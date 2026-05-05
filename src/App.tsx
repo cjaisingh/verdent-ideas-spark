@@ -9,6 +9,7 @@ import Tenants from "./pages/Tenants";
 import TenantDetail from "./pages/TenantDetail";
 import Capabilities from "./pages/Capabilities";
 import Events from "./pages/Events";
+import ApiLogs from "./pages/ApiLogs";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
