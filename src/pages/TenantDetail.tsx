@@ -25,8 +25,11 @@ type Node = {
   spawned_from_reason: string | null;
   created_by: string;
   created_at: string;
-  okr_measurements: Measurement[] | null;
+  okr_measurements: Measurement | Measurement[] | null;
 };
+
+const firstMeasurement = (m: Node["okr_measurements"]): Measurement | undefined =>
+  Array.isArray(m) ? m[0] : m ?? undefined;
 
 const statusColor: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -37,7 +40,7 @@ const statusColor: Record<string, string> = {
 };
 
 const NodeRow = ({ node, children }: { node: Node; children: React.ReactNode }) => {
-  const m = node.okr_measurements?.[0];
+  const m = firstMeasurement(node.okr_measurements);
   const dim = node.status === "superseded";
   return (
     <li className={dim ? "opacity-50" : ""}>
@@ -97,7 +100,7 @@ const TenantDetail = () => {
       .order("created_at")
       .then(({ data, error }) => {
         if (error) toast.error(error.message);
-        setNodes((data ?? []) as Node[]);
+        setNodes((data ?? []) as unknown as Node[]);
       });
   }, [id]);
 
