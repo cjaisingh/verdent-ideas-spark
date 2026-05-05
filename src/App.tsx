@@ -9,6 +9,7 @@ import Tenants from "./pages/Tenants";
 import TenantDetail from "./pages/TenantDetail";
 import Capabilities from "./pages/Capabilities";
 import Events from "./pages/Events";
+import ApiLogs from "./pages/ApiLogs";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/tenants/:id" element={<TenantDetail />} />
             <Route path="/capabilities" element={<Capabilities />} />
             <Route path="/events" element={<Events />} />
+            <Route path="/api-logs" element={<ApiLogs />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

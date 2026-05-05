@@ -47,6 +47,38 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; er
   return { ok: true, actor: `user:${data.user.id}` };
 }
 
+async function logApiCall(entry: {
+  route: string;
+  method: string;
+  actor: string | null;
+  idempotency_key: string | null;
+  idempotent_replay?: boolean;
+  status_code: number;
+  duration_ms: number;
+  tenant_id?: string | null;
+  request_summary?: Record<string, unknown>;
+  response_summary?: Record<string, unknown>;
+  error?: string | null;
+}) {
+  try {
+    await supabase.from("api_call_logs").insert({
+      route: entry.route,
+      method: entry.method,
+      actor: entry.actor,
+      idempotency_key: entry.idempotency_key,
+      idempotent_replay: entry.idempotent_replay ?? false,
+      status_code: entry.status_code,
+      duration_ms: entry.duration_ms,
+      tenant_id: entry.tenant_id ?? null,
+      request_summary: entry.request_summary ?? {},
+      response_summary: entry.response_summary ?? {},
+      error: entry.error ?? null,
+    });
+  } catch (e) {
+    console.error("logApiCall failed", e);
+  }
+}
+
 async function checkIdempotency(scope: string, key: string | null) {
   if (!key) return null;
   const { data } = await supabase
@@ -333,25 +365,79 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   // Strip the function name prefix: /awip-api/...
   const path = url.pathname.replace(/^.*\/awip-api/, "") || "/";
+  const started = Date.now();
+  const idemKey = req.headers.get("idempotency-key");
+  let actor = "anonymous";
+  let response: Response;
+  let logged = false;
 
   try {
-    // Public-ish: allow GET /capabilities with service token OR operator JWT (still requires auth)
     const auth = await authorize(req);
-    if (!auth.ok) return json({ error: auth.error ?? "unauthorized" }, 401);
+    if (!auth.ok) {
+      response = json({ error: auth.error ?? "unauthorized" }, 401);
+    } else {
+      actor = auth.actor;
+      const spawnMatch = path.match(/^\/okr\/([0-9a-f-]+)\/spawn$/i);
+      const supMatch = path.match(/^\/okr\/([0-9a-f-]+)\/supersede$/i);
 
-    if (req.method === "GET" && path === "/capabilities") return await listCapabilities(url);
-    if (req.method === "POST" && path === "/capabilities/register") return await registerCapability(req, auth.actor);
-    if (req.method === "POST" && path === "/okr/ingest") return await ingestOkrTree(req, auth.actor);
-    if (req.method === "GET" && path === "/okr/tree") return await getTree(url);
-
-    const spawnMatch = path.match(/^\/okr\/([0-9a-f-]+)\/spawn$/i);
-    if (req.method === "POST" && spawnMatch) return await spawnSubOkr(req, spawnMatch[1], auth.actor);
-    const supMatch = path.match(/^\/okr\/([0-9a-f-]+)\/supersede$/i);
-    if (req.method === "POST" && supMatch) return await supersedeOkr(req, supMatch[1], auth.actor);
-
-    return json({ error: "not found", path }, 404);
+      if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
+      else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
+      else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
+      else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
+      else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
+      else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
+      else response = json({ error: "not found", path }, 404);
+    }
   } catch (e) {
     console.error(e);
-    return json({ error: (e as Error).message }, 500);
+    response = json({ error: (e as Error).message }, 500);
   }
+
+  // Log (best-effort, non-blocking-ish)
+  try {
+    const cloned = response.clone();
+    let body: any = null;
+    try { body = await cloned.json(); } catch { /* non-JSON */ }
+    const summary: Record<string, unknown> = {};
+    let tenant_id: string | null = null;
+    let replay = false;
+    if (body && typeof body === "object") {
+      if (body.tenant_id) tenant_id = body.tenant_id;
+      if (Array.isArray(body.created)) summary.created_count = body.created.length;
+      if (Array.isArray(body.warnings)) summary.warnings = body.warnings;
+      if (Array.isArray(body.capabilities)) summary.capabilities_count = body.capabilities.length;
+      if (body.error) summary.error = body.error;
+      if (body.id) summary.id = body.id;
+    }
+    // Detect idempotent replay for okr/ingest
+    if (path === "/okr/ingest" && idemKey && response.status === 200) {
+      const { data } = await supabase
+        .from("idempotency_keys")
+        .select("created_at")
+        .eq("scope", "okr_ingest")
+        .eq("key", idemKey)
+        .maybeSingle();
+      if (data?.created_at && Date.now() - new Date(data.created_at).getTime() > 1500) {
+        replay = true;
+      }
+    }
+    await logApiCall({
+      route: path,
+      method: req.method,
+      actor,
+      idempotency_key: idemKey,
+      idempotent_replay: replay,
+      status_code: response.status,
+      duration_ms: Date.now() - started,
+      tenant_id,
+      request_summary: { query: Object.fromEntries(url.searchParams) },
+      response_summary: summary,
+      error: body?.error ?? null,
+    });
+    logged = true;
+  } catch (e) {
+    if (!logged) console.error("log wrap failed", e);
+  }
+
+  return response;
 });

@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_call_logs: {
+        Row: {
+          actor: string | null
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          id: string
+          idempotency_key: string | null
+          idempotent_replay: boolean
+          method: string
+          request_summary: Json
+          response_summary: Json
+          route: string
+          status_code: number
+          tenant_id: string | null
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          idempotent_replay?: boolean
+          method: string
+          request_summary?: Json
+          response_summary?: Json
+          route: string
+          status_code: number
+          tenant_id?: string | null
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          idempotency_key?: string | null
+          idempotent_replay?: boolean
+          method?: string
+          request_summary?: Json
+          response_summary?: Json
+          route?: string
+          status_code?: number
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
       capabilities: {
         Row: {
           created_at: string
