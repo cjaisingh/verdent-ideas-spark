@@ -47,6 +47,38 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; er
   return { ok: true, actor: `user:${data.user.id}` };
 }
 
+async function logApiCall(entry: {
+  route: string;
+  method: string;
+  actor: string | null;
+  idempotency_key: string | null;
+  idempotent_replay?: boolean;
+  status_code: number;
+  duration_ms: number;
+  tenant_id?: string | null;
+  request_summary?: Record<string, unknown>;
+  response_summary?: Record<string, unknown>;
+  error?: string | null;
+}) {
+  try {
+    await supabase.from("api_call_logs").insert({
+      route: entry.route,
+      method: entry.method,
+      actor: entry.actor,
+      idempotency_key: entry.idempotency_key,
+      idempotent_replay: entry.idempotent_replay ?? false,
+      status_code: entry.status_code,
+      duration_ms: entry.duration_ms,
+      tenant_id: entry.tenant_id ?? null,
+      request_summary: entry.request_summary ?? {},
+      response_summary: entry.response_summary ?? {},
+      error: entry.error ?? null,
+    });
+  } catch (e) {
+    console.error("logApiCall failed", e);
+  }
+}
+
 async function checkIdempotency(scope: string, key: string | null) {
   if (!key) return null;
   const { data } = await supabase
