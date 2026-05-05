@@ -1,16 +1,38 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const [authed, setAuthed] = useState(false);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <main className="min-h-screen flex items-center justify-center bg-background px-6">
+      <div className="max-w-2xl w-full space-y-6">
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">AWIP Core</p>
+          <h1 className="text-4xl font-semibold tracking-tight">The OKR substrate</h1>
+          <p className="text-muted-foreground">
+            Versioned OKR trees, a capability manifest, and an audit-grade event log.
+            The spine that every future AWIP module hangs off.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Button asChild>
+            <Link to={authed ? "/tenants" : "/auth"}>
+              {authed ? "Open operator console" : "Sign in"}
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/capabilities">Capability manifest</Link>
+          </Button>
+        </div>
+      </div>
+    </main>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
