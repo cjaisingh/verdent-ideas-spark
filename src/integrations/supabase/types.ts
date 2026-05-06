@@ -376,6 +376,42 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_audit_log: {
+        Row: {
+          action: string
+          actor: string | null
+          created_at: string
+          entry_key: string
+          id: string
+          new_value: Json | null
+          note: string | null
+          old_value: Json | null
+          scope: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          created_at?: string
+          entry_key: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          scope: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          created_at?: string
+          entry_key?: string
+          id?: string
+          new_value?: Json | null
+          note?: string | null
+          old_value?: Json | null
+          scope?: string
+        }
+        Relationships: []
+      }
       okr_measurements: {
         Row: {
           attribution_rules: Json
