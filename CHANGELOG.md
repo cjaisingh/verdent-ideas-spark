@@ -8,6 +8,18 @@ _Nothing pending._
 
 ---
 
+## [0.7.0] — 2026-05-06 — Operator observability & automation
+
+### Added
+- **Scheduled AI code review** — `scheduled-code-review` edge function (weekly `pg_cron`) summarises the last 7 days of git diff via Lovable AI Gateway (`google/gemini-2.5-pro`) into `roadmap_review_findings`. UI: click-to-expand findings with file/line context; filter by severity / acknowledged; sort by date or severity.
+- **Nightly tests** — `.github/workflows/nightly.yml` runs vitest unit + e2e at 02:00 UTC and POSTs results to `record-test-run` → `test_runs`. UI: per-run list with status filter and last-run chip.
+- **QA probes** — `qa-validate` edge function runs phase-success-criterion checks (`qa_checks` + `qa_probe_results`). UI: progress bar + per-check expand showing pass/fail criteria and last note.
+- **Failure alerts** — `alert_settings` / `alert_log` tables and `dispatchAlert` helper wired into all three jobs. Configurable Slack/Discord/custom webhook with per-job toggles, dedupe window, send-test button, and realtime delivery log in the Automation card.
+- `docs/automation.md` — full reference for the four automation jobs, payload shape, and operator workflow.
+- README link to the automation doc.
+
+---
+
 ## [0.6.0] — 2026-05-06 — Security documentation
 
 ### Added

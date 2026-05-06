@@ -10,6 +10,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
 - [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
+- [Automation](docs/automation.md) — scheduled code review, nightly tests, QA probes, failure alerts
 - [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys
 - [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)
