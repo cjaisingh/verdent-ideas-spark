@@ -412,6 +412,24 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_settings: {
+        Row: {
+          auto_purge_enabled: boolean
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_purge_enabled?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_purge_enabled?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       okr_measurements: {
         Row: {
           attribution_rules: Json
