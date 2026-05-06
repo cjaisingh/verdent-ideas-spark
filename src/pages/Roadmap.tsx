@@ -471,6 +471,14 @@ const Roadmap = () => {
                                     {cs.length > 0 && (
                                       <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{cs.length}</span>
                                     )}
+                                    <Link
+                                      to={`/master-plan#${sprint.key}-${task.key}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="hover:text-foreground"
+                                      title="Open in master plan"
+                                    >
+                                      <ExternalLink className="h-3 w-3" />
+                                    </Link>
                                   </div>
                                 </div>
 
