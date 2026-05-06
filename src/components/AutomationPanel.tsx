@@ -251,11 +251,31 @@ export const AutomationPanel = () => {
           {reviewMsg && <span className={statusTone(reviewState === "error" ? "fail" : "pass")}>{reviewMsg}</span>}
         </div>
         <LastRun run={lastReview} emptyHint="No runs recorded yet — click Run now to test." />
-        {findings.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
+        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+          <select value={findingSev} onChange={(e) => setFindingSev(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="all">all severity</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+            <option value="info">info</option>
+          </select>
+          <select value={findingAck} onChange={(e) => setFindingAck(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="open">open</option>
+            <option value="ack">acknowledged</option>
+            <option value="all">all</option>
+          </select>
+          <select value={findingSort} onChange={(e) => setFindingSort(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="newest">newest</option>
+            <option value="oldest">oldest</option>
+            <option value="severity">by severity</option>
+          </select>
+          <span className="ml-auto text-muted-foreground font-mono">{filteredFindings.length}/{findings.length}</span>
+        </div>
+        {filteredFindings.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">No findings match.</div>
         ) : (
           <ul className="divide-y divide-border max-h-80 overflow-y-auto">
-            {findings.map((f) => {
+            {filteredFindings.map((f) => {
               const open = expandedFindings.has(f.id);
               return (
                 <li key={f.id} className={`py-1.5 ${f.acknowledged ? "opacity-60" : ""}`}>
