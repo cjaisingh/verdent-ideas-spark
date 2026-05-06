@@ -94,12 +94,26 @@ async function inferNextUpTaskId(supabase: ReturnType<typeof createClient>): Pro
   if (!phase) return null;
   const { data: sprints } = await supabase
     .from('roadmap_sprints').select('id').eq('phase_id', phase.id).neq('status', 'done').order('order');
+  const sprintIds = (sprints ?? []).map((s) => s.id);
+  if (!sprintIds.length) return null;
+
+  // Prefer the active task (in_progress) anywhere in the active phase.
+  const { data: active } = await supabase
+    .from('roadmap_tasks')
+    .select('id, sprint_id, order')
+    .in('sprint_id', sprintIds)
+    .eq('status', 'in_progress')
+    .order('order')
+    .limit(1);
+  if (active?.[0]) return active[0].id;
+
+  // Otherwise, first todo in earliest sprint.
   for (const s of sprints ?? []) {
     const { data: tasks } = await supabase
       .from('roadmap_tasks')
-      .select('id, status, order')
+      .select('id, order')
       .eq('sprint_id', s.id)
-      .in('status', ['todo', 'in_progress'])
+      .eq('status', 'todo')
       .order('order')
       .limit(1);
     if (tasks?.[0]) return tasks[0].id;
