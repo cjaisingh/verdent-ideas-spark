@@ -115,23 +115,44 @@ export const AutoLogSettings = () => {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loading, setLoading] = useState(false);
 
+  // Load on mount so behavior reflects current DB state without opening the dialog.
   useEffect(() => {
-    if (!open) return;
+    let cancelled = false;
     (async () => {
       const { data } = await supabase.from("roadmap_autolog_settings" as any).select("*").eq("id", true).maybeSingle();
-      if (data) setSettings({ ...DEFAULTS, ...(data as any) });
+      if (!cancelled && data) setSettings({ ...DEFAULTS, ...(data as any) });
     })();
-  }, [open]);
+
+    // Realtime: keep all open clients (and this dialog) in sync after writes.
+    const channel = supabase
+      .channel("roadmap_autolog_settings")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "roadmap_autolog_settings" },
+        (payload) => {
+          const next = (payload.new ?? payload.old) as Partial<Settings> | null;
+          if (next) setSettings((prev) => ({ ...prev, ...DEFAULTS, ...next }));
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const save = async (next: Settings) => {
+    const previous = settings;
+    setSettings(next); // optimistic — UI updates instantly
     setLoading(true);
-    const { error } = await supabase.from("roadmap_autolog_settings" as any).upsert({ id: true, ...next, updated_at: new Date().toISOString() });
+    const { error } = await supabase
+      .from("roadmap_autolog_settings" as any)
+      .upsert({ id: true, ...next, updated_at: new Date().toISOString() });
     setLoading(false);
     if (error) {
+      setSettings(previous); // rollback
       toast({ title: "Save failed", description: error.message, variant: "destructive" });
-      return;
     }
-    setSettings(next);
   };
 
   const toggle = (key: keyof Settings) => save({ ...settings, [key]: !settings[key] });
