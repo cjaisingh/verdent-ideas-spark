@@ -60,6 +60,32 @@ async function logApiCall(entry: {
   response_summary?: Record<string, unknown>;
   error?: string | null;
 }) {
+  // Structured log line — surfaces in `supabase functions logs awip-api` and the platform log viewer.
+  // One JSON object per call; severity reflects status. Slow calls (>1500ms) are tagged "slow".
+  const SLOW_MS = 1500;
+  const severity =
+    entry.status_code >= 500 ? "error"
+    : entry.status_code >= 400 && entry.status_code !== 401 ? "warn"
+    : "info";
+  const logLine = {
+    ts: new Date().toISOString(),
+    fn: "awip-api",
+    severity,
+    route: entry.route,
+    method: entry.method,
+    status: entry.status_code,
+    duration_ms: entry.duration_ms,
+    actor: entry.actor,
+    tenant_id: entry.tenant_id ?? null,
+    idempotency_key: entry.idempotency_key,
+    idempotent_replay: entry.idempotent_replay ?? false,
+    slow: entry.duration_ms >= SLOW_MS,
+    error: entry.error ?? null,
+  };
+  if (severity === "error") console.error(JSON.stringify(logLine));
+  else if (severity === "warn" || logLine.slow) console.warn(JSON.stringify(logLine));
+  else console.log(JSON.stringify(logLine));
+
   try {
     await supabase.from("api_call_logs").insert({
       route: entry.route,
@@ -75,7 +101,7 @@ async function logApiCall(entry: {
       error: entry.error ?? null,
     });
   } catch (e) {
-    console.error("logApiCall failed", e);
+    console.error(JSON.stringify({ fn: "awip-api", severity: "error", msg: "logApiCall insert failed", error: String(e) }));
   }
 }
 
