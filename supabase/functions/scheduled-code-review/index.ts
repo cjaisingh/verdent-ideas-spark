@@ -129,8 +129,10 @@ Deno.serve(async (req) => {
     if (!aiResp.ok) {
       const t = await aiResp.text();
       console.error("AI gateway error", aiResp.status, t);
-      if (aiResp.status === 429) return json({ error: "rate_limited" }, 429);
-      if (aiResp.status === 402) return json({ error: "credits_exhausted" }, 402);
+      const msg = `AI gateway returned ${aiResp.status}: ${t.slice(0, 200)}`;
+      if (aiResp.status === 429) { await recordRun("error", 429, msg); return json({ error: "rate_limited" }, 429); }
+      if (aiResp.status === 402) { await recordRun("error", 402, msg); return json({ error: "credits_exhausted" }, 402); }
+      await recordRun("error", 500, msg);
       return json({ error: "ai_gateway_error" }, 500);
     }
 
@@ -154,7 +156,8 @@ Deno.serve(async (req) => {
       if (error) console.error("insert failed", error);
     }
 
-    return json({ ok: true, count: findings.length, window: { sinceISO, untilISO } });
+    await recordRun("ok", 200, `${findings.length} findings recorded`, { findings_count: findings.length });
+    return json({ ok: true, count: findings.length, findings_count: findings.length, window: { sinceISO, untilISO } });
   } catch (e) {
     console.error(e);
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
