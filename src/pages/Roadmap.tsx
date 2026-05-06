@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle, MessageSquare } from "lucide-react";
+import { InlineEdit } from "@/components/InlineEdit";
+import {
+  ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
+  MessageSquare, ExternalLink, Timer, Coins,
+} from "lucide-react";
 
 type Phase = { id: string; key: string; title: string; summary: string | null; order: number; status: string };
 type Sprint = { id: string; phase_id: string; key: string; title: string; goal: string | null; order: number; status: string };
@@ -14,6 +20,12 @@ type Task = {
   capability_id: string | null; order: number; updated_at: string; created_at: string;
 };
 type Comment = { id: string; task_id: string; author: string; body: string; kind: string; resolved: boolean; created_at: string };
+type WorkLog = {
+  id: string; task_id: string; started_at: string; ended_at: string | null;
+  duration_ms: number | null; tokens_in: number | null; tokens_out: number | null;
+  tokens_total: number | null; model: string | null; summary: string | null;
+  issues: string | null; fixes: string | null; author: string | null; created_at: string;
+};
 
 const TASK_STATUSES = ["todo", "in_progress", "blocked", "review", "done", "wont_do"] as const;
 
@@ -35,7 +47,6 @@ const phaseStatusBadge = (s: string) => {
   return <Badge variant={map[s] ?? "outline"} className="text-[10px] uppercase">{s}</Badge>;
 };
 
-// Tri-state checkbox: empty / indeterminate / checked
 const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; onClick?: (e: React.MouseEvent) => void }) => {
   const base = "h-4 w-4 rounded-[4px] border flex items-center justify-center shrink-0 transition";
   if (state === "full")
@@ -45,17 +56,34 @@ const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; 
   return <button onClick={onClick} className={`${base} border-muted-foreground/40 hover:border-foreground`} />;
 };
 
+const fmtDuration = (ms: number | null) => {
+  if (!ms || ms < 0) return "—";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+};
+
 const Roadmap = () => {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("roadmap.collapsed") ?? "[]")); } catch { return new Set(); }
   });
   const [newComment, setNewComment] = useState("");
   const [commentKind, setCommentKind] = useState<"comment" | "question" | "decision">("comment");
+
+  // Work-log form state
+  const [logForm, setLogForm] = useState({
+    started_at: "", ended_at: "", tokens_in: "", tokens_out: "",
+    model: "", summary: "", issues: "", fixes: "",
+  });
 
   const persistCollapsed = (s: Set<string>) => {
     setCollapsed(new Set(s));
@@ -68,16 +96,18 @@ const Roadmap = () => {
   };
 
   const loadAll = async () => {
-    const [p, s, t, c] = await Promise.all([
+    const [p, s, t, c, w] = await Promise.all([
       supabase.from("roadmap_phases").select("*").order("order"),
       supabase.from("roadmap_sprints").select("*").order("order"),
       supabase.from("roadmap_tasks").select("*").order("order"),
       supabase.from("roadmap_comments").select("*").order("created_at"),
+      supabase.from("roadmap_work_log").select("*").order("started_at", { ascending: false }),
     ]);
     if (p.data) setPhases(p.data as Phase[]);
     if (s.data) setSprints(s.data as Sprint[]);
     if (t.data) setTasks(t.data as Task[]);
     if (c.data) setComments(c.data as Comment[]);
+    if (w.data) setWorkLogs(w.data as WorkLog[]);
   };
 
   useEffect(() => {
@@ -88,6 +118,7 @@ const Roadmap = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_comments" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_sprints" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_phases" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_work_log" }, loadAll)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
@@ -119,7 +150,15 @@ const Roadmap = () => {
     return m;
   }, [comments]);
 
-  // Tri-state for sprint based on task children
+  const logsByTask = useMemo(() => {
+    const m = new Map<string, WorkLog[]>();
+    for (const l of workLogs) {
+      if (!m.has(l.task_id)) m.set(l.task_id, []);
+      m.get(l.task_id)!.push(l);
+    }
+    return m;
+  }, [workLogs]);
+
   const sprintTriState = (sprintId: string): "empty" | "partial" | "full" => {
     const ts = tasksBySprint.get(sprintId) ?? [];
     if (ts.length === 0) return "empty";
@@ -144,6 +183,19 @@ const Roadmap = () => {
     if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
   };
 
+  const updateTaskField = async (taskId: string, field: "title" | "description" | "acceptance", value: string) => {
+    const { error } = await supabase.from("roadmap_tasks").update({ [field]: value || null }).eq("id", taskId);
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+  };
+  const updatePhaseSummary = async (phaseId: string, value: string) => {
+    const { error } = await supabase.from("roadmap_phases").update({ summary: value || null }).eq("id", phaseId);
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+  };
+  const updateSprintGoal = async (sprintId: string, value: string) => {
+    const { error } = await supabase.from("roadmap_sprints").update({ goal: value || null }).eq("id", sprintId);
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+  };
+
   const selected = tasks.find((t) => t.id === selectedTaskId) ?? null;
 
   const submitComment = async () => {
@@ -160,6 +212,39 @@ const Roadmap = () => {
     setNewComment("");
   };
 
+  const submitWorkLog = async () => {
+    if (!selected) return;
+    if (!logForm.started_at) {
+      toast({ title: "Start time required", variant: "destructive" });
+      return;
+    }
+    const started = new Date(logForm.started_at);
+    const ended = logForm.ended_at ? new Date(logForm.ended_at) : null;
+    const duration_ms = ended ? ended.getTime() - started.getTime() : null;
+    const tokens_in = logForm.tokens_in ? parseInt(logForm.tokens_in, 10) : null;
+    const tokens_out = logForm.tokens_out ? parseInt(logForm.tokens_out, 10) : null;
+    const tokens_total = (tokens_in ?? 0) + (tokens_out ?? 0) || null;
+    const { data: u } = await supabase.auth.getUser();
+    const { error } = await supabase.from("roadmap_work_log").insert({
+      task_id: selected.id,
+      started_at: started.toISOString(),
+      ended_at: ended?.toISOString() ?? null,
+      duration_ms,
+      tokens_in, tokens_out, tokens_total,
+      model: logForm.model || null,
+      summary: logForm.summary || null,
+      issues: logForm.issues || null,
+      fixes: logForm.fixes || null,
+      author: u.user?.email ?? "operator",
+    });
+    if (error) {
+      toast({ title: "Log failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    setLogForm({ started_at: "", ended_at: "", tokens_in: "", tokens_out: "", model: "", summary: "", issues: "", fixes: "" });
+    toast({ title: "Work logged" });
+  };
+
   const nextUp = useMemo(() => {
     const activePhase = phases.find((p) => p.status === "active");
     if (!activePhase) return null;
@@ -174,10 +259,19 @@ const Roadmap = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Roadmap</h1>
-          <p className="text-sm text-muted-foreground">Phases, sprints, tasks. Click a checkbox to cycle status.</p>
+          <p className="text-sm text-muted-foreground">
+            Phases, sprints, tasks. Click a checkbox to cycle status. Click any text to edit.
+          </p>
+          <Link
+            to="#"
+            onClick={(e) => { e.preventDefault(); window.open("/docs/master-plan.md", "_blank"); }}
+            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mt-1"
+          >
+            View master plan <ExternalLink className="h-3 w-3" />
+          </Link>
         </div>
         {nextUp && (
           <button
@@ -265,65 +359,119 @@ const Roadmap = () => {
               const sps = sprintsByPhase.get(phase.id) ?? [];
               return (
                 <div key={phase.id} className="mb-6">
-                  <div className="flex items-center gap-3 mb-3 pl-6">
+                  <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
                     {phaseStatusBadge(phase.status)}
+                  </div>
+                  <div className="pl-6 mb-3 text-xs">
+                    <InlineEdit
+                      value={phase.summary}
+                      onSave={(v) => updatePhaseSummary(phase.id, v)}
+                      multiline
+                      placeholder="Add an epic description…"
+                      textClassName="text-muted-foreground italic"
+                    />
                   </div>
                   {sps.map((sprint) => {
                     const ts = tasksBySprint.get(sprint.id) ?? [];
                     return (
                       <div key={sprint.id} className="mb-4">
-                        <div className="flex items-center gap-2 mb-2 pl-6">
+                        <div className="flex items-center gap-2 mb-1 pl-6">
                           <div className="text-[11px] font-mono text-muted-foreground">{sprint.key}</div>
                           <div className="text-xs">{sprint.title}</div>
                         </div>
+                        <div className="pl-6 mb-2 text-[11px]">
+                          <InlineEdit
+                            value={sprint.goal}
+                            onSave={(v) => updateSprintGoal(sprint.id, v)}
+                            multiline
+                            placeholder="Add a sprint goal…"
+                            textClassName="text-muted-foreground"
+                          />
+                        </div>
                         {ts.map((task) => {
                           const cs = commentsByTask.get(task.id) ?? [];
+                          const ls = logsByTask.get(task.id) ?? [];
+                          const totalMs = ls.reduce((acc, l) => acc + (l.duration_ms ?? 0), 0);
+                          const totalTokens = ls.reduce((acc, l) => acc + (l.tokens_total ?? 0), 0);
                           const isSel = selectedTaskId === task.id;
                           return (
                             <div key={task.id} className="relative pl-6 py-1.5">
                               <div className="absolute left-0 top-2.5 bg-background p-0.5">
                                 {taskMarker(task.status)}
                               </div>
-                              <button
+                              <div
                                 onClick={() => setSelectedTaskId(task.id)}
-                                className={`text-left w-full rounded px-2 py-1 transition ${
+                                className={`text-left w-full rounded px-2 py-1 transition cursor-pointer ${
                                   isSel ? "bg-primary/10" : "hover:bg-muted/30"
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
                                     {new Date(task.updated_at).toLocaleDateString()}
                                   </span>
-                                  <span className="text-sm font-medium">{task.title}</span>
+                                  {isSel ? (
+                                    <div className="flex-1 min-w-[200px]" onClick={(e) => e.stopPropagation()}>
+                                      <InlineEdit
+                                        value={task.title}
+                                        onSave={(v) => updateTaskField(task.id, "title", v)}
+                                        placeholder="Task title"
+                                        textClassName="text-sm font-medium"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm font-medium">{task.title}</span>
+                                  )}
                                   {task.module && (
                                     <span className="text-[10px] font-mono text-muted-foreground">· {task.module}</span>
                                   )}
-                                  {cs.length > 0 && (
-                                    <span className="ml-auto text-[10px] text-muted-foreground flex items-center gap-0.5">
-                                      <MessageSquare className="h-3 w-3" />{cs.length}
-                                    </span>
-                                  )}
+                                  <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
+                                    {totalMs > 0 && (
+                                      <span className="flex items-center gap-0.5"><Timer className="h-3 w-3" />{fmtDuration(totalMs)}</span>
+                                    )}
+                                    {totalTokens > 0 && (
+                                      <span className="flex items-center gap-0.5"><Coins className="h-3 w-3" />{totalTokens.toLocaleString()}</span>
+                                    )}
+                                    {cs.length > 0 && (
+                                      <span className="flex items-center gap-0.5"><MessageSquare className="h-3 w-3" />{cs.length}</span>
+                                    )}
+                                  </div>
                                 </div>
+
                                 {isSel && (
-                                  <div className="mt-2 space-y-2">
-                                    {task.description && (
-                                      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{task.description}</p>
-                                    )}
-                                    {task.acceptance && (
+                                  <div className="mt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                                    <div>
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Description</div>
                                       <div className="text-xs">
-                                        <span className="font-semibold">Acceptance: </span>
-                                        <span className="text-muted-foreground">{task.acceptance}</span>
+                                        <InlineEdit
+                                          value={task.description}
+                                          onSave={(v) => updateTaskField(task.id, "description", v)}
+                                          multiline
+                                          placeholder="Add a description…"
+                                          textClassName="text-muted-foreground"
+                                        />
                                       </div>
-                                    )}
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Acceptance criteria</div>
+                                      <div className="text-xs">
+                                        <InlineEdit
+                                          value={task.acceptance}
+                                          onSave={(v) => updateTaskField(task.id, "acceptance", v)}
+                                          multiline
+                                          placeholder="Add acceptance criteria…"
+                                          textClassName="text-muted-foreground"
+                                        />
+                                      </div>
+                                    </div>
+
                                     <div className="flex flex-wrap gap-1">
                                       {TASK_STATUSES.map((s) => (
                                         <button
                                           key={s}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            supabase.from("roadmap_tasks").update({ status: s }).eq("id", task.id);
-                                          }}
+                                          onClick={() =>
+                                            supabase.from("roadmap_tasks").update({ status: s }).eq("id", task.id)
+                                          }
                                           className={`text-[10px] px-1.5 py-0.5 rounded border ${
                                             task.status === s
                                               ? "bg-primary text-primary-foreground border-primary"
@@ -334,7 +482,10 @@ const Roadmap = () => {
                                         </button>
                                       ))}
                                     </div>
+
+                                    {/* Comments */}
                                     <div className="space-y-1.5 border-t border-border pt-2">
+                                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Comments</div>
                                       {cs.map((c) => (
                                         <div key={c.id} className="text-xs">
                                           <span className={`font-mono mr-1 ${
@@ -345,7 +496,7 @@ const Roadmap = () => {
                                           <span className="text-muted-foreground">{c.body}</span>
                                         </div>
                                       ))}
-                                      <div onClick={(e) => e.stopPropagation()} className="space-y-1 pt-1">
+                                      <div className="space-y-1 pt-1">
                                         <Textarea
                                           value={newComment}
                                           onChange={(e) => setNewComment(e.target.value)}
@@ -372,9 +523,95 @@ const Roadmap = () => {
                                         </div>
                                       </div>
                                     </div>
+
+                                    {/* Work log */}
+                                    <div className="space-y-2 border-t border-border pt-2">
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Work log</div>
+                                        <div className="text-[10px] text-muted-foreground">
+                                          {ls.length} entries · {fmtDuration(totalMs)} · {totalTokens.toLocaleString()} tokens
+                                        </div>
+                                      </div>
+                                      {ls.length > 0 && (
+                                        <div className="space-y-1">
+                                          {ls.map((l) => (
+                                            <div key={l.id} className="text-[11px] border border-border rounded p-1.5 bg-muted/20">
+                                              <div className="flex items-center gap-2 flex-wrap text-muted-foreground">
+                                                <span className="font-mono">{new Date(l.started_at).toLocaleString()}</span>
+                                                <span>· {fmtDuration(l.duration_ms)}</span>
+                                                {l.tokens_total != null && <span>· {l.tokens_total.toLocaleString()} tok</span>}
+                                                {l.model && <span>· {l.model}</span>}
+                                                {l.author && <span>· {l.author}</span>}
+                                              </div>
+                                              {l.summary && <div className="mt-0.5">{l.summary}</div>}
+                                              {(l.issues || l.fixes) && (
+                                                <div className="mt-0.5 grid grid-cols-2 gap-2 text-muted-foreground">
+                                                  {l.issues && <div><span className="font-semibold">Issues:</span> {l.issues}</div>}
+                                                  {l.fixes && <div><span className="font-semibold">Fixes:</span> {l.fixes}</div>}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">Start</label>
+                                          <Input type="datetime-local" value={logForm.started_at}
+                                            onChange={(e) => setLogForm({ ...logForm, started_at: e.target.value })}
+                                            className="h-7 text-xs" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">End</label>
+                                          <Input type="datetime-local" value={logForm.ended_at}
+                                            onChange={(e) => setLogForm({ ...logForm, ended_at: e.target.value })}
+                                            className="h-7 text-xs" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">Tokens in</label>
+                                          <Input type="number" value={logForm.tokens_in}
+                                            onChange={(e) => setLogForm({ ...logForm, tokens_in: e.target.value })}
+                                            className="h-7 text-xs" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">Tokens out</label>
+                                          <Input type="number" value={logForm.tokens_out}
+                                            onChange={(e) => setLogForm({ ...logForm, tokens_out: e.target.value })}
+                                            className="h-7 text-xs" />
+                                        </div>
+                                        <div className="col-span-2">
+                                          <label className="text-[10px] text-muted-foreground">Model</label>
+                                          <Input value={logForm.model} placeholder="e.g. claude-sonnet-4.5"
+                                            onChange={(e) => setLogForm({ ...logForm, model: e.target.value })}
+                                            className="h-7 text-xs" />
+                                        </div>
+                                        <div className="col-span-2">
+                                          <label className="text-[10px] text-muted-foreground">Summary</label>
+                                          <Textarea value={logForm.summary}
+                                            onChange={(e) => setLogForm({ ...logForm, summary: e.target.value })}
+                                            placeholder="What was done"
+                                            className="text-xs min-h-[40px]" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">Issues</label>
+                                          <Textarea value={logForm.issues}
+                                            onChange={(e) => setLogForm({ ...logForm, issues: e.target.value })}
+                                            className="text-xs min-h-[40px]" />
+                                        </div>
+                                        <div>
+                                          <label className="text-[10px] text-muted-foreground">Fixes</label>
+                                          <Textarea value={logForm.fixes}
+                                            onChange={(e) => setLogForm({ ...logForm, fixes: e.target.value })}
+                                            className="text-xs min-h-[40px]" />
+                                        </div>
+                                      </div>
+                                      <Button size="sm" className="h-7 text-xs" onClick={submitWorkLog}>
+                                        Log work
+                                      </Button>
+                                    </div>
                                   </div>
                                 )}
-                              </button>
+                              </div>
                             </div>
                           );
                         })}
