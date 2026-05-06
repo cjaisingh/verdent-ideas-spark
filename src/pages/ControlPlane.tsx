@@ -65,6 +65,25 @@ const ControlPlane = () => {
   const [tgSending, setTgSending] = useState(false);
   const [chatIds, setChatIds] = useState<number[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string>("");
+  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
+  const [botError, setBotError] = useState<string | null>(null);
+  const [botLoading, setBotLoading] = useState(false);
+
+  const loadBotInfo = async () => {
+    setBotLoading(true);
+    setBotError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("telegram-bot-info");
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setBotInfo(data as any);
+    } catch (e) {
+      setBotError((e as Error).message);
+      setBotInfo(null);
+    } finally {
+      setBotLoading(false);
+    }
+  };
 
   const loadChatIds = async () => {
     const { data } = await supabase
@@ -142,6 +161,7 @@ const ControlPlane = () => {
     loadDemand();
     pollEvents();
     loadChatIds();
+    loadBotInfo();
     if (paused) return;
     const id = setInterval(() => {
       pollEvents();
@@ -236,6 +256,48 @@ const ControlPlane = () => {
           {error}
         </div>
       )}
+
+      <div className="border border-border rounded-md p-4 flex items-center justify-between gap-4 bg-muted/20">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+            TG
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Telegram bot</div>
+            {botLoading && !botInfo && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {botInfo && (
+              <div className="text-sm font-medium truncate">
+                {botInfo.first_name ?? "Bot"}{" "}
+                <span className="font-mono text-muted-foreground">@{botInfo.username ?? "unknown"}</span>
+                {botInfo.id != null && (
+                  <span className="ml-2 text-xs text-muted-foreground font-mono">id {botInfo.id}</span>
+                )}
+              </div>
+            )}
+            {botError && <div className="text-sm text-destructive font-mono truncate">{botError}</div>}
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading}>
+            {botLoading ? "…" : "↻"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            disabled={!botInfo?.url}
+          >
+            <a
+              href={botInfo?.url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={!botInfo?.url}
+            >
+              Open in Telegram ↗
+            </a>
+          </Button>
+        </div>
+      </div>
 
       <Tabs defaultValue="demand">
         <TabsList>
