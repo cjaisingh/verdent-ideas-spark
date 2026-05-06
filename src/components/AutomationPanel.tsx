@@ -54,6 +54,7 @@ export const AutomationPanel = () => {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [qa, setQa] = useState<QaCheck[]>([]);
+  const [autoRuns, setAutoRuns] = useState<AutoRun[]>([]);
 
   const [reviewState, setReviewState] = useState<RunState>("idle");
   const [qaState, setQaState] = useState<RunState>("idle");
@@ -61,17 +62,20 @@ export const AutomationPanel = () => {
   const [qaMsg, setQaMsg] = useState<string | null>(null);
 
   const load = async () => {
-    const [f, r, q] = await Promise.all([
+    const [f, r, q, a] = await Promise.all([
       supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged")
         .order("created_at", { ascending: false }).limit(5),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
       supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note")
         .order("phase_key").order("criterion"),
+      supabase.from("automation_runs" as any).select("id, created_at, job, trigger, status, status_code, duration_ms, message")
+        .order("created_at", { ascending: false }).limit(40),
     ]);
     setFindings(((f.data ?? []) as unknown) as Finding[]);
     setRuns(((r.data ?? []) as unknown) as TestRun[]);
     setQa(((q.data ?? []) as unknown) as QaCheck[]);
+    setAutoRuns(((a.data ?? []) as unknown) as AutoRun[]);
   };
 
   useEffect(() => {
@@ -81,9 +85,12 @@ export const AutomationPanel = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_review_findings" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "test_runs" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "qa_checks" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "automation_runs" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
+
+  const lastRunFor = (job: string) => autoRuns.find((r) => r.job === job) ?? null;
 
   const runReview = async () => {
     setReviewState("running");
