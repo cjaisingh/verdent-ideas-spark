@@ -66,7 +66,7 @@ const ControlPlane = () => {
   const [chatIds, setChatIds] = useState<number[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string>("");
   const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
-  const [botError, setBotError] = useState<string | null>(null);
+  const [botError, setBotError] = useState<{ message: string; status?: number; detail?: unknown; at: string } | null>(null);
   const [botLoading, setBotLoading] = useState(false);
 
   const loadBotInfo = async () => {
@@ -75,11 +75,21 @@ const ControlPlane = () => {
     try {
       const { data, error } = await supabase.functions.invoke("telegram-bot-info");
       if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
-      setBotInfo(data as any);
+      const d = data as any;
+      if (d?.error) {
+        setBotInfo(null);
+        setBotError({
+          message: d.error,
+          status: d.status,
+          detail: d.detail,
+          at: new Date().toISOString(),
+        });
+        return;
+      }
+      setBotInfo(d);
     } catch (e) {
-      setBotError((e as Error).message);
       setBotInfo(null);
+      setBotError({ message: (e as Error).message, at: new Date().toISOString() });
     } finally {
       setBotLoading(false);
     }
