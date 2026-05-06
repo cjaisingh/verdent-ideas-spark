@@ -54,17 +54,77 @@ Configurable webhook (Slack/Discord-compatible) fires when any of the three jobs
 
 ### Webhook payload
 
+Every alert POSTs the same JSON body to `alert_settings.webhook_url`:
+
 ```json
 {
-  "job": "code_review" | "tests" | "qa",
-  "status": "failed" | "errored" | "high_severity_finding" | "test",
-  "summary": "Human-readable one-liner",
-  "details_url": "https://<project>.lovable.app/roadmap",
-  "occurred_at": "2026-05-06T20:55:00Z"
+  "text": "🚨 scheduled-code-review · high_finding\n3 new high-severity findings in this run",
+  "job": "scheduled-code-review",
+  "reason": "high_finding",
+  "message": "3 new high-severity findings in this run",
+  "payload": { "run_id": "…", "count": 3 },
+  "ts": "2026-05-06T20:55:00.000Z"
 }
 ```
 
-Slack and Discord both accept this shape via their incoming-webhook endpoints; for custom receivers, parse `job` + `status`.
+Field reference:
+
+| Field | Values | Notes |
+|---|---|---|
+| `text` | string | Pre-formatted one-liner. Slack and Discord render this directly. |
+| `job` | `scheduled-code-review` \| `qa-validate` \| `record-test-run` | Source edge function. |
+| `reason` | `review_error` \| `high_finding` \| `qa_fail` \| `test_fail` \| `test` | `test` is the synthetic payload from the **Send test** button. Mapped to per-job toggles via `alert_on_review_error`, `alert_on_high_finding`, `alert_on_qa_fail`, `alert_on_test_fail`. |
+| `message` | string | Human-readable detail (e.g. failing test names, probe id). |
+| `payload` | object | Job-specific context (run id, finding ids, probe results). Schema is best-effort, not stable. |
+| `ts` | ISO 8601 | Dispatch time. |
+
+#### Slack incoming webhook
+
+No transformation needed — Slack uses the top-level `text` field. Drop the URL from **Slack → Apps → Incoming Webhooks → Add to channel** straight into the Alerts card.
+
+```
+https://hooks.slack.com/services/T000/B000/XXXX
+```
+
+For richer formatting (blocks, attachments), terminate the webhook at a small relay that re-shapes `payload` into Block Kit before forwarding.
+
+#### Discord incoming webhook
+
+Discord also reads top-level `content`/`text` differently — it expects `content`. The current dispatcher sends `text`, which Discord ignores, so for Discord use a relay or append `/slack` to the Discord webhook URL to enable Slack-compatible mode:
+
+```
+https://discord.com/api/webhooks/123/abc/slack
+```
+
+With `/slack` appended, Discord reads the `text` field directly and the alert renders in-channel with no extra work.
+
+#### Custom receiver
+
+Any HTTPS endpoint that returns 2xx counts as delivered. Parse `job` + `reason` to route, use `payload` for structured detail. Minimal Node example:
+
+```ts
+// POST /awip-alerts
+app.post("/awip-alerts", async (req, res) => {
+  const { job, reason, message, payload, ts } = req.body;
+  if (reason === "test") return res.sendStatus(204);
+
+  switch (job) {
+    case "scheduled-code-review":
+      await pageOnCall({ title: `Code review: ${reason}`, body: message, meta: payload });
+      break;
+    case "record-test-run":
+      await openIncident({ severity: "P3", summary: message, ts });
+      break;
+    case "qa-validate":
+      await notifyChannel("#qa", `${message} (${payload?.probe_id ?? "n/a"})`);
+      break;
+  }
+  res.sendStatus(202);
+});
+```
+
+Delivery outcome (status code, error body, `delivered` flag) is recorded in `alert_log` and shown in the Alerts card. Non-2xx responses surface as red rows so you can debug receiver issues without leaving the operator UI.
+
 
 ## Operator workflow
 
