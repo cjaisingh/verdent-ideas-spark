@@ -89,9 +89,13 @@ const ControlPlane = () => {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "events failed");
       const fresh: EventRow[] = j.events ?? [];
+      setLastPoll(new Date());
       if (fresh.length > 0) {
         lastSeen.current = fresh[0].created_at;
         setEvents((prev) => [...fresh, ...prev].slice(0, 200));
+        const ids = new Set(fresh.map((e) => `${e.source}-${e.id}`));
+        setFreshIds(ids);
+        setTimeout(() => setFreshIds(new Set()), 1800);
       }
     } catch (e) {
       setError((e as Error).message);
