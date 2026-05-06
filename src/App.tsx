@@ -19,6 +19,7 @@ import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import Runbook from "./pages/Runbook";
 import Memory from "./pages/Memory";
+import Notebook from "./pages/Notebook";
 import MasterPlan from "./pages/MasterPlan";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
+            <Route path="/notebook" element={<Notebook />} />
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/admin" element={<Admin />} />

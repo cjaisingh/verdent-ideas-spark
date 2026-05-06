@@ -1,17 +1,12 @@
 import { useEffect } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import PendingApprovalsIndicator from "@/components/PendingApprovalsIndicator";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 
-const navCls = ({ isActive }: { isActive: boolean }) =>
-  `px-3 py-1.5 rounded-md text-sm ${
-    isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"
-  }`;
-
-// Module-scoped dedupe: survives remounts and prevents duplicate toasts
-// when multiple realtime payloads arrive for the same id+status transition.
 const toastedDecisions = new Set<string>();
 
 const OperatorLayout = () => {
@@ -35,10 +30,7 @@ const OperatorLayout = () => {
           const dedupeKey = `${next.id}:${next.status}`;
           if (toastedDecisions.has(dedupeKey)) return;
           toastedDecisions.add(dedupeKey);
-          const action = {
-            label: "View",
-            onClick: () => navigate(`/approvals/${next.id}`),
-          };
+          const action = { label: "View", onClick: () => navigate(`/approvals/${next.id}`) };
           const opts = {
             id: dedupeKey,
             description: `${next.activity ?? "request"} • by ${next.decided_by ?? "operator"} • ${next.id.slice(0, 8)}`,
@@ -53,36 +45,26 @@ const OperatorLayout = () => {
       supabase.removeChannel(channel);
     };
   }, []);
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-6">
-          <Link to="/tenants" className="font-semibold">
-            AWIP Core
-          </Link>
-          <nav className="flex gap-1">
-            <NavLink to="/tenants" className={navCls}>Tenants</NavLink>
-            <NavLink to="/capabilities" className={navCls}>Capabilities</NavLink>
-            <NavLink to="/events" className={navCls}>Events</NavLink>
-            <NavLink to="/api-logs" className={navCls}>API logs</NavLink>
-            <NavLink to="/control-plane" className={navCls}>Control plane</NavLink>
-            <NavLink to="/roadmap" className={navCls}>Roadmap</NavLink>
-            <NavLink to="/runbook" className={navCls}>Runbook</NavLink>
-            <NavLink to="/memory" className={navCls}>Memory</NavLink>
-            <NavLink to="/api-explorer" className={navCls}>API explorer</NavLink>
-            <NavLink to="/admin" className={navCls}>Admin</NavLink>
-            <NavLink to="/status" className={navCls}>Status</NavLink>
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <PendingApprovalsIndicator />
-            <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
-          </div>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10">
+            <SidebarTrigger />
+            <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
+            <div className="ml-auto flex items-center gap-2">
+              <PendingApprovalsIndicator />
+              <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
+            </div>
+          </header>
+          <main className="flex-1 px-6 py-6 max-w-[1600px] w-full mx-auto">
+            <Outlet />
+          </main>
         </div>
-      </header>
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        <Outlet />
-      </main>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 };
 
