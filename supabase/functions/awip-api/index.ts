@@ -216,7 +216,7 @@ async function registerCapability(req: Request, actor: string) {
   await supabase.from("capability_events").insert({
     capability_id: body.id,
     event_type: "registered",
-    payload: body,
+    payload: redact(body),
     actor,
   });
   return json({ ok: true, id: body.id });
@@ -344,7 +344,7 @@ async function ingestOkrTree(req: Request, actor: string) {
       tenant_id: tenant!.id,
       okr_node_id: ins.data.id,
       event_type: "ingested",
-      payload: { client_id: n.client_id },
+      payload: redact({ client_id: n.client_id }),
       actor,
     });
   }
@@ -387,7 +387,7 @@ async function spawnSubOkr(req: Request, parentId: string, actor: string) {
     tenant_id: parent.tenant_id,
     okr_node_id: ins.data.id,
     event_type: "spawned",
-    payload: { parent_id: parent.id, reason: body.spawned_from_reason },
+    payload: redact({ parent_id: parent.id, reason: body.spawned_from_reason }),
     actor,
   });
   return json({ ok: true, node: ins.data });
@@ -431,14 +431,14 @@ async function supersedeOkr(req: Request, oldId: string, actor: string) {
       tenant_id: old.tenant_id,
       okr_node_id: oldId,
       event_type: "superseded",
-      payload: { superseded_by: ins.data.id, reason: body.reason },
+      payload: redact({ superseded_by: ins.data.id, reason: body.reason }),
       actor,
     },
     {
       tenant_id: old.tenant_id,
       okr_node_id: ins.data.id,
       event_type: "created",
-      payload: { supersedes: oldId },
+      payload: redact({ supersedes: oldId }),
       actor,
     },
   ]);
@@ -478,7 +478,7 @@ async function ingestEvents(req: Request, actor: string) {
   const rows = events.map((e: any) => ({
     capability_id: String(e.capability_id ?? ""),
     event_type: String(e.event_type ?? ""),
-    payload: e.payload ?? {},
+    payload: redact(e.payload ?? {}),
     actor,
   }));
   if (rows.some((r: any) => !r.capability_id || !r.event_type)) {
