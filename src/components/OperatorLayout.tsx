@@ -26,13 +26,19 @@ const OperatorLayout = () => {
           const next = payload.new as { id: string; status: string; activity?: string; decided_by?: string };
           const prev = payload.old as { status: string };
           if (prev?.status === next?.status) return;
+          const action = {
+            label: "View",
+            onClick: () => navigate(`/approvals/${next.id}`),
+          };
           if (next.status === "approved") {
             toast.success(`Approval approved`, {
               description: `${next.activity ?? "request"} • by ${next.decided_by ?? "operator"} • ${next.id.slice(0, 8)}`,
+              action,
             });
           } else if (next.status === "rejected") {
             toast.error(`Approval rejected`, {
               description: `${next.activity ?? "request"} • by ${next.decided_by ?? "operator"} • ${next.id.slice(0, 8)}`,
+              action,
             });
           }
         },
