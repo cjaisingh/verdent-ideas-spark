@@ -17,8 +17,8 @@ const fmt = (ms: number) => {
 // Parse tokens/model from a pasted blob: JSON usage object, raw numbers,
 // or text containing "prompt_tokens": N / "completion_tokens": N / model: "..."
 const parseUsage = (raw: string) => {
-  const out: { tokens_in: number | null; tokens_out: number | null; model: string | null } = {
-    tokens_in: null, tokens_out: null, model: null,
+  const out: { tokens_in: number | null; tokens_out: number | null; model: string | null; text: string } = {
+    tokens_in: null, tokens_out: null, model: null, text: raw,
   };
   if (!raw.trim()) return out;
   try {
@@ -27,6 +27,9 @@ const parseUsage = (raw: string) => {
     out.tokens_in = u.prompt_tokens ?? u.input_tokens ?? u.tokens_in ?? null;
     out.tokens_out = u.completion_tokens ?? u.output_tokens ?? u.tokens_out ?? null;
     out.model = j.model ?? u.model ?? null;
+    // include any text content for issues/fixes extraction
+    const content = j.choices?.[0]?.message?.content ?? j.output_text ?? j.text ?? '';
+    if (content) out.text = String(content);
     return out;
   } catch { /* fall through to regex */ }
   const num = (re: RegExp) => {
@@ -37,6 +40,26 @@ const parseUsage = (raw: string) => {
   const mm = raw.match(/model["\s:]+["']?([\w./-]+)/i);
   out.model = mm ? mm[1] : null;
   return out;
+};
+
+// Mirror of edge-function extractor — keeps client previews accurate.
+const extractIssuesAndFixes = (raw: string): { issues: string | null; fixes: string | null } => {
+  if (!raw) return { issues: null, fixes: null };
+  const text = raw.replace(/\r\n/g, '\n');
+  const grab = (labels: string[]): string | null => {
+    const re = new RegExp(
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*|\\*\\*|__)?(?:${labels.join('|')})(?:\\*\\*|__)?\\s*[:\\-–]\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s|\\*\\*[A-Z]|[A-Z][A-Za-z ]{2,30}\\s*[:\\-–]\\s*\\n)|\\n\\s*\\n\\s*\\n|$)`,
+      'i',
+    );
+    const m = text.match(re);
+    if (!m) return null;
+    return m[1].split('\n').map((l) => l.replace(/^\s*[-*•\d.]+\s*/, '').trim()).filter(Boolean).slice(0, 8).join('\n').trim() || null;
+  };
+  let issues = grab(['issues?', 'problems?', 'errors?', 'bugs?', 'blockers?', 'failures?']);
+  let fixes = grab(['fixes?', 'fixed', 'resolutions?', 'resolved', 'solutions?', 'changes?\\s+made']);
+  if (!fixes) { const m = text.match(/\b(?:fixed|resolved|patched)\s+([^.\n]{5,200})/i); if (m) fixes = m[0].trim(); }
+  if (!issues) { const m = text.match(/\b(?:error|failed|exception|broke|crashed)[^.\n]{5,200}/i); if (m) issues = m[0].trim(); }
+  return { issues, fixes };
 };
 
 export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) => {
