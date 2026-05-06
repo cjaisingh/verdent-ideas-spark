@@ -277,7 +277,7 @@ export default function Memory() {
                   <th className="px-3 py-2 font-medium text-right">Rows</th>
                   <th className="px-3 py-2 font-medium">Oldest</th>
                   <th className="px-3 py-2 font-medium text-right">Retention (days)</th>
-                  <th className="px-3 py-2 w-24" />
+                  <th className="px-3 py-2 w-44" />
                 </tr>
               </thead>
               <tbody>
