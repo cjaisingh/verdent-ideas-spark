@@ -286,8 +286,7 @@ const Roadmap = () => {
             Phases, sprints, tasks. Click a checkbox to cycle status. Click any text to edit.
           </p>
           <Link
-            to="#"
-            onClick={(e) => { e.preventDefault(); window.open("/docs/master-plan.md", "_blank"); }}
+            to="/master-plan"
             className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mt-1"
           >
             View master plan <ExternalLink className="h-3 w-3" />
