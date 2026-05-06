@@ -14,6 +14,7 @@ import ControlPlane from "./pages/ControlPlane";
 import CapabilityDetail from "./pages/CapabilityDetail";
 import ApiExplorer from "./pages/ApiExplorer";
 import Admin from "./pages/Admin";
+import Status from "./pages/Status";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/status" element={<Status />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
