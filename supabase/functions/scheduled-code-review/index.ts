@@ -24,15 +24,33 @@ Deno.serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
-    const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN")!;
+    const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
 
     // Allow cron (service token) OR an authenticated operator.
     const provided = req.headers.get("x-service-token");
-    if (provided !== SERVICE_TOKEN) {
-      const auth = req.headers.get("authorization") ?? "";
-      if (!auth.startsWith("Bearer ")) {
-        return json({ error: "unauthorized" }, 401);
-      }
+    const auth = req.headers.get("authorization") ?? "";
+    const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+    const trigger = triggeredByCron ? "cron" : "manual";
+    const sbLog = createClient(SUPABASE_URL, SERVICE_ROLE);
+    const startedAt = Date.now();
+    const recordRun = async (status: string, status_code: number, message: string, detail: Record<string, unknown> = {}) => {
+      try {
+        await sbLog.from("automation_runs").insert({
+          job: "scheduled-code-review", trigger, status, status_code,
+          duration_ms: Date.now() - startedAt, message, detail,
+        });
+      } catch (e) { console.error("automation_runs insert failed", e); }
+    };
+
+    if (!triggeredByCron && !auth.startsWith("Bearer ")) {
+      await recordRun("error", 401, !SERVICE_TOKEN
+        ? "AWIP_SERVICE_TOKEN secret is missing in Lovable Cloud — cron cannot authenticate."
+        : "Missing service token and no Authorization header.");
+      return json({ error: "unauthorized" }, 401);
+    }
+    if (!LOVABLE_API_KEY) {
+      await recordRun("error", 500, "LOVABLE_API_KEY secret is missing — cannot reach AI gateway.");
+      return json({ error: "missing_lovable_api_key" }, 500);
     }
 
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
