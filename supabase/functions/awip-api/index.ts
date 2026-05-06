@@ -383,6 +383,33 @@ async function getTree(url: URL) {
   return json({ nodes });
 }
 
+async function ingestEvents(req: Request, actor: string) {
+  const idemKey = req.headers.get("idempotency-key");
+  const cached = await checkIdempotency("events_ingest", idemKey);
+  if (cached) return json(cached);
+
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const events = Array.isArray(body?.events) ? body.events : null;
+  if (!events || events.length === 0) return json({ error: "events[] required" }, 400);
+
+  const rows = events.map((e: any) => ({
+    capability_id: String(e.capability_id ?? ""),
+    event_type: String(e.event_type ?? ""),
+    payload: e.payload ?? {},
+    actor,
+  }));
+  if (rows.some((r: any) => !r.capability_id || !r.event_type)) {
+    return json({ error: "each event needs capability_id and event_type" }, 400);
+  }
+
+  const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
+  if (error) return json({ error: error.message }, 500);
+  const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d: any) => d.id) };
+  await storeIdempotency("events_ingest", idemKey, null, response);
+  return json(response);
+}
+
 async function getRecentEvents(url: URL) {
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 500);
   const since = url.searchParams.get("since"); // ISO timestamp
