@@ -40,6 +40,7 @@ const App = () => (
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/status" element={<Status />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
