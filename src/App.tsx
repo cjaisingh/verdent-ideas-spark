@@ -32,6 +32,7 @@ const App = () => (
             <Route path="/capabilities" element={<Capabilities />} />
             <Route path="/events" element={<Events />} />
             <Route path="/api-logs" element={<ApiLogs />} />
+            <Route path="/control-plane" element={<ControlPlane />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
