@@ -105,6 +105,22 @@ async function logApiCall(entry: {
   }
 }
 
+// Idempotency-Key format: 1-200 chars, printable ASCII, no whitespace.
+const IDEM_KEY_RE = /^[!-~]{1,200}$/;
+function validateIdemKey(key: string | null): { ok: true } | { ok: false; error: string } {
+  if (key === null) return { ok: true };
+  if (!IDEM_KEY_RE.test(key)) {
+    return { ok: false, error: "invalid idempotency-key (1-200 printable ASCII, no whitespace)" };
+  }
+  return { ok: true };
+}
+
+async function hashBody(text: string): Promise<string> {
+  const buf = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function checkIdempotency(scope: string, key: string | null) {
   if (!key) return null;
   const { data } = await supabase
@@ -116,9 +132,27 @@ async function checkIdempotency(scope: string, key: string | null) {
   return data?.response ?? null;
 }
 
-async function storeIdempotency(scope: string, key: string | null, tenantId: string | null, response: unknown) {
+// Returns { conflict: true } if the same key was used previously with a different body hash.
+async function checkIdempotencyConflict(scope: string, key: string | null, bodyHash: string) {
+  if (!key) return { conflict: false as const };
+  const { data } = await supabase
+    .from("idempotency_keys")
+    .select("response")
+    .eq("scope", scope)
+    .eq("key", key)
+    .maybeSingle();
+  if (!data) return { conflict: false as const };
+  const stored = (data.response as any)?.__body_hash;
+  if (stored && stored !== bodyHash) return { conflict: true as const };
+  return { conflict: false as const, cached: data.response };
+}
+
+async function storeIdempotency(scope: string, key: string | null, tenantId: string | null, response: unknown, bodyHash?: string) {
   if (!key) return;
-  await supabase.from("idempotency_keys").insert({ scope, key, tenant_id: tenantId, response });
+  const payload = bodyHash && response && typeof response === "object"
+    ? { ...(response as object), __body_hash: bodyHash }
+    : response;
+  await supabase.from("idempotency_keys").insert({ scope, key, tenant_id: tenantId, response: payload });
 }
 
 // ---------- handlers ----------
