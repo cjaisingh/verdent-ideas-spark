@@ -186,6 +186,29 @@ export const AutomationPanel = () => {
     (acc[c.phase_key] ||= []).push(c); return acc;
   }, {});
 
+  const sevRank: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
+  const filteredFindings = findings
+    .filter((f) => findingSev === "all" || f.severity === findingSev)
+    .filter((f) => findingAck === "all" || (findingAck === "ack" ? f.acknowledged : !f.acknowledged))
+    .sort((a, b) => {
+      if (findingSort === "severity") return (sevRank[a.severity] ?? 9) - (sevRank[b.severity] ?? 9);
+      const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+      return findingSort === "oldest" ? da - db : db - da;
+    });
+
+  const filteredRuns = runs
+    .filter((r) => {
+      if (runStatus === "all") return true;
+      if (runStatus === "passed") return r.status === "pass" || r.status === "passed";
+      if (runStatus === "failed") return r.status === "fail" || r.status === "failed";
+      if (runStatus === "errored") return r.status === "errored" || r.status === "error";
+      return true;
+    })
+    .sort((a, b) => {
+      const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+      return runSort === "oldest" ? da - db : db - da;
+    });
+
   const lastRunAt = runs[0]?.created_at ?? null;
   const lastReview = lastRunFor("scheduled-code-review");
   const lastQa = lastRunFor("qa-validate");
