@@ -66,6 +66,13 @@ export const AutomationPanel = () => {
   const [qaMsg, setQaMsg] = useState<string | null>(null);
   const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
 
+  // Filters / sorting
+  const [findingSev, setFindingSev] = useState<"all" | "high" | "medium" | "low" | "info">("all");
+  const [findingAck, setFindingAck] = useState<"all" | "open" | "ack">("open");
+  const [findingSort, setFindingSort] = useState<"newest" | "oldest" | "severity">("newest");
+  const [runStatus, setRunStatus] = useState<"all" | "passed" | "failed" | "errored">("all");
+  const [runSort, setRunSort] = useState<"newest" | "oldest">("newest");
+
   const toggleFinding = (id: string) => {
     setExpandedFindings((prev) => {
       const next = new Set(prev);
