@@ -168,6 +168,15 @@ const Roadmap = () => {
     return m;
   }, [workLogs]);
 
+  const activityByTask = useMemo(() => {
+    const m = new Map<string, Activity[]>();
+    for (const a of activity) {
+      if (!m.has(a.task_id)) m.set(a.task_id, []);
+      m.get(a.task_id)!.push(a);
+    }
+    return m;
+  }, [activity]);
+
   const sprintTriState = (sprintId: string): "empty" | "partial" | "full" => {
     const ts = tasksBySprint.get(sprintId) ?? [];
     if (ts.length === 0) return "empty";
