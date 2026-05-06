@@ -54,35 +54,76 @@ const classifyTool = {
 async function classify(text: string) {
   const apiKey = Deno.env.get('LOVABLE_API_KEY');
   if (!apiKey) throw new Error('LOVABLE_API_KEY not configured');
-  const res = await fetch(AI_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'google/gemini-3-flash-preview',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You classify short operator messages addressed to an automation system. Always call the classify_operator_intent tool. Pick activity from a short snake_case verb_noun. If the message is chitchat or unclear, use activity "smalltalk" or "unknown" and risk "low".',
-        },
-        { role: 'user', content: text },
-      ],
-      tools: [classifyTool],
-      tool_choice: { type: 'function', function: { name: 'classify_operator_intent' } },
-    }),
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    const err = new Error(`AI gateway ${res.status}: ${detail}`);
-    (err as any).status = res.status;
-    throw err;
+  const model = 'google/gemini-3-flash-preview';
+  const startedAt = new Date();
+  let issues: string | null = null;
+  let tokens_in: number | null = null;
+  let tokens_out: number | null = null;
+  let result: { activity: string; summary: string; risk: 'low' | 'medium' | 'high'; payload: Record<string, unknown> } | null = null;
+  try {
+    const res = await fetch(AI_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You classify short operator messages addressed to an automation system. Always call the classify_operator_intent tool. Pick activity from a short snake_case verb_noun. If the message is chitchat or unclear, use activity "smalltalk" or "unknown" and risk "low".',
+          },
+          { role: 'user', content: text },
+        ],
+        tools: [classifyTool],
+        tool_choice: { type: 'function', function: { name: 'classify_operator_intent' } },
+      }),
+    });
+    if (!res.ok) {
+      const detail = await res.text();
+      issues = `AI gateway ${res.status}: ${detail.slice(0, 500)}`;
+      const err = new Error(`AI gateway ${res.status}: ${detail}`);
+      (err as any).status = res.status;
+      throw err;
+    }
+    const data = await res.json();
+    tokens_in = data.usage?.prompt_tokens ?? null;
+    tokens_out = data.usage?.completion_tokens ?? null;
+    const call = data.choices?.[0]?.message?.tool_calls?.[0];
+    if (!call?.function?.arguments) {
+      issues = 'No tool call returned';
+      throw new Error('No tool call returned');
+    }
+    result = JSON.parse(call.function.arguments);
+    return result!;
+  } finally {
+    // Fire-and-forget auto work log.
+    const endedAt = new Date();
+    const summary = result
+      ? `Classified operator message → ${result.activity} (risk=${result.risk})`
+      : 'Operator message classification (failed)';
+    autoLog({
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt.toISOString(),
+      duration_ms: endedAt.getTime() - startedAt.getTime(),
+      tokens_in, tokens_out,
+      model,
+      summary,
+      issues,
+      source: 'awip_api',
+      author: 'route-operator-message',
+    }).catch((e) => console.error('autoLog failed', e));
   }
-  const data = await res.json();
-  const call = data.choices?.[0]?.message?.tool_calls?.[0];
-  if (!call?.function?.arguments) throw new Error('No tool call returned');
-  return JSON.parse(call.function.arguments) as {
-    activity: string; summary: string; risk: 'low' | 'medium' | 'high'; payload: Record<string, unknown>;
-  };
+}
+
+async function autoLog(payload: Record<string, unknown>) {
+  const serviceToken = Deno.env.get('AWIP_SERVICE_TOKEN');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  if (!serviceToken || !supabaseUrl) return;
+  await fetch(`${supabaseUrl}/functions/v1/roadmap-log-work`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-service-token': serviceToken },
+    body: JSON.stringify(payload),
+  });
 }
 
 Deno.serve(async (req) => {
