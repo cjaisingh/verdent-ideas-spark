@@ -488,3 +488,148 @@ export const AutomationPanel = () => {
     </div>
   );
 };
+
+type AlertSettings = {
+  webhook_url: string | null; enabled: boolean;
+  alert_on_review_error: boolean; alert_on_high_finding: boolean;
+  alert_on_test_fail: boolean; alert_on_qa_fail: boolean;
+  dedupe_minutes: number;
+};
+type AlertLog = {
+  id: string; created_at: string; job: string; reason: string;
+  message: string | null; delivered: boolean; status_code: number | null; error: string | null;
+};
+
+const AlertsCard = () => {
+  const [s, setS] = useState<AlertSettings | null>(null);
+  const [logs, setLogs] = useState<AlertLog[]>([]);
+  const [draftUrl, setDraftUrl] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const load = async () => {
+    const [{ data: settings }, { data: log }] = await Promise.all([
+      supabase.from("alert_settings" as any).select("*").eq("id", true).maybeSingle(),
+      supabase.from("alert_log" as any).select("id, created_at, job, reason, message, delivered, status_code, error")
+        .order("created_at", { ascending: false }).limit(8),
+    ]);
+    if (settings) {
+      const cast = settings as unknown as AlertSettings;
+      setS(cast);
+      setDraftUrl(cast.webhook_url ?? "");
+    }
+    setLogs(((log ?? []) as unknown) as AlertLog[]);
+  };
+
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("alerts_panel")
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_settings" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_log" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  const patch = async (changes: Partial<AlertSettings>) => {
+    if (!s) return;
+    const next = { ...s, ...changes };
+    setS(next);
+    const { error } = await supabase.from("alert_settings" as any)
+      .update({ ...changes, updated_at: new Date().toISOString() }).eq("id", true);
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+  };
+
+  const saveUrl = async () => {
+    setSaving(true);
+    await patch({ webhook_url: draftUrl.trim() || null });
+    setSaving(false);
+    toast({ title: "Webhook saved" });
+  };
+
+  const sendTest = async () => {
+    const url = draftUrl.trim();
+    if (!url) { toast({ title: "Enter a webhook URL first", variant: "destructive" }); return; }
+    setTesting(true);
+    try {
+      const r = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: "🔔 Test alert from Roadmap Automation panel", job: "manual-test", reason: "test", ts: new Date().toISOString() }),
+      });
+      toast({ title: r.ok ? "Test sent" : `Test failed (${r.status})`, variant: r.ok ? "default" : "destructive" });
+    } catch (e) {
+      toast({ title: "Test failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setTesting(false); }
+  };
+
+  if (!s) return null;
+
+  const Toggle = ({ k, label }: { k: keyof AlertSettings; label: string }) => (
+    <label className="inline-flex items-center gap-1 text-[11px] cursor-pointer">
+      <input type="checkbox" className="accent-foreground" checked={Boolean(s[k])} onChange={(e) => patch({ [k]: e.target.checked } as any)} />
+      {label}
+    </label>
+  );
+
+  return (
+    <section className="rounded-md border border-border bg-card p-3 space-y-2">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <AlertTriangle className="h-4 w-4" /> Failure alerts
+          <label className="ml-2 inline-flex items-center gap-1 text-[11px] cursor-pointer">
+            <input type="checkbox" className="accent-foreground" checked={s.enabled} onChange={(e) => patch({ enabled: e.target.checked })} />
+            enabled
+          </label>
+        </div>
+        <span className="text-[10px] text-muted-foreground">POST JSON · works with Slack/Discord webhooks or any URL</span>
+      </header>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="url" placeholder="https://hooks.slack.com/services/…  or  https://discord.com/api/webhooks/…"
+          value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)}
+          className="flex-1 text-xs bg-background border border-border rounded px-2 py-1 font-mono"
+        />
+        <button onClick={saveUrl} disabled={saving}
+          className="text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={sendTest} disabled={testing}
+          className="text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
+          {testing ? "Sending…" : "Send test"}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
+        <Toggle k="alert_on_review_error" label="code review errors" />
+        <Toggle k="alert_on_high_finding" label="new high-severity findings" />
+        <Toggle k="alert_on_test_fail" label="test failures" />
+        <Toggle k="alert_on_qa_fail" label="QA probe failures" />
+        <label className="inline-flex items-center gap-1 text-[11px] ml-auto">
+          dedupe
+          <input type="number" min={0} max={1440} value={s.dedupe_minutes}
+            onChange={(e) => patch({ dedupe_minutes: Math.max(0, parseInt(e.target.value || "0", 10)) })}
+            className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
+          min
+        </label>
+      </div>
+
+      {logs.length > 0 && (
+        <ul className="divide-y divide-border max-h-32 overflow-y-auto text-[11px]">
+          {logs.map((l) => (
+            <li key={l.id} className="py-1 flex items-center gap-2">
+              {l.delivered
+                ? <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                : <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />}
+              <span className="font-mono text-muted-foreground">{l.job}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="font-mono">{l.reason}</span>
+              {l.status_code != null && <span className="text-muted-foreground">· {l.status_code}</span>}
+              <span className="truncate flex-1" title={l.error ?? l.message ?? ""}>{l.error ?? l.message}</span>
+              <span className="text-muted-foreground shrink-0">{ago(l.created_at)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+};
