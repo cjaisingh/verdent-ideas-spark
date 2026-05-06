@@ -65,6 +65,25 @@ const ControlPlane = () => {
   const [tgSending, setTgSending] = useState(false);
   const [chatIds, setChatIds] = useState<number[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string>("");
+  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
+  const [botError, setBotError] = useState<string | null>(null);
+  const [botLoading, setBotLoading] = useState(false);
+
+  const loadBotInfo = async () => {
+    setBotLoading(true);
+    setBotError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("telegram-bot-info");
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setBotInfo(data as any);
+    } catch (e) {
+      setBotError((e as Error).message);
+      setBotInfo(null);
+    } finally {
+      setBotLoading(false);
+    }
+  };
 
   const loadChatIds = async () => {
     const { data } = await supabase
