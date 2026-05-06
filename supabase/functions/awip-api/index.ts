@@ -664,6 +664,7 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
       else response = json({ error: "not found", path }, 404);
     }
+    }
   } catch (e) {
     console.error(e);
     response = json({ error: (e as Error).message }, 500);
