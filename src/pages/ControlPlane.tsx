@@ -257,6 +257,48 @@ const ControlPlane = () => {
         </div>
       )}
 
+      <div className="border border-border rounded-md p-4 flex items-center justify-between gap-4 bg-muted/20">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+            TG
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">Telegram bot</div>
+            {botLoading && !botInfo && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {botInfo && (
+              <div className="text-sm font-medium truncate">
+                {botInfo.first_name ?? "Bot"}{" "}
+                <span className="font-mono text-muted-foreground">@{botInfo.username ?? "unknown"}</span>
+                {botInfo.id != null && (
+                  <span className="ml-2 text-xs text-muted-foreground font-mono">id {botInfo.id}</span>
+                )}
+              </div>
+            )}
+            {botError && <div className="text-sm text-destructive font-mono truncate">{botError}</div>}
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading}>
+            {botLoading ? "…" : "↻"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            disabled={!botInfo?.url}
+          >
+            <a
+              href={botInfo?.url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-disabled={!botInfo?.url}
+            >
+              Open in Telegram ↗
+            </a>
+          </Button>
+        </div>
+      </div>
+
       <Tabs defaultValue="demand">
         <TabsList>
           <TabsTrigger value="demand">Demand board</TabsTrigger>
