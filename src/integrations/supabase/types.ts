@@ -730,6 +730,11 @@ export type Database = {
           id: string
           issues: string | null
           model: string | null
+          model_provider: string | null
+          prompt_preview: string | null
+          request_meta: Json
+          response_meta: Json
+          response_preview: string | null
           source: string
           started_at: string
           summary: string | null
@@ -747,6 +752,11 @@ export type Database = {
           id?: string
           issues?: string | null
           model?: string | null
+          model_provider?: string | null
+          prompt_preview?: string | null
+          request_meta?: Json
+          response_meta?: Json
+          response_preview?: string | null
           source?: string
           started_at: string
           summary?: string | null
@@ -764,6 +774,11 @@ export type Database = {
           id?: string
           issues?: string | null
           model?: string | null
+          model_provider?: string | null
+          prompt_preview?: string | null
+          request_meta?: Json
+          response_meta?: Json
+          response_preview?: string | null
           source?: string
           started_at?: string
           summary?: string | null
