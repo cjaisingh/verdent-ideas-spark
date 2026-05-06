@@ -172,6 +172,41 @@ export default function Memory() {
     };
   }, []);
 
+  const [exporting, setExporting] = useState(false);
+
+  const exportMemory = async () => {
+    setExporting(true);
+    try {
+      const [retention, autologRow, audit_log] = await Promise.all([
+        supabase.from("retention_settings" as any).select("*").order("table_name"),
+        supabase.from("roadmap_autolog_settings" as any).select("*").eq("id", true).maybeSingle(),
+        supabase.from("memory_audit_log" as any).select("*").order("created_at", { ascending: false }).limit(1000),
+      ]);
+      const bundle = {
+        exported_at: new Date().toISOString(),
+        agent_memory: AGENT_MEMORY,
+        retention_settings: retention.data ?? [],
+        autolog_settings: autologRow.data ?? null,
+        retention_stats: stats,
+        audit_log: audit_log.data ?? [],
+      };
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `memory-export-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Memory exported" });
+    } catch (e: any) {
+      toast({ title: "Export failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex items-end justify-between gap-4">
@@ -181,6 +216,10 @@ export default function Memory() {
             What the system remembers, what gets captured automatically, and how long it's kept.
           </p>
         </div>
+        <Button variant="outline" size="sm" onClick={exportMemory} disabled={exporting}>
+          <Download className={`h-4 w-4 mr-1 ${exporting ? "animate-pulse" : ""}`} />
+          {exporting ? "Exporting…" : "Export memory"}
+        </Button>
       </header>
 
       {/* Agent memory */}
