@@ -66,6 +66,14 @@ const AUTOLOG_FIELDS: { key: keyof AutoLog; label: string; hint: string; group: 
   { key: "source_awip_api", label: "AWIP API", hint: "Turns posted with the service token", group: "source" },
 ];
 
+const TTL_PRESETS: { label: string; days: number }[] = [
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+  { label: "1y", days: 365 },
+  { label: "∞", days: 0 },
+];
+
 export default function Memory() {
   // ---- Retention
   const [stats, setStats] = useState<RetentionRow[]>([]);
