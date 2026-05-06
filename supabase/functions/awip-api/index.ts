@@ -363,7 +363,8 @@ async function spawnSubOkr(req: Request, parentId: string, actor: string) {
 }
 
 async function supersedeOkr(req: Request, oldId: string, actor: string) {
-  const body = await req.json();
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (!body.title || !body.reason) return json({ error: "title and reason required" }, 400);
   const { data: old, error: oErr } = await supabase
     .from("okr_nodes")
