@@ -38,6 +38,7 @@ const App = () => (
             <Route path="/api-logs" element={<ApiLogs />} />
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
+            <Route path="/admin" element={<Admin />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
