@@ -384,6 +384,13 @@ const Roadmap = () => {
                   <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
                     {phaseStatusBadge(phase.status)}
+                    <Link
+                      to={`/master-plan#${phase.key}`}
+                      className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
+                      title="Open in master plan"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
                   </div>
                   <div className="pl-6 mb-3 text-xs">
                     <InlineEdit
@@ -401,6 +408,13 @@ const Roadmap = () => {
                         <div className="flex items-center gap-2 mb-1 pl-6">
                           <div className="text-[11px] font-mono text-muted-foreground">{sprint.key}</div>
                           <div className="text-xs">{sprint.title}</div>
+                          <Link
+                            to={`/master-plan#${sprint.key}`}
+                            className="text-[10px] text-muted-foreground hover:text-foreground"
+                            title="Open in master plan"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
                         </div>
                         <div className="pl-6 mb-2 text-[11px]">
                           <InlineEdit
