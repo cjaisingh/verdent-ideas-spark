@@ -41,12 +41,20 @@ const PendingApprovalsIndicator = () => {
           } else if (payload.eventType === "UPDATE") {
             if (next.status === "pending") {
               setPending((c) => [next, ...c.filter((r) => r.id !== next.id)].slice(0, 20));
-            } else if (prev?.status === "pending" && next.status !== "pending") {
-              setPending((c) => c.filter((r) => r.id !== next.id));
-              setLastDecidedId(next.id);
-              setTimeout(() => {
-                setLastDecidedId((cur) => (cur === next.id ? null : cur));
-              }, 4000);
+            } else {
+              // Status flipped away from pending (or row updated while non-pending).
+              // payload.old usually only has the PK without REPLICA IDENTITY FULL,
+              // so we can't trust prev?.status — drop by id and flash if it was in our list.
+              setPending((c) => {
+                const wasPending = c.some((r) => r.id === next.id);
+                if (wasPending) {
+                  setLastDecidedId(next.id);
+                  setTimeout(() => {
+                    setLastDecidedId((cur) => (cur === next.id ? null : cur));
+                  }, 4000);
+                }
+                return c.filter((r) => r.id !== next.id);
+              });
             }
           } else if (payload.eventType === "DELETE") {
             const old = payload.old as { id: string };
