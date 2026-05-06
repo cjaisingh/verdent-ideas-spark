@@ -324,7 +324,8 @@ async function ingestOkrTree(req: Request, actor: string) {
 }
 
 async function spawnSubOkr(req: Request, parentId: string, actor: string) {
-  const body = await req.json();
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (!body.title || !body.kind || !body.spawned_from_reason) {
     return json({ error: "title, kind, spawned_from_reason required" }, 400);
   }
