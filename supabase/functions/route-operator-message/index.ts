@@ -164,6 +164,20 @@ Deno.serve(async (req) => {
   const decision = policy?.default_action
     ?? (classification.risk === 'low' ? 'approve' : 'needs_approval');
 
+  const policyTrace = {
+    matched: !!policy,
+    activity: classification.activity,
+    rule_default_action: policy?.default_action ?? null,
+    rule_conditions: policy?.conditions ?? null,
+    rule_notes: policy?.notes ?? null,
+    risk: classification.risk,
+    decision,
+    reason: policy
+      ? `Matched activity_policies rule for "${classification.activity}" → default_action="${policy.default_action}".`
+      : `No activity_policies rule for "${classification.activity}". Fell back to risk-based default: risk="${classification.risk}" → ${decision}.`,
+    evaluated_at: new Date().toISOString(),
+  };
+
   // Persist intent on the source message (if any)
   if (messageId) {
     await supabase
@@ -179,7 +193,12 @@ Deno.serve(async (req) => {
       .insert({
         activity: classification.activity,
         risk: classification.risk,
-        intent_payload: { ...classification.payload, _summary: classification.summary, _source_text: text },
+        intent_payload: {
+          ...classification.payload,
+          _summary: classification.summary,
+          _source_text: text,
+          _policy: policyTrace,
+        },
         requested_by: requestedBy,
         status: decision === 'reject' ? 'rejected' : 'pending',
         decided_by: decision === 'reject' ? 'policy:auto-reject' : null,

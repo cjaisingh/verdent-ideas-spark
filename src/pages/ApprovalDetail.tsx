@@ -112,12 +112,107 @@ const ApprovalDetail = () => {
               <dd className="font-mono">{row.telegram_message_id ?? "—"}</dd>
             </div>
           </dl>
-          <div>
-            <div className="text-xs text-muted-foreground mb-1">Intent payload</div>
-            <pre className="text-[11px] font-mono bg-muted/30 rounded p-2 overflow-auto max-h-60">
-{JSON.stringify(row.intent_payload, null, 2)}
-            </pre>
-          </div>
+          {(() => {
+            const payload = (row.intent_payload ?? {}) as Record<string, unknown>;
+            const policy = payload._policy as
+              | {
+                  matched: boolean;
+                  activity: string;
+                  rule_default_action: string | null;
+                  rule_conditions: unknown;
+                  rule_notes: string | null;
+                  risk: string;
+                  decision: string;
+                  reason: string;
+                  evaluated_at: string;
+                }
+              | undefined;
+            const summary = payload._summary as string | undefined;
+            const sourceText = payload._source_text as string | undefined;
+            const cleanPayload = Object.fromEntries(
+              Object.entries(payload).filter(([k]) => !k.startsWith("_")),
+            );
+            const decisionColor =
+              policy?.decision === "approve"
+                ? "border-emerald-500/40 text-emerald-500"
+                : policy?.decision === "reject"
+                  ? "border-destructive/40 text-destructive"
+                  : "border-amber-500/40 text-amber-500";
+
+            return (
+              <>
+                {summary && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Summary</div>
+                    <div className="text-sm">{summary}</div>
+                  </div>
+                )}
+                {sourceText && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Source message</div>
+                    <div className="text-sm font-mono bg-muted/30 rounded p-2 whitespace-pre-wrap">
+                      {sourceText}
+                    </div>
+                  </div>
+                )}
+                {policy && (
+                  <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium">Policy preview</div>
+                      <Badge variant="outline" className={decisionColor}>
+                        {policy.decision}
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{policy.reason}</div>
+                    <dl className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Rule matched</dt>
+                        <dd className="font-mono">
+                          {policy.matched ? `activity_policies(${policy.activity})` : "— (fallback)"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Default action</dt>
+                        <dd className="font-mono">{policy.rule_default_action ?? "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Risk</dt>
+                        <dd className="font-mono">{policy.risk}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Evaluated at</dt>
+                        <dd className="font-mono">
+                          {new Date(policy.evaluated_at).toLocaleString()}
+                        </dd>
+                      </div>
+                    </dl>
+                    {policy.rule_notes && (
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Notes: </span>
+                        {policy.rule_notes}
+                      </div>
+                    )}
+                    {policy.rule_conditions != null &&
+                      Array.isArray(policy.rule_conditions) &&
+                      policy.rule_conditions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-muted-foreground mb-1">Conditions</div>
+                          <pre className="text-[11px] font-mono bg-background/60 rounded p-2 overflow-auto max-h-40">
+{JSON.stringify(policy.rule_conditions, null, 2)}
+                          </pre>
+                        </div>
+                      )}
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Intent payload</div>
+                  <pre className="text-[11px] font-mono bg-muted/30 rounded p-2 overflow-auto max-h-60">
+{JSON.stringify(cleanPayload, null, 2)}
+                  </pre>
+                </div>
+              </>
+            );
+          })()}
           {row.result != null && (
             <div>
               <div className="text-xs text-muted-foreground mb-1">Result</div>
