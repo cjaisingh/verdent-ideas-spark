@@ -220,7 +220,10 @@ export const AutoLogSettings = () => {
             </div>
           </div>
 
-          <PreviewPanel settings={settings} />
+          <div className="space-y-4">
+            <PreviewPanel settings={settings} />
+            <SkipsPanel open={open} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
