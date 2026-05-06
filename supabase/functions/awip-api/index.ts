@@ -15,6 +15,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+// ---------- redaction ----------
+// Scrub secrets from anything we persist (api_call_logs, *_events.payload).
+// Defensive: walk strings, leave non-strings alone, cap recursion depth.
+const SERVICE_TOKEN_VALUE = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+const REDACTION_PATTERNS: RegExp[] = [
+  /sk-[A-Za-z0-9_\-]{16,}/g,
+  /Bearer\s+[A-Za-z0-9._\-]+/g,
+  /eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g,
+];
+function redactString(s: string): string {
+  let out = s;
+  for (const re of REDACTION_PATTERNS) out = out.replace(re, "[REDACTED]");
+  if (SERVICE_TOKEN_VALUE && out.includes(SERVICE_TOKEN_VALUE)) {
+    out = out.split(SERVICE_TOKEN_VALUE).join("[REDACTED]");
+  }
+  return out;
+}
+export function redact<T>(value: T, depth = 0): T {
+  if (depth > 8) return value;
+  if (typeof value === "string") return redactString(value) as unknown as T;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1)) as unknown as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redact(v, depth + 1);
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
