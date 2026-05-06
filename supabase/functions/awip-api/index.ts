@@ -193,10 +193,18 @@ async function registerCapability(req: Request, actor: string) {
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("okr_ingest", idemKey);
-  if (cached) return json(cached);
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let body: any;
+  try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("okr_ingest", idemKey, bodyHash);
+  if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+  if (conflict.cached) {
+    const { __body_hash, ...rest } = conflict.cached as any;
+    return json(rest);
+  }
 
-  const body = await req.json();
   const { tenant_slug, tenant_name, nodes } = body as {
     tenant_slug: string;
     tenant_name?: string;
