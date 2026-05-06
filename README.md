@@ -8,6 +8,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [API reference](docs/api.md) — every `/awip-api` endpoint with examples
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
+- [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)
 
 ## What's in this project
