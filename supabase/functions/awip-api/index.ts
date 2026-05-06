@@ -386,14 +386,16 @@ async function getRecentEvents(url: URL) {
 }
 
 async function getCapabilityDemand() {
-  const [capsRes, measRes, nodesRes] = await Promise.all([
+  const [capsRes, measRes, nodesRes, tenantsRes] = await Promise.all([
     supabase.from("capabilities").select("*"),
     supabase.from("okr_measurements").select("okr_node_id, required_capabilities"),
     supabase.from("okr_nodes").select("id, tenant_id, status"),
+    supabase.from("tenants").select("id, slug, name"),
   ]);
   if (capsRes.error) return json({ error: capsRes.error.message }, 500);
   if (measRes.error) return json({ error: measRes.error.message }, 500);
   if (nodesRes.error) return json({ error: nodesRes.error.message }, 500);
+  if (tenantsRes.error) return json({ error: tenantsRes.error.message }, 500);
 
   const nodeById = new Map((nodesRes.data ?? []).map((n: any) => [n.id, n]));
   type Agg = { tenants: Set<string>; krs: Set<string>; active_krs: Set<string> };
@@ -411,26 +413,22 @@ async function getCapabilityDemand() {
     }
   }
 
-  const demand = (capsRes.data ?? []).map((c: any) => {
-    const a = agg.get(c.id);
-    return {
-      id: c.id,
-      name: c.name,
-      status: c.status,
-      owning_module: c.owning_module,
-      tenant_count: a?.tenants.size ?? 0,
-      kr_count: a?.krs.size ?? 0,
-      active_kr_count: a?.active_krs.size ?? 0,
-    };
+  const rowFor = (c: any, a?: Agg) => ({
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    owning_module: c.owning_module,
+    tenant_ids: [...(a?.tenants ?? [])],
+    tenant_count: a?.tenants.size ?? 0,
+    kr_count: a?.krs.size ?? 0,
+    active_kr_count: a?.active_krs.size ?? 0,
   });
 
-  // Also surface unknown capabilities referenced by KRs but not registered
+  const demand = (capsRes.data ?? []).map((c: any) => rowFor(c, agg.get(c.id)));
+
   for (const [capId, a] of agg) {
     if (!demand.find((d) => d.id === capId)) {
-      demand.push({
-        id: capId, name: capId, status: "unknown", owning_module: null,
-        tenant_count: a.tenants.size, kr_count: a.krs.size, active_kr_count: a.active_krs.size,
-      });
+      demand.push(rowFor({ id: capId, name: capId, status: "unknown", owning_module: null }, a));
     }
   }
 
@@ -440,7 +438,7 @@ async function getCapabilityDemand() {
     a.name.localeCompare(b.name)
   );
 
-  return json({ demand });
+  return json({ demand, tenants: tenantsRes.data ?? [] });
 }
 
 // ---------- router ----------
