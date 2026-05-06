@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
   const startedAt = b.started_at ?? new Date().toISOString();
   const endedAt = b.ended_at ?? new Date().toISOString();
   const duration_ms = b.duration_ms ?? (new Date(endedAt).getTime() - new Date(startedAt).getTime());
-  const tokens_total = b.tokens_total ?? ((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null;
+  const tokens_total = b.tokens_total ?? (((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null);
 
   const { data, error } = await admin.from('roadmap_work_log').insert({
     task_id: taskId,
