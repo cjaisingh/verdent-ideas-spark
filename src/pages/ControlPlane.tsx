@@ -68,8 +68,20 @@ const ControlPlane = () => {
   const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
   const [botError, setBotError] = useState<{ message: string; status?: number; detail?: unknown; at: string } | null>(null);
   const [botLoading, setBotLoading] = useState(false);
+  const botFailCount = useRef(0);
+  const botRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [botNextRetryAt, setBotNextRetryAt] = useState<number | null>(null);
+
+  const clearBotRetry = () => {
+    if (botRetryTimer.current) {
+      clearTimeout(botRetryTimer.current);
+      botRetryTimer.current = null;
+    }
+    setBotNextRetryAt(null);
+  };
 
   const loadBotInfo = async () => {
+    clearBotRetry();
     setBotLoading(true);
     setBotError(null);
     try {
@@ -84,15 +96,31 @@ const ControlPlane = () => {
           detail: d.detail,
           at: new Date().toISOString(),
         });
+        scheduleBotRetry();
         return;
       }
+      botFailCount.current = 0;
       setBotInfo(d);
     } catch (e) {
       setBotInfo(null);
       setBotError({ message: (e as Error).message, at: new Date().toISOString() });
+      scheduleBotRetry();
     } finally {
       setBotLoading(false);
     }
+  };
+
+  const scheduleBotRetry = () => {
+    botFailCount.current += 1;
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s, capped at 60s
+    const delayMs = Math.min(60_000, 2_000 * 2 ** (botFailCount.current - 1));
+    const nextAt = Date.now() + delayMs;
+    setBotNextRetryAt(nextAt);
+    botRetryTimer.current = setTimeout(() => {
+      botRetryTimer.current = null;
+      setBotNextRetryAt(null);
+      loadBotInfo();
+    }, delayMs);
   };
 
   const loadChatIds = async () => {
