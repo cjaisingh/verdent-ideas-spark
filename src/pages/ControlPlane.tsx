@@ -65,7 +65,7 @@ const ControlPlane = () => {
   const [tgSending, setTgSending] = useState(false);
   const [chatIds, setChatIds] = useState<number[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string>("");
-  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
+  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null; expected_username?: string | null; mismatch?: boolean } | null>(null);
   const [botError, setBotError] = useState<{ message: string; status?: number; detail?: unknown; at: string } | null>(null);
   const [botLoading, setBotLoading] = useState(false);
   const botFailCount = useRef(0);
