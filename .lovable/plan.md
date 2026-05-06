@@ -1,57 +1,124 @@
 
-# Adopt three small Ruflo-inspired patterns
+# AWIP Voice-Loop — Phase A
 
-Three additions, each independently revertable. We commit to a periodic review (noted in `docs/adr/README.md`) of whether to take more from Ruflo — the default answer stays "no" unless a concrete AWIP pain matches a Ruflo pattern.
+Build the Telegram bridge, the four operator tables, and the seed policy data inside this Lovable project (AWIP Core). Phases B–E follow in subsequent messages, one at a time, so each is independently reviewable and revertable.
 
-## 1. `docs/adr/` with template + two seed ADRs
+## What gets built in Phase A
 
-Create:
+### 1. Connect Telegram
 
-- **`docs/adr/README.md`** — explains the ADR convention, numbering, status lifecycle (`proposed` → `accepted` → `superseded`), and a standing "Ruflo review" note: every time we consider adopting a Ruflo pattern, log it as an ADR (accepted or rejected with reason) so we don't churn on the same questions.
-- **`docs/adr/_template.md`** — 1-page template: Context / Decision / Consequences / Status / Date.
-- **`docs/adr/0001-capability-registry-contract.md`** — codifies the existing contract: capabilities are content-addressed by `id`, registered via `POST /capabilities/register`, surfaced via `/capabilities` and `/capabilities/demand`. Unknown capabilities referenced by KRs are first-class signals, not errors.
-- **`docs/adr/0002-service-token-and-idempotency.md`** — codifies: service-token auth path for cross-project calls, `Idempotency-Key` required on writes, body-hash conflict → 409, replay → cached response with `idempotent_replay=true` in logs.
+Trigger the Telegram connector picker against this project so `TELEGRAM_API_KEY` and `LOVABLE_API_KEY` are available to edge functions.
 
-No code changes, just docs.
+### 2. Database (one migration)
 
-## 2. Redaction helper in `awip-api`
+Four new tables, all RLS-locked to operators only (matches existing pattern).
 
-Add a `redact(value)` function in `supabase/functions/awip-api/index.ts` that walks any JSON value and replaces matches with `"[REDACTED]"`:
+```text
+operator_messages
+─────────────────
+id                uuid pk
+update_id         bigint unique         -- Telegram update_id, idempotency
+chat_id           bigint
+direction         text                  -- 'inbound' | 'outbound'
+text              text
+intent            text                  -- parsed by router; null until classified
+raw               jsonb
+created_at        timestamptz
 
-- `sk-[A-Za-z0-9_\-]{16,}` (OpenAI / Anthropic-style keys)
-- `Bearer\s+[A-Za-z0-9._\-]+` (auth headers leaked into bodies)
-- JWT shape: `eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+`
-- `x-awip-service-token` value if it appears anywhere in a string
+approval_queue
+──────────────
+id                uuid pk
+activity          text                  -- e.g. 'gmail.send'
+intent_payload    jsonb                 -- what would be executed if approved
+risk              text                  -- 'safe' | 'risky' | 'unknown' | 'blocker'
+status            text                  -- 'pending' | 'approved' | 'rejected' | 'expired' | 'executed' | 'failed'
+telegram_message_id bigint              -- the message with inline buttons
+requested_by      text
+decided_by        text
+decided_at        timestamptz
+result            jsonb
+created_at        timestamptz
 
-Apply it inside `logApiCall` to `request_summary`, `response_summary`, and `error` **before** insert, and inside the event-insert helpers (`okr_node_events.payload`, `capability_events.payload`) before insert. Keep redaction defensive: scan strings recursively, leave non-string leaves alone, cap recursion depth at 8 to avoid pathological payloads.
+rethink_tasks
+─────────────
+id                uuid pk
+topic             text
+original_proposal jsonb
+reason            text                  -- why first answer was unconvincing / blocker
+temp_fix          text                  -- optional, for blockers
+status            text                  -- 'open' | 'in_review' | 'resolved'
+created_at        timestamptz
+resolved_at       timestamptz
 
-Add `e2e/redaction.test.ts`:
-- Send `/okr/ingest` with a fake `sk-…` string buried in a `data_sources[].notes` field; assert it does not appear in `api_call_logs.request_summary` or in any `okr_node_events.payload` row.
-- Same for a `Bearer …` and a JWT-shaped string.
+activity_policies
+─────────────────
+id                uuid pk
+activity          text unique           -- 'gmail.send', 'gmail.draft', 'calendar.hold', ...
+default_action    text                  -- 'auto' | 'approve' | 'block'
+conditions        jsonb                 -- IF/THEN rule list, first match wins
+notes             text
+updated_at        timestamptz
+```
 
-## 3. `capability_resolution_warnings` event type
+Seed `activity_policies` conservatively:
 
-Inside the `/capabilities/demand` handler in `awip-api`, after computing the demand aggregate, for each entry where `status === "unknown"` **or** (`status !== "unknown"` and `owning_module` is null and `active_kr_count > 0`), emit one row to `capability_events`:
+```text
+gmail.read                 auto
+gmail.draft                auto
+gmail.send                 approve
+calendar.read              auto
+calendar.hold (own cal)    auto
+calendar.invite_external   approve
+drive.read                 auto
+drive.write                approve
+awip.spawn_okr             approve
+awip.supersede_okr         approve
+```
 
-- `capability_id` = the demanded id
-- `event_type` = `"resolution_warning"`
-- `actor` = the calling actor
-- `payload` = `{ reason: "unowned" | "unknown", tenant_count, active_kr_count, tenant_ids }`
+### 3. Edge function: `telegram-webhook`
 
-To avoid a flood (the demand endpoint may be polled), de-dupe: only emit if no `resolution_warning` row exists for that `capability_id` in the last 10 minutes. Implement the de-dupe with a single `select … where event_type='resolution_warning' and capability_id in (...) and created_at > now()-interval '10 minutes'` and skip ids present in the result.
+- `verify_jwt = false` (added to `supabase/config.toml`)
+- Validates `X-Telegram-Bot-Api-Secret-Token` against base64url-SHA256 of `telegram-webhook:${TELEGRAM_API_KEY}` (constant-time compare)
+- Inserts inbound update into `operator_messages` (upsert on `update_id` for idempotency)
+- Handles `callback_query` from inline buttons → updates `approval_queue.status` to `approved` / `rejected`, records `decided_by`, `decided_at`
+- Returns `{ ok: true }` quickly; heavy work deferred to Phase B router
 
-Surface these in the existing `/events/recent` stream automatically (it already merges `capability_events`). No new endpoint.
+### 4. Edge function: `telegram-send` (helper)
 
-Add to `e2e/coverage.test.ts` (or new `e2e/resolution-warnings.test.ts`):
-- Ingest a tenant with a KR referencing an unknown capability, call `/capabilities/demand`, assert a `capability_events` row with `event_type='resolution_warning'`, `payload.reason='unknown'` exists.
-- Call `/capabilities/demand` again immediately, assert no duplicate row was added (de-dupe works).
+Small internal-only helper used by later phases to post messages and inline-button approval prompts via the gateway. Service-token-protected, not exposed to end users.
 
-## Out of scope (revisit at next ADR review)
+### 5. Register the webhook
 
-- Ruflo's hooks framework, swarm runtime, plugin marketplace, signed witness manifests, tiered embedding fallback. Logged as "considered, deferred" in `docs/adr/README.md` so future Lovables don't re-propose them.
+After deploy, call `setWebhook` through the connector gateway with:
+
+```text
+url           = https://<ref>.supabase.co/functions/v1/telegram-webhook
+secret_token  = base64url(sha256("telegram-webhook:" + TELEGRAM_API_KEY))
+allowed_updates = ["message","edited_message","callback_query"]
+```
+
+Verify with `getWebhookInfo`.
+
+### 6. Smoke test
+
+Send a Telegram message to the bot → confirm a row lands in `operator_messages`. Tap a fake inline button via `telegram-send` → confirm `approval_queue` row flips status. No reasoning yet (that's Phase B).
 
 ## Files
 
-- create: `docs/adr/README.md`, `docs/adr/_template.md`, `docs/adr/0001-capability-registry-contract.md`, `docs/adr/0002-service-token-and-idempotency.md`, `e2e/redaction.test.ts`, `e2e/resolution-warnings.test.ts`
-- edit: `supabase/functions/awip-api/index.ts` (redaction helper + apply it in `logApiCall` and event inserts; emit `resolution_warning` from `/capabilities/demand` with 10-min dedupe)
-- redeploy: `awip-api`
+- create migration: tables `operator_messages`, `approval_queue`, `rethink_tasks`, `activity_policies` + RLS + seed inserts for `activity_policies`
+- create: `supabase/functions/telegram-webhook/index.ts`
+- create: `supabase/functions/telegram-send/index.ts`
+- edit: `supabase/config.toml` — add `[functions.telegram-webhook] verify_jwt = false`
+- run: `standard_connectors--connect telegram`, then `setWebhook` via gateway curl
+
+## Out of scope for Phase A
+
+- The 4 `/awip/*` primitives (Phase C)
+- The reasoning router with model-map (Phase B)
+- Gmail / Calendar connectors (Phase D)
+- `/policies`, `/approvals`, `/rethink` operator UI pages (Phase E)
+- Gemini Gem configuration on your phone (external, not a Lovable change)
+
+## After Phase A
+
+You'll be able to message the bot and have it logged + acknowledged, and the approval-queue mechanics will be testable end-to-end with synthetic rows. Phase B adds the brain.
