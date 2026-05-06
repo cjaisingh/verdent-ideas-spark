@@ -66,6 +66,13 @@ export const AutomationPanel = () => {
   const [qaMsg, setQaMsg] = useState<string | null>(null);
   const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
 
+  // Filters / sorting
+  const [findingSev, setFindingSev] = useState<"all" | "high" | "medium" | "low" | "info">("all");
+  const [findingAck, setFindingAck] = useState<"all" | "open" | "ack">("open");
+  const [findingSort, setFindingSort] = useState<"newest" | "oldest" | "severity">("newest");
+  const [runStatus, setRunStatus] = useState<"all" | "passed" | "failed" | "errored">("all");
+  const [runSort, setRunSort] = useState<"newest" | "oldest">("newest");
+
   const toggleFinding = (id: string) => {
     setExpandedFindings((prev) => {
       const next = new Set(prev);
@@ -103,9 +110,9 @@ export const AutomationPanel = () => {
   const load = async () => {
     const [f, r, q, a] = await Promise.all([
       supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged, body, area, reviewer_model, diff_window_start, diff_window_end")
-        .order("created_at", { ascending: false }).limit(8),
+        .order("created_at", { ascending: false }).limit(100),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
-        .order("created_at", { ascending: false }).limit(4),
+        .order("created_at", { ascending: false }).limit(50),
       supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note, kind, probe")
         .order("phase_key").order("criterion"),
       supabase.from("automation_runs" as any).select("id, created_at, job, trigger, status, status_code, duration_ms, message")
@@ -179,6 +186,29 @@ export const AutomationPanel = () => {
     (acc[c.phase_key] ||= []).push(c); return acc;
   }, {});
 
+  const sevRank: Record<string, number> = { high: 0, medium: 1, low: 2, info: 3 };
+  const filteredFindings = findings
+    .filter((f) => findingSev === "all" || f.severity === findingSev)
+    .filter((f) => findingAck === "all" || (findingAck === "ack" ? f.acknowledged : !f.acknowledged))
+    .sort((a, b) => {
+      if (findingSort === "severity") return (sevRank[a.severity] ?? 9) - (sevRank[b.severity] ?? 9);
+      const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+      return findingSort === "oldest" ? da - db : db - da;
+    });
+
+  const filteredRuns = runs
+    .filter((r) => {
+      if (runStatus === "all") return true;
+      if (runStatus === "passed") return r.status === "pass" || r.status === "passed";
+      if (runStatus === "failed") return r.status === "fail" || r.status === "failed";
+      if (runStatus === "errored") return r.status === "errored" || r.status === "error";
+      return true;
+    })
+    .sort((a, b) => {
+      const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+      return runSort === "oldest" ? da - db : db - da;
+    });
+
   const lastRunAt = runs[0]?.created_at ?? null;
   const lastReview = lastRunFor("scheduled-code-review");
   const lastQa = lastRunFor("qa-validate");
@@ -221,11 +251,31 @@ export const AutomationPanel = () => {
           {reviewMsg && <span className={statusTone(reviewState === "error" ? "fail" : "pass")}>{reviewMsg}</span>}
         </div>
         <LastRun run={lastReview} emptyHint="No runs recorded yet — click Run now to test." />
-        {findings.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
+        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+          <select value={findingSev} onChange={(e) => setFindingSev(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="all">all severity</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+            <option value="info">info</option>
+          </select>
+          <select value={findingAck} onChange={(e) => setFindingAck(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="open">open</option>
+            <option value="ack">acknowledged</option>
+            <option value="all">all</option>
+          </select>
+          <select value={findingSort} onChange={(e) => setFindingSort(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="newest">newest</option>
+            <option value="oldest">oldest</option>
+            <option value="severity">by severity</option>
+          </select>
+          <span className="ml-auto text-muted-foreground font-mono">{filteredFindings.length}/{findings.length}</span>
+        </div>
+        {filteredFindings.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">No findings match.</div>
         ) : (
           <ul className="divide-y divide-border max-h-80 overflow-y-auto">
-            {findings.map((f) => {
+            {filteredFindings.map((f) => {
               const open = expandedFindings.has(f.id);
               return (
                 <li key={f.id} className={`py-1.5 ${f.acknowledged ? "opacity-60" : ""}`}>
@@ -296,11 +346,24 @@ export const AutomationPanel = () => {
           {lastRunAt && <span>last: {ago(lastRunAt)}</span>}
         </div>
         <LastRun run={lastTestPost} emptyHint="No nightly POSTs received — once GitHub Actions runs, the latest call (incl. 401s) appears here." />
-        {runs.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2">No runs recorded yet — first nightly will appear here.</div>
+        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+          <select value={runStatus} onChange={(e) => setRunStatus(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="all">all status</option>
+            <option value="passed">passed</option>
+            <option value="failed">failed</option>
+            <option value="errored">errored</option>
+          </select>
+          <select value={runSort} onChange={(e) => setRunSort(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="newest">newest</option>
+            <option value="oldest">oldest</option>
+          </select>
+          <span className="ml-auto text-muted-foreground font-mono">{filteredRuns.length}/{runs.length}</span>
+        </div>
+        {filteredRuns.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">No runs match.</div>
         ) : (
-          <ul className="divide-y divide-border">
-            {runs.map((r) => (
+          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+            {filteredRuns.map((r) => (
               <li key={r.id} className="py-1.5 flex items-center gap-2 text-xs">
                 <span className="font-mono uppercase text-[10px] text-muted-foreground w-12">{r.suite}</span>
                 <span className={`font-mono ${statusTone(r.status)}`}>{r.status}</span>
