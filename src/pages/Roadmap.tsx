@@ -27,7 +27,11 @@ type WorkLog = {
   tokens_total: number | null; model: string | null; summary: string | null;
   issues: string | null; fixes: string | null; author: string | null; created_at: string;
 };
-
+type Activity = {
+  id: string; task_id: string; field: string;
+  old_value: string | null; new_value: string | null;
+  author_label: string | null; created_at: string;
+};
 const TASK_STATUSES = ["todo", "in_progress", "blocked", "review", "done", "wont_do"] as const;
 
 const taskMarker = (status: string) => {
