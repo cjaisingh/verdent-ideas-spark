@@ -511,6 +511,9 @@ export type Database = {
           enabled: boolean
           extract_issues_fixes: boolean
           id: boolean
+          source_ai_gateway: boolean
+          source_awip_api: boolean
+          source_lovable_agent: boolean
           updated_at: string
         }
         Insert: {
@@ -524,6 +527,9 @@ export type Database = {
           enabled?: boolean
           extract_issues_fixes?: boolean
           id?: boolean
+          source_ai_gateway?: boolean
+          source_awip_api?: boolean
+          source_lovable_agent?: boolean
           updated_at?: string
         }
         Update: {
@@ -537,6 +543,9 @@ export type Database = {
           enabled?: boolean
           extract_issues_fixes?: boolean
           id?: boolean
+          source_ai_gateway?: boolean
+          source_awip_api?: boolean
+          source_lovable_agent?: boolean
           updated_at?: string
         }
         Relationships: []
