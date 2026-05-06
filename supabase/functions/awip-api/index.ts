@@ -542,6 +542,7 @@ Deno.serve(async (req) => {
       actor = auth.actor;
       const spawnMatch = path.match(/^\/okr\/([0-9a-f-]+)\/spawn$/i);
       const supMatch = path.match(/^\/okr\/([0-9a-f-]+)\/supersede$/i);
+      const capDetailMatch = path.match(/^\/capabilities\/([^\/]+)\/demand-detail$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
