@@ -1,104 +1,57 @@
-# AWIP v1 — The OKR Substrate (Core)
 
-## What this is
+# Adopt three small Ruflo-inspired patterns
 
-AWIP is built as **a constellation of Lovable projects**, not one monolith. Each module (CDP, agent, connector) will be its own project, registering itself with Core via a shared contract.
+Three additions, each independently revertable. We commit to a periodic review (noted in `docs/adr/README.md`) of whether to take more from Ruflo — the default answer stays "no" unless a concrete AWIP pain matches a Ruflo pattern.
 
-- **AWIP Core** (this project) — OKR tree, capability manifest, operator view, contract endpoints. The spine every future module hangs off.
-- **Discovery AI** (separate project) — queries Core during OKR drafting, hands off the finished tree to Core via `POST /okr/ingest`.
-- **Control Plane** — currently embedded at `/control-plane` in this project. Read-only consumer of the event streams + demand aggregate. May move to its own project once the first acting module ships.
+## 1. `docs/adr/` with template + two seed ADRs
 
-## Status
+Create:
 
-v1 success criteria are met end-to-end. A synthetic engagement has been driven through ingest → spawn → supersede → idempotent replay; the operator view, demand board, and event feed all reflect it correctly.
+- **`docs/adr/README.md`** — explains the ADR convention, numbering, status lifecycle (`proposed` → `accepted` → `superseded`), and a standing "Ruflo review" note: every time we consider adopting a Ruflo pattern, log it as an ADR (accepted or rejected with reason) so we don't churn on the same questions.
+- **`docs/adr/_template.md`** — 1-page template: Context / Decision / Consequences / Status / Date.
+- **`docs/adr/0001-capability-registry-contract.md`** — codifies the existing contract: capabilities are content-addressed by `id`, registered via `POST /capabilities/register`, surfaced via `/capabilities` and `/capabilities/demand`. Unknown capabilities referenced by KRs are first-class signals, not errors.
+- **`docs/adr/0002-service-token-and-idempotency.md`** — codifies: service-token auth path for cross-project calls, `Idempotency-Key` required on writes, body-hash conflict → 409, replay → cached response with `idempotent_replay=true` in logs.
 
-## Part A — AWIP Core (this project)
+No code changes, just docs.
 
-### Data model
+## 2. Redaction helper in `awip-api`
 
-- **`tenants`** — one per client engagement
-- **`okr_nodes`** — versioned tree. `parent_id`, `kind` (`objective` | `key_result`), `status` (`draft` | `active` | `superseded` | `achieved` | `abandoned`), `version`, `superseded_by`, `spawned_from_reason`, `created_by` (`discovery_ai` | `awip` | `human`)
-- **`okr_measurements`** — for KR nodes: `metric_name`, `baseline`, `target`, `unit`, `cadence`, `attribution_rules`, `data_sources`, `required_capabilities`
-- **`okr_node_events`** — append-only log
-- **`capabilities`** — `id`, `name`, `description`, `status` (`available` | `planned` | `experimental`), `version`, `inputs_required`, `outputs_provided`, `owning_module`
-- **`capability_connectors`** — connector dependencies per capability
-- **`capability_events`** — append-only log
-- **`idempotency_keys`** — scope + key + cached response
-- **`api_call_logs`** — every contract call (route, status, duration, actor, idempotency replay flag)
-- **`user_roles`** — operator / admin via `has_role()` security-definer function
+Add a `redact(value)` function in `supabase/functions/awip-api/index.ts` that walks any JSON value and replaces matches with `"[REDACTED]"`:
 
-Sub-OKRs spawn by inserting with `parent_id`. Superseding sets old `status='superseded'` + `superseded_by`. Nothing is hard-deleted.
+- `sk-[A-Za-z0-9_\-]{16,}` (OpenAI / Anthropic-style keys)
+- `Bearer\s+[A-Za-z0-9._\-]+` (auth headers leaked into bodies)
+- JWT shape: `eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+`
+- `x-awip-service-token` value if it appears anywhere in a string
 
-### Contract endpoints (single edge function `awip-api`)
+Apply it inside `logApiCall` to `request_summary`, `response_summary`, and `error` **before** insert, and inside the event-insert helpers (`okr_node_events.payload`, `capability_events.payload`) before insert. Keep redaction defensive: scan strings recursively, leave non-string leaves alone, cap recursion depth at 8 to avoid pathological payloads.
 
-All stateless and idempotent. Auth: operator JWT or `x-awip-service-token`.
+Add `e2e/redaction.test.ts`:
+- Send `/okr/ingest` with a fake `sk-…` string buried in a `data_sources[].notes` field; assert it does not appear in `api_call_logs.request_summary` or in any `okr_node_events.payload` row.
+- Same for a `Bearer …` and a JWT-shaped string.
 
-| Method | Path | Notes |
-|---|---|---|
-| `GET` | `/capabilities` | Optional `?status=` |
-| `POST` | `/capabilities/register` | Upsert + emit `registered` |
-| `POST` | `/okr/ingest` | `Idempotency-Key` required |
-| `POST` | `/okr/:id/spawn` | `spawned_from_reason` mandatory |
-| `POST` | `/okr/:id/supersede` | Preserves history |
-| `GET` | `/okr/tree?tenant_id=…` | Includes superseded |
-| `GET` | `/events/recent` | `limit`, `since`, `tenant_id` |
-| `GET` | `/capabilities/demand` | Ranked aggregate; surfaces unknown capabilities |
-| `GET` | `/capabilities/:id/demand-detail` | Capability + KRs + tenants |
+## 3. `capability_resolution_warnings` event type
 
-Every call logs to `api_call_logs`.
+Inside the `/capabilities/demand` handler in `awip-api`, after computing the demand aggregate, for each entry where `status === "unknown"` **or** (`status !== "unknown"` and `owning_module` is null and `active_kr_count > 0`), emit one row to `capability_events`:
 
-### Operator UI
+- `capability_id` = the demanded id
+- `event_type` = `"resolution_warning"`
+- `actor` = the calling actor
+- `payload` = `{ reason: "unowned" | "unknown", tenant_count, active_kr_count, tenant_ids }`
 
-- **Tenants** — list + detail with OKR tree (status, version, `created_by`, `spawned_from_reason`; superseded dimmed)
-- **Capabilities** — manifest table
-- **Events** — chronological log
-- **API logs** — filterable by route, with idempotency-replay badge
-- **Control Plane** — tabbed:
-  - **Demand board** — capabilities ranked by active KRs / tenants. Filters: tenant, status, min active KRs. Sortable columns. Click → capability detail.
-  - **Live event feed** — 5s polling with `since` cursor, source filter (okr / capability / all), colored rails per source, freshness flash on new rows.
-- **Capability detail** (`/capabilities/:id`) — header + stats + tenants driving demand (linked) + KRs requiring it (active first, then superseded)
+To avoid a flood (the demand endpoint may be polled), de-dupe: only emit if no `resolution_warning` row exists for that `capability_id` in the last 10 minutes. Implement the de-dupe with a single `select … where event_type='resolution_warning' and capability_id in (...) and created_at > now()-interval '10 minutes'` and skip ids present in the result.
 
-## Part B — Discovery AI follow-up (separate project)
+Surface these in the existing `/events/recent` stream automatically (it already merges `capability_events`). No new endpoint.
 
-1. Call `GET /capabilities` during drafting; constrain to `available` or tag as future hooks.
-2. POST approved drafts to `/okr/ingest` with an idempotency key. Surface validation warnings.
-3. Store Core's service token as a project secret.
+Add to `e2e/coverage.test.ts` (or new `e2e/resolution-warnings.test.ts`):
+- Ingest a tenant with a KR referencing an unknown capability, call `/capabilities/demand`, assert a `capability_events` row with `event_type='resolution_warning'`, `payload.reason='unknown'` exists.
+- Call `/capabilities/demand` again immediately, assert no duplicate row was added (de-dupe works).
 
-## Orchestration: where it lives, where it's going
+## Out of scope (revisit at next ADR review)
 
-| Concern | Today | Future |
-|---|---|---|
-| Routing | Hardcoded / human | Control Plane subscribes to `okr_node_events`, consults manifest, dispatches |
-| Scheduling | None | Control Plane cron, reading KR cadences |
-| Module lifecycle | `POST /capabilities/register` | Control Plane reacts to `capability_events`, notifies waiting OKRs |
-| Arbitration | N/A | Control Plane uses version + tenant overrides |
-| Observability | Operator event log | Control Plane aggregates module action logs |
+- Ruflo's hooks framework, swarm runtime, plugin marketplace, signed witness manifests, tiered embedding fallback. Logged as "considered, deferred" in `docs/adr/README.md` so future Lovables don't re-propose them.
 
-The four design rules that keep the future Control Plane a clean addition:
+## Files
 
-1. Every OKR mutation emits an `okr_node_events` row.
-2. Every manifest change emits a `capability_events` row.
-3. All write endpoints are idempotent.
-4. No "who acts when" logic in Core.
-
-## Explicitly deferred
-
-- Acting modules (agents, CDPs, connectors) — own projects
-- Client-facing UI / iOS PWA — own project
-- Writes back into client systems
-- Self-serve OKR authoring by clients
-- Real-time KR scoring against live data
-- Per-action provenance (audit at OKR-mutation level only for now)
-
-## v1 success criteria — status
-
-- ✅ Discovery AI can query `/capabilities` and POST a draft tree, getting back IDs + warnings. Replay with same idempotency key returns same result without duplicates.
-- ✅ Spawning a sub-OKR works and shows in the tree with the spawn reason.
-- ✅ Superseding preserves history; event log shows the full evolution.
-- ✅ `capability_events` + `okr_node_events` form a complete replayable stream (`/events/recent`).
-- ✅ Operator view shows which OKRs reference which capabilities (demand board + capability detail).
-- ✅ Synthetic engagement run end-to-end (Acme Coworking + Verify Discovery tenants).
-
-## Next decision
-
-Promote the first capability to `available`. `desk_utilisation_measurement` has the strongest demand signal (2 tenants, 1 active KR after the sensor-ingest supersede). Either build it as the first module project, or seed more tenants first to make the ranking meaningful.
+- create: `docs/adr/README.md`, `docs/adr/_template.md`, `docs/adr/0001-capability-registry-contract.md`, `docs/adr/0002-service-token-and-idempotency.md`, `e2e/redaction.test.ts`, `e2e/resolution-warnings.test.ts`
+- edit: `supabase/functions/awip-api/index.ts` (redaction helper + apply it in `logApiCall` and event inserts; emit `resolution_warning` from `/capabilities/demand` with 10-min dedupe)
+- redeploy: `awip-api`
