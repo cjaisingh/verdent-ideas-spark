@@ -360,6 +360,19 @@ export default function Memory() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center justify-between rounded-md border border-border p-3 mb-3 bg-muted/30">
+            <div>
+              <div className="font-medium text-sm">Automatic purging</div>
+              <div className="text-xs text-muted-foreground">
+                When on, expired rows (per each table's TTL) are deleted daily at 03:30 UTC. Manual purge always works.
+              </div>
+            </div>
+            <Switch
+              checked={!!autoPurge}
+              disabled={autoPurge === null}
+              onCheckedChange={toggleAutoPurge}
+            />
+          </div>
           <p className="text-xs text-muted-foreground mb-3">
             Pick a time-to-live per table. <strong>0 = keep forever.</strong> Rows older than the window are deleted on purge.
           </p>
