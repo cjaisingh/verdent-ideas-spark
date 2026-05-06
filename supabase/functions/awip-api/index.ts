@@ -720,7 +720,8 @@ async function requestApproval(req: Request, actor: string) {
     if (existing) return json({ ok: true, approval_id: existing.id, status: existing.status, replayed: true });
   }
 
-  const risk = body.risk ?? "unknown";
+  const RISK_MAP: Record<string, string> = { low: "safe", medium: "risky", high: "blocker", safe: "safe", risky: "risky", blocker: "blocker", unknown: "unknown" };
+  const risk = RISK_MAP[String(body.risk ?? "unknown")] ?? "unknown";
   const { data: ins, error } = await supabase
     .from("approval_queue")
     .insert({
