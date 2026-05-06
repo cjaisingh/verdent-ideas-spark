@@ -511,6 +511,42 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_gateway_logs: {
+        Row: {
+          attempt: number
+          created_at: string
+          detail: Json | null
+          endpoint: string
+          error: string | null
+          id: string
+          latency_ms: number | null
+          ok: boolean
+          status_code: number | null
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          detail?: Json | null
+          endpoint: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          ok?: boolean
+          status_code?: number | null
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          detail?: Json | null
+          endpoint?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          ok?: boolean
+          status_code?: number | null
+        }
+        Relationships: []
+      }
       tenants: {
         Row: {
           created_at: string
