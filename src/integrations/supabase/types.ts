@@ -412,6 +412,24 @@ export type Database = {
         }
         Relationships: []
       }
+      memory_settings: {
+        Row: {
+          auto_purge_enabled: boolean
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_purge_enabled?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_purge_enabled?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       okr_measurements: {
         Row: {
           attribution_rules: Json
@@ -1291,6 +1309,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_purge_if_enabled: { Args: never; Returns: number }
       grant_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

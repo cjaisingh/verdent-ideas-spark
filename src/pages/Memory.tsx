@@ -160,7 +160,29 @@ export default function Memory() {
     if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
   };
 
-  // ---- Audit log
+  // ---- Auto-purge toggle
+  const [autoPurge, setAutoPurge] = useState<boolean | null>(null);
+  const loadAutoPurge = async () => {
+    const { data } = await supabase
+      .from("memory_settings" as any)
+      .select("auto_purge_enabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (data) setAutoPurge((data as any).auto_purge_enabled);
+  };
+  const toggleAutoPurge = async () => {
+    const next = !autoPurge;
+    setAutoPurge(next);
+    const { error } = await supabase
+      .from("memory_settings" as any)
+      .upsert({ id: true, auto_purge_enabled: next, updated_at: new Date().toISOString() });
+    if (error) {
+      setAutoPurge(!next);
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: next ? "Auto-purge enabled" : "Auto-purge disabled" });
+    }
+  };
   const [audit, setAudit] = useState<any[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(true);
 
@@ -180,6 +202,7 @@ export default function Memory() {
     loadStats();
     loadAutolog();
     loadAudit();
+    loadAutoPurge();
 
     const ch = supabase
       .channel("memory_audit_log")
@@ -337,6 +360,19 @@ export default function Memory() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center justify-between rounded-md border border-border p-3 mb-3 bg-muted/30">
+            <div>
+              <div className="font-medium text-sm">Automatic purging</div>
+              <div className="text-xs text-muted-foreground">
+                When on, expired rows (per each table's TTL) are deleted daily at 03:30 UTC. Manual purge always works.
+              </div>
+            </div>
+            <Switch
+              checked={!!autoPurge}
+              disabled={autoPurge === null}
+              onCheckedChange={toggleAutoPurge}
+            />
+          </div>
           <p className="text-xs text-muted-foreground mb-3">
             Pick a time-to-live per table. <strong>0 = keep forever.</strong> Rows older than the window are deleted on purge.
           </p>
