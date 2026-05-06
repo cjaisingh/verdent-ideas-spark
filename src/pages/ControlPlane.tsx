@@ -206,7 +206,10 @@ const ControlPlane = () => {
       loadDemand();
       loadChatIds();
     }, 5000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearBotRetry();
+    };
   }, [paused]);
 
   const statusOptions = useMemo(() => {
