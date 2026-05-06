@@ -639,6 +639,10 @@ Deno.serve(async (req) => {
   let logged = false;
 
   try {
+    const idemCheck = validateIdemKey(idemKey);
+    if (!idemCheck.ok) {
+      response = json({ error: idemCheck.error }, 400);
+    } else {
     const auth = await authorize(req);
     if (!auth.ok) {
       response = json({ error: auth.error ?? "unauthorized" }, 401);
