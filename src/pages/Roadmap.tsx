@@ -184,7 +184,9 @@ const Roadmap = () => {
   };
 
   const updateTaskField = async (taskId: string, field: "title" | "description" | "acceptance", value: string) => {
-    const { error } = await supabase.from("roadmap_tasks").update({ [field]: value || null }).eq("id", taskId);
+    const patch: { title?: string; description?: string | null; acceptance?: string | null } =
+      field === "title" ? { title: value } : field === "description" ? { description: value || null } : { acceptance: value || null };
+    const { error } = await supabase.from("roadmap_tasks").update(patch).eq("id", taskId);
     if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
   };
   const updatePhaseSummary = async (phaseId: string, value: string) => {
