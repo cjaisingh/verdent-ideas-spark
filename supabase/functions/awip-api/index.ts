@@ -602,6 +602,7 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
+      else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
       else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand();
       else if (req.method === "GET" && capDetailMatch) response = await getCapabilityDetail(decodeURIComponent(capDetailMatch[1]));
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
