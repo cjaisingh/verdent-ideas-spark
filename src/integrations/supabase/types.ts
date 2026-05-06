@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_policies: {
+        Row: {
+          activity: string
+          conditions: Json
+          default_action: string
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          activity: string
+          conditions?: Json
+          default_action?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activity?: string
+          conditions?: Json
+          default_action?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       api_call_logs: {
         Row: {
           actor: string | null
@@ -59,6 +86,48 @@ export type Database = {
           route?: string
           status_code?: number
           tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      approval_queue: {
+        Row: {
+          activity: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          intent_payload: Json
+          requested_by: string | null
+          result: Json | null
+          risk: string
+          status: string
+          telegram_message_id: number | null
+        }
+        Insert: {
+          activity: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          intent_payload?: Json
+          requested_by?: string | null
+          result?: Json | null
+          risk?: string
+          status?: string
+          telegram_message_id?: number | null
+        }
+        Update: {
+          activity?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          intent_payload?: Json
+          requested_by?: string | null
+          result?: Json | null
+          risk?: string
+          status?: string
+          telegram_message_id?: number | null
         }
         Relationships: []
       }
@@ -348,6 +417,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      operator_messages: {
+        Row: {
+          chat_id: number
+          created_at: string
+          direction: string
+          id: string
+          intent: string | null
+          raw: Json
+          text: string | null
+          update_id: number | null
+        }
+        Insert: {
+          chat_id: number
+          created_at?: string
+          direction: string
+          id?: string
+          intent?: string | null
+          raw?: Json
+          text?: string | null
+          update_id?: number | null
+        }
+        Update: {
+          chat_id?: number
+          created_at?: string
+          direction?: string
+          id?: string
+          intent?: string | null
+          raw?: Json
+          text?: string | null
+          update_id?: number | null
+        }
+        Relationships: []
+      }
+      rethink_tasks: {
+        Row: {
+          created_at: string
+          id: string
+          original_proposal: Json
+          reason: string | null
+          resolved_at: string | null
+          status: string
+          temp_fix: string | null
+          topic: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_proposal?: Json
+          reason?: string | null
+          resolved_at?: string | null
+          status?: string
+          temp_fix?: string | null
+          topic: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_proposal?: Json
+          reason?: string | null
+          resolved_at?: string | null
+          status?: string
+          temp_fix?: string | null
+          topic?: string
+        }
+        Relationships: []
       }
       role_change_audit: {
         Row: {
