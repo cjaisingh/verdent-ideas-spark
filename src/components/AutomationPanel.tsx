@@ -5,7 +5,7 @@ import { toast } from "@/hooks/use-toast";
 
 type Finding = { id: string; created_at: string; severity: string; category: string | null; title: string; acknowledged: boolean };
 type TestRun = { id: string; created_at: string; suite: string; status: string; passed: number | null; failed: number | null; total: number | null; workflow_run_url: string | null };
-type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null };
+type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null; kind?: string | null; probe?: string | null };
 type AutoRun = { id: string; created_at: string; job: string; trigger: string; status: string; status_code: number | null; duration_ms: number | null; message: string | null };
 
 const ago = (iso: string | null) => {
