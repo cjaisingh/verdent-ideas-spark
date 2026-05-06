@@ -239,6 +239,8 @@ export const AutomationPanel = () => {
   };
 
   return (
+    <div className="space-y-3">
+    <AlertsCard />
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
       {/* Code review */}
       <section className="rounded-md border border-border bg-card p-3 space-y-2">
