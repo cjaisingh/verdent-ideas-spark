@@ -161,6 +161,7 @@ const ControlPlane = () => {
     loadDemand();
     pollEvents();
     loadChatIds();
+    loadBotInfo();
     if (paused) return;
     const id = setInterval(() => {
       pollEvents();
