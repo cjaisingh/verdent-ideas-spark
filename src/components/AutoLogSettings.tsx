@@ -270,3 +270,107 @@ const PreviewPanel = ({ settings }: { settings: Settings }) => {
     </div>
   );
 };
+
+type SkipRow = {
+  id: string;
+  created_at: string;
+  source: string;
+  reason: string;
+  task_id: string | null;
+  author: string | null;
+  model: string | null;
+  summary: string | null;
+};
+
+const reasonLabel = (reason: string) => {
+  if (reason === "autolog_disabled") return { label: "Auto-log disabled", tone: "destructive" as const };
+  if (reason.startsWith("source_disabled:")) {
+    const src = reason.split(":")[1];
+    return { label: `Source disabled (${src})`, tone: "warning" as const };
+  }
+  return { label: reason, tone: "muted" as const };
+};
+
+const SkipsPanel = ({ open }: { open: boolean }) => {
+  const [rows, setRows] = useState<SkipRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("roadmap_autolog_skips" as any)
+      .select("id, created_at, source, reason, task_id, author, model, summary")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setRows((data ?? []) as SkipRow[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    load();
+    const channel = supabase
+      .channel("roadmap_autolog_skips_feed")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "roadmap_autolog_skips" },
+        (payload) => setRows((prev) => [payload.new as SkipRow, ...prev].slice(0, 20)),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Skipped entries</div>
+        <button
+          onClick={load}
+          className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+          disabled={loading}
+        >
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+      <div className="rounded-md border border-border bg-muted/30 p-2 text-xs max-h-72 overflow-y-auto">
+        {rows.length === 0 ? (
+          <div className="px-2 py-3 text-center text-muted-foreground text-[11px]">
+            No skipped entries yet. When auto-log or a source is off, suppressed turns will show up here.
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {rows.map((r) => {
+              const { label, tone } = reasonLabel(r.reason);
+              const toneClass =
+                tone === "destructive" ? "bg-destructive/10 text-destructive border-destructive/30"
+                : tone === "warning" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                : "bg-muted text-muted-foreground border-border";
+              return (
+                <li key={r.id} className="px-1.5 py-2 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${toneClass}`}>
+                      {label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(r.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span><span className="font-mono">source:</span> {r.source}</span>
+                    {r.author && <span><span className="font-mono">by:</span> {r.author}</span>}
+                    {r.model && <span><span className="font-mono">model:</span> {r.model}</span>}
+                  </div>
+                  {r.summary && (
+                    <div className="text-[11px] text-foreground/80 line-clamp-2">{r.summary}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
