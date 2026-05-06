@@ -77,6 +77,7 @@ const Roadmap = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
+  const [activity, setActivity] = useState<Activity[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("roadmap.collapsed") ?? "[]")); } catch { return new Set(); }
@@ -101,18 +102,20 @@ const Roadmap = () => {
   };
 
   const loadAll = async () => {
-    const [p, s, t, c, w] = await Promise.all([
+    const [p, s, t, c, w, a] = await Promise.all([
       supabase.from("roadmap_phases").select("*").order("order"),
       supabase.from("roadmap_sprints").select("*").order("order"),
       supabase.from("roadmap_tasks").select("*").order("order"),
       supabase.from("roadmap_comments").select("*").order("created_at"),
       supabase.from("roadmap_work_log").select("*").order("started_at", { ascending: false }),
+      supabase.from("roadmap_task_activity").select("*").order("created_at", { ascending: false }),
     ]);
     if (p.data) setPhases(p.data as Phase[]);
     if (s.data) setSprints(s.data as Sprint[]);
     if (t.data) setTasks(t.data as Task[]);
     if (c.data) setComments(c.data as Comment[]);
     if (w.data) setWorkLogs(w.data as WorkLog[]);
+    if (a.data) setActivity(a.data as Activity[]);
   };
 
   useEffect(() => {
@@ -124,6 +127,7 @@ const Roadmap = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_sprints" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_phases" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_work_log" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_task_activity" }, loadAll)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
