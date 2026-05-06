@@ -138,7 +138,7 @@ export const AutoLogSettings = () => {
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle>Automatic work logging</DialogTitle>
           <DialogDescription>
             Controls what gets captured from each AI turn into roadmap work logs. Manual entries are unaffected.
