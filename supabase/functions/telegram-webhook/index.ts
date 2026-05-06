@@ -93,19 +93,31 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { error } = await supabase.from('operator_messages').upsert({
+  const { data: inserted, error } = await supabase.from('operator_messages').upsert({
     update_id: update.update_id,
     chat_id: message.chat.id,
     direction: 'inbound',
     text: message.text ?? null,
     raw: update,
-  }, { onConflict: 'update_id' });
+  }, { onConflict: 'update_id' }).select('id').maybeSingle();
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  // Fire-and-forget routing for text messages
+  const serviceToken = Deno.env.get('AWIP_SERVICE_TOKEN');
+  if (inserted?.id && message.text && serviceToken) {
+    const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/route-operator-message`;
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-service-token': serviceToken },
+      body: JSON.stringify({ message_id: inserted.id }),
+    }).catch((e) => console.error('route-operator-message dispatch failed', e));
+  }
+
   return new Response(JSON.stringify({ ok: true }), {
     headers: { 'Content-Type': 'application/json' },
   });
