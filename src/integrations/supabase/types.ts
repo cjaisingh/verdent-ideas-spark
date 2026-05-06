@@ -1309,6 +1309,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_purge_if_enabled: { Args: never; Returns: number }
       grant_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
