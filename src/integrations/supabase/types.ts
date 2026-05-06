@@ -41,6 +41,78 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_log: {
+        Row: {
+          created_at: string
+          delivered: boolean
+          error: string | null
+          id: string
+          job: string
+          message: string | null
+          payload: Json
+          reason: string
+          status_code: number | null
+        }
+        Insert: {
+          created_at?: string
+          delivered?: boolean
+          error?: string | null
+          id?: string
+          job: string
+          message?: string | null
+          payload?: Json
+          reason: string
+          status_code?: number | null
+        }
+        Update: {
+          created_at?: string
+          delivered?: boolean
+          error?: string | null
+          id?: string
+          job?: string
+          message?: string | null
+          payload?: Json
+          reason?: string
+          status_code?: number | null
+        }
+        Relationships: []
+      }
+      alert_settings: {
+        Row: {
+          alert_on_high_finding: boolean
+          alert_on_qa_fail: boolean
+          alert_on_review_error: boolean
+          alert_on_test_fail: boolean
+          dedupe_minutes: number
+          enabled: boolean
+          id: boolean
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          alert_on_high_finding?: boolean
+          alert_on_qa_fail?: boolean
+          alert_on_review_error?: boolean
+          alert_on_test_fail?: boolean
+          dedupe_minutes?: number
+          enabled?: boolean
+          id?: boolean
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          alert_on_high_finding?: boolean
+          alert_on_qa_fail?: boolean
+          alert_on_review_error?: boolean
+          alert_on_test_fail?: boolean
+          dedupe_minutes?: number
+          enabled?: boolean
+          id?: boolean
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       api_call_logs: {
         Row: {
           actor: string | null

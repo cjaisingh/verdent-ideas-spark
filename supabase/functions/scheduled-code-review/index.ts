@@ -41,6 +41,9 @@ Deno.serve(async (req) => {
         });
       } catch (e) { console.error("automation_runs insert failed", e); }
     };
+    const maybeAlert = async (reason: string, message: string, payload: Record<string, unknown> = {}) => {
+      await dispatchAlert(sbLog, "scheduled-code-review", reason, message, payload);
+    };
 
     if (!triggeredByCron && !auth.startsWith("Bearer ")) {
       await recordRun("error", 401, !SERVICE_TOKEN
@@ -130,10 +133,10 @@ Deno.serve(async (req) => {
       const t = await aiResp.text();
       console.error("AI gateway error", aiResp.status, t);
       const msg = `AI gateway returned ${aiResp.status}: ${t.slice(0, 200)}`;
-      if (aiResp.status === 429) { await recordRun("error", 429, msg); return json({ error: "rate_limited" }, 429); }
-      if (aiResp.status === 402) { await recordRun("error", 402, msg); return json({ error: "credits_exhausted" }, 402); }
-      await recordRun("error", 500, msg);
-      return json({ error: "ai_gateway_error" }, 500);
+      const code = aiResp.status === 429 ? 429 : aiResp.status === 402 ? 402 : 500;
+      await recordRun("error", code, msg);
+      await maybeAlert("review_error", msg, { status: aiResp.status });
+      return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
     }
 
     const aiJson = await aiResp.json();
@@ -141,19 +144,27 @@ Deno.serve(async (req) => {
     const args = call?.function?.arguments ? JSON.parse(call.function.arguments) : { findings: [] };
     const findings = Array.isArray(args.findings) ? args.findings : [];
 
+    let highCount = 0;
     if (findings.length > 0) {
-      const rows = findings.map((f: any) => ({
-        reviewer_model: REVIEWER_MODEL,
-        severity: f.severity ?? "info",
-        category: f.category ?? null,
-        area: f.area ?? null,
-        title: String(f.title).slice(0, 300),
-        body: f.body ?? null,
-        diff_window_start: sinceISO,
-        diff_window_end: untilISO,
-      }));
+      const rows = findings.map((f: any) => {
+        if (f.severity === "high") highCount++;
+        return {
+          reviewer_model: REVIEWER_MODEL,
+          severity: f.severity ?? "info",
+          category: f.category ?? null,
+          area: f.area ?? null,
+          title: String(f.title).slice(0, 300),
+          body: f.body ?? null,
+          diff_window_start: sinceISO,
+          diff_window_end: untilISO,
+        };
+      });
       const { error } = await sb.from("roadmap_review_findings").insert(rows);
       if (error) console.error("insert failed", error);
+    }
+
+    if (highCount > 0) {
+      await maybeAlert("high_finding", `${highCount} new high-severity finding(s) from code review`, { high_count: highCount, total: findings.length });
     }
 
     await recordRun("ok", 200, `${findings.length} findings recorded`, { findings_count: findings.length });
@@ -169,4 +180,41 @@ function json(payload: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+async function dispatchAlert(
+  sb: ReturnType<typeof createClient>,
+  job: string, reason: string, message: string, payload: Record<string, unknown> = {},
+) {
+  try {
+    const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
+    if (!settings || !settings.enabled || !settings.webhook_url) return;
+    const flagMap: Record<string, string> = {
+      review_error: "alert_on_review_error",
+      high_finding: "alert_on_high_finding",
+      test_fail: "alert_on_test_fail",
+      qa_fail: "alert_on_qa_fail",
+    };
+    const flag = flagMap[reason];
+    if (flag && settings[flag] === false) return;
+    const dedupeMin = Math.max(0, Number(settings.dedupe_minutes ?? 0));
+    if (dedupeMin > 0) {
+      const since = new Date(Date.now() - dedupeMin * 60_000).toISOString();
+      const { data: recent } = await sb.from("alert_log")
+        .select("id").eq("job", job).eq("reason", reason).eq("delivered", true)
+        .gte("created_at", since).limit(1);
+      if (recent && recent.length > 0) return;
+    }
+    const body = JSON.stringify({
+      text: `🚨 ${job} · ${reason}\n${message}`,
+      job, reason, message, payload, ts: new Date().toISOString(),
+    });
+    let delivered = false; let status_code: number | null = null; let error: string | null = null;
+    try {
+      const r = await fetch(settings.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      status_code = r.status; delivered = r.ok;
+      if (!r.ok) error = (await r.text()).slice(0, 300);
+    } catch (e) { error = e instanceof Error ? e.message : String(e); }
+    await sb.from("alert_log").insert({ job, reason, message, delivered, status_code, error, payload });
+  } catch (e) { console.error("dispatchAlert failed", e); }
 }
