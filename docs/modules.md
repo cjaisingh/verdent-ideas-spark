@@ -7,11 +7,13 @@ This file lists the planned modules and which capabilities each one owns in the 
 ## Modules
 
 ### `awip_core` — this project
-Owns the OKR tree, the manifest, and the event streams.
+Owns the OKR tree, the manifest, the event streams, and (by decision) the operator channel: Telegram webhook/send, message routing, approval queue, and voice transcription. Kept in-process to avoid an extra service hop for the bot.
 
 | Capability | Status |
 |---|---|
 | `okr_authoring` | available |
+| `operator_channel.telegram` | available |
+| `operator_channel.voice_transcription` | available (Gemini 2.5 Flash) |
 
 ### `discovery_ai` — separate Lovable project
 Drafts OKR trees with clients, then hands them to Core via `POST /okr/ingest`. Reads `GET /capabilities` during drafting to constrain to what's available.
