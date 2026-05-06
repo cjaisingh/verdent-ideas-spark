@@ -229,5 +229,3 @@ const PreviewPanel = ({ settings }: { settings: Settings }) => {
     </div>
   );
 };
-  );
-};
