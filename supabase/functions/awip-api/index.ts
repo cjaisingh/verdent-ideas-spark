@@ -127,9 +127,9 @@ async function logApiCall(entry: {
       status_code: entry.status_code,
       duration_ms: entry.duration_ms,
       tenant_id: entry.tenant_id ?? null,
-      request_summary: entry.request_summary ?? {},
-      response_summary: entry.response_summary ?? {},
-      error: entry.error ?? null,
+      request_summary: redact(entry.request_summary ?? {}),
+      response_summary: redact(entry.response_summary ?? {}),
+      error: entry.error ? redact(entry.error) : null,
     });
   } catch (e) {
     console.error(JSON.stringify({ fn: "awip-api", severity: "error", msg: "logApiCall insert failed", error: String(e) }));
