@@ -98,6 +98,18 @@ export default function Memory() {
     if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
   };
 
+  const setAllDays = async (days: number) => {
+    const next = Math.max(0, Math.floor(days || 0));
+    if (!window.confirm(`Set TTL to ${next === 0 ? "keep forever" : next + " days"} for all ${stats.length} tables?`)) return;
+    setStats((prev) => prev.map((r) => ({ ...r, retention_days: next })));
+    const { error } = await supabase
+      .from("retention_settings" as any)
+      .update({ retention_days: next, updated_at: new Date().toISOString() })
+      .gte("retention_days", 0);
+    if (error) toast({ title: "Bulk save failed", description: error.message, variant: "destructive" });
+    else toast({ title: `TTL set for ${stats.length} table(s)` });
+  };
+
   const purge = async (table?: string) => {
     setPurging(table ?? "__all__");
     const { data, error } = await supabase.rpc("purge_expired_rows" as any, { _table: table ?? null });
