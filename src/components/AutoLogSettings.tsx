@@ -39,10 +39,16 @@ const FIELDS: { key: keyof Settings; label: string; hint: string }[] = [
   { key: "extract_issues_fixes", label: "Auto-extract issues / fixes", hint: "Parse labeled sections from the AI output" },
 ];
 
-const SOURCES: { key: keyof Settings; label: string; hint: string }[] = [
-  { key: "source_lovable_agent", label: "Lovable agent", hint: "Turns captured by the in-app TurnTracker" },
-  { key: "source_ai_gateway", label: "AI gateway", hint: "Turns posted via the AI gateway" },
-  { key: "source_awip_api", label: "AWIP API", hint: "Turns posted with the service token" },
+const SOURCES: { key: keyof Settings; source: string; label: string; hint: string; trigger: string }[] = [
+  { key: "source_lovable_agent", source: "lovable_agent", label: "Lovable agent",
+    hint: "Turns captured by the in-app TurnTracker",
+    trigger: "Used when you click Log in the in-app TurnTracker on /roadmap (logs the current Lovable AI turn)." },
+  { key: "source_ai_gateway", source: "ai_gateway", label: "AI gateway",
+    hint: "Turns posted via the AI gateway",
+    trigger: "Used when an edge function calls roadmap-log-work with source: \"ai_gateway\" after a Lovable AI Gateway response." },
+  { key: "source_awip_api", source: "awip_api", label: "AWIP API",
+    hint: "Turns posted with the service token",
+    trigger: "Used by external callers hitting roadmap-log-work with the x-service-token header (default for service-token requests)." },
 ];
 
 const SAMPLE_TURN = {
