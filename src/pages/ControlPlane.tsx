@@ -202,6 +202,9 @@ const ControlPlane = () => {
           </p>
         </div>
         <div className="flex gap-2 items-center">
+          <Button variant="ghost" size="sm" onClick={loadChatIds} title="Reload chat IDs">
+            ↻ Refresh chats
+          </Button>
           <Select value={selectedChatId} onValueChange={setSelectedChatId}>
             <SelectTrigger className="w-44 h-9 text-xs">
               <SelectValue placeholder={chatIds.length ? "Pick chat" : "No chats yet"} />
