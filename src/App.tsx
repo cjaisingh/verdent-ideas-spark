@@ -15,6 +15,7 @@ import CapabilityDetail from "./pages/CapabilityDetail";
 import ApiExplorer from "./pages/ApiExplorer";
 import Admin from "./pages/Admin";
 import Status from "./pages/Status";
+import ApprovalDetail from "./pages/ApprovalDetail";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />
+            <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
