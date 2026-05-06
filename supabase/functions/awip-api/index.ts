@@ -357,6 +357,34 @@ async function getTree(url: URL) {
   return json({ nodes });
 }
 
+async function getRecentEvents(url: URL) {
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 500);
+  const since = url.searchParams.get("since"); // ISO timestamp
+  const tenantId = url.searchParams.get("tenant_id");
+
+  let oq = supabase.from("okr_node_events").select("*").order("created_at", { ascending: false }).limit(limit);
+  let cq = supabase.from("capability_events").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (since) { oq = oq.gt("created_at", since); cq = cq.gt("created_at", since); }
+  if (tenantId) oq = oq.eq("tenant_id", tenantId);
+
+  const [o, c] = await Promise.all([oq, cq]);
+  if (o.error) return json({ error: o.error.message }, 500);
+  if (c.error) return json({ error: c.error.message }, 500);
+
+  const merged = [
+    ...(o.data ?? []).map((e: any) => ({
+      id: e.id, source: "okr", ref: e.okr_node_id, tenant_id: e.tenant_id,
+      event_type: e.event_type, payload: e.payload, actor: e.actor, created_at: e.created_at,
+    })),
+    ...(c.data ?? []).map((e: any) => ({
+      id: e.id, source: "capability", ref: e.capability_id, tenant_id: null,
+      event_type: e.event_type, payload: e.payload, actor: e.actor, created_at: e.created_at,
+    })),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit);
+
+  return json({ events: merged, count: merged.length });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
