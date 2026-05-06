@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { InlineEdit } from "@/components/InlineEdit";
 import { TurnTracker } from "@/components/TurnTracker";
+import { WorkLogPulse } from "@/components/WorkLogPulse";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
@@ -305,6 +306,7 @@ const Roadmap = () => {
         </div>
         <div className="flex items-center gap-2">
           <AutoLogSettings />
+          <WorkLogPulse />
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           {nextUp && (
             <button
