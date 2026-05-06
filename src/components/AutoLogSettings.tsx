@@ -39,10 +39,16 @@ const FIELDS: { key: keyof Settings; label: string; hint: string }[] = [
   { key: "extract_issues_fixes", label: "Auto-extract issues / fixes", hint: "Parse labeled sections from the AI output" },
 ];
 
-const SOURCES: { key: keyof Settings; label: string; hint: string }[] = [
-  { key: "source_lovable_agent", label: "Lovable agent", hint: "Turns captured by the in-app TurnTracker" },
-  { key: "source_ai_gateway", label: "AI gateway", hint: "Turns posted via the AI gateway" },
-  { key: "source_awip_api", label: "AWIP API", hint: "Turns posted with the service token" },
+const SOURCES: { key: keyof Settings; source: string; label: string; hint: string; trigger: string }[] = [
+  { key: "source_lovable_agent", source: "lovable_agent", label: "Lovable agent",
+    hint: "Turns captured by the in-app TurnTracker",
+    trigger: "Used when you click Log in the in-app TurnTracker on /roadmap (logs the current Lovable AI turn)." },
+  { key: "source_ai_gateway", source: "ai_gateway", label: "AI gateway",
+    hint: "Turns posted via the AI gateway",
+    trigger: "Used when an edge function calls roadmap-log-work with source: \"ai_gateway\" after a Lovable AI Gateway response." },
+  { key: "source_awip_api", source: "awip_api", label: "AWIP API",
+    hint: "Turns posted with the service token",
+    trigger: "Used by external callers hitting roadmap-log-work with the x-service-token header (default for service-token requests)." },
 ];
 
 const SAMPLE_TURN = {
@@ -169,14 +175,25 @@ export const AutoLogSettings = () => {
             </div>
 
             <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
-              <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
+                <div className="text-[10px] text-muted-foreground">how each turn picks a source ↓</div>
+              </div>
               {SOURCES.map((f) => (
-                <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
-                  <div className="pr-3">
-                    <div className="text-sm font-medium">{f.label}</div>
-                    <div className="text-xs text-muted-foreground">{f.hint}</div>
+                <div key={f.key} className="rounded-md border border-border p-2.5 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="pr-3">
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        {f.label}
+                        <code className="text-[10px] font-mono px-1 py-0.5 rounded bg-muted text-muted-foreground">{f.source}</code>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{f.hint}</div>
+                    </div>
+                    <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
                   </div>
-                  <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
+                  <div className="text-[11px] leading-snug text-muted-foreground border-l-2 border-border pl-2">
+                    <span className="font-medium text-foreground/80">When it fires:</span> {f.trigger}
+                  </div>
                 </div>
               ))}
             </div>
