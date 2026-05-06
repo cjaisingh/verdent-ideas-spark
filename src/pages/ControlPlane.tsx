@@ -254,7 +254,7 @@ const ControlPlane = () => {
                   <div className="col-span-1 text-right tabular-nums">{d.tenant_count}</div>
                   <div className="col-span-1 text-right tabular-nums font-medium">{d.active_kr_count}</div>
                   <div className="col-span-2 text-right tabular-nums text-muted-foreground">{d.kr_count}</div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
