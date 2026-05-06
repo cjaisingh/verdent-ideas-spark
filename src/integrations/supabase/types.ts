@@ -689,6 +689,7 @@ export type Database = {
           id: string
           issues: string | null
           model: string | null
+          source: string
           started_at: string
           summary: string | null
           task_id: string
@@ -705,6 +706,7 @@ export type Database = {
           id?: string
           issues?: string | null
           model?: string | null
+          source?: string
           started_at: string
           summary?: string | null
           task_id: string
@@ -721,6 +723,7 @@ export type Database = {
           id?: string
           issues?: string | null
           model?: string | null
+          source?: string
           started_at?: string
           summary?: string | null
           task_id?: string
