@@ -125,9 +125,36 @@ export default function Memory() {
     if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
   };
 
+  // ---- Audit log
+  const [audit, setAudit] = useState<any[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(true);
+
+  const loadAudit = async () => {
+    setLoadingAudit(true);
+    const { data, error } = await supabase
+      .from("memory_audit_log" as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) toast({ title: "Failed to load audit", description: error.message, variant: "destructive" });
+    setAudit((data as any[]) ?? []);
+    setLoadingAudit(false);
+  };
+
   useEffect(() => {
     loadStats();
     loadAutolog();
+    loadAudit();
+
+    const ch = supabase
+      .channel("memory_audit_log")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "memory_audit_log" }, (p) => {
+        setAudit((prev) => [p.new, ...prev].slice(0, 100));
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   return (
