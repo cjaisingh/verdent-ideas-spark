@@ -103,3 +103,13 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Swagger UI host: keep its built-in light theme readable inside our dark layout */
+.swagger-host {
+  background: #fafafa;
+  color: #1a1a1a;
+  padding: 1rem;
+}
+.swagger-host .swagger-ui {
+  color: #1a1a1a;
+}
