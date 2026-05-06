@@ -181,6 +181,7 @@ export const AutomationPanel = () => {
           <span>openai/gpt-5 · weekly Mon 06:00 UTC</span>
           {reviewMsg && <span className={statusTone(reviewState === "error" ? "fail" : "pass")}>{reviewMsg}</span>}
         </div>
+        <LastRun run={lastReview} emptyHint="No runs recorded yet — click Run now to test." />
         {findings.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
         ) : (
