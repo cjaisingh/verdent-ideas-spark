@@ -141,10 +141,12 @@ const ControlPlane = () => {
   useEffect(() => {
     loadDemand();
     pollEvents();
+    loadChatIds();
     if (paused) return;
     const id = setInterval(() => {
       pollEvents();
       loadDemand();
+      loadChatIds();
     }, 5000);
     return () => clearInterval(id);
   }, [paused]);
@@ -199,8 +201,25 @@ const ControlPlane = () => {
             Read-only view of the AWIP contract. Auto-refresh every 5s.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={sendTelegramTest} disabled={tgSending}>
+        <div className="flex gap-2 items-center">
+          <Select value={selectedChatId} onValueChange={setSelectedChatId}>
+            <SelectTrigger className="w-44 h-9 text-xs">
+              <SelectValue placeholder={chatIds.length ? "Pick chat" : "No chats yet"} />
+            </SelectTrigger>
+            <SelectContent>
+              {chatIds.map((id) => (
+                <SelectItem key={id} value={String(id)} className="font-mono text-xs">
+                  {id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={sendTelegramTest}
+            disabled={tgSending || !selectedChatId}
+          >
             {tgSending ? "Sending…" : "Send Telegram test"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setPaused((p) => !p)}>
