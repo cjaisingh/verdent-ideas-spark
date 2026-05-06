@@ -1,44 +1,89 @@
-# End-to-End Test Harness (no Gemini Gems required)
+# Extract `operator_channel` module + approvals contract in Core
+
+Honor the docs: Core stays substrate, Telegram/voice/Gem classification moves to a new `operator_channel` module, and approvals become a first-class contract on Core that any module can use.
 
 ## Why
-Real Gem prompts aren't wired yet, so we can't drive the router with live Telegram → LLM classification. We need a way to exercise the full pipeline (inbound message → router → approval_queue → decision → toast/flash/indicator) deterministically.
+Today Core hosts `operator_messages`, `approval_queue`, `activity_policies`, the Telegram webhook, and the router. That violates the "Core is substrate, not a brain" rule in `docs/architecture.md` and `docs/modules.md`. It also blocks future modules from requesting approvals through a stable contract.
 
-## Scope
-A scripted harness that simulates inbound operator messages and runs them through the existing `route-operator-message` edge function — bypassing any Gem/LLM call — so the rest of the loop (policy match, queue insert, UI realtime, decision flow) can be verified end to end.
+## End-state architecture
 
-## Pieces
+```text
+ Telegram ──► operator_channel module ──► Core /awip-api/approvals/request
+                  │  (classify, voice ASR,                │
+                  │   policy match, Telegram I/O)         ▼
+                  │                              approval_queue (Core)
+                  └──◄ Core /awip-api/approvals/:id/decide ──► capability_events
+```
 
-### 1. Edge function: `simulate-operator-message`
-- Operator-only (verify JWT + `has_role(uid,'operator')`).
-- Input: `{ activity, text, intent_payload?, risk?, chat_id?, force_decision? }`.
-- Inserts a synthetic `operator_messages` row (direction=`inbound`, raw flagged `simulated:true`).
-- Invokes the existing `route-operator-message` logic (extract into a shared handler, or call internally) so the same policy preview / `_policy` trace lands in `approval_queue`.
-- Returns the created `approval_queue` row id so the harness can follow it.
+- **Core owns**: `approval_queue` (generic substrate), `/approvals/request`, `/approvals/:id/decide`, capability registry, events.
+- **operator_channel module owns**: Telegram webhook + send, voice transcription, intent classification (Gemini), policy table, router. Registers capabilities `human_approval_gate`, `telegram_operator_channel`, `voice_intent_capture` with Core.
 
-### 2. Control-plane UI: "Test harness" panel
-- New collapsible card on `/control-plane` (operators only).
-- Form: activity dropdown (from `activity_policies`), free-text message, optional JSON payload, risk override.
-- Buttons: **Send simulated message**, **Send + auto-approve**, **Send + auto-reject**.
-- After send: shows the resulting approval row id + deep link to `/approvals/:id`, and live status (pending → decided) via the existing realtime subscription.
-- Clearly labeled "Simulated — does not hit Telegram".
+## Phase 1 — Core changes (substrate)
 
-### 3. Quick presets
-- 3–4 buttons that fire common scenarios: low-risk auto-approve, high-risk needs-approval, no-policy-match (default action), malformed payload.
-- Useful for one-click smoke tests after any change to policies or the router.
+### Schema (migration)
+1. Add to `approval_queue`:
+   - `tenant_id uuid` (nullable for now; required once tenants exist per request)
+   - `requesting_module text` (e.g. `operator_channel`)
+   - `capability_id text` (FK-ish to `capabilities.id`, soft ref)
+   - `callback_url text` nullable — module endpoint Core POSTs to on decision
+   - `idempotency_key text` nullable + unique index `(requesting_module, idempotency_key)`
+2. Drop `operator_messages` and `activity_policies` from Core (after Phase 2 cutover; keep during migration).
+3. Keep `idempotency_keys` table; reuse for `/approvals/request`.
 
-### 4. Verification checklist (manual, after harness lands)
-- Toast fires on decision ✅
-- Pending indicator increments on insert, decrements on decision ✅
-- Row flash on decided id ✅
-- Policy preview shows matched rule on `/approvals/:id` ✅
-- `decided_by` recorded as `ui:<actor>` ✅
+### `awip-api` endpoints (service-token auth)
+- `POST /approvals/request` — body: `{capability_id, activity, risk, intent_payload, requesting_module, callback_url?, idempotency_key?, requested_by?, tenant_id?}`. Validates `capability_id` exists in registry. Inserts pending row. Returns `{approval_id, status}`.
+- `POST /approvals/:id/decide` — body: `{decision: 'approved'|'rejected', decided_by, result?}`. Updates row, emits `capability_events` row (`event_type='approval_decided'`), fires `callback_url` POST if set (fire-and-forget, logged).
+- `GET /approvals/:id` and `GET /approvals?status=pending&module=...` — for module/UI polling.
 
-## Out of scope (for now)
-- Real Gemini Gems / LLM-based classification — tracked separately.
-- Telegram outbound echo for simulated messages (skip; would spam the chat).
+### UI (Control Plane stays in Core for now)
+- `/approvals` and `/approvals/:id` keep working — read directly from `approval_queue` via RLS as today. No UI rewrite this phase.
+- The decision buttons in UI call `/approvals/:id/decide` instead of writing the row directly. This proves the contract from the inside.
+
+## Phase 2 — Spin up `operator_channel` module project
+
+A new Lovable project (separate Supabase). Uses the scaffold in `docs/module-scaffold/`.
+
+### Tables (in module DB)
+- `operator_messages` — full schema from Core + new columns:
+  - `modality text` (`text` | `voice`)
+  - `transcript text` nullable
+  - `audio_file_id text` nullable
+  - `tenant_id uuid` nullable
+- `activity_policies` — same shape, plus `capability_id text` linking to a Core-registered capability id (soft ref via `GET /capabilities`).
+
+### Edge functions (module)
+- `telegram-webhook` — moved from Core. Adds voice path: detects `message.voice`, calls `getFile`, downloads OGG via gateway, transcribes with Gemini 2.5 Flash (audio input), stores `transcript`, then routes.
+- `telegram-send` — moved from Core.
+- `route-operator-message` — moved from Core. After classify + policy, instead of inserting locally, calls Core `POST /approvals/request` with `requesting_module='operator_channel'`, `callback_url=<module>/approval-callback`, `capability_id` resolved from policy row.
+- `approval-callback` — receives Core's decision webhook, sends Telegram confirmation back to the originating chat.
+- `register` — registers `human_approval_gate`, `telegram_operator_channel`, `voice_intent_capture` per the scaffold.
+
+### Secrets (module project)
+`AWIP_CORE_URL`, `AWIP_SERVICE_TOKEN`, `LOVABLE_API_KEY`, `TELEGRAM_API_KEY`.
+
+## Phase 3 — Cutover & cleanup
+1. Point Telegram `setWebhook` at the module's URL.
+2. Verify a round-trip: Telegram message → module classify → Core `/approvals/request` → UI shows pending → operator decides in UI → Core POSTs callback → module replies on Telegram.
+3. Drop `operator_messages`, `activity_policies`, `route-operator-message`, `telegram-*` from Core.
+4. Update `docs/modules.md` to mark `operator_channel` as a real module with its three capabilities.
+
+## Phase 4 — Voice (lands inside the module, not Core)
+Gemini 2.5 Flash transcription inside the module's `telegram-webhook`. No new vendor, no new key. Deepgram fallback deferred behind a feature flag if quality is insufficient.
+
+## Out of scope this round
+- Multi-tenant enforcement on `tenant_id` (column added, validation later).
+- Moving Control Plane UI out of Core (still embedded; separate project later).
+- Browser dictation for `/control-plane` (only Telegram voice for now).
 
 ## Order of work
-1. Extract router core into a shared module (`_shared/route.ts`) so both `route-operator-message` and `simulate-operator-message` share it.
-2. Implement `simulate-operator-message` edge function.
-3. Add Test harness panel to `/control-plane`.
-4. Run all four checklist items end to end and report.
+1. Core migration: extend `approval_queue`, add idempotency support.
+2. Add `/approvals/request`, `/approvals/:id/decide`, `GET /approvals*` to `awip-api` + tests.
+3. Switch existing UI decision flow to call the new endpoints (proves the contract).
+4. Stand up `operator_channel` module project from scaffold; move Telegram + router + policies; add voice path.
+5. Register module capabilities with Core; flip Telegram webhook; smoke test.
+6. Delete moved tables/functions from Core; update docs.
+
+## Risks
+- **Two deploys to coordinate** during cutover — mitigate by running both webhooks briefly and disabling Core's once module is verified.
+- **Capability id drift** between policy rows and registry — `register` is the source of truth; policies validated on write.
+- **Callback delivery** — log every callback POST in `api_call_logs`; module is idempotent on `approval_id`.
