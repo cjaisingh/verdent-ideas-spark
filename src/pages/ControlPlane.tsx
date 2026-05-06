@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,25 @@ const ControlPlane = () => {
   const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const lastSeen = useRef<string | null>(null);
+  const [tgSending, setTgSending] = useState(false);
+
+  const sendTelegramTest = async () => {
+    setTgSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("telegram-test", { body: {} });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast({ title: "Telegram ping sent", description: `chat_id ${(data as any).chat_id}` });
+    } catch (e) {
+      toast({
+        title: "Telegram test failed",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setTgSending(false);
+    }
+  };
 
   // Filter / sort state
   const [tenantFilter, setTenantFilter] = useState<string>("all");
@@ -164,9 +184,14 @@ const ControlPlane = () => {
             Read-only view of the AWIP contract. Auto-refresh every 5s.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setPaused((p) => !p)}>
-          {paused ? "Resume" : "Pause"}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={sendTelegramTest} disabled={tgSending}>
+            {tgSending ? "Sending…" : "Send Telegram test"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setPaused((p) => !p)}>
+            {paused ? "Resume" : "Pause"}
+          </Button>
+        </div>
       </div>
 
       {error && (
