@@ -267,46 +267,76 @@ const ControlPlane = () => {
         </div>
       )}
 
-      <div className="border border-border rounded-md p-4 flex items-center justify-between gap-4 bg-muted/20">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-            TG
+      <div className="border border-border rounded-md p-4 bg-muted/20 space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+              TG
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Telegram bot</div>
+              {botLoading && !botInfo && !botError && (
+                <div className="text-sm text-muted-foreground">Loading…</div>
+              )}
+              {botInfo && (
+                <div className="text-sm font-medium truncate">
+                  {botInfo.first_name ?? "Bot"}{" "}
+                  <span className="font-mono text-muted-foreground">@{botInfo.username ?? "unknown"}</span>
+                  {botInfo.id != null && (
+                    <span className="ml-2 text-xs text-muted-foreground font-mono">id {botInfo.id}</span>
+                  )}
+                </div>
+              )}
+              {botError && !botInfo && (
+                <div className="text-sm text-destructive font-medium">
+                  Gateway failure
+                  {botError.status ? <span className="font-mono"> · {botError.status}</span> : null}
+                </div>
+              )}
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Telegram bot</div>
-            {botLoading && !botInfo && <div className="text-sm text-muted-foreground">Loading…</div>}
-            {botInfo && (
-              <div className="text-sm font-medium truncate">
-                {botInfo.first_name ?? "Bot"}{" "}
-                <span className="font-mono text-muted-foreground">@{botInfo.username ?? "unknown"}</span>
-                {botInfo.id != null && (
-                  <span className="ml-2 text-xs text-muted-foreground font-mono">id {botInfo.id}</span>
-                )}
+          <div className="flex gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading}>
+              {botLoading ? "…" : "↻"}
+            </Button>
+            <Button variant="outline" size="sm" asChild disabled={!botInfo?.url}>
+              <a
+                href={botInfo?.url ?? "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!botInfo?.url}
+              >
+                Open in Telegram ↗
+              </a>
+            </Button>
+          </div>
+        </div>
+        {botError && (
+          <div className="border border-destructive/40 bg-destructive/5 rounded-md p-3 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-xs text-destructive font-mono break-all">
+                {botError.message}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadBotInfo}
+                disabled={botLoading}
+                className="shrink-0"
+              >
+                {botLoading ? "Retrying…" : "Try again"}
+              </Button>
+            </div>
+            {botError.detail != null && (
+              <pre className="text-[11px] font-mono text-muted-foreground bg-background/50 rounded p-2 overflow-auto max-h-40">
+{JSON.stringify(botError.detail, null, 2)}
+              </pre>
             )}
-            {botError && <div className="text-sm text-destructive font-mono truncate">{botError}</div>}
+            <div className="text-[11px] text-muted-foreground font-mono">
+              at {new Date(botError.at).toLocaleTimeString()}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading}>
-            {botLoading ? "…" : "↻"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            disabled={!botInfo?.url}
-          >
-            <a
-              href={botInfo?.url ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-disabled={!botInfo?.url}
-            >
-              Open in Telegram ↗
-            </a>
-          </Button>
-        </div>
+        )}
       </div>
 
       <Tabs defaultValue="demand">
