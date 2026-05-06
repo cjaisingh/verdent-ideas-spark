@@ -11,6 +11,7 @@ import Capabilities from "./pages/Capabilities";
 import Events from "./pages/Events";
 import ApiLogs from "./pages/ApiLogs";
 import ControlPlane from "./pages/ControlPlane";
+import CapabilityDetail from "./pages/CapabilityDetail";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/tenants" element={<Tenants />} />
             <Route path="/tenants/:id" element={<TenantDetail />} />
             <Route path="/capabilities" element={<Capabilities />} />
+            <Route path="/capabilities/:id" element={<CapabilityDetail />} />
             <Route path="/events" element={<Events />} />
             <Route path="/api-logs" element={<ApiLogs />} />
             <Route path="/control-plane" element={<ControlPlane />} />

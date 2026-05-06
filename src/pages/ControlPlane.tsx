@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -236,7 +237,11 @@ const ControlPlane = () => {
                 <div className="p-6 text-sm text-muted-foreground">No capabilities match.</div>
               )}
               {filtered?.map((d) => (
-                <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm items-center">
+                <Link
+                  key={d.id}
+                  to={`/capabilities/${encodeURIComponent(d.id)}`}
+                  className="grid grid-cols-12 gap-2 px-4 py-3 text-sm items-center hover:bg-muted/30 transition"
+                >
                   <div className="col-span-4">
                     <div className="font-medium">{d.name}</div>
                     <div className="text-xs text-muted-foreground font-mono">{d.id}</div>
@@ -250,7 +255,7 @@ const ControlPlane = () => {
                   <div className="col-span-1 text-right tabular-nums">{d.tenant_count}</div>
                   <div className="col-span-1 text-right tabular-nums font-medium">{d.active_kr_count}</div>
                   <div className="col-span-2 text-right tabular-nums text-muted-foreground">{d.kr_count}</div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
