@@ -92,42 +92,57 @@ export type Database = {
       approval_queue: {
         Row: {
           activity: string
+          callback_url: string | null
+          capability_id: string | null
           created_at: string
           decided_at: string | null
           decided_by: string | null
           id: string
+          idempotency_key: string | null
           intent_payload: Json
           requested_by: string | null
+          requesting_module: string | null
           result: Json | null
           risk: string
           status: string
           telegram_message_id: number | null
+          tenant_id: string | null
         }
         Insert: {
           activity: string
+          callback_url?: string | null
+          capability_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           id?: string
+          idempotency_key?: string | null
           intent_payload?: Json
           requested_by?: string | null
+          requesting_module?: string | null
           result?: Json | null
           risk?: string
           status?: string
           telegram_message_id?: number | null
+          tenant_id?: string | null
         }
         Update: {
           activity?: string
+          callback_url?: string | null
+          capability_id?: string | null
           created_at?: string
           decided_at?: string | null
           decided_by?: string | null
           id?: string
+          idempotency_key?: string | null
           intent_payload?: Json
           requested_by?: string | null
+          requesting_module?: string | null
           result?: Json | null
           risk?: string
           status?: string
           telegram_message_id?: number | null
+          tenant_id?: string | null
         }
         Relationships: []
       }
