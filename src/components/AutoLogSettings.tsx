@@ -137,7 +137,7 @@ export const AutoLogSettings = () => {
           <Settings2 className="h-3.5 w-3.5" /> Auto-log
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Automatic work logging</DialogTitle>
           <DialogDescription>
@@ -145,40 +145,89 @@ export const AutoLogSettings = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center justify-between rounded-md border border-border p-3">
-          <div>
-            <div className="font-medium">Auto-logging enabled</div>
-            <div className="text-xs text-muted-foreground">Master switch for all automatic sources</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div>
+                <div className="font-medium">Auto-logging enabled</div>
+                <div className="text-xs text-muted-foreground">Master switch for all automatic sources</div>
+              </div>
+              <Switch checked={settings.enabled} onCheckedChange={() => toggle("enabled")} disabled={loading} />
+            </div>
+
+            <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
+              <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">What to capture</div>
+              {FIELDS.map((f) => (
+                <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
+                  <div className="pr-3">
+                    <div className="text-sm font-medium">{f.label}</div>
+                    <div className="text-xs text-muted-foreground">{f.hint}</div>
+                  </div>
+                  <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
+                </div>
+              ))}
+            </div>
+
+            <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
+              <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
+              {SOURCES.map((f) => (
+                <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
+                  <div className="pr-3">
+                    <div className="text-sm font-medium">{f.label}</div>
+                    <div className="text-xs text-muted-foreground">{f.hint}</div>
+                  </div>
+                  <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
+                </div>
+              ))}
+            </div>
           </div>
-          <Switch checked={settings.enabled} onCheckedChange={() => toggle("enabled")} disabled={loading} />
-        </div>
 
-        <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
-          <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">What to capture</div>
-          {FIELDS.map((f) => (
-            <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
-              <div className="pr-3">
-                <div className="text-sm font-medium">{f.label}</div>
-                <div className="text-xs text-muted-foreground">{f.hint}</div>
-              </div>
-              <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
-            </div>
-          ))}
-        </div>
-
-        <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
-          <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
-          {SOURCES.map((f) => (
-            <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
-              <div className="pr-3">
-                <div className="text-sm font-medium">{f.label}</div>
-                <div className="text-xs text-muted-foreground">{f.hint}</div>
-              </div>
-              <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
-            </div>
-          ))}
+          <PreviewPanel settings={settings} />
         </div>
       </DialogContent>
     </Dialog>
+  );
+};
+
+const PreviewPanel = ({ settings }: { settings: Settings }) => {
+  const { skipped, row } = buildPreview(settings);
+  const isEmpty = (v: unknown) =>
+    v === null || v === undefined || (typeof v === "object" && v !== null && !Array.isArray(v) && Object.keys(v as object).length === 0);
+  const fmt = (v: unknown) =>
+    typeof v === "object" && v !== null ? JSON.stringify(v) : String(v);
+
+  return (
+    <div className="space-y-2 md:sticky md:top-0 md:self-start">
+      <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Live preview</div>
+      <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-2">
+        <div className="text-muted-foreground">
+          What would be saved for a sample <span className="font-mono">{SAMPLE_TURN.source}</span> turn:
+        </div>
+        {skipped ? (
+          <div className="rounded border border-dashed border-border bg-background p-3 text-center text-muted-foreground">
+            ⚠️ {skipped}<br />
+            <span className="text-[10px]">No row would be inserted.</span>
+          </div>
+        ) : (
+          <div className="divide-y divide-border rounded border border-border bg-background">
+            {row && Object.entries(row).map(([k, v]) => {
+              const empty = isEmpty(v);
+              return (
+                <div key={k} className="flex items-start gap-2 px-2.5 py-1.5">
+                  <span className={`font-mono text-[11px] ${empty ? "text-muted-foreground/60 line-through" : "text-foreground"}`}>
+                    {k}
+                  </span>
+                  <span className={`flex-1 text-right font-mono text-[11px] truncate ${empty ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+                    {empty ? "—" : fmt(v)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
   );
 };
