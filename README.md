@@ -4,6 +4,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 
 **Docs**
 
+- [Master plan](docs/master-plan.md) — vision, phases, working agreements (live state at `/roadmap`)
 - [Architecture overview](docs/architecture.md) — data model, event streams, how consumers read them
 - [API reference](docs/api.md) — every `/awip-api` endpoint with examples
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
