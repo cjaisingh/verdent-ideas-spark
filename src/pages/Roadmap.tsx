@@ -236,7 +236,7 @@ const Roadmap = () => {
                           >
                             <TriCheckbox
                               state={isDone ? "full" : task.status === "in_progress" || task.status === "review" ? "partial" : "empty"}
-                              onClick={(e: any) => { e.stopPropagation?.(); cycleTaskStatus(task); }}
+                              onClick={(e) => { e.stopPropagation(); cycleTaskStatus(task); }}
                             />
                             <span className={`text-sm flex-1 truncate ${isDone ? "text-muted-foreground line-through" : ""}`}>
                               {task.title}
