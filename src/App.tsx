@@ -11,6 +11,7 @@ import Capabilities from "./pages/Capabilities";
 import Events from "./pages/Events";
 import ApiLogs from "./pages/ApiLogs";
 import ControlPlane from "./pages/ControlPlane";
+import CapabilityDetail from "./pages/CapabilityDetail";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
