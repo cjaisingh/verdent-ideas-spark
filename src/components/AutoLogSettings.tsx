@@ -302,7 +302,7 @@ const SkipsPanel = ({ open }: { open: boolean }) => {
       .select("id, created_at, source, reason, task_id, author, model, summary")
       .order("created_at", { ascending: false })
       .limit(20);
-    setRows((data ?? []) as SkipRow[]);
+    setRows(((data ?? []) as unknown) as SkipRow[]);
     setLoading(false);
   };
 
