@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { RefreshCw, Trash2, Database, Bot, FileText, History } from "lucide-react";
+import { RefreshCw, Trash2, Database, Bot, FileText, History, Download } from "lucide-react";
 
 type RetentionRow = {
   table_name: string;
