@@ -412,6 +412,7 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
+      else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
       else response = json({ error: "not found", path }, 404);
