@@ -322,6 +322,8 @@ const Roadmap = () => {
         </div>
       </div>
 
+      <AutomationPanel />
+
       <div className="grid grid-cols-12 gap-4">
         {/* TREE */}
         <div className="col-span-5 border border-border rounded-md p-2 max-h-[75vh] overflow-auto">
