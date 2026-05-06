@@ -36,7 +36,7 @@ const phaseStatusBadge = (s: string) => {
 };
 
 // Tri-state checkbox: empty / indeterminate / checked
-const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; onClick?: () => void }) => {
+const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; onClick?: (e: React.MouseEvent) => void }) => {
   const base = "h-4 w-4 rounded-[4px] border flex items-center justify-center shrink-0 transition";
   if (state === "full")
     return <button onClick={onClick} className={`${base} bg-primary border-primary text-primary-foreground`}><Check className="h-3 w-3" /></button>;
