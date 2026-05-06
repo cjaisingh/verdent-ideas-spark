@@ -101,6 +101,7 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
     }
     const parsed = parseUsage(withUsage);
     const tTotal = (parsed.tokens_in ?? 0) + (parsed.tokens_out ?? 0) || null;
+    const { issues, fixes } = extractIssuesAndFixes(parsed.text);
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("roadmap_work_log").insert({
       task_id: nextUpTaskId,
@@ -111,6 +112,10 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
       tokens_out: parsed.tokens_out,
       tokens_total: tTotal,
       model: parsed.model,
+      issues,
+      fixes,
+      response_preview: withUsage ? withUsage.slice(0, 2000) : null,
+      response_meta: (issues || fixes) ? { issues_fixes_auto_extracted: true } : {},
       author: u.user?.email ?? "operator",
       source: "lovable_agent",
     });
@@ -118,9 +123,14 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
       toast({ title: "Log failed", description: error.message, variant: "destructive" });
       return;
     }
+    const extras = [
+      tTotal ? `${tTotal.toLocaleString()} tokens` : null,
+      issues ? "issues✓" : null,
+      fixes ? "fixes✓" : null,
+    ].filter(Boolean).join(" · ");
     toast({
       title: "Turn logged",
-      description: `${fmt(ended - startedAt)}${tTotal ? ` · ${tTotal.toLocaleString()} tokens` : " · duration only"}`,
+      description: `${fmt(ended - startedAt)}${extras ? ` · ${extras}` : " · duration only"}`,
     });
     reset();
   };
