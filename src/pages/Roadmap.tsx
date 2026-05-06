@@ -306,6 +306,7 @@ const Roadmap = () => {
         </div>
         <div className="flex items-center gap-2">
           <AutoLogSettings />
+          <WorkLogPulse />
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           {nextUp && (
             <button
