@@ -65,7 +65,7 @@ const ControlPlane = () => {
   const [tgSending, setTgSending] = useState(false);
   const [chatIds, setChatIds] = useState<number[]>([]);
   const [selectedChatId, setSelectedChatId] = useState<string>("");
-  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null } | null>(null);
+  const [botInfo, setBotInfo] = useState<{ username: string | null; first_name?: string; id?: number; url: string | null; expected_username?: string | null; mismatch?: boolean } | null>(null);
   const [botError, setBotError] = useState<{ message: string; status?: number; detail?: unknown; at: string } | null>(null);
   const [botLoading, setBotLoading] = useState(false);
   const botFailCount = useRef(0);
@@ -342,6 +342,19 @@ const ControlPlane = () => {
             </Button>
           </div>
         </div>
+        {botInfo?.mismatch && botInfo.expected_username && (
+          <div className="border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md p-3 text-sm">
+            <div className="font-medium">Bot username mismatch</div>
+            <div className="text-xs font-mono mt-1">
+              expected <span className="font-semibold">@{botInfo.expected_username}</span> · got{" "}
+              <span className="font-semibold">@{botInfo.username ?? "unknown"}</span>
+            </div>
+            <div className="text-xs mt-1 opacity-80">
+              The connected TELEGRAM_API_KEY points to a different bot than expected. Update the
+              connector or the <code className="font-mono">TELEGRAM_EXPECTED_BOT_USERNAME</code> secret.
+            </div>
+          </div>
+        )}
         {botError && (
           <div className="border border-destructive/40 bg-destructive/5 rounded-md p-3 space-y-2">
             <div className="flex items-start justify-between gap-3">

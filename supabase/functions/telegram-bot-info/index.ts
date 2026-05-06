@@ -94,11 +94,16 @@ Deno.serve(async (req) => {
 
     if (ok) {
       const { id, username, first_name } = data.result;
+      const expectedRaw = Deno.env.get("TELEGRAM_EXPECTED_BOT_USERNAME") ?? null;
+      const expected = expectedRaw?.trim().replace(/^@/, "").toLowerCase() || null;
+      const mismatch = expected ? expected !== (username ?? "").toLowerCase() : false;
       return json({
         id,
         username,
         first_name,
         url: username ? `https://t.me/${username}` : null,
+        expected_username: expected,
+        mismatch,
       });
     }
 
