@@ -430,6 +430,45 @@ export type Database = {
         }
         Relationships: []
       }
+      notebook_entries: {
+        Row: {
+          author: string | null
+          body: string | null
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["notebook_kind"]
+          pinned: boolean
+          status: Database["public"]["Enums"]["notebook_status"]
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["notebook_kind"]
+          pinned?: boolean
+          status?: Database["public"]["Enums"]["notebook_status"]
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["notebook_kind"]
+          pinned?: boolean
+          status?: Database["public"]["Enums"]["notebook_status"]
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       okr_measurements: {
         Row: {
           attribution_rules: Json
@@ -1361,6 +1400,8 @@ export type Database = {
     Enums: {
       app_role: "operator" | "admin"
       capability_status: "available" | "planned" | "experimental" | "deprecated"
+      notebook_kind: "thought" | "issue" | "research" | "suggestion" | "todo"
+      notebook_status: "open" | "in_progress" | "resolved" | "archived"
       okr_creator: "discovery_ai" | "awip" | "human"
       okr_kind: "objective" | "key_result"
       okr_status: "draft" | "active" | "superseded" | "achieved" | "abandoned"
@@ -1502,6 +1543,8 @@ export const Constants = {
     Enums: {
       app_role: ["operator", "admin"],
       capability_status: ["available", "planned", "experimental", "deprecated"],
+      notebook_kind: ["thought", "issue", "research", "suggestion", "todo"],
+      notebook_status: ["open", "in_progress", "resolved", "archived"],
       okr_creator: ["discovery_ai", "awip", "human"],
       okr_kind: ["objective", "key_result"],
       okr_status: ["draft", "active", "superseded", "achieved", "abandoned"],
