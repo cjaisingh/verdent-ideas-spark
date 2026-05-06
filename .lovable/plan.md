@@ -1,73 +1,44 @@
+# Plan — next few days
 
-## Answering your questions first
+_Updated tonight while you sleep. Live state on `/roadmap`. Operator notes on `/notebook`._
 
-**1. Are the suggestions ("Add skip filters", "Link skips to turns", "Add CSV export", "Fix security linter") on the roadmap?**
-No. The roadmap currently only tracks Phase 1–4 module work (approvals, module split, telegram move, voice). None of the recent auto-log / skips / audit work is represented as tasks, and nothing is being logged against `roadmap_work_log` for the sessions that built it. Right now the roadmap is drifting from what we are actually building.
+## What I shipped tonight
+- **Notebook tab** (`/notebook`) — kinds (thought / issue / research / suggestion / todo), tags, pin, status, search, realtime. Backed by `notebook_entries` (operator-only RLS).
+- **Sidebar nav** — collapsible icon-strip sidebar replaces the cramped top nav. Main content max-width 1600px so `/roadmap`, `/api-logs`, `/memory` actually use the screen. Sign-out + pending approvals stay in the top header.
+- Seeded notebook with 6 starter entries: 2 pinned **decisions I need from you**, plus the outstanding s2.4 hygiene items.
+- Logged a new sprint `s2.5 — Operator UX` (done) so the work is tracked.
 
-**2. Code reviews by GitLab / another AI on a regular basis?**
-We are on GitHub (CI workflows already exist). We don't currently run any AI review. Recommend adding a lightweight scheduled review pass (weekly) using Lovable AI Gateway — cheap, no extra keys — that posts findings as roadmap comments. It is worth doing; not urgent.
+## Decisions I need from you (pinned in notebook)
+1. **Telegram module shape (phase-3)** — same Supabase project with a namespace, or a separate operator_channel project?
+2. **Voice transcription model (phase-4)** — Gemini 2.5 Flash via Lovable AI (free in plan, recommended) or Whisper via OpenAI (extra key)?
 
-**3. Scheduled testing?**
-Vitest + e2e suites exist but only run on push via `.github/workflows/ci.yml`. No nightly/scheduled run, no record of green/red over time. Worth a nightly cron + a "last test run" tile on the roadmap.
+Once you answer those two I can land phases 3 and 4 end-to-end without guessing.
 
-**4. Scheduled QA validation against goals?**
-Nothing today. The master plan has phase success criteria but nothing checks them. Worth adding a recurring QA checklist tied to each active phase.
+## What I'm NOT doing tonight (and why)
+- **Phase 3 cutover** — touches webhook URL routing and drops live tables. Doing this without confirming the module shape risks breaking your Telegram bridge. Blocked on Q1.
+- **Phase 4 voice** — needs Q2 answered + a sample voice clip from you to test against.
+- **s2.4 t4 (linter fixes)** — straightforward `REVOKE EXECUTE ... FROM anon, public` migration on `has_role` and friends. I left it as a tracked todo because it touches every SECURITY DEFINER function and I'd rather you eyeball the list before we lock anon out (10 functions).
 
----
+## Suggested order for tomorrow (no decisions needed)
+Pick these off in any order — all mechanical:
 
-## Plan
+1. **s2.4 t1** — Skip filters (source / reason / date) on `SkipsPanel`.
+2. **s2.4 t3** — CSV export for `roadmap_autolog_skips` and `roadmap_work_log`.
+3. **s2.4 t2** — Mint a `turn_id` per TurnTracker session and stamp it on both `roadmap_work_log` and `roadmap_autolog_skips`, then link "Open turn" from each skip row.
+4. **s2.4 t4** — Linter sweep (after you say go).
+5. **Roadmap split-pane** — sprint list left, task detail right; uses the new screen real estate. Bonus, not on roadmap yet.
 
-### A. Put the meta-work on the roadmap (so it gets tracked)
-Add a new sprint **`s2.4 — Operator observability & hygiene`** under Phase 2 with these tasks:
+## Then, with your answers
+- **s2.2 (Telegram move)** → 1 session.
+- **s2.3 (Approval callback wiring + Telegram update_id idempotency)** → 1 session.
+- **Phase 3 cutover** → 1 session (smoke test + drop old tables).
+- **Phase 4 voice** → 1 session (detect → transcribe → re-route as text).
 
-1. `t1` Add skip filters (by source / reason / date) to `SkipsPanel`
-2. `t2` Link each skip row back to the originating turn (store `turn_id` / open task)
-3. `t3` CSV export for skips and work-log
-4. `t4` Fix outstanding Supabase security linter warnings
-5. `t5` Auto-log this meta-work itself (TurnTracker entries against the new sprint)
+Realistic: phases 2-4 fully closed in ~4 working sessions after your morning answers. Tonight I prioritised giving you a clean place to land thoughts and a usable layout over half-shipping a cutover that would brick the bot.
 
-Migration: `INSERT` rows into `roadmap_sprints` + `roadmap_tasks`. No schema change.
+## Outstanding from the previous plan (still relevant)
+- Auto-default TurnTracker task to active sprint (B in old plan) — small.
+- "Unlogged turns this week" counter on `/roadmap` — small.
+- AI weekly code review cron is already deployed (`scheduled-code-review`); confirm GitHub token is in secrets and we can flip it on.
 
-### B. Make sure these get logged
-- Default `TurnTracker` task selection to the active sprint when one is set, so we stop forgetting to attach turns.
-- Add a small "unlogged turns this week" counter on `/roadmap` so drift is visible.
-
-### C. Scheduled AI code review (weekly)
-- New edge function `scheduled-code-review` invoked by a `pg_cron` weekly job.
-- Pulls the last 7 days of git diff via GitHub API (token already in CI), sends to `google/gemini-2.5-pro` via Lovable AI Gateway, writes findings into a new `roadmap_review_findings` table (RLS: operator read).
-- Surface count + latest 5 findings in a "Code review" card on `/roadmap`.
-
-### D. Scheduled tests
-- Add `.github/workflows/nightly.yml` running `vitest run` + `vitest -c vitest.e2e.config.ts run` on cron.
-- Edge function `record-test-run` (called from the workflow) writes pass/fail + duration into a new `test_runs` table.
-- "Last test run" chip on `/roadmap` (green/red + timestamp + link).
-
-### E. Scheduled QA validation
-- New table `qa_checks` (one row per phase success criterion from `docs/master-plan.md`, status: `pass | fail | unknown`, last_checked_at, note).
-- Weekly `pg_cron` calls `qa-validate` edge function which:
-  - For mechanical criteria (e.g. "every API call logged"), runs a SQL probe.
-  - For judgement criteria, opens a roadmap comment asking the operator to tick it off.
-- "Phase health" panel on `/roadmap` showing each active phase's criteria status.
-
-### F. Cadence proposal (for you to confirm)
-- **Code review:** weekly, Mondays 06:00 UTC
-- **Full test suite:** nightly 02:00 UTC
-- **QA validation sweep:** weekly, Fridays 16:00 UTC
-- **Roadmap hygiene check (unlogged turns):** daily, surfaced as a chip — no notification
-
----
-
-## Technical notes
-- Reuse `roadmap-log-work` source enum; add `'scheduled_review'` and `'qa_validator'` for E2E auditability of automated activity.
-- All new tables: RLS operator-only, realtime enabled (matches existing pattern).
-- All new edge functions: `verify_jwt = true` except cron-invoked ones, which use the service token already used by `awip-api`.
-- pg_cron + pg_net extensions need enabling in a migration.
-
----
-
-## Out of scope this pass
-- GitLab integration (we're on GitHub; happy to add if you switch).
-- Slack/Telegram notifications for failed test runs (easy follow-up once `test_runs` exists).
-- Auto-fixing review findings.
-
-Approve and I'll do A + B in the first pass (cheap, immediately useful), then C/D/E in a follow-up so you can review each cron in isolation.
+Sleep well — drop anything in `/notebook` when you wake up and I'll work from there.
