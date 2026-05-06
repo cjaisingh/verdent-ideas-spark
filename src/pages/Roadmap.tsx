@@ -27,7 +27,11 @@ type WorkLog = {
   tokens_total: number | null; model: string | null; summary: string | null;
   issues: string | null; fixes: string | null; author: string | null; created_at: string;
 };
-
+type Activity = {
+  id: string; task_id: string; field: string;
+  old_value: string | null; new_value: string | null;
+  author_label: string | null; created_at: string;
+};
 const TASK_STATUSES = ["todo", "in_progress", "blocked", "review", "done", "wont_do"] as const;
 
 const taskMarker = (status: string) => {
@@ -73,6 +77,7 @@ const Roadmap = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
+  const [activity, setActivity] = useState<Activity[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("roadmap.collapsed") ?? "[]")); } catch { return new Set(); }
@@ -97,18 +102,20 @@ const Roadmap = () => {
   };
 
   const loadAll = async () => {
-    const [p, s, t, c, w] = await Promise.all([
+    const [p, s, t, c, w, a] = await Promise.all([
       supabase.from("roadmap_phases").select("*").order("order"),
       supabase.from("roadmap_sprints").select("*").order("order"),
       supabase.from("roadmap_tasks").select("*").order("order"),
       supabase.from("roadmap_comments").select("*").order("created_at"),
       supabase.from("roadmap_work_log").select("*").order("started_at", { ascending: false }),
+      supabase.from("roadmap_task_activity").select("*").order("created_at", { ascending: false }),
     ]);
     if (p.data) setPhases(p.data as Phase[]);
     if (s.data) setSprints(s.data as Sprint[]);
     if (t.data) setTasks(t.data as Task[]);
     if (c.data) setComments(c.data as Comment[]);
     if (w.data) setWorkLogs(w.data as WorkLog[]);
+    if (a.data) setActivity(a.data as Activity[]);
   };
 
   useEffect(() => {
@@ -120,6 +127,7 @@ const Roadmap = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_sprints" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_phases" }, loadAll)
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_work_log" }, loadAll)
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_task_activity" }, loadAll)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
@@ -159,6 +167,15 @@ const Roadmap = () => {
     }
     return m;
   }, [workLogs]);
+
+  const activityByTask = useMemo(() => {
+    const m = new Map<string, Activity[]>();
+    for (const a of activity) {
+      if (!m.has(a.task_id)) m.set(a.task_id, []);
+      m.get(a.task_id)!.push(a);
+    }
+    return m;
+  }, [activity]);
 
   const sprintTriState = (sprintId: string): "empty" | "partial" | "full" => {
     const ts = tasksBySprint.get(sprintId) ?? [];
@@ -529,6 +546,39 @@ const Roadmap = () => {
                                         </div>
                                       </div>
                                     </div>
+
+                                    {/* Activity timeline */}
+                                    {(() => {
+                                      const acts = activityByTask.get(task.id) ?? [];
+                                      if (acts.length === 0) return null;
+                                      const trunc = (v: string | null) => {
+                                        if (!v) return <span className="italic text-muted-foreground">empty</span>;
+                                        const s = v.length > 60 ? v.slice(0, 60) + "…" : v;
+                                        return <span className="font-mono">"{s}"</span>;
+                                      };
+                                      return (
+                                        <div className="space-y-1.5 border-t border-border pt-2">
+                                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Activity</div>
+                                          <div className="space-y-1 max-h-48 overflow-auto">
+                                            {acts.map((a) => (
+                                              <div key={a.id} className="text-[11px] flex gap-2 items-start">
+                                                <span className="font-mono text-muted-foreground tabular-nums shrink-0">
+                                                  {new Date(a.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                                <span className="text-muted-foreground">{a.author_label ?? "system"}</span>
+                                                <span className="flex-1">
+                                                  {a.field === "status" ? (
+                                                    <>changed <span className="font-semibold">status</span> from <span className="font-mono">{a.old_value ?? "—"}</span> to <span className="font-mono">{a.new_value ?? "—"}</span></>
+                                                  ) : (
+                                                    <>edited <span className="font-semibold">{a.field}</span>: {trunc(a.old_value)} → {trunc(a.new_value)}</>
+                                                  )}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Work log */}
                                     <div className="space-y-2 border-t border-border pt-2">
