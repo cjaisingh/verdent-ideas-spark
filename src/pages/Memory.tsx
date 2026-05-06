@@ -103,6 +103,21 @@ export default function Memory() {
     loadStats();
   };
 
+  const purgeAll = async (table: string) => {
+    const row = stats.find((s) => s.table_name === table);
+    const count = row?.row_count ?? 0;
+    if (!window.confirm(`Delete ALL ${count.toLocaleString()} rows from ${table}? This cannot be undone.`)) return;
+    setPurging(`all:${table}`);
+    const { data, error } = await supabase.rpc("purge_all_rows" as any, { _table: table });
+    setPurging(null);
+    if (error) {
+      toast({ title: "Purge failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Deleted ${Number(data ?? 0).toLocaleString()} row(s) from ${table}` });
+    loadStats();
+  };
+
   // ---- Autolog
   const [autolog, setAutolog] = useState<AutoLog | null>(null);
 
