@@ -429,11 +429,18 @@ async function getTree(url: URL) {
 
 async function ingestEvents(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("events_ingest", idemKey);
-  if (cached) return json(cached);
-
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
   let body: any;
-  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("events_ingest", idemKey, bodyHash);
+  if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+  if (conflict.cached) {
+    const { __body_hash, ...rest } = conflict.cached as any;
+    return json(rest);
+  }
+
   const events = Array.isArray(body?.events) ? body.events : null;
   if (!events || events.length === 0) return json({ error: "events[] required" }, 400);
 
@@ -450,7 +457,7 @@ async function ingestEvents(req: Request, actor: string) {
   const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
   if (error) return json({ error: error.message }, 500);
   const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d: any) => d.id) };
-  await storeIdempotency("events_ingest", idemKey, null, response);
+  await storeIdempotency("events_ingest", idemKey, null, response, bodyHash);
   return json(response);
 }
 
