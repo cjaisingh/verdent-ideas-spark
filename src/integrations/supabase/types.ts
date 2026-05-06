@@ -466,6 +466,45 @@ export type Database = {
         }
         Relationships: []
       }
+      qa_checks: {
+        Row: {
+          created_at: string
+          criterion: string
+          id: string
+          kind: string
+          last_checked_at: string | null
+          note: string | null
+          phase_key: string
+          probe: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          criterion: string
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          note?: string | null
+          phase_key: string
+          probe?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          criterion?: string
+          id?: string
+          kind?: string
+          last_checked_at?: string | null
+          note?: string | null
+          phase_key?: string
+          probe?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rethink_tasks: {
         Row: {
           created_at: string
@@ -654,6 +693,51 @@ export type Database = {
           summary?: string | null
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      roadmap_review_findings: {
+        Row: {
+          acknowledged: boolean
+          area: string | null
+          body: string | null
+          category: string | null
+          created_at: string
+          diff_window_end: string | null
+          diff_window_start: string | null
+          id: string
+          reviewed_at: string
+          reviewer_model: string
+          severity: string
+          title: string
+        }
+        Insert: {
+          acknowledged?: boolean
+          area?: string | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          diff_window_end?: string | null
+          diff_window_start?: string | null
+          id?: string
+          reviewed_at?: string
+          reviewer_model: string
+          severity?: string
+          title: string
+        }
+        Update: {
+          acknowledged?: boolean
+          area?: string | null
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          diff_window_end?: string | null
+          diff_window_start?: string | null
+          id?: string
+          reviewed_at?: string
+          reviewer_model?: string
+          severity?: string
+          title?: string
         }
         Relationships: []
       }
@@ -965,6 +1049,54 @@ export type Database = {
           id?: string
           name?: string
           slug?: string
+        }
+        Relationships: []
+      }
+      test_runs: {
+        Row: {
+          branch: string | null
+          commit_sha: string | null
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          failed: number | null
+          id: string
+          passed: number | null
+          skipped: number | null
+          status: string
+          suite: string
+          total: number | null
+          workflow_run_url: string | null
+        }
+        Insert: {
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          failed?: number | null
+          id?: string
+          passed?: number | null
+          skipped?: number | null
+          status: string
+          suite: string
+          total?: number | null
+          workflow_run_url?: string | null
+        }
+        Update: {
+          branch?: string | null
+          commit_sha?: string | null
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          failed?: number | null
+          id?: string
+          passed?: number | null
+          skipped?: number | null
+          status?: string
+          suite?: string
+          total?: number | null
+          workflow_run_url?: string | null
         }
         Relationships: []
       }
