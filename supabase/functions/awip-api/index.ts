@@ -441,6 +441,85 @@ async function getCapabilityDemand() {
   return json({ demand, tenants: tenantsRes.data ?? [] });
 }
 
+async function getCapabilityDetail(capId: string) {
+  const { data: cap } = await supabase.from("capabilities").select("*").eq("id", capId).maybeSingle();
+
+  // Find measurements that reference this capability
+  const { data: meas, error: mErr } = await supabase
+    .from("okr_measurements")
+    .select("okr_node_id, metric_name, target, unit, cadence, required_capabilities");
+  if (mErr) return json({ error: mErr.message }, 500);
+  const matching = (meas ?? []).filter((m: any) =>
+    (m.required_capabilities ?? []).includes(capId)
+  );
+  const nodeIds = [...new Set(matching.map((m: any) => m.okr_node_id))];
+
+  if (nodeIds.length === 0) {
+    return json({
+      capability: cap ?? { id: capId, name: capId, status: "unknown", owning_module: null },
+      krs: [],
+      tenants: [],
+    });
+  }
+
+  const { data: nodes, error: nErr } = await supabase
+    .from("okr_nodes")
+    .select("id, tenant_id, parent_id, kind, title, status, version, created_at")
+    .in("id", nodeIds);
+  if (nErr) return json({ error: nErr.message }, 500);
+
+  const tenantIds = [...new Set((nodes ?? []).map((n: any) => n.tenant_id))];
+  const { data: tenants } = await supabase
+    .from("tenants")
+    .select("id, slug, name")
+    .in("id", tenantIds);
+  const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
+
+  const measByNode = new Map(matching.map((m: any) => [m.okr_node_id, m]));
+
+  // Parent objective lookup
+  const parentIds = [...new Set((nodes ?? []).map((n: any) => n.parent_id).filter(Boolean))];
+  const { data: parents } = parentIds.length
+    ? await supabase.from("okr_nodes").select("id, title").in("id", parentIds)
+    : { data: [] as any[] };
+  const parentById = new Map((parents ?? []).map((p: any) => [p.id, p]));
+
+  const krs = (nodes ?? []).map((n: any) => ({
+    id: n.id,
+    title: n.title,
+    status: n.status,
+    version: n.version,
+    created_at: n.created_at,
+    tenant: tenantById.get(n.tenant_id) ?? null,
+    parent_title: n.parent_id ? parentById.get(n.parent_id)?.title ?? null : null,
+    measurement: measByNode.get(n.id) ?? null,
+  }));
+
+  // Tenants summary with KR counts
+  const tenantSummary = tenantIds.map((tid) => {
+    const tKrs = krs.filter((k) => k.tenant?.id === tid);
+    return {
+      ...(tenantById.get(tid) ?? { id: tid, slug: tid, name: tid }),
+      kr_count: tKrs.length,
+      active_kr_count: tKrs.filter((k) => k.status !== "superseded").length,
+    };
+  }).sort((a, b) => b.active_kr_count - a.active_kr_count);
+
+  // Sort KRs: active first, then by created_at desc
+  krs.sort((a, b) => {
+    const as = a.status === "superseded" ? 1 : 0;
+    const bs = b.status === "superseded" ? 1 : 0;
+    if (as !== bs) return as - bs;
+    return b.created_at.localeCompare(a.created_at);
+  });
+
+  return json({
+    capability: cap ?? { id: capId, name: capId, status: "unknown", owning_module: null },
+    krs,
+    tenants: tenantSummary,
+  });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
