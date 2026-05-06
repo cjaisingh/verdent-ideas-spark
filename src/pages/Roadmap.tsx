@@ -24,8 +24,11 @@ type Comment = { id: string; task_id: string; author: string; body: string; kind
 type WorkLog = {
   id: string; task_id: string; started_at: string; ended_at: string | null;
   duration_ms: number | null; tokens_in: number | null; tokens_out: number | null;
-  tokens_total: number | null; model: string | null; summary: string | null;
-  issues: string | null; fixes: string | null; author: string | null; created_at: string;
+  tokens_total: number | null; model: string | null; model_provider: string | null;
+  summary: string | null; issues: string | null; fixes: string | null;
+  author: string | null; created_at: string; source: string | null;
+  prompt_preview: string | null; response_preview: string | null;
+  request_meta: Record<string, unknown> | null; response_meta: Record<string, unknown> | null;
 };
 type Activity = {
   id: string; task_id: string; field: string;
