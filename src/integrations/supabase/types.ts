@@ -499,6 +499,186 @@ export type Database = {
         }
         Relationships: []
       }
+      roadmap_comments: {
+        Row: {
+          author: string
+          body: string
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["roadmap_comment_kind"]
+          resolved: boolean
+          task_id: string
+        }
+        Insert: {
+          author: string
+          body: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["roadmap_comment_kind"]
+          resolved?: boolean
+          task_id: string
+        }
+        Update: {
+          author?: string
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["roadmap_comment_kind"]
+          resolved?: boolean
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_phases: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          order: number
+          status: Database["public"]["Enums"]["roadmap_status"]
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          order?: number
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          order?: number
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      roadmap_sprints: {
+        Row: {
+          created_at: string
+          ends_on: string | null
+          goal: string | null
+          id: string
+          key: string
+          order: number
+          phase_id: string
+          starts_on: string | null
+          status: Database["public"]["Enums"]["roadmap_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_on?: string | null
+          goal?: string | null
+          id?: string
+          key: string
+          order?: number
+          phase_id: string
+          starts_on?: string | null
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_on?: string | null
+          goal?: string | null
+          id?: string
+          key?: string
+          order?: number
+          phase_id?: string
+          starts_on?: string | null
+          status?: Database["public"]["Enums"]["roadmap_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_sprints_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_tasks: {
+        Row: {
+          acceptance: string | null
+          blocked_by: string[]
+          capability_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          module: string | null
+          order: number
+          owner: string | null
+          sprint_id: string
+          status: Database["public"]["Enums"]["roadmap_task_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          acceptance?: string | null
+          blocked_by?: string[]
+          capability_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          module?: string | null
+          order?: number
+          owner?: string | null
+          sprint_id: string
+          status?: Database["public"]["Enums"]["roadmap_task_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          acceptance?: string | null
+          blocked_by?: string[]
+          capability_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          module?: string | null
+          order?: number
+          owner?: string | null
+          sprint_id?: string
+          status?: Database["public"]["Enums"]["roadmap_task_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_sprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_change_audit: {
         Row: {
           action: string
@@ -646,6 +826,15 @@ export type Database = {
       okr_creator: "discovery_ai" | "awip" | "human"
       okr_kind: "objective" | "key_result"
       okr_status: "draft" | "active" | "superseded" | "achieved" | "abandoned"
+      roadmap_comment_kind: "comment" | "question" | "decision"
+      roadmap_status: "planned" | "active" | "done" | "paused"
+      roadmap_task_status:
+        | "todo"
+        | "in_progress"
+        | "blocked"
+        | "review"
+        | "done"
+        | "wont_do"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -778,6 +967,16 @@ export const Constants = {
       okr_creator: ["discovery_ai", "awip", "human"],
       okr_kind: ["objective", "key_result"],
       okr_status: ["draft", "active", "superseded", "achieved", "abandoned"],
+      roadmap_comment_kind: ["comment", "question", "decision"],
+      roadmap_status: ["planned", "active", "done", "paused"],
+      roadmap_task_status: [
+        "todo",
+        "in_progress",
+        "blocked",
+        "review",
+        "done",
+        "wont_do",
+      ],
     },
   },
 } as const

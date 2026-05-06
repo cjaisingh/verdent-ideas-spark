@@ -1,89 +1,78 @@
-# Extract `operator_channel` module + approvals contract in Core
 
-Honor the docs: Core stays substrate, Telegram/voice/Gem classification moves to a new `operator_channel` module, and approvals become a first-class contract on Core that any module can use.
+## Revised Roadmap view: Tree + Timeline (no Gantt)
 
-## Why
-Today Core hosts `operator_messages`, `approval_queue`, `activity_policies`, the Telegram webhook, and the router. That violates the "Core is substrate, not a brain" rule in `docs/architecture.md` and `docs/modules.md`. It also blocks future modules from requesting approvals through a stable contract.
-
-## End-state architecture
+Replace the earlier "collapsible list" sketch with a two-pane combo that mirrors your references.
 
 ```text
- Telegram ──► operator_channel module ──► Core /awip-api/approvals/request
-                  │  (classify, voice ASR,                │
-                  │   policy match, Telegram I/O)         ▼
-                  │                              approval_queue (Core)
-                  └──◄ Core /awip-api/approvals/:id/decide ──► capability_events
+┌──────────────────────────────┬──────────────────────────────────────────┐
+│  TREE (left, ~38%)           │  TIMELINE (right, fills rest)            │
+│                              │                                          │
+│  ▼ ☑ Phase 1  Core           │     ●  2026-05-06  Phase 1 done          │
+│      ▼ ☑ Sprint 1.1          │     │                                    │
+│          ☑ Migration         │     ●  2026-05-06  /approvals contract   │
+│          ☑ /approvals API    │     │                                    │
+│          ☑ UI cutover        │  ⏱ ●  now         Sprint 2.1 in progress │
+│  ▼ ◧ Phase 2  operator_ch.   │     │              "register endpoint"   │
+│      ▼ ◧ Sprint 2.1 Scaffold │     │                                    │
+│          ☑ README            │     ○  todo        approval-callback     │
+│          ◧ register endpoint │     │              💬 2 questions        │
+│          ☐ approval-callback │     ○  todo        Sprint 2.2 Telegram   │
+│      ▶ ☐ Sprint 2.2 Telegram │     │                                    │
+│  ▶ ☐ Phase 3  Cutover        │     ○  planned     Phase 3 Cutover       │
+│  ▶ ☐ Phase 4  Voice          │     ○  planned     Phase 4 Voice         │
+└──────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-- **Core owns**: `approval_queue` (generic substrate), `/approvals/request`, `/approvals/:id/decide`, capability registry, events.
-- **operator_channel module owns**: Telegram webhook + send, voice transcription, intent classification (Gemini), policy table, router. Registers capabilities `human_approval_gate`, `telegram_operator_channel`, `voice_intent_capture` with Core.
+### Left pane — Tree with tri-state checkboxes (ref: image 1)
 
-## Phase 1 — Core changes (substrate)
+- Phase → Sprint → Task hierarchy, collapsible at every level.
+- Checkbox states map to status:
+  - `☐` empty = `todo`
+  - `◧` indeterminate = some children done / `in_progress`
+  - `☑` checked = `done`
+  - dimmed = `wont_do` / `paused`
+- Clicking a row selects it and scrolls the timeline to the matching marker; clicking the checkbox toggles status (operator only).
+- Drag to reorder within a parent.
+- Badges on the row: 💬 comment count, 🚧 blocked, 👤 owner initials.
+- Built on Radix `Collapsible` + custom tri-state checkbox (no new dep).
 
-### Schema (migration)
-1. Add to `approval_queue`:
-   - `tenant_id uuid` (nullable for now; required once tenants exist per request)
-   - `requesting_module text` (e.g. `operator_channel`)
-   - `capability_id text` (FK-ish to `capabilities.id`, soft ref)
-   - `callback_url text` nullable — module endpoint Core POSTs to on decision
-   - `idempotency_key text` nullable + unique index `(requesting_module, idempotency_key)`
-2. Drop `operator_messages` and `activity_policies` from Core (after Phase 2 cutover; keep during migration).
-3. Keep `idempotency_keys` table; reuse for `/approvals/request`.
+### Right pane — Vertical timeline (ref: image 2)
 
-### `awip-api` endpoints (service-token auth)
-- `POST /approvals/request` — body: `{capability_id, activity, risk, intent_payload, requesting_module, callback_url?, idempotency_key?, requested_by?, tenant_id?}`. Validates `capability_id` exists in registry. Inserts pending row. Returns `{approval_id, status}`.
-- `POST /approvals/:id/decide` — body: `{decision: 'approved'|'rejected', decided_by, result?}`. Updates row, emits `capability_events` row (`event_type='approval_decided'`), fires `callback_url` POST if set (fire-and-forget, logged).
-- `GET /approvals/:id` and `GET /approvals?status=pending&module=...` — for module/UI polling.
+- One marker per task, ordered by `order` within sprint, sprints stacked under their phase header.
+- Marker style by status:
+  - blue ring `○` = todo / planned
+  - green filled `●` = done
+  - clock `⏱` = in_progress
+  - red ring = blocked
+- Each marker shows: relative date (created/updated/decided), one-line title, and — when expanded — description, acceptance criteria, comment thread.
+- Clicking a marker selects it and highlights the matching tree row.
+- Sticky "Now" line between last `done` and first `in_progress`/`todo`. The "Next up" pill from earlier sits on this line.
+- Filter chips above the timeline: All / Active phase only / My tasks / Has questions.
 
-### UI (Control Plane stays in Core for now)
-- `/approvals` and `/approvals/:id` keep working — read directly from `approval_queue` via RLS as today. No UI rewrite this phase.
-- The decision buttons in UI call `/approvals/:id/decide` instead of writing the row directly. This proves the contract from the inside.
+### Sync behaviour
 
-## Phase 2 — Spin up `operator_channel` module project
+- Selection is shared state — tree ⇄ timeline.
+- Realtime subscription on `roadmap_tasks` and `roadmap_comments` updates both panes without reload.
+- Collapse state persists in `localStorage` per user.
 
-A new Lovable project (separate Supabase). Uses the scaffold in `docs/module-scaffold/`.
+### What stays the same as the previous plan
 
-### Tables (in module DB)
-- `operator_messages` — full schema from Core + new columns:
-  - `modality text` (`text` | `voice`)
-  - `transcript text` nullable
-  - `audio_file_id text` nullable
-  - `tenant_id uuid` nullable
-- `activity_policies` — same shape, plus `capability_id text` linking to a Core-registered capability id (soft ref via `GET /capabilities`).
+- Tables: `roadmap_phases`, `roadmap_sprints`, `roadmap_tasks`, `roadmap_comments`.
+- Edge function `roadmap-api` with `/tasks/:id/status`, `/tasks/:id/comment`, `/next`.
+- Seeded from `.lovable/plan.md` so Phases 1–4 + the operator_channel sprints/tasks are present immediately.
+- Mounted as a new tab on `/control-plane` ("Roadmap"), alongside Demand and Feed.
+- Optional Linear mirror deferred.
 
-### Edge functions (module)
-- `telegram-webhook` — moved from Core. Adds voice path: detects `message.voice`, calls `getFile`, downloads OGG via gateway, transcribes with Gemini 2.5 Flash (audio input), stores `transcript`, then routes.
-- `telegram-send` — moved from Core.
-- `route-operator-message` — moved from Core. After classify + policy, instead of inserting locally, calls Core `POST /approvals/request` with `requesting_module='operator_channel'`, `callback_url=<module>/approval-callback`, `capability_id` resolved from policy row.
-- `approval-callback` — receives Core's decision webhook, sends Telegram confirmation back to the originating chat.
-- `register` — registers `human_approval_gate`, `telegram_operator_channel`, `voice_intent_capture` per the scaffold.
+### What changes vs the previous plan
 
-### Secrets (module project)
-`AWIP_CORE_URL`, `AWIP_SERVICE_TOKEN`, `LOVABLE_API_KEY`, `TELEGRAM_API_KEY`.
+- Drop the flat collapsible list. Build the two-pane Tree+Timeline instead.
+- Add `parent_path` virtualisation so deeply-nested trees stay performant (we won't go past 3 levels for now, so this is just future-proofing — no extra column needed).
+- Side panel for task detail becomes the *expanded timeline marker* — no separate drawer, fewer clicks.
 
-## Phase 3 — Cutover & cleanup
-1. Point Telegram `setWebhook` at the module's URL.
-2. Verify a round-trip: Telegram message → module classify → Core `/approvals/request` → UI shows pending → operator decides in UI → Core POSTs callback → module replies on Telegram.
-3. Drop `operator_messages`, `activity_policies`, `route-operator-message`, `telegram-*` from Core.
-4. Update `docs/modules.md` to mark `operator_channel` as a real module with its three capabilities.
+### Out of scope (still)
 
-## Phase 4 — Voice (lands inside the module, not Core)
-Gemini 2.5 Flash transcription inside the module's `telegram-webhook`. No new vendor, no new key. Deepgram fallback deferred behind a feature flag if quality is insufficient.
+- Gantt / horizontal time axis.
+- Calendar dates on every task (only sprints have `starts_on`/`ends_on`; tasks just show created/updated).
+- Cross-phase dependency arrows on the timeline (blocked-by shown as a chip on the row, not a line).
 
-## Out of scope this round
-- Multi-tenant enforcement on `tenant_id` (column added, validation later).
-- Moving Control Plane UI out of Core (still embedded; separate project later).
-- Browser dictation for `/control-plane` (only Telegram voice for now).
-
-## Order of work
-1. Core migration: extend `approval_queue`, add idempotency support.
-2. Add `/approvals/request`, `/approvals/:id/decide`, `GET /approvals*` to `awip-api` + tests.
-3. Switch existing UI decision flow to call the new endpoints (proves the contract).
-4. Stand up `operator_channel` module project from scaffold; move Telegram + router + policies; add voice path.
-5. Register module capabilities with Core; flip Telegram webhook; smoke test.
-6. Delete moved tables/functions from Core; update docs.
-
-## Risks
-- **Two deploys to coordinate** during cutover — mitigate by running both webhooks briefly and disabling Core's once module is verified.
-- **Capability id drift** between policy rows and registry — `register` is the source of truth; policies validated on write.
-- **Callback delivery** — log every callback POST in `api_call_logs`; module is idempotent on `approval_id`.
+Approve and I'll build Phase 1 (schema + seed + read-only Tree+Timeline) and Phase 2 (editing + comments + realtime) in one pass.
