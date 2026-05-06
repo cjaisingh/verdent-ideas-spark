@@ -64,6 +64,41 @@ export const AutomationPanel = () => {
   const [qaState, setQaState] = useState<RunState>("idle");
   const [reviewMsg, setReviewMsg] = useState<string | null>(null);
   const [qaMsg, setQaMsg] = useState<string | null>(null);
+  const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
+
+  const toggleFinding = (id: string) => {
+    setExpandedFindings((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const ackFinding = async (id: string, value: boolean) => {
+    const { error } = await supabase.from("roadmap_review_findings" as any)
+      .update({ acknowledged: value }).eq("id", id);
+    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+  };
+
+  // Render a body with simple file:line refs detected — turn `path/to/file.ts:42`
+  // into a subtle highlight so the eye finds it. We don't link out (no editor URL).
+  const renderBody = (body: string) => {
+    const re = /([\w./@\-]+\.(?:tsx?|jsx?|css|sql|json|md|ya?ml))(?::(\d+))?/g;
+    const parts: Array<string | { file: string; line?: string }> = [];
+    let last = 0;
+    for (const m of body.matchAll(re)) {
+      const idx = m.index ?? 0;
+      if (idx > last) parts.push(body.slice(last, idx));
+      parts.push({ file: m[1], line: m[2] });
+      last = idx + m[0].length;
+    }
+    if (last < body.length) parts.push(body.slice(last));
+    return parts.map((p, i) =>
+      typeof p === "string"
+        ? <span key={i}>{p}</span>
+        : <code key={i} className="px-1 py-0.5 mx-0.5 rounded bg-muted text-foreground font-mono text-[11px]">{p.file}{p.line ? `:${p.line}` : ""}</code>
+    );
+  };
 
   const load = async () => {
     const [f, r, q, a] = await Promise.all([
