@@ -324,6 +324,40 @@ export const AutomationPanel = () => {
           {qaMsg && <span className={statusTone(qaState === "error" ? "fail" : "pass")}>{qaMsg}</span>}
         </div>
         <LastRun run={lastQa} emptyHint="No probe runs recorded yet — click Run probes to test." />
+        {(() => {
+          const probes = qa.filter((c) => c.kind === "probe");
+          const total = probes.length;
+          const pass = probes.filter((c) => c.status === "pass").length;
+          const fail = probes.filter((c) => c.status === "fail").length;
+          const unknown = total - pass - fail;
+          const pct = total ? Math.round((pass / total) * 100) : 0;
+          const running = qaState === "running";
+          return (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                <span>probes {pass}/{total} passing{running ? " · running…" : ""}</span>
+                <span>
+                  <span className="text-emerald-600 dark:text-emerald-400">{pass}✓</span>
+                  {" · "}
+                  <span className={fail ? "text-destructive" : ""}>{fail}✗</span>
+                  {" · "}
+                  <span>{unknown}?</span>
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded bg-muted overflow-hidden flex" aria-label={`probes progress ${pct}%`}>
+                {total === 0 ? (
+                  <div className={`h-full w-full ${running ? "animate-pulse bg-muted-foreground/30" : ""}`} />
+                ) : (
+                  <>
+                    <div className="h-full bg-emerald-500/70" style={{ width: `${(pass / total) * 100}%` }} />
+                    <div className="h-full bg-destructive/70" style={{ width: `${(fail / total) * 100}%` }} />
+                    <div className={`h-full bg-muted-foreground/20 ${running ? "animate-pulse" : ""}`} style={{ width: `${(unknown / total) * 100}%` }} />
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
         <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
           {Object.entries(phaseGroups).map(([phase, items]) => {
             const pass = items.filter((c) => c.status === "pass").length;
