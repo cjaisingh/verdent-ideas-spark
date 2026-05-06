@@ -67,7 +67,7 @@ export const AutomationPanel = () => {
         .order("created_at", { ascending: false }).limit(5),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
-      supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note")
+      supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note, kind, probe")
         .order("phase_key").order("criterion"),
       supabase.from("automation_runs" as any).select("id, created_at, job, trigger, status, status_code, duration_ms, message")
         .order("created_at", { ascending: false }).limit(40),
