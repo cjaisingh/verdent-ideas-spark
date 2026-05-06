@@ -167,6 +167,22 @@ Deno.serve(async (req) => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
+  // Load autolog settings (single-row table). Settings only gate AUTOMATIC sources.
+  const { data: settings } = await admin
+    .from('roadmap_autolog_settings')
+    .select('*').eq('id', true).maybeSingle();
+  const isAuto = (b.source ?? (isService ? 'awip_api' : 'manual')) !== 'manual';
+  const s = settings ?? {
+    enabled: true, capture_tokens: true, capture_duration: true, capture_model: true,
+    capture_prompt: true, capture_response: true, capture_request_meta: true,
+    capture_response_meta: true, extract_issues_fixes: true,
+  };
+  if (isAuto && !s.enabled) {
+    return new Response(JSON.stringify({ ok: true, skipped: 'autolog_disabled' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   const taskId = b.task_id ?? (await inferNextUpTaskId(admin));
   if (!taskId) {
     return new Response(JSON.stringify({ error: 'no_active_task' }), {
@@ -176,33 +192,50 @@ Deno.serve(async (req) => {
 
   const startedAt = b.started_at ?? new Date().toISOString();
   const endedAt = b.ended_at ?? new Date().toISOString();
-  const duration_ms = b.duration_ms ?? (new Date(endedAt).getTime() - new Date(startedAt).getTime());
-  const tokens_total = b.tokens_total ?? (((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null);
+  const rawDuration = b.duration_ms ?? (new Date(endedAt).getTime() - new Date(startedAt).getTime());
+  const duration_ms = isAuto && !s.capture_duration ? null : rawDuration;
+  const tokens_in = isAuto && !s.capture_tokens ? null : (b.tokens_in ?? null);
+  const tokens_out = isAuto && !s.capture_tokens ? null : (b.tokens_out ?? null);
+  const tokens_total = isAuto && !s.capture_tokens
+    ? null
+    : (b.tokens_total ?? (((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null));
+  const model = isAuto && !s.capture_model ? null : (b.model ?? null);
+  const model_provider = isAuto && !s.capture_model
+    ? null
+    : (b.model_provider ?? inferProvider(b.model));
+  const prompt_preview = isAuto && !s.capture_prompt ? null : trim(b.prompt_preview);
+  const response_preview = isAuto && !s.capture_response ? null : trim(b.response_preview);
+  const request_meta = isAuto && !s.capture_request_meta ? {} : (b.request_meta ?? {});
+  const baseRespMeta = isAuto && !s.capture_response_meta ? {} : (b.response_meta ?? {});
 
-  // Auto-extract issues/fixes from AI turn output if operator/agent didn't provide them.
-  const sourceText = [b.response_preview, b.summary].filter(Boolean).join('\n\n');
-  const extracted = extractIssuesAndFixes(sourceText);
-  const finalIssues = b.issues ?? extracted.issues;
-  const finalFixes = b.fixes ?? extracted.fixes;
-  const autoExtracted = (!b.issues && extracted.issues) || (!b.fixes && extracted.fixes);
+  // Issues/fixes extraction (only if enabled or for manual entries)
+  let finalIssues = b.issues ?? null;
+  let finalFixes = b.fixes ?? null;
+  let autoExtracted = false;
+  if (!isAuto || s.extract_issues_fixes) {
+    const sourceText = [b.response_preview, b.summary].filter(Boolean).join('\n\n');
+    const extracted = extractIssuesAndFixes(sourceText);
+    if (!finalIssues && extracted.issues) { finalIssues = extracted.issues; autoExtracted = true; }
+    if (!finalFixes && extracted.fixes) { finalFixes = extracted.fixes; autoExtracted = true; }
+  }
 
   const { data, error } = await admin.from('roadmap_work_log').insert({
     task_id: taskId,
     started_at: startedAt,
     ended_at: endedAt,
     duration_ms,
-    tokens_in: b.tokens_in ?? null,
-    tokens_out: b.tokens_out ?? null,
+    tokens_in,
+    tokens_out,
     tokens_total,
-    model: b.model ?? null,
-    model_provider: b.model_provider ?? inferProvider(b.model),
+    model,
+    model_provider,
     summary: b.summary ?? null,
     issues: finalIssues,
     fixes: finalFixes,
-    prompt_preview: trim(b.prompt_preview),
-    response_preview: trim(b.response_preview),
-    request_meta: b.request_meta ?? {},
-    response_meta: { ...(b.response_meta ?? {}), ...(autoExtracted ? { issues_fixes_auto_extracted: true } : {}) },
+    prompt_preview,
+    response_preview,
+    request_meta,
+    response_meta: { ...baseRespMeta, ...(autoExtracted ? { issues_fixes_auto_extracted: true } : {}) },
     author: b.author ?? userEmail ?? (isService ? 'service' : 'operator'),
     source: b.source ?? (isService ? 'awip_api' : 'manual'),
   }).select('id, task_id').single();
