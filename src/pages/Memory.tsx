@@ -202,6 +202,7 @@ export default function Memory() {
     loadStats();
     loadAutolog();
     loadAudit();
+    loadAutoPurge();
 
     const ch = supabase
       .channel("memory_audit_log")
