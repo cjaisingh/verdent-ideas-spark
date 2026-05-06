@@ -100,22 +100,36 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
       return;
     }
     const parsed = parseUsage(withUsage);
-    const tTotal = (parsed.tokens_in ?? 0) + (parsed.tokens_out ?? 0) || null;
-    const { issues, fixes } = extractIssuesAndFixes(parsed.text);
+    const { data: settings } = await supabase
+      .from("roadmap_autolog_settings" as any)
+      .select("*").eq("id", true).maybeSingle();
+    const s: Record<string, boolean> = (settings as any) ?? {
+      enabled: true, capture_tokens: true, capture_duration: true, capture_model: true,
+      capture_response: true, capture_response_meta: true, extract_issues_fixes: true,
+    };
+    if (!s.enabled) {
+      toast({ title: "Auto-log disabled", description: "Enable it in Auto-log settings to record this turn." });
+      reset();
+      return;
+    }
+    const tTotal = s.capture_tokens ? ((parsed.tokens_in ?? 0) + (parsed.tokens_out ?? 0) || null) : null;
+    const { issues, fixes } = s.extract_issues_fixes
+      ? extractIssuesAndFixes(parsed.text)
+      : { issues: null, fixes: null };
     const { data: u } = await supabase.auth.getUser();
     const { error } = await supabase.from("roadmap_work_log").insert({
       task_id: nextUpTaskId,
       started_at: new Date(startedAt).toISOString(),
       ended_at: new Date(ended).toISOString(),
-      duration_ms: ended - startedAt,
-      tokens_in: parsed.tokens_in,
-      tokens_out: parsed.tokens_out,
+      duration_ms: s.capture_duration ? ended - startedAt : null,
+      tokens_in: s.capture_tokens ? parsed.tokens_in : null,
+      tokens_out: s.capture_tokens ? parsed.tokens_out : null,
       tokens_total: tTotal,
-      model: parsed.model,
+      model: s.capture_model ? parsed.model : null,
       issues,
       fixes,
-      response_preview: withUsage ? withUsage.slice(0, 2000) : null,
-      response_meta: (issues || fixes) ? { issues_fixes_auto_extracted: true } : {},
+      response_preview: s.capture_response && withUsage ? withUsage.slice(0, 2000) : null,
+      response_meta: s.capture_response_meta && (issues || fixes) ? { issues_fixes_auto_extracted: true } : {},
       author: u.user?.email ?? "operator",
       source: "lovable_agent",
     });
