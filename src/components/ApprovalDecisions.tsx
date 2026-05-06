@@ -2,10 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 type Row = {
   id: string;
@@ -25,6 +32,17 @@ const ApprovalDecisions = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [deciderFilter, setDeciderFilter] = useState<string>("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<null | "approved" | "rejected">(null);
+  const [actorTag, setActorTag] = useState<string>("operator");
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const email = data.user?.email;
+      if (email) setActorTag(email);
+    });
+  }, []);
 
   const load = async () => {
     const { data } = await supabase
@@ -88,18 +106,78 @@ const ApprovalDecisions = () => {
       if (!q) return true;
       return (
         r.activity?.toLowerCase().includes(q) ||
-        r.id.toLowerCase().startsWith(q) ||
         r.id.toLowerCase().includes(q) ||
         (r.decided_by ?? "").toLowerCase().includes(q)
       );
     });
   }, [rows, search, statusFilter, deciderFilter]);
 
+  const filteredIds = useMemo(() => filtered.map((r) => r.id), [filtered]);
+  const pendingFilteredIds = useMemo(
+    () => filtered.filter((r) => r.status === "pending").map((r) => r.id),
+    [filtered],
+  );
+  const selectedPendingIds = useMemo(
+    () => Array.from(selected).filter((id) =>
+      filtered.find((r) => r.id === id)?.status === "pending",
+    ),
+    [selected, filtered],
+  );
+  const allFilteredSelected =
+    filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
+
+  const toggleAll = () => {
+    if (allFilteredSelected) {
+      const nextSel = new Set(selected);
+      filteredIds.forEach((id) => nextSel.delete(id));
+      setSelected(nextSel);
+    } else {
+      setSelected(new Set([...selected, ...filteredIds]));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+
+  const runBulk = async (status: "approved" | "rejected") => {
+    if (selectedPendingIds.length === 0) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase
+        .from("approval_queue")
+        .update({
+          status,
+          decided_by: `ui:${actorTag}`,
+          decided_at: new Date().toISOString(),
+        })
+        .in("id", selectedPendingIds)
+        .eq("status", "pending")
+        .select("id");
+      if (error) throw error;
+      const n = data?.length ?? 0;
+      toast[status === "approved" ? "success" : "error"](
+        `${status === "approved" ? "Approved" : "Rejected"} ${n} approval${n === 1 ? "" : "s"}`,
+      );
+      setSelected(new Set());
+    } catch (e) {
+      toast.error("Bulk action failed", { description: (e as Error).message });
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+    }
+  };
+
   const badgeFor = (status: string) => {
     if (status === "approved") return "border-emerald-500/40 text-emerald-500";
     if (status === "rejected") return "border-destructive/40 text-destructive";
     return "border-amber-500/40 text-amber-500";
   };
+
+  const selectedCount = selectedPendingIds.length;
 
   return (
     <div className="border border-border rounded-md">
@@ -156,42 +234,138 @@ const ApprovalDecisions = () => {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-border bg-muted/10">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allFilteredSelected}
+            onCheckedChange={toggleAll}
+            id="select-all"
+            disabled={filteredIds.length === 0}
+          />
+          <label htmlFor="select-all" className="text-xs text-muted-foreground cursor-pointer">
+            Select filtered ({filteredIds.length})
+          </label>
+        </div>
+        {selected.size > 0 && (
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Clear selection
+          </button>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {selected.size} selected · {selectedCount} pending actionable
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-emerald-500/40 text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-500"
+            disabled={selectedCount === 0 || busy}
+            onClick={() => setConfirm("approved")}
+          >
+            ✅ Approve selected
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            disabled={selectedCount === 0 || busy}
+            onClick={() => setConfirm("rejected")}
+          >
+            ❌ Reject selected
+          </Button>
+          {pendingFilteredIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              onClick={() => setSelected(new Set([...selected, ...pendingFilteredIds]))}
+            >
+              + all pending in view
+            </Button>
+          )}
+        </div>
+      </div>
+
       <div className="divide-y divide-border max-h-[40vh] overflow-auto">
         {filtered.length === 0 && (
           <div className="p-6 text-sm text-muted-foreground">No approvals match.</div>
         )}
         {filtered.map((r) => {
           const fresh = flashIds.has(r.id);
+          const checked = selected.has(r.id);
+          const selectable = r.status === "pending";
           return (
-            <Link
+            <div
               key={r.id}
-              to={`/approvals/${r.id}`}
               className={`flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-muted/40 ${
                 fresh ? "bg-primary/10" : ""
-              }`}
+              } ${checked ? "bg-primary/5" : ""}`}
             >
-              <Badge variant="outline" className={badgeFor(r.status)}>
-                {r.status}
-              </Badge>
-              <span className="font-medium truncate">{r.activity}</span>
-              {r.risk && (
-                <span className="text-xs text-muted-foreground font-mono">risk:{r.risk}</span>
-              )}
-              <span className="ml-auto text-xs text-muted-foreground font-mono truncate max-w-[30%]">
-                {r.decided_by ?? "—"}
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                {r.decided_at
-                  ? new Date(r.decided_at).toLocaleTimeString()
-                  : new Date(r.created_at).toLocaleTimeString()}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                {r.id.slice(0, 8)}
-              </span>
-            </Link>
+              <Checkbox
+                checked={checked}
+                onCheckedChange={() => toggleOne(r.id)}
+                disabled={!selectable}
+                aria-label={`Select ${r.id}`}
+              />
+              <Link
+                to={`/approvals/${r.id}`}
+                className="flex items-center gap-3 flex-1 min-w-0"
+              >
+                <Badge variant="outline" className={badgeFor(r.status)}>
+                  {r.status}
+                </Badge>
+                <span className="font-medium truncate">{r.activity}</span>
+                {r.risk && (
+                  <span className="text-xs text-muted-foreground font-mono">risk:{r.risk}</span>
+                )}
+                <span className="ml-auto text-xs text-muted-foreground font-mono truncate max-w-[30%]">
+                  {r.decided_by ?? "—"}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                  {r.decided_at
+                    ? new Date(r.decided_at).toLocaleTimeString()
+                    : new Date(r.created_at).toLocaleTimeString()}
+                </span>
+                <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                  {r.id.slice(0, 8)}
+                </span>
+              </Link>
+            </div>
           );
         })}
       </div>
+
+      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirm === "approved" ? "Approve" : "Reject"} {selectedCount} pending approval
+              {selectedCount === 1 ? "" : "s"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              You're acting as <span className="font-mono">ui:{actorTag}</span>. Only rows still in{" "}
+              <span className="font-mono">pending</span> will be changed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirm && runBulk(confirm)}
+              disabled={busy}
+              className={
+                confirm === "approved"
+                  ? "bg-emerald-600 hover:bg-emerald-700"
+                  : "bg-destructive hover:bg-destructive/90"
+              }
+            >
+              {busy ? "Working…" : confirm === "approved" ? "Approve all" : "Reject all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
