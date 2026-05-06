@@ -218,7 +218,7 @@ export const AutomationPanel = () => {
           <span>nightly 02:00 UTC via GitHub Actions</span>
           {lastRunAt && <span>last: {ago(lastRunAt)}</span>}
         </div>
-        {runs.length === 0 ? (
+        <LastRun run={lastTestPost} emptyHint="No nightly POSTs received — once GitHub Actions runs, the latest call (incl. 401s) appears here." />
           <div className="text-xs text-muted-foreground py-2">No runs recorded yet — first nightly will appear here.</div>
         ) : (
           <ul className="divide-y divide-border">
