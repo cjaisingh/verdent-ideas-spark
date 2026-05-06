@@ -303,6 +303,7 @@ const Roadmap = () => {
           </Link>
         </div>
         <div className="flex items-center gap-2">
+          <AutoLogSettings />
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           {nextUp && (
             <button
