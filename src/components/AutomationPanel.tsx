@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-type Finding = { id: string; created_at: string; severity: string; category: string | null; title: string; acknowledged: boolean };
+type Finding = {
+  id: string; created_at: string; severity: string; category: string | null;
+  title: string; acknowledged: boolean; body: string | null; area: string | null;
+  reviewer_model: string | null; diff_window_start: string | null; diff_window_end: string | null;
+};
 type TestRun = { id: string; created_at: string; suite: string; status: string; passed: number | null; failed: number | null; total: number | null; workflow_run_url: string | null };
 type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null; kind?: string | null; probe?: string | null };
 type AutoRun = { id: string; created_at: string; job: string; trigger: string; status: string; status_code: number | null; duration_ms: number | null; message: string | null };
