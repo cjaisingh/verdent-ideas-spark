@@ -693,6 +693,172 @@ async function getCapabilityDetail(capId: string) {
   });
 }
 
+// ---------- approvals ----------
+
+async function requestApproval(req: Request, actor: string) {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const required = ["capability_id", "activity", "requesting_module"];
+  for (const k of required) if (!body[k]) return json({ error: `missing ${k}` }, 400);
+
+  // Validate capability exists in registry
+  const { data: cap } = await supabase
+    .from("capabilities")
+    .select("id")
+    .eq("id", body.capability_id)
+    .maybeSingle();
+  if (!cap) return json({ error: `unknown capability_id: ${body.capability_id}` }, 400);
+
+  // Idempotency: (requesting_module, idempotency_key) is unique
+  if (body.idempotency_key) {
+    const { data: existing } = await supabase
+      .from("approval_queue")
+      .select("id, status")
+      .eq("requesting_module", body.requesting_module)
+      .eq("idempotency_key", body.idempotency_key)
+      .maybeSingle();
+    if (existing) return json({ ok: true, approval_id: existing.id, status: existing.status, replayed: true });
+  }
+
+  const risk = body.risk ?? "unknown";
+  const { data: ins, error } = await supabase
+    .from("approval_queue")
+    .insert({
+      activity: body.activity,
+      risk,
+      intent_payload: body.intent_payload ?? {},
+      requested_by: body.requested_by ?? actor,
+      tenant_id: body.tenant_id ?? null,
+      requesting_module: body.requesting_module,
+      capability_id: body.capability_id,
+      callback_url: body.callback_url ?? null,
+      idempotency_key: body.idempotency_key ?? null,
+      status: "pending",
+    })
+    .select("id, status")
+    .single();
+  if (error) return json({ error: error.message }, 500);
+
+  await supabase.from("capability_events").insert({
+    capability_id: body.capability_id,
+    event_type: "approval_requested",
+    actor,
+    payload: redact({
+      approval_id: ins.id,
+      activity: body.activity,
+      risk,
+      requesting_module: body.requesting_module,
+      tenant_id: body.tenant_id ?? null,
+    }),
+  });
+
+  return json({ ok: true, approval_id: ins.id, status: ins.status });
+}
+
+async function decideApproval(req: Request, approvalId: string, actor: string) {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const decision = body.decision;
+  if (decision !== "approved" && decision !== "rejected") {
+    return json({ error: "decision must be 'approved' or 'rejected'" }, 400);
+  }
+
+  const { data: row, error: fErr } = await supabase
+    .from("approval_queue")
+    .select("*")
+    .eq("id", approvalId)
+    .maybeSingle();
+  if (fErr) return json({ error: fErr.message }, 500);
+  if (!row) return json({ error: "approval not found" }, 404);
+  if (row.status !== "pending") {
+    return json({ ok: true, approval_id: row.id, status: row.status, replayed: true });
+  }
+
+  const decidedBy = body.decided_by ?? actor;
+  const { data: upd, error: uErr } = await supabase
+    .from("approval_queue")
+    .update({
+      status: decision,
+      decided_by: decidedBy,
+      decided_at: new Date().toISOString(),
+      result: body.result ?? null,
+    })
+    .eq("id", approvalId)
+    .eq("status", "pending")
+    .select("*")
+    .maybeSingle();
+  if (uErr) return json({ error: uErr.message }, 500);
+  if (!upd) {
+    // Lost race — re-read and return current
+    const { data: cur } = await supabase.from("approval_queue").select("id, status").eq("id", approvalId).single();
+    return json({ ok: true, approval_id: cur!.id, status: cur!.status, replayed: true });
+  }
+
+  await supabase.from("capability_events").insert({
+    capability_id: row.capability_id ?? "unknown",
+    event_type: "approval_decided",
+    actor,
+    payload: redact({
+      approval_id: upd.id,
+      decision,
+      decided_by: decidedBy,
+      requesting_module: row.requesting_module,
+      tenant_id: row.tenant_id,
+    }),
+  });
+
+  // Fire callback (best-effort)
+  if (row.callback_url) {
+    fetch(row.callback_url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-awip-service-token": SERVICE_TOKEN_VALUE,
+      },
+      body: JSON.stringify({
+        approval_id: upd.id,
+        status: decision,
+        decided_by: decidedBy,
+        decided_at: upd.decided_at,
+        activity: row.activity,
+        capability_id: row.capability_id,
+        intent_payload: row.intent_payload,
+        result: upd.result,
+      }),
+    }).catch((e) => console.error(JSON.stringify({
+      fn: "awip-api", severity: "warn", msg: "approval callback failed",
+      approval_id: upd.id, callback_url: row.callback_url, error: String(e),
+    })));
+  }
+
+  return json({ ok: true, approval_id: upd.id, status: upd.status });
+}
+
+async function getApproval(approvalId: string) {
+  const { data, error } = await supabase
+    .from("approval_queue")
+    .select("*")
+    .eq("id", approvalId)
+    .maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!data) return json({ error: "approval not found" }, 404);
+  return json({ approval: data });
+}
+
+async function listApprovals(url: URL) {
+  const status = url.searchParams.get("status");
+  const module = url.searchParams.get("module");
+  const tenantId = url.searchParams.get("tenant_id");
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 500);
+  let q = supabase.from("approval_queue").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (status) q = q.eq("status", status);
+  if (module) q = q.eq("requesting_module", module);
+  if (tenantId) q = q.eq("tenant_id", tenantId);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+  return json({ approvals: data, count: data?.length ?? 0 });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
