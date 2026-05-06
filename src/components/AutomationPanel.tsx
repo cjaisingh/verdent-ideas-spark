@@ -67,8 +67,8 @@ export const AutomationPanel = () => {
 
   const load = async () => {
     const [f, r, q, a] = await Promise.all([
-      supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged")
-        .order("created_at", { ascending: false }).limit(5),
+      supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged, body, area, reviewer_model, diff_window_start, diff_window_end")
+        .order("created_at", { ascending: false }).limit(8),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
       supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note, kind, probe")
