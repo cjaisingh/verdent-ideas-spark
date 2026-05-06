@@ -16,6 +16,7 @@ import ApiExplorer from "./pages/ApiExplorer";
 import Admin from "./pages/Admin";
 import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
+import Roadmap from "./pages/Roadmap";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -39,6 +40,7 @@ const App = () => (
             <Route path="/events" element={<Events />} />
             <Route path="/api-logs" element={<ApiLogs />} />
             <Route path="/control-plane" element={<ControlPlane />} />
+            <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />

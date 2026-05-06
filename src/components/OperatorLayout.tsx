@@ -66,6 +66,7 @@ const OperatorLayout = () => {
             <NavLink to="/events" className={navCls}>Events</NavLink>
             <NavLink to="/api-logs" className={navCls}>API logs</NavLink>
             <NavLink to="/control-plane" className={navCls}>Control plane</NavLink>
+            <NavLink to="/roadmap" className={navCls}>Roadmap</NavLink>
             <NavLink to="/api-explorer" className={navCls}>API explorer</NavLink>
             <NavLink to="/admin" className={navCls}>Admin</NavLink>
             <NavLink to="/status" className={navCls}>Status</NavLink>
