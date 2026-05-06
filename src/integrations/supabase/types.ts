@@ -499,6 +499,48 @@ export type Database = {
         }
         Relationships: []
       }
+      roadmap_autolog_settings: {
+        Row: {
+          capture_duration: boolean
+          capture_model: boolean
+          capture_prompt: boolean
+          capture_request_meta: boolean
+          capture_response: boolean
+          capture_response_meta: boolean
+          capture_tokens: boolean
+          enabled: boolean
+          extract_issues_fixes: boolean
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          capture_duration?: boolean
+          capture_model?: boolean
+          capture_prompt?: boolean
+          capture_request_meta?: boolean
+          capture_response?: boolean
+          capture_response_meta?: boolean
+          capture_tokens?: boolean
+          enabled?: boolean
+          extract_issues_fixes?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          capture_duration?: boolean
+          capture_model?: boolean
+          capture_prompt?: boolean
+          capture_request_meta?: boolean
+          capture_response?: boolean
+          capture_response_meta?: boolean
+          capture_tokens?: boolean
+          enabled?: boolean
+          extract_issues_fixes?: boolean
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       roadmap_comments: {
         Row: {
           author: string
