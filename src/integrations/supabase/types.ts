@@ -613,6 +613,27 @@ export type Database = {
         }
         Relationships: []
       }
+      retention_settings: {
+        Row: {
+          description: string | null
+          retention_days: number
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          retention_days?: number
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          retention_days?: number
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rethink_tasks: {
         Row: {
           created_at: string
@@ -1255,6 +1276,22 @@ export type Database = {
           email: string
           roles: Database["public"]["Enums"]["app_role"][]
           user_id: string
+        }[]
+      }
+      purge_expired_rows: {
+        Args: { _table?: string }
+        Returns: {
+          deleted: number
+          table_name: string
+        }[]
+      }
+      retention_stats: {
+        Args: never
+        Returns: {
+          oldest: string
+          retention_days: number
+          row_count: number
+          table_name: string
         }[]
       }
       revoke_user_role: {
