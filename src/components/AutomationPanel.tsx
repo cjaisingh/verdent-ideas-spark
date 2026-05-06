@@ -247,6 +247,7 @@ export const AutomationPanel = () => {
           {qaMsg && <span className={statusTone(qaState === "error" ? "fail" : "pass")}>{qaMsg}</span>}
         </div>
         <LastRun run={lastQa} emptyHint="No probe runs recorded yet — click Run probes to test." />
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
           {Object.entries(phaseGroups).map(([phase, items]) => (
             <div key={phase}>
               <div className="text-[10px] font-mono uppercase text-muted-foreground">{phase}</div>
