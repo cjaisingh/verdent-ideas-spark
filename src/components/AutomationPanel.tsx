@@ -5,7 +5,7 @@ import { toast } from "@/hooks/use-toast";
 
 type Finding = { id: string; created_at: string; severity: string; category: string | null; title: string; acknowledged: boolean };
 type TestRun = { id: string; created_at: string; suite: string; status: string; passed: number | null; failed: number | null; total: number | null; workflow_run_url: string | null };
-type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null };
+type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null; kind?: string | null; probe?: string | null };
 type AutoRun = { id: string; created_at: string; job: string; trigger: string; status: string; status_code: number | null; duration_ms: number | null; message: string | null };
 
 const ago = (iso: string | null) => {
@@ -67,7 +67,7 @@ export const AutomationPanel = () => {
         .order("created_at", { ascending: false }).limit(5),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
-      supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note")
+      supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note, kind, probe")
         .order("phase_key").order("criterion"),
       supabase.from("automation_runs" as any).select("id, created_at, job, trigger, status, status_code, duration_ms, message")
         .order("created_at", { ascending: false }).limit(40),
@@ -247,29 +247,65 @@ export const AutomationPanel = () => {
           {qaMsg && <span className={statusTone(qaState === "error" ? "fail" : "pass")}>{qaMsg}</span>}
         </div>
         <LastRun run={lastQa} emptyHint="No probe runs recorded yet — click Run probes to test." />
-        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-          {Object.entries(phaseGroups).map(([phase, items]) => (
-            <div key={phase}>
-              <div className="text-[10px] font-mono uppercase text-muted-foreground">{phase}</div>
-              <ul>
-                {items.map((c) => (
-                  <li key={c.id} className="flex items-center gap-2 text-xs py-0.5">
-                    <span className={`font-mono w-12 ${statusTone(c.status)}`}>{c.status}</span>
-                    <span className="flex-1 truncate" title={c.note ?? c.criterion}>{c.criterion}</span>
-                    <select
-                      value={c.status}
-                      onChange={(e) => setQaStatus(c.id, e.target.value)}
-                      className="text-[10px] bg-transparent border border-border rounded px-1"
-                    >
-                      <option value="unknown">?</option>
-                      <option value="pass">pass</option>
-                      <option value="fail">fail</option>
-                    </select>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+          {Object.entries(phaseGroups).map(([phase, items]) => {
+            const pass = items.filter((c) => c.status === "pass").length;
+            const fail = items.filter((c) => c.status === "fail").length;
+            return (
+              <div key={phase} className="space-y-1">
+                <div className="flex items-center gap-2 text-[10px] font-mono uppercase text-muted-foreground">
+                  <span>{phase}</span>
+                  <span className="ml-auto normal-case tracking-normal">
+                    <span className="text-emerald-600 dark:text-emerald-400">{pass} pass</span>
+                    {" · "}
+                    <span className={fail ? "text-destructive" : ""}>{fail} fail</span>
+                    {" · "}
+                    <span>{items.length - pass - fail} unknown</span>
+                  </span>
+                </div>
+                <ul className="space-y-1">
+                  {items.map((c) => {
+                    const isProbe = c.kind === "probe";
+                    return (
+                      <li key={c.id} className="rounded border border-border bg-background/40 px-2 py-1 space-y-0.5">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`font-mono uppercase text-[10px] w-10 ${statusTone(c.status)}`}>{c.status}</span>
+                          <span
+                            className={`text-[9px] font-mono px-1 rounded border ${
+                              isProbe ? "border-blue-500/30 text-blue-600 dark:text-blue-400" : "border-border text-muted-foreground"
+                            }`}
+                            title={isProbe ? `automated probe: ${c.probe}` : "manual judgement"}
+                          >
+                            {isProbe ? "probe" : "manual"}
+                          </span>
+                          <span className="flex-1 truncate" title={c.criterion}>{c.criterion}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0" title={c.last_checked_at ?? "never checked"}>
+                            {c.last_checked_at ? ago(c.last_checked_at) : "never"}
+                          </span>
+                          <select
+                            value={c.status}
+                            onChange={(e) => setQaStatus(c.id, e.target.value)}
+                            className="text-[10px] bg-transparent border border-border rounded px-1"
+                            disabled={isProbe}
+                            title={isProbe ? "Automated probe — runs via Run probes" : "Set status manually"}
+                          >
+                            <option value="unknown">?</option>
+                            <option value="pass">pass</option>
+                            <option value="fail">fail</option>
+                          </select>
+                        </div>
+                        {c.note && (
+                          <div className="text-[11px] text-muted-foreground leading-snug pl-12 break-words">
+                            {c.note}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </section>
     </div>
