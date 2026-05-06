@@ -8,8 +8,8 @@ How AWIP Core watches itself: scheduled AI code review, nightly tests, QA probes
 |---|---|---|---|
 | AI code review | Weekly, Mon 06:00 UTC (`pg_cron`) | `scheduled-code-review` | `roadmap_review_findings` |
 | Nightly tests | Nightly 02:00 UTC (GitHub Actions) | `record-test-run` | `test_runs` |
-| QA probes | Weekly, Fri 16:00 UTC (`pg_cron`) | `qa-validate` | `qa_checks`, `qa_probe_results` |
-| Failure alerts | On every job failure | `dispatch-alert` (helper) | `alert_log` |
+| QA probes | Weekly, Fri 16:00 UTC (`pg_cron`) | `qa-validate` | `qa_checks` |
+| Failure alerts | On every job failure | `dispatchAlert` (inline helper) | `alert_log` |
 
 All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same token used by `awip-api`). RLS on every new table is operator-only; realtime is enabled so the UI updates without polling.
 
@@ -31,15 +31,15 @@ All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same toke
 - **Mechanical** criteria — SQL probe (e.g. "every API call logged" → `select count(*) from api_call_logs where ...`).
 - **Judgement** criteria — opens a roadmap comment for the operator to tick off.
 
-Each run writes per-criterion results to `qa_probe_results` and updates `qa_checks.status` (`pass | fail | unknown`) + `last_checked_at`.
+Each run updates `qa_checks.status` (`pass | fail | unknown`), `note`, and `last_checked_at`.
 
-**UI:** progress bar showing pass/fail/unknown ratio, per-check list with expand-to-detail (last note, last checked, failing probe output).
+**UI:** progress bar showing pass/fail/unknown ratio, per-check list with expand-to-detail (last note, last checked, failing probe output). Operators can also drive triage from the dedicated [`/runbook`](#related-docs) page.
 
 ## Failure alerts
 
 Configurable webhook (Slack/Discord-compatible) fires when any of the three jobs fail or surface significant findings. Configured in the **Alerts** card at the bottom of the Automation panel.
 
-- `alert_settings` — one row per project: `webhook_url`, `enabled`, per-job toggles (`alert_code_review`, `alert_tests`, `alert_qa`), `dedupe_minutes` (suppress duplicate alerts within window).
+- `alert_settings` — single-row config: `webhook_url`, `enabled`, per-reason toggles (`alert_on_review_error`, `alert_on_high_finding`, `alert_on_test_fail`, `alert_on_qa_fail`), `dedupe_minutes` (suppress duplicate alerts within window).
 - `alert_log` — every dispatch attempt: timestamp, target job, HTTP status, error message if any.
 - `dispatchAlert(job, summary)` helper imported by `scheduled-code-review`, `qa-validate`, `record-test-run`. Honours dedupe + enabled flags before POSTing.
 - **Send test** button POSTs a synthetic payload so operators can verify connectivity without waiting for a real failure.
@@ -128,7 +128,7 @@ Delivery outcome (status code, error body, `delivered` flag) is recorded in `ale
 
 ## Operator workflow
 
-1. Open `/roadmap` → **Automation** card.
+1. Open `/roadmap` → **Automation** card, or `/runbook` for a focused triage view.
 2. Triage red items (failed test runs, failing QA probes, new high-severity findings).
 3. Acknowledge code review findings once addressed.
 4. Configure the webhook once; rotate by editing the URL in the Alerts card.
@@ -138,3 +138,5 @@ Delivery outcome (status code, error body, `delivered` flag) is recorded in `ale
 - [Architecture](./architecture.md) — where Automation fits in the substrate model
 - [Security](./security.md) — RLS on new tables, service-token usage by cron jobs
 - [Development](./development.md) — running edge functions locally, env vars
+- [`/runbook`](../src/pages/Runbook.tsx) — operator triage page in the app
+

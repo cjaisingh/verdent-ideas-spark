@@ -13,10 +13,11 @@ _Nothing pending._
 ### Added
 - **Scheduled AI code review** — `scheduled-code-review` edge function (weekly `pg_cron`) summarises the last 7 days of git diff via Lovable AI Gateway (`google/gemini-2.5-pro`) into `roadmap_review_findings`. UI: click-to-expand findings with file/line context; filter by severity / acknowledged; sort by date or severity.
 - **Nightly tests** — `.github/workflows/nightly.yml` runs vitest unit + e2e at 02:00 UTC and POSTs results to `record-test-run` → `test_runs`. UI: per-run list with status filter and last-run chip.
-- **QA probes** — `qa-validate` edge function runs phase-success-criterion checks (`qa_checks` + `qa_probe_results`). UI: progress bar + per-check expand showing pass/fail criteria and last note.
-- **Failure alerts** — `alert_settings` / `alert_log` tables and `dispatchAlert` helper wired into all three jobs. Configurable Slack/Discord/custom webhook with per-job toggles, dedupe window, send-test button, and realtime delivery log in the Automation card.
-- `docs/automation.md` — full reference for the four automation jobs, payload shape, and operator workflow.
-- README link to the automation doc.
+- **QA probes** — `qa-validate` edge function runs phase-success-criterion checks against `qa_checks`. UI: progress bar + per-check expand showing pass/fail criteria and last note.
+- **Failure alerts** — `alert_settings` / `alert_log` tables and inline `dispatchAlert` helper wired into all three jobs. Configurable Slack/Discord/custom webhook with per-reason toggles (`alert_on_review_error`, `alert_on_high_finding`, `alert_on_test_fail`, `alert_on_qa_fail`), dedupe window, send-test button, and realtime delivery log in the Automation card.
+- **Runbook page** — new `/runbook` route consolidates open high/medium findings, failed test runs, failing QA probes, and recent alert deliveries into a single triage view with one-click acknowledge.
+- `docs/automation.md` — full reference for the four automation jobs, payload shape, Slack/Discord/custom-receiver setup, and operator workflow.
+- README links to the automation doc and `/runbook` page.
 
 ---
 
