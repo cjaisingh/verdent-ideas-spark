@@ -299,14 +299,27 @@ export default function Memory() {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={purging === r.table_name || r.retention_days === 0}
-                        onClick={() => purge(r.table_name)}
-                      >
-                        {purging === r.table_name ? "…" : "Purge"}
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={purging?.startsWith("all:") || purging === r.table_name || r.retention_days === 0}
+                          onClick={() => purge(r.table_name)}
+                          title="Delete rows older than the retention window"
+                        >
+                          {purging === r.table_name ? "…" : "Purge"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={!!purging || r.row_count === 0}
+                          onClick={() => purgeAll(r.table_name)}
+                          title="Delete every row in this table"
+                        >
+                          {purging === `all:${r.table_name}` ? "…" : "Delete all"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
