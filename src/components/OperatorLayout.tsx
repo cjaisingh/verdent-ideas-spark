@@ -25,6 +25,7 @@ const OperatorLayout = () => {
             <NavLink to="/capabilities" className={navCls}>Capabilities</NavLink>
             <NavLink to="/events" className={navCls}>Events</NavLink>
             <NavLink to="/api-logs" className={navCls}>API logs</NavLink>
+            <NavLink to="/control-plane" className={navCls}>Control plane</NavLink>
           </nav>
           <div className="ml-auto">
             <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
