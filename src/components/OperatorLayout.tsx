@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import PendingApprovalsIndicator from "@/components/PendingApprovalsIndicator";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-1.5 rounded-md text-sm ${
@@ -69,7 +70,8 @@ const OperatorLayout = () => {
             <NavLink to="/admin" className={navCls}>Admin</NavLink>
             <NavLink to="/status" className={navCls}>Status</NavLink>
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <PendingApprovalsIndicator />
             <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
           </div>
         </div>
