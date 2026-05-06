@@ -520,7 +520,7 @@ async function getRecentEvents(url: URL) {
   return json({ events: merged, count: merged.length });
 }
 
-async function getCapabilityDemand() {
+async function getCapabilityDemand(actor: string) {
   const [capsRes, measRes, nodesRes, tenantsRes] = await Promise.all([
     supabase.from("capabilities").select("*"),
     supabase.from("okr_measurements").select("okr_node_id, required_capabilities"),
@@ -572,6 +572,44 @@ async function getCapabilityDemand() {
     b.tenant_count - a.tenant_count ||
     a.name.localeCompare(b.name)
   );
+
+  // Emit resolution_warning events for unowned/unknown capabilities with active demand.
+  // De-dupe: skip ids that already have a resolution_warning in the last 10 minutes.
+  try {
+    const candidates = demand.filter(
+      (d) =>
+        d.active_kr_count > 0 &&
+        (d.status === "unknown" || (!d.owning_module && d.status !== "unknown")),
+    );
+    if (candidates.length > 0) {
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: recent } = await supabase
+        .from("capability_events")
+        .select("capability_id")
+        .eq("event_type", "resolution_warning")
+        .in("capability_id", candidates.map((d) => d.id))
+        .gt("created_at", tenMinAgo);
+      const skip = new Set((recent ?? []).map((r: any) => r.capability_id));
+      const toInsert = candidates
+        .filter((d) => !skip.has(d.id))
+        .map((d) => ({
+          capability_id: d.id,
+          event_type: "resolution_warning",
+          actor,
+          payload: redact({
+            reason: d.status === "unknown" ? "unknown" : "unowned",
+            tenant_count: d.tenant_count,
+            active_kr_count: d.active_kr_count,
+            tenant_ids: d.tenant_ids,
+          }),
+        }));
+      if (toInsert.length > 0) {
+        await supabase.from("capability_events").insert(toInsert);
+      }
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ fn: "awip-api", severity: "warn", msg: "resolution_warning emit failed", error: String(e) }));
+  }
 
   return json({ demand, tenants: tenantsRes.data ?? [] });
 }
@@ -689,7 +727,7 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
       else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
-      else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand();
+      else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand(auth.actor);
       else if (req.method === "GET" && capDetailMatch) response = await getCapabilityDetail(decodeURIComponent(capDetailMatch[1]));
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
