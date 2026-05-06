@@ -105,6 +105,22 @@ async function logApiCall(entry: {
   }
 }
 
+// Idempotency-Key format: 1-200 chars, printable ASCII, no whitespace.
+const IDEM_KEY_RE = /^[!-~]{1,200}$/;
+function validateIdemKey(key: string | null): { ok: true } | { ok: false; error: string } {
+  if (key === null) return { ok: true };
+  if (!IDEM_KEY_RE.test(key)) {
+    return { ok: false, error: "invalid idempotency-key (1-200 printable ASCII, no whitespace)" };
+  }
+  return { ok: true };
+}
+
+async function hashBody(text: string): Promise<string> {
+  const buf = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 async function checkIdempotency(scope: string, key: string | null) {
   if (!key) return null;
   const { data } = await supabase
@@ -116,9 +132,27 @@ async function checkIdempotency(scope: string, key: string | null) {
   return data?.response ?? null;
 }
 
-async function storeIdempotency(scope: string, key: string | null, tenantId: string | null, response: unknown) {
+// Returns { conflict: true } if the same key was used previously with a different body hash.
+async function checkIdempotencyConflict(scope: string, key: string | null, bodyHash: string) {
+  if (!key) return { conflict: false as const };
+  const { data } = await supabase
+    .from("idempotency_keys")
+    .select("response")
+    .eq("scope", scope)
+    .eq("key", key)
+    .maybeSingle();
+  if (!data) return { conflict: false as const };
+  const stored = (data.response as any)?.__body_hash;
+  if (stored && stored !== bodyHash) return { conflict: true as const };
+  return { conflict: false as const, cached: data.response };
+}
+
+async function storeIdempotency(scope: string, key: string | null, tenantId: string | null, response: unknown, bodyHash?: string) {
   if (!key) return;
-  await supabase.from("idempotency_keys").insert({ scope, key, tenant_id: tenantId, response });
+  const payload = bodyHash && response && typeof response === "object"
+    ? { ...(response as object), __body_hash: bodyHash }
+    : response;
+  await supabase.from("idempotency_keys").insert({ scope, key, tenant_id: tenantId, response: payload });
 }
 
 // ---------- handlers ----------
@@ -159,10 +193,18 @@ async function registerCapability(req: Request, actor: string) {
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("okr_ingest", idemKey);
-  if (cached) return json(cached);
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let body: any;
+  try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("okr_ingest", idemKey, bodyHash);
+  if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+  if (conflict.cached) {
+    const { __body_hash, ...rest } = conflict.cached as any;
+    return json(rest);
+  }
 
-  const body = await req.json();
   const { tenant_slug, tenant_name, nodes } = body as {
     tenant_slug: string;
     tenant_name?: string;
@@ -277,12 +319,13 @@ async function ingestOkrTree(req: Request, actor: string) {
   }
 
   const response = { ok: true, tenant_id: tenant!.id, created, warnings };
-  await storeIdempotency("okr_ingest", idemKey, tenant!.id, response);
+  await storeIdempotency("okr_ingest", idemKey, tenant!.id, response, bodyHash);
   return json(response);
 }
 
 async function spawnSubOkr(req: Request, parentId: string, actor: string) {
-  const body = await req.json();
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (!body.title || !body.kind || !body.spawned_from_reason) {
     return json({ error: "title, kind, spawned_from_reason required" }, 400);
   }
@@ -320,7 +363,8 @@ async function spawnSubOkr(req: Request, parentId: string, actor: string) {
 }
 
 async function supersedeOkr(req: Request, oldId: string, actor: string) {
-  const body = await req.json();
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   if (!body.title || !body.reason) return json({ error: "title and reason required" }, 400);
   const { data: old, error: oErr } = await supabase
     .from("okr_nodes")
@@ -385,11 +429,18 @@ async function getTree(url: URL) {
 
 async function ingestEvents(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("events_ingest", idemKey);
-  if (cached) return json(cached);
-
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
   let body: any;
-  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("events_ingest", idemKey, bodyHash);
+  if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+  if (conflict.cached) {
+    const { __body_hash, ...rest } = conflict.cached as any;
+    return json(rest);
+  }
+
   const events = Array.isArray(body?.events) ? body.events : null;
   if (!events || events.length === 0) return json({ error: "events[] required" }, 400);
 
@@ -406,7 +457,7 @@ async function ingestEvents(req: Request, actor: string) {
   const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
   if (error) return json({ error: error.message }, 500);
   const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d: any) => d.id) };
-  await storeIdempotency("events_ingest", idemKey, null, response);
+  await storeIdempotency("events_ingest", idemKey, null, response, bodyHash);
   return json(response);
 }
 
@@ -588,6 +639,10 @@ Deno.serve(async (req) => {
   let logged = false;
 
   try {
+    const idemCheck = validateIdemKey(idemKey);
+    if (!idemCheck.ok) {
+      response = json({ error: idemCheck.error }, 400);
+    } else {
     const auth = await authorize(req);
     if (!auth.ok) {
       response = json({ error: auth.error ?? "unauthorized" }, 401);
@@ -608,6 +663,7 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
       else response = json({ error: "not found", path }, 404);
+    }
     }
   } catch (e) {
     console.error(e);
