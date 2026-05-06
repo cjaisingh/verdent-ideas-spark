@@ -293,7 +293,19 @@ export default function Memory() {
           <CardTitle className="text-base flex items-center gap-2">
             <Database className="h-4 w-4" /> Data retention
           </CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            <span className="text-xs text-muted-foreground">Apply to all:</span>
+            {TTL_PRESETS.map((p) => (
+              <Button
+                key={p.label}
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setAllDays(p.days)}
+              >
+                {p.label}
+              </Button>
+            ))}
             <Button variant="outline" size="sm" onClick={loadStats} disabled={loadingStats}>
               <RefreshCw className={`h-4 w-4 mr-1 ${loadingStats ? "animate-spin" : ""}`} />
               Refresh
@@ -306,7 +318,7 @@ export default function Memory() {
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground mb-3">
-            Set retention in days per table. <strong>0 = keep forever.</strong> Rows older than the window are deleted on purge.
+            Pick a time-to-live per table. <strong>0 = keep forever.</strong> Rows older than the window are deleted on purge.
           </p>
           <div className="border border-border rounded-md overflow-hidden">
             <table className="w-full text-xs">
@@ -315,7 +327,8 @@ export default function Memory() {
                   <th className="px-3 py-2 font-medium">Table</th>
                   <th className="px-3 py-2 font-medium text-right">Rows</th>
                   <th className="px-3 py-2 font-medium">Oldest</th>
-                  <th className="px-3 py-2 font-medium text-right">Retention (days)</th>
+                  <th className="px-3 py-2 font-medium">TTL</th>
+                  <th className="px-3 py-2 font-medium text-right">Days</th>
                   <th className="px-3 py-2 w-44" />
                 </tr>
               </thead>
@@ -326,6 +339,23 @@ export default function Memory() {
                     <td className="px-3 py-2 text-right tabular-nums">{r.row_count.toLocaleString()}</td>
                     <td className="px-3 py-2 text-muted-foreground">
                       {r.oldest ? new Date(r.oldest).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1 flex-wrap">
+                        {TTL_PRESETS.map((p) => (
+                          <button
+                            key={p.label}
+                            onClick={() => setDays(r.table_name, p.days)}
+                            className={`px-1.5 py-0.5 rounded text-[10px] border transition-colors ${
+                              r.retention_days === p.days
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background border-border hover:bg-muted"
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <input
