@@ -296,8 +296,8 @@ const ControlPlane = () => {
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading}>
-              {botLoading ? "…" : "↻"}
+            <Button variant="ghost" size="sm" onClick={loadBotInfo} disabled={botLoading} title="Reload bot info">
+              {botLoading ? "Refreshing…" : "↻ Refresh bot info"}
             </Button>
             <Button variant="outline" size="sm" asChild disabled={!botInfo?.url}>
               <a
