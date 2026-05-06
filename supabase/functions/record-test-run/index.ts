@@ -65,6 +65,13 @@ Deno.serve(async (req) => {
     return json({ error: error.message }, 500);
   }
   await recordRun("ok", 200, `${suite} ${status} ${body.passed ?? 0}/${body.total ?? 0}`, { suite, status });
+
+  if (status === "failed" || status === "errored") {
+    await dispatchAlert(sb, "record-test-run", "test_fail",
+      `${suite}: ${status} (${body.passed ?? 0}/${body.total ?? 0})`,
+      { suite, status, passed: body.passed, failed: body.failed, total: body.total, workflow_run_url: body.workflow_run_url });
+  }
+
   return json({ ok: true });
 });
 
@@ -75,4 +82,39 @@ function int(v: unknown): number | null {
 }
 function json(p: unknown, s = 200) {
   return new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function dispatchAlert(
+  sb: ReturnType<typeof createClient>,
+  job: string, reason: string, message: string, payload: Record<string, unknown> = {},
+) {
+  try {
+    const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
+    if (!settings || !settings.enabled || !settings.webhook_url) return;
+    const flagMap: Record<string, string> = {
+      review_error: "alert_on_review_error", high_finding: "alert_on_high_finding",
+      test_fail: "alert_on_test_fail", qa_fail: "alert_on_qa_fail",
+    };
+    const flag = flagMap[reason];
+    if (flag && (settings as any)[flag] === false) return;
+    const dedupeMin = Math.max(0, Number(settings.dedupe_minutes ?? 0));
+    if (dedupeMin > 0) {
+      const since = new Date(Date.now() - dedupeMin * 60_000).toISOString();
+      const { data: recent } = await sb.from("alert_log")
+        .select("id").eq("job", job).eq("reason", reason).eq("delivered", true)
+        .gte("created_at", since).limit(1);
+      if (recent && recent.length > 0) return;
+    }
+    const reqBody = JSON.stringify({
+      text: `🚨 ${job} · ${reason}\n${message}`,
+      job, reason, message, payload, ts: new Date().toISOString(),
+    });
+    let delivered = false; let status_code: number | null = null; let error: string | null = null;
+    try {
+      const r = await fetch(settings.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body: reqBody });
+      status_code = r.status; delivered = r.ok;
+      if (!r.ok) error = (await r.text()).slice(0, 300);
+    } catch (e) { error = e instanceof Error ? e.message : String(e); }
+    await sb.from("alert_log").insert({ job, reason, message, delivered, status_code, error, payload });
+  } catch (e) { console.error("dispatchAlert failed", e); }
 }
