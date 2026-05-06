@@ -485,5 +485,6 @@ export const AutomationPanel = () => {
         </div>
       </section>
     </div>
+    </div>
   );
 };
