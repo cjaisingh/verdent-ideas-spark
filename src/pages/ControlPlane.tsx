@@ -63,11 +63,26 @@ const ControlPlane = () => {
   const [paused, setPaused] = useState(false);
   const lastSeen = useRef<string | null>(null);
   const [tgSending, setTgSending] = useState(false);
+  const [chatIds, setChatIds] = useState<number[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string>("");
+
+  const loadChatIds = async () => {
+    const { data } = await supabase
+      .from("operator_messages")
+      .select("chat_id")
+      .eq("direction", "inbound")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    const unique = Array.from(new Set((data ?? []).map((r) => Number(r.chat_id))));
+    setChatIds(unique);
+    if (unique.length && !selectedChatId) setSelectedChatId(String(unique[0]));
+  };
 
   const sendTelegramTest = async () => {
     setTgSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("telegram-test", { body: {} });
+      const body = selectedChatId ? { chat_id: Number(selectedChatId) } : {};
+      const { data, error } = await supabase.functions.invoke("telegram-test", { body });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({ title: "Telegram ping sent", description: `chat_id ${(data as any).chat_id}` });
