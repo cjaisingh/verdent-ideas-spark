@@ -179,7 +179,20 @@ Deno.serve(async (req) => {
     capture_response_meta: true, extract_issues_fixes: true,
     source_lovable_agent: true, source_ai_gateway: true, source_awip_api: true,
   };
+  const recordSkip = async (reason: string) => {
+    await admin.from('roadmap_autolog_skips').insert({
+      source: effectiveSource,
+      reason,
+      task_id: b.task_id ?? null,
+      author: b.author ?? userEmail ?? (isService ? 'service' : 'operator'),
+      model: b.model ?? null,
+      summary: (b.summary ?? b.response_preview ?? '').slice(0, 500) || null,
+      request_meta: b.request_meta ?? {},
+    });
+  };
+
   if (isAuto && !s.enabled) {
+    await recordSkip('autolog_disabled');
     return new Response(JSON.stringify({ ok: true, skipped: 'autolog_disabled' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -190,6 +203,7 @@ Deno.serve(async (req) => {
     awip_api: s.source_awip_api ?? true,
   };
   if (isAuto && sourceEnabledMap[effectiveSource] === false) {
+    await recordSkip(`source_disabled:${effectiveSource}`);
     return new Response(JSON.stringify({ ok: true, skipped: `source_disabled:${effectiveSource}` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
