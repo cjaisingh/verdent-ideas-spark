@@ -886,6 +886,8 @@ Deno.serve(async (req) => {
       const spawnMatch = path.match(/^\/okr\/([0-9a-f-]+)\/spawn$/i);
       const supMatch = path.match(/^\/okr\/([0-9a-f-]+)\/supersede$/i);
       const capDetailMatch = path.match(/^\/capabilities\/([^\/]+)\/demand-detail$/i);
+      const approvalDecideMatch = path.match(/^\/approvals\/([0-9a-f-]+)\/decide$/i);
+      const approvalGetMatch = path.match(/^\/approvals\/([0-9a-f-]+)$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
@@ -897,6 +899,10 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && capDetailMatch) response = await getCapabilityDetail(decodeURIComponent(capDetailMatch[1]));
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
+      else if (req.method === "POST" && path === "/approvals/request") response = await requestApproval(req, auth.actor);
+      else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor);
+      else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1]);
+      else if (req.method === "GET" && path === "/approvals") response = await listApprovals(url);
       else response = json({ error: "not found", path }, 404);
     }
     }
