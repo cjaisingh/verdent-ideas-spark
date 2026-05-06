@@ -106,6 +106,19 @@ export const AutoLogSettings = () => {
             </div>
           ))}
         </div>
+
+        <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
+          <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
+          {SOURCES.map((f) => (
+            <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
+              <div className="pr-3">
+                <div className="text-sm font-medium">{f.label}</div>
+                <div className="text-xs text-muted-foreground">{f.hint}</div>
+              </div>
+              <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
+            </div>
+          ))}
+        </div>
       </DialogContent>
     </Dialog>
   );
