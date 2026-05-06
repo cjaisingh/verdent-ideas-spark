@@ -224,17 +224,55 @@ export const AutomationPanel = () => {
         {findings.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
         ) : (
-          <ul className="divide-y divide-border">
-            {findings.map((f) => (
-              <li key={f.id} className="py-1.5 space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${sevTone(f.severity)}`}>{f.severity}</span>
-                  {f.category && <span className="text-[10px] text-muted-foreground font-mono">{f.category}</span>}
-                  <span className="text-[10px] text-muted-foreground ml-auto">{ago(f.created_at)}</span>
-                </div>
-                <div className="text-xs leading-snug">{f.title}</div>
-              </li>
-            ))}
+          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+            {findings.map((f) => {
+              const open = expandedFindings.has(f.id);
+              return (
+                <li key={f.id} className={`py-1.5 ${f.acknowledged ? "opacity-60" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleFinding(f.id)}
+                    className="w-full text-left space-y-0.5 group"
+                    aria-expanded={open}
+                  >
+                    <div className="flex items-center gap-2">
+                      {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${sevTone(f.severity)}`}>{f.severity}</span>
+                      {f.category && <span className="text-[10px] text-muted-foreground font-mono">{f.category}</span>}
+                      {f.area && <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[40%]" title={f.area}>· {f.area}</span>}
+                      {f.acknowledged && <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-label="acknowledged" />}
+                      <span className="text-[10px] text-muted-foreground ml-auto">{ago(f.created_at)}</span>
+                    </div>
+                    <div className="text-xs leading-snug pl-5 group-hover:text-foreground">{f.title}</div>
+                  </button>
+                  {open && (
+                    <div className="mt-2 ml-5 rounded border border-border bg-muted/30 p-2 space-y-2">
+                      {f.body ? (
+                        <div className="text-[12px] leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
+                          {renderBody(f.body)}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-muted-foreground italic">No additional context provided by reviewer.</div>
+                      )}
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono pt-1 border-t border-border/60">
+                        <span>{f.reviewer_model ?? "unknown model"}</span>
+                        {f.diff_window_start && f.diff_window_end && (
+                          <span title={`window: ${f.diff_window_start} → ${f.diff_window_end}`}>
+                            window {ago(f.diff_window_start)} → {ago(f.diff_window_end)}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); ackFinding(f.id, !f.acknowledged); }}
+                          className="ml-auto px-2 py-0.5 rounded border border-border hover:bg-muted hover:text-foreground"
+                        >
+                          {f.acknowledged ? "Unacknowledge" : "Acknowledge"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
