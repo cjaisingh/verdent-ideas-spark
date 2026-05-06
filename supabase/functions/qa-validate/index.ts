@@ -85,12 +85,64 @@ Deno.serve(async (req) => {
   }
 
   const totalChecks = (checks ?? []).length;
+
+  // Count probes that ended in fail status to alert.
+  const { data: probeFails } = await sb.from("qa_checks")
+    .select("criterion, phase_key, note").eq("kind", "probe").eq("status", "fail");
+  const failedProbes = probeFails ?? [];
+
   await recordRun(failures.length ? "partial" : "ok", failures.length ? 207 : 200,
     `${updated} probes updated${failures.length ? ` · ${failures.length} failed` : ""}`,
     { probes_run: updated, total_checks: totalChecks, failures });
+
+  if (failures.length > 0) {
+    await dispatchAlert(sb, "qa-validate", "qa_fail",
+      `${failures.length} probe execution error(s) during QA run`,
+      { errors: failures.slice(0, 10) });
+  } else if (failedProbes.length > 0) {
+    await dispatchAlert(sb, "qa-validate", "qa_fail",
+      `${failedProbes.length} QA probe(s) currently failing`,
+      { failing: failedProbes.slice(0, 10) });
+  }
+
   return json({ ok: true, probes_run: updated, checked: updated, count: updated });
 });
 
 function json(p: unknown, s = 200) {
   return new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+async function dispatchAlert(
+  sb: ReturnType<typeof createClient>,
+  job: string, reason: string, message: string, payload: Record<string, unknown> = {},
+) {
+  try {
+    const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
+    if (!settings || !settings.enabled || !settings.webhook_url) return;
+    const flagMap: Record<string, string> = {
+      review_error: "alert_on_review_error", high_finding: "alert_on_high_finding",
+      test_fail: "alert_on_test_fail", qa_fail: "alert_on_qa_fail",
+    };
+    const flag = flagMap[reason];
+    if (flag && (settings as any)[flag] === false) return;
+    const dedupeMin = Math.max(0, Number(settings.dedupe_minutes ?? 0));
+    if (dedupeMin > 0) {
+      const since = new Date(Date.now() - dedupeMin * 60_000).toISOString();
+      const { data: recent } = await sb.from("alert_log")
+        .select("id").eq("job", job).eq("reason", reason).eq("delivered", true)
+        .gte("created_at", since).limit(1);
+      if (recent && recent.length > 0) return;
+    }
+    const body = JSON.stringify({
+      text: `🚨 ${job} · ${reason}\n${message}`,
+      job, reason, message, payload, ts: new Date().toISOString(),
+    });
+    let delivered = false; let status_code: number | null = null; let error: string | null = null;
+    try {
+      const r = await fetch(settings.webhook_url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+      status_code = r.status; delivered = r.ok;
+      if (!r.ok) error = (await r.text()).slice(0, 300);
+    } catch (e) { error = e instanceof Error ? e.message : String(e); }
+    await sb.from("alert_log").insert({ job, reason, message, delivered, status_code, error, payload });
+  } catch (e) { console.error("dispatchAlert failed", e); }
 }
