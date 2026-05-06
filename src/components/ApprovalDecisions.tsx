@@ -147,21 +147,32 @@ const ApprovalDecisions = () => {
     if (selectedPendingIds.length === 0) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from("approval_queue")
-        .update({
-          status,
-          decided_by: `ui:${actorTag}`,
-          decided_at: new Date().toISOString(),
-        })
-        .in("id", selectedPendingIds)
-        .eq("status", "pending")
-        .select("id");
-      if (error) throw error;
-      const n = data?.length ?? 0;
-      toast[status === "approved" ? "success" : "error"](
-        `${status === "approved" ? "Approved" : "Rejected"} ${n} approval${n === 1 ? "" : "s"}`,
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in");
+      const results = await Promise.allSettled(
+        selectedPendingIds.map((id) =>
+          supabase.functions.invoke(`awip-api/approvals/${id}/decide`, {
+            body: { decision: status, decided_by: `ui:${actorTag}` },
+            headers: { Authorization: `Bearer ${token}` },
+          }).then((r) => {
+            if (r.error) throw r.error;
+            return r.data;
+          }),
+        ),
       );
+      const ok = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - ok;
+      if (ok > 0) {
+        toast[status === "approved" ? "success" : "error"](
+          `${status === "approved" ? "Approved" : "Rejected"} ${ok} approval${ok === 1 ? "" : "s"}` +
+            (failed > 0 ? ` · ${failed} failed` : ""),
+        );
+      }
+      if (failed > 0 && ok === 0) {
+        const first = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+        toast.error("Bulk action failed", { description: first ? String(first.reason?.message ?? first.reason) : undefined });
+      }
       setSelected(new Set());
     } catch (e) {
       toast.error("Bulk action failed", { description: (e as Error).message });
