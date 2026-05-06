@@ -1,18 +1,25 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 type DemandRow = {
   id: string;
   name: string;
   status: string;
   owning_module: string | null;
+  tenant_ids: string[];
   tenant_count: number;
   kr_count: number;
   active_kr_count: number;
 };
+
+type Tenant = { id: string; slug: string; name: string };
 
 type EventRow = {
   id: string;
@@ -24,6 +31,9 @@ type EventRow = {
   actor: string | null;
   created_at: string;
 };
+
+type SortKey = "active_kr_count" | "tenant_count" | "kr_count" | "name" | "status";
+type SortDir = "asc" | "desc";
 
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/awip-api`;
 
@@ -42,10 +52,18 @@ const statusVariant = (s: string) => {
 
 const ControlPlane = () => {
   const [demand, setDemand] = useState<DemandRow[] | null>(null);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const lastSeen = useRef<string | null>(null);
+
+  // Filter / sort state
+  const [tenantFilter, setTenantFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [minActive, setMinActive] = useState<string>("0");
+  const [sortKey, setSortKey] = useState<SortKey>("active_kr_count");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const loadDemand = async () => {
     try {
@@ -53,6 +71,7 @@ const ControlPlane = () => {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? "demand failed");
       setDemand(j.demand);
+      setTenants(j.tenants ?? []);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -87,6 +106,47 @@ const ControlPlane = () => {
     return () => clearInterval(id);
   }, [paused]);
 
+  const statusOptions = useMemo(() => {
+    const s = new Set<string>();
+    demand?.forEach((d) => s.add(d.status));
+    return [...s].sort();
+  }, [demand]);
+
+  const filtered = useMemo(() => {
+    if (!demand) return null;
+    const min = parseInt(minActive, 10) || 0;
+    let rows = demand.filter((d) => {
+      if (statusFilter !== "all" && d.status !== statusFilter) return false;
+      if (tenantFilter !== "all" && !d.tenant_ids.includes(tenantFilter)) return false;
+      if (d.active_kr_count < min) return false;
+      return true;
+    });
+    const dir = sortDir === "asc" ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const av = (a as any)[sortKey];
+      const bv = (b as any)[sortKey];
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+      return String(av).localeCompare(String(bv)) * dir;
+    });
+    return rows;
+  }, [demand, statusFilter, tenantFilter, minActive, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" || key === "status" ? "asc" : "desc"); }
+  };
+
+  const sortIndicator = (key: SortKey) => sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+
+  const HeaderCell = ({ k, label, className = "" }: { k: SortKey; label: string; className?: string }) => (
+    <button
+      onClick={() => toggleSort(k)}
+      className={`text-left text-xs uppercase tracking-wide text-muted-foreground hover:text-foreground transition ${className}`}
+    >
+      {label}{sortIndicator(k)}
+    </button>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
@@ -113,22 +173,62 @@ const ControlPlane = () => {
           <TabsTrigger value="feed">Live event feed</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="demand" className="mt-4">
+        <TabsContent value="demand" className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Tenant</label>
+              <Select value={tenantFilter} onValueChange={setTenantFilter}>
+                <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tenants</SelectItem>
+                  {tenants.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Status</label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {statusOptions.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Min active KRs</label>
+              <Input
+                type="number"
+                min={0}
+                value={minActive}
+                onChange={(e) => setMinActive(e.target.value)}
+                className="w-28"
+              />
+            </div>
+            <div className="ml-auto text-xs text-muted-foreground">
+              {filtered?.length ?? 0} of {demand?.length ?? 0}
+            </div>
+          </div>
+
           <div className="border border-border rounded-md overflow-hidden">
-            <div className="grid grid-cols-12 gap-2 px-4 py-2 text-xs uppercase tracking-wide text-muted-foreground bg-muted/30">
-              <div className="col-span-4">Capability</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2">Module</div>
-              <div className="col-span-1 text-right">Tenants</div>
-              <div className="col-span-1 text-right">Active KRs</div>
-              <div className="col-span-2 text-right">Total KRs</div>
+            <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/30">
+              <HeaderCell k="name" label="Capability" className="col-span-4" />
+              <HeaderCell k="status" label="Status" className="col-span-2" />
+              <div className="col-span-2 text-xs uppercase tracking-wide text-muted-foreground">Module</div>
+              <HeaderCell k="tenant_count" label="Tenants" className="col-span-1 text-right" />
+              <HeaderCell k="active_kr_count" label="Active KRs" className="col-span-1 text-right" />
+              <HeaderCell k="kr_count" label="Total KRs" className="col-span-2 text-right" />
             </div>
             <div className="divide-y divide-border">
-              {!demand && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
-              {demand?.length === 0 && (
-                <div className="p-6 text-sm text-muted-foreground">No capability demand yet.</div>
+              {!filtered && <div className="p-6 text-sm text-muted-foreground">Loading…</div>}
+              {filtered?.length === 0 && (
+                <div className="p-6 text-sm text-muted-foreground">No capabilities match.</div>
               )}
-              {demand?.map((d) => (
+              {filtered?.map((d) => (
                 <div key={d.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm items-center">
                   <div className="col-span-4">
                     <div className="font-medium">{d.name}</div>
