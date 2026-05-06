@@ -62,3 +62,20 @@ Database changes go through migrations only — never edit `src/integrations/sup
 
 - **Discovery AI** (separate Lovable project) — calls `GET /capabilities` during drafting and `POST /okr/ingest` to hand off finished trees
 - **Control Plane** — currently embedded in this project at `/control-plane`. Will likely move to its own Lovable project when the first acting module ships
+
+## CI / nightly tests
+
+The nightly workflow (`.github/workflows/nightly.yml`) runs vitest unit + e2e suites at 02:00 UTC and posts a summary to the `record-test-run` edge function so results show up on `/roadmap`.
+
+That POST is authenticated with the same `AWIP_SERVICE_TOKEN` used by the API. Until the token is configured as a GitHub Actions secret, the workflow will run but the report step will fail with `401 unauthorized`.
+
+### One-time setup
+
+1. Copy the existing `AWIP_SERVICE_TOKEN` value from Lovable Cloud → Project settings → Secrets.
+2. In GitHub: **Repo → Settings → Secrets and variables → Actions → New repository secret**.
+3. Name: `AWIP_SERVICE_TOKEN` — Value: paste the token from step 1. Save.
+4. Trigger a run to verify: **Actions → Nightly tests → Run workflow**, then check `/roadmap` for the new entry under **Tests**.
+
+### Rotating the token
+
+If you rotate `AWIP_SERVICE_TOKEN` in Lovable Cloud, update the GitHub Actions secret with the same name — no workflow change needed.
