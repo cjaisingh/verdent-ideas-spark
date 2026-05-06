@@ -272,9 +272,16 @@ const Roadmap = () => {
     const activePhase = phases.find((p) => p.status === "active");
     if (!activePhase) return null;
     const sps = (sprintsByPhase.get(activePhase.id) ?? []).filter((s) => s.status !== "done");
+    // Prefer any in_progress task across the active phase.
     for (const s of sps) {
       const ts = tasksBySprint.get(s.id) ?? [];
-      const t = ts.find((x) => x.status === "todo" || x.status === "in_progress");
+      const t = ts.find((x) => x.status === "in_progress");
+      if (t) return { phase: activePhase, sprint: s, task: t };
+    }
+    // Fallback: first todo in earliest sprint.
+    for (const s of sps) {
+      const ts = tasksBySprint.get(s.id) ?? [];
+      const t = ts.find((x) => x.status === "todo");
       if (t) return { phase: activePhase, sprint: s, task: t };
     }
     return null;
