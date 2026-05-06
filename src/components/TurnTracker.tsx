@@ -112,6 +112,11 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
       reset();
       return;
     }
+    if (s.source_lovable_agent === false) {
+      toast({ title: "Source disabled", description: "Lovable agent source is turned off in Auto-log settings." });
+      reset();
+      return;
+    }
     const tTotal = s.capture_tokens ? ((parsed.tokens_in ?? 0) + (parsed.tokens_out ?? 0) || null) : null;
     const { issues, fixes } = s.extract_issues_fixes
       ? extractIssuesAndFixes(parsed.text)

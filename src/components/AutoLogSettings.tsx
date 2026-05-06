@@ -16,12 +16,16 @@ type Settings = {
   capture_request_meta: boolean;
   capture_response_meta: boolean;
   extract_issues_fixes: boolean;
+  source_lovable_agent: boolean;
+  source_ai_gateway: boolean;
+  source_awip_api: boolean;
 };
 
 const DEFAULTS: Settings = {
   enabled: true, capture_tokens: true, capture_duration: true, capture_model: true,
   capture_prompt: true, capture_response: true, capture_request_meta: true,
   capture_response_meta: true, extract_issues_fixes: true,
+  source_lovable_agent: true, source_ai_gateway: true, source_awip_api: true,
 };
 
 const FIELDS: { key: keyof Settings; label: string; hint: string }[] = [
@@ -33,6 +37,12 @@ const FIELDS: { key: keyof Settings; label: string; hint: string }[] = [
   { key: "capture_request_meta", label: "Request metadata", hint: "Endpoint, system prompt, tool choices" },
   { key: "capture_response_meta", label: "Response metadata", hint: "HTTP status, finish reason, tool calls" },
   { key: "extract_issues_fixes", label: "Auto-extract issues / fixes", hint: "Parse labeled sections from the AI output" },
+];
+
+const SOURCES: { key: keyof Settings; label: string; hint: string }[] = [
+  { key: "source_lovable_agent", label: "Lovable agent", hint: "Turns captured by the in-app TurnTracker" },
+  { key: "source_ai_gateway", label: "AI gateway", hint: "Turns posted via the AI gateway" },
+  { key: "source_awip_api", label: "AWIP API", hint: "Turns posted with the service token" },
 ];
 
 export const AutoLogSettings = () => {
@@ -87,6 +97,19 @@ export const AutoLogSettings = () => {
         <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
           <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">What to capture</div>
           {FIELDS.map((f) => (
+            <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
+              <div className="pr-3">
+                <div className="text-sm font-medium">{f.label}</div>
+                <div className="text-xs text-muted-foreground">{f.hint}</div>
+              </div>
+              <Switch checked={settings[f.key]} onCheckedChange={() => toggle(f.key)} disabled={loading} />
+            </div>
+          ))}
+        </div>
+
+        <div className={`space-y-2 ${settings.enabled ? "" : "opacity-50 pointer-events-none"}`}>
+          <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">Sources to capture</div>
+          {SOURCES.map((f) => (
             <div key={f.key} className="flex items-center justify-between rounded-md border border-border p-2.5">
               <div className="pr-3">
                 <div className="text-sm font-medium">{f.label}</div>
