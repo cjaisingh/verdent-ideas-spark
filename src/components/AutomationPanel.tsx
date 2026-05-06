@@ -346,11 +346,24 @@ export const AutomationPanel = () => {
           {lastRunAt && <span>last: {ago(lastRunAt)}</span>}
         </div>
         <LastRun run={lastTestPost} emptyHint="No nightly POSTs received — once GitHub Actions runs, the latest call (incl. 401s) appears here." />
-        {runs.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2">No runs recorded yet — first nightly will appear here.</div>
+        <div className="flex flex-wrap items-center gap-1 text-[10px]">
+          <select value={runStatus} onChange={(e) => setRunStatus(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="all">all status</option>
+            <option value="passed">passed</option>
+            <option value="failed">failed</option>
+            <option value="errored">errored</option>
+          </select>
+          <select value={runSort} onChange={(e) => setRunSort(e.target.value as any)} className="bg-transparent border border-border rounded px-1 py-0.5">
+            <option value="newest">newest</option>
+            <option value="oldest">oldest</option>
+          </select>
+          <span className="ml-auto text-muted-foreground font-mono">{filteredRuns.length}/{runs.length}</span>
+        </div>
+        {filteredRuns.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">No runs match.</div>
         ) : (
-          <ul className="divide-y divide-border">
-            {runs.map((r) => (
+          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+            {filteredRuns.map((r) => (
               <li key={r.id} className="py-1.5 flex items-center gap-2 text-xs">
                 <span className="font-mono uppercase text-[10px] text-muted-foreground w-12">{r.suite}</span>
                 <span className={`font-mono ${statusTone(r.status)}`}>{r.status}</span>
