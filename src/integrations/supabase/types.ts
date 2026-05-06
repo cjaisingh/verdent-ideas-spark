@@ -679,6 +679,65 @@ export type Database = {
           },
         ]
       }
+      roadmap_work_log: {
+        Row: {
+          author: string | null
+          created_at: string
+          duration_ms: number | null
+          ended_at: string | null
+          fixes: string | null
+          id: string
+          issues: string | null
+          model: string | null
+          started_at: string
+          summary: string | null
+          task_id: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tokens_total: number | null
+        }
+        Insert: {
+          author?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          ended_at?: string | null
+          fixes?: string | null
+          id?: string
+          issues?: string | null
+          model?: string | null
+          started_at: string
+          summary?: string | null
+          task_id: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tokens_total?: number | null
+        }
+        Update: {
+          author?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          ended_at?: string | null
+          fixes?: string | null
+          id?: string
+          issues?: string | null
+          model?: string | null
+          started_at?: string
+          summary?: string | null
+          task_id?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tokens_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_work_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_change_audit: {
         Row: {
           action: string
