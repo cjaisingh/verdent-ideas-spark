@@ -620,7 +620,15 @@ const Roadmap = () => {
                                                 <span className="font-mono">{new Date(l.started_at).toLocaleString()}</span>
                                                 <span>· {fmtDuration(l.duration_ms)}</span>
                                                 {l.tokens_total != null && <span>· {l.tokens_total.toLocaleString()} tok</span>}
-                                                {l.model && <span>· {l.model}</span>}
+                                                {(l.tokens_in != null || l.tokens_out != null) && (
+                                                  <span className="opacity-70">({l.tokens_in ?? 0}↑ / {l.tokens_out ?? 0}↓)</span>
+                                                )}
+                                                {l.model && (
+                                                  <span>· <span className="font-mono">{l.model}</span>
+                                                    {l.model_provider && <span className="opacity-70"> [{l.model_provider}]</span>}
+                                                  </span>
+                                                )}
+                                                {l.source && <span className="px-1 rounded bg-muted">{l.source}</span>}
                                                 {l.author && <span>· {l.author}</span>}
                                               </div>
                                               {l.summary && <div className="mt-0.5">{l.summary}</div>}
@@ -629,6 +637,29 @@ const Roadmap = () => {
                                                   {l.issues && <div><span className="font-semibold">Issues:</span> {l.issues}</div>}
                                                   {l.fixes && <div><span className="font-semibold">Fixes:</span> {l.fixes}</div>}
                                                 </div>
+                                              )}
+                                              {(l.prompt_preview || l.response_preview || (l.request_meta && Object.keys(l.request_meta).length) || (l.response_meta && Object.keys(l.response_meta).length)) && (
+                                                <details className="mt-1">
+                                                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Audit metadata</summary>
+                                                  <div className="mt-1 space-y-1 pl-2 border-l border-border">
+                                                    {l.prompt_preview && (
+                                                      <div><div className="text-[10px] uppercase text-muted-foreground">Prompt</div>
+                                                        <div className="font-mono whitespace-pre-wrap break-words">{l.prompt_preview}</div></div>
+                                                    )}
+                                                    {l.response_preview && (
+                                                      <div><div className="text-[10px] uppercase text-muted-foreground">Response</div>
+                                                        <div className="font-mono whitespace-pre-wrap break-words">{l.response_preview}</div></div>
+                                                    )}
+                                                    {l.request_meta && Object.keys(l.request_meta).length > 0 && (
+                                                      <div><div className="text-[10px] uppercase text-muted-foreground">Request meta</div>
+                                                        <pre className="font-mono text-[10px] whitespace-pre-wrap break-words">{JSON.stringify(l.request_meta, null, 2)}</pre></div>
+                                                    )}
+                                                    {l.response_meta && Object.keys(l.response_meta).length > 0 && (
+                                                      <div><div className="text-[10px] uppercase text-muted-foreground">Response meta</div>
+                                                        <pre className="font-mono text-[10px] whitespace-pre-wrap break-words">{JSON.stringify(l.response_meta, null, 2)}</pre></div>
+                                                    )}
+                                                  </div>
+                                                </details>
                                               )}
                                             </div>
                                           ))}
