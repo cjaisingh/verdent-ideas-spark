@@ -1314,6 +1314,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      purge_all_rows: { Args: { _table: string }; Returns: number }
       purge_expired_rows: {
         Args: { _table?: string }
         Returns: {
