@@ -1,124 +1,44 @@
+# End-to-End Test Harness (no Gemini Gems required)
 
-# AWIP Voice-Loop — Phase A
+## Why
+Real Gem prompts aren't wired yet, so we can't drive the router with live Telegram → LLM classification. We need a way to exercise the full pipeline (inbound message → router → approval_queue → decision → toast/flash/indicator) deterministically.
 
-Build the Telegram bridge, the four operator tables, and the seed policy data inside this Lovable project (AWIP Core). Phases B–E follow in subsequent messages, one at a time, so each is independently reviewable and revertable.
+## Scope
+A scripted harness that simulates inbound operator messages and runs them through the existing `route-operator-message` edge function — bypassing any Gem/LLM call — so the rest of the loop (policy match, queue insert, UI realtime, decision flow) can be verified end to end.
 
-## What gets built in Phase A
+## Pieces
 
-### 1. Connect Telegram
+### 1. Edge function: `simulate-operator-message`
+- Operator-only (verify JWT + `has_role(uid,'operator')`).
+- Input: `{ activity, text, intent_payload?, risk?, chat_id?, force_decision? }`.
+- Inserts a synthetic `operator_messages` row (direction=`inbound`, raw flagged `simulated:true`).
+- Invokes the existing `route-operator-message` logic (extract into a shared handler, or call internally) so the same policy preview / `_policy` trace lands in `approval_queue`.
+- Returns the created `approval_queue` row id so the harness can follow it.
 
-Trigger the Telegram connector picker against this project so `TELEGRAM_API_KEY` and `LOVABLE_API_KEY` are available to edge functions.
+### 2. Control-plane UI: "Test harness" panel
+- New collapsible card on `/control-plane` (operators only).
+- Form: activity dropdown (from `activity_policies`), free-text message, optional JSON payload, risk override.
+- Buttons: **Send simulated message**, **Send + auto-approve**, **Send + auto-reject**.
+- After send: shows the resulting approval row id + deep link to `/approvals/:id`, and live status (pending → decided) via the existing realtime subscription.
+- Clearly labeled "Simulated — does not hit Telegram".
 
-### 2. Database (one migration)
+### 3. Quick presets
+- 3–4 buttons that fire common scenarios: low-risk auto-approve, high-risk needs-approval, no-policy-match (default action), malformed payload.
+- Useful for one-click smoke tests after any change to policies or the router.
 
-Four new tables, all RLS-locked to operators only (matches existing pattern).
+### 4. Verification checklist (manual, after harness lands)
+- Toast fires on decision ✅
+- Pending indicator increments on insert, decrements on decision ✅
+- Row flash on decided id ✅
+- Policy preview shows matched rule on `/approvals/:id` ✅
+- `decided_by` recorded as `ui:<actor>` ✅
 
-```text
-operator_messages
-─────────────────
-id                uuid pk
-update_id         bigint unique         -- Telegram update_id, idempotency
-chat_id           bigint
-direction         text                  -- 'inbound' | 'outbound'
-text              text
-intent            text                  -- parsed by router; null until classified
-raw               jsonb
-created_at        timestamptz
+## Out of scope (for now)
+- Real Gemini Gems / LLM-based classification — tracked separately.
+- Telegram outbound echo for simulated messages (skip; would spam the chat).
 
-approval_queue
-──────────────
-id                uuid pk
-activity          text                  -- e.g. 'gmail.send'
-intent_payload    jsonb                 -- what would be executed if approved
-risk              text                  -- 'safe' | 'risky' | 'unknown' | 'blocker'
-status            text                  -- 'pending' | 'approved' | 'rejected' | 'expired' | 'executed' | 'failed'
-telegram_message_id bigint              -- the message with inline buttons
-requested_by      text
-decided_by        text
-decided_at        timestamptz
-result            jsonb
-created_at        timestamptz
-
-rethink_tasks
-─────────────
-id                uuid pk
-topic             text
-original_proposal jsonb
-reason            text                  -- why first answer was unconvincing / blocker
-temp_fix          text                  -- optional, for blockers
-status            text                  -- 'open' | 'in_review' | 'resolved'
-created_at        timestamptz
-resolved_at       timestamptz
-
-activity_policies
-─────────────────
-id                uuid pk
-activity          text unique           -- 'gmail.send', 'gmail.draft', 'calendar.hold', ...
-default_action    text                  -- 'auto' | 'approve' | 'block'
-conditions        jsonb                 -- IF/THEN rule list, first match wins
-notes             text
-updated_at        timestamptz
-```
-
-Seed `activity_policies` conservatively:
-
-```text
-gmail.read                 auto
-gmail.draft                auto
-gmail.send                 approve
-calendar.read              auto
-calendar.hold (own cal)    auto
-calendar.invite_external   approve
-drive.read                 auto
-drive.write                approve
-awip.spawn_okr             approve
-awip.supersede_okr         approve
-```
-
-### 3. Edge function: `telegram-webhook`
-
-- `verify_jwt = false` (added to `supabase/config.toml`)
-- Validates `X-Telegram-Bot-Api-Secret-Token` against base64url-SHA256 of `telegram-webhook:${TELEGRAM_API_KEY}` (constant-time compare)
-- Inserts inbound update into `operator_messages` (upsert on `update_id` for idempotency)
-- Handles `callback_query` from inline buttons → updates `approval_queue.status` to `approved` / `rejected`, records `decided_by`, `decided_at`
-- Returns `{ ok: true }` quickly; heavy work deferred to Phase B router
-
-### 4. Edge function: `telegram-send` (helper)
-
-Small internal-only helper used by later phases to post messages and inline-button approval prompts via the gateway. Service-token-protected, not exposed to end users.
-
-### 5. Register the webhook
-
-After deploy, call `setWebhook` through the connector gateway with:
-
-```text
-url           = https://<ref>.supabase.co/functions/v1/telegram-webhook
-secret_token  = base64url(sha256("telegram-webhook:" + TELEGRAM_API_KEY))
-allowed_updates = ["message","edited_message","callback_query"]
-```
-
-Verify with `getWebhookInfo`.
-
-### 6. Smoke test
-
-Send a Telegram message to the bot → confirm a row lands in `operator_messages`. Tap a fake inline button via `telegram-send` → confirm `approval_queue` row flips status. No reasoning yet (that's Phase B).
-
-## Files
-
-- create migration: tables `operator_messages`, `approval_queue`, `rethink_tasks`, `activity_policies` + RLS + seed inserts for `activity_policies`
-- create: `supabase/functions/telegram-webhook/index.ts`
-- create: `supabase/functions/telegram-send/index.ts`
-- edit: `supabase/config.toml` — add `[functions.telegram-webhook] verify_jwt = false`
-- run: `standard_connectors--connect telegram`, then `setWebhook` via gateway curl
-
-## Out of scope for Phase A
-
-- The 4 `/awip/*` primitives (Phase C)
-- The reasoning router with model-map (Phase B)
-- Gmail / Calendar connectors (Phase D)
-- `/policies`, `/approvals`, `/rethink` operator UI pages (Phase E)
-- Gemini Gem configuration on your phone (external, not a Lovable change)
-
-## After Phase A
-
-You'll be able to message the bot and have it logged + acknowledged, and the approval-queue mechanics will be testable end-to-end with synthetic rows. Phase B adds the brain.
+## Order of work
+1. Extract router core into a shared module (`_shared/route.ts`) so both `route-operator-message` and `simulate-operator-message` share it.
+2. Implement `simulate-operator-message` edge function.
+3. Add Test harness panel to `/control-plane`.
+4. Run all four checklist items end to end and report.
