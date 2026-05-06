@@ -141,6 +141,33 @@ export const AutomationPanel = () => {
   }, {});
 
   const lastRunAt = runs[0]?.created_at ?? null;
+  const lastReview = lastRunFor("scheduled-code-review");
+  const lastQa = lastRunFor("qa-validate");
+  const lastTestPost = lastRunFor("record-test-run");
+
+  const LastRun = ({ run, emptyHint }: { run: AutoRun | null; emptyHint: string }) => {
+    if (!run) return <div className="text-[10px] text-muted-foreground italic">{emptyHint}</div>;
+    const isErr = run.status === "error";
+    const isPartial = run.status === "partial";
+    const Icon = isErr ? AlertTriangle : CheckCircle2;
+    const tone = isErr
+      ? "border-destructive/40 bg-destructive/5 text-destructive"
+      : isPartial
+      ? "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+      : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400";
+    return (
+      <div className={`text-[11px] rounded border px-2 py-1.5 ${tone} space-y-0.5`}>
+        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+          <Icon className="h-3 w-3 shrink-0" />
+          <span className="uppercase">{run.status}</span>
+          {run.status_code != null && <span>· {run.status_code}</span>}
+          <span>· {run.trigger}</span>
+          <span className="ml-auto opacity-70">{ago(run.created_at)}</span>
+        </div>
+        {run.message && <div className="leading-snug break-words" title={run.message}>{run.message}</div>}
+      </div>
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
