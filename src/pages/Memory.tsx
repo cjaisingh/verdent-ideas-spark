@@ -160,7 +160,29 @@ export default function Memory() {
     if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
   };
 
-  // ---- Audit log
+  // ---- Auto-purge toggle
+  const [autoPurge, setAutoPurge] = useState<boolean | null>(null);
+  const loadAutoPurge = async () => {
+    const { data } = await supabase
+      .from("memory_settings" as any)
+      .select("auto_purge_enabled")
+      .eq("id", true)
+      .maybeSingle();
+    if (data) setAutoPurge((data as any).auto_purge_enabled);
+  };
+  const toggleAutoPurge = async () => {
+    const next = !autoPurge;
+    setAutoPurge(next);
+    const { error } = await supabase
+      .from("memory_settings" as any)
+      .upsert({ id: true, auto_purge_enabled: next, updated_at: new Date().toISOString() });
+    if (error) {
+      setAutoPurge(!next);
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: next ? "Auto-purge enabled" : "Auto-purge disabled" });
+    }
+  };
   const [audit, setAudit] = useState<any[]>([]);
   const [loadingAudit, setLoadingAudit] = useState(true);
 
