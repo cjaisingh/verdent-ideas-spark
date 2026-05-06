@@ -2,7 +2,12 @@
 
 Operator console + contract API for the AWIP constellation. Owns the OKR tree, the capability manifest, and the event streams every other AWIP project subscribes to.
 
-See [.lovable/plan.md](.lovable/plan.md) for the full v1 plan and current status.
+**Docs**
+
+- [Architecture overview](docs/architecture.md) — data model, event streams, how consumers read them
+- [API reference](docs/api.md) — every `/awip-api` endpoint with examples
+- [Local development](docs/development.md) — clone, env vars, migrations, edge functions
+- [v1 plan + status](.lovable/plan.md)
 
 ## What's in this project
 
