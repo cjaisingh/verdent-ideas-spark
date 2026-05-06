@@ -213,11 +213,11 @@ const PreviewPanel = ({ settings }: { settings: Settings }) => {
             {row && Object.entries(row).map(([k, v]) => {
               const empty = isEmpty(v);
               return (
-                <div key={k} className="flex items-start gap-2 px-2.5 py-1.5">
-                  <span className={`font-mono text-[11px] ${empty ? "text-muted-foreground/60 line-through" : "text-foreground"}`}>
+                <div key={k} className="flex items-start gap-2 px-2.5 py-1.5 min-w-0">
+                  <span className={`shrink-0 font-mono text-[11px] ${empty ? "text-muted-foreground/60 line-through" : "text-foreground"}`}>
                     {k}
                   </span>
-                  <span className={`flex-1 text-right font-mono text-[11px] truncate ${empty ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
+                  <span className={`flex-1 min-w-0 text-right font-mono text-[11px] truncate ${empty ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
                     {empty ? "—" : fmt(v)}
                   </span>
                 </div>
