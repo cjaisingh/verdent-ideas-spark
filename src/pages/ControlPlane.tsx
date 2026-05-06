@@ -256,22 +256,84 @@ const ControlPlane = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="feed" className="mt-4">
-          <div className="border border-border rounded-md divide-y divide-border max-h-[60vh] overflow-auto">
+        <TabsContent value="feed" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-1 border border-border rounded-md p-0.5">
+              {(["all", "okr", "capability"] as const).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSourceFilter(s)}
+                  className={`px-3 py-1 text-xs rounded ${
+                    sourceFilter === s
+                      ? "bg-secondary text-secondary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className={`inline-block h-2 w-2 rounded-full ${paused ? "bg-muted-foreground" : "bg-emerald-500 animate-pulse"}`} />
+              {paused ? "Paused" : "Live"}
+              {lastSeen.current && <span className="font-mono">since {new Date(lastSeen.current).toLocaleTimeString()}</span>}
+              {lastPoll && <span>· polled {lastPoll.toLocaleTimeString()}</span>}
+            </div>
+            <div className="ml-auto text-xs text-muted-foreground">
+              {events.filter((e) => sourceFilter === "all" || e.source === sourceFilter).length} events
+            </div>
+          </div>
+
+          <div className="border border-border rounded-md max-h-[60vh] overflow-auto">
             {events.length === 0 && (
               <div className="p-6 text-sm text-muted-foreground">Waiting for events…</div>
             )}
-            {events.map((e) => (
-              <div key={`${e.source}-${e.id}`} className="p-3 text-sm flex items-start gap-3 font-mono">
-                <Badge variant="outline" className="shrink-0">{e.source}</Badge>
-                <span className="text-xs shrink-0 text-muted-foreground">
-                  {new Date(e.created_at).toLocaleTimeString()}
-                </span>
-                <span className="text-xs shrink-0">{e.event_type}</span>
-                <span className="text-xs text-muted-foreground truncate">{e.ref}</span>
-                <span className="text-xs text-muted-foreground ml-auto shrink-0">{e.actor ?? "—"}</span>
-              </div>
-            ))}
+            <div className="divide-y divide-border">
+              {events
+                .filter((e) => sourceFilter === "all" || e.source === sourceFilter)
+                .map((e) => {
+                  const key = `${e.source}-${e.id}`;
+                  const isFresh = freshIds.has(key);
+                  const isOkr = e.source === "okr";
+                  return (
+                    <div
+                      key={key}
+                      className={`flex items-stretch text-sm transition-colors ${
+                        isFresh ? "bg-primary/10" : ""
+                      }`}
+                    >
+                      <div
+                        className={`w-1 shrink-0 ${
+                          isOkr ? "bg-blue-500" : "bg-amber-500"
+                        }`}
+                        aria-hidden
+                      />
+                      <div className="flex-1 p-3 flex items-start gap-3 font-mono">
+                        <Badge
+                          variant="outline"
+                          className={`shrink-0 ${
+                            isOkr
+                              ? "border-blue-500/40 text-blue-500"
+                              : "border-amber-500/40 text-amber-500"
+                          }`}
+                        >
+                          {e.source}
+                        </Badge>
+                        <span className="text-xs shrink-0 text-muted-foreground tabular-nums">
+                          {new Date(e.created_at).toLocaleTimeString()}
+                        </span>
+                        <span className="text-xs shrink-0 font-medium">{e.event_type}</span>
+                        <span className="text-xs text-muted-foreground truncate" title={e.ref}>
+                          {e.ref}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                          {e.actor ?? "—"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           </div>
         </TabsContent>
       </Tabs>
