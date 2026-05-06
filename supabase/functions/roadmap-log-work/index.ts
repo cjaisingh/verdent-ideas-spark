@@ -171,14 +171,26 @@ Deno.serve(async (req) => {
   const { data: settings } = await admin
     .from('roadmap_autolog_settings')
     .select('*').eq('id', true).maybeSingle();
-  const isAuto = (b.source ?? (isService ? 'awip_api' : 'manual')) !== 'manual';
+  const effectiveSource = b.source ?? (isService ? 'awip_api' : 'manual');
+  const isAuto = effectiveSource !== 'manual';
   const s = settings ?? {
     enabled: true, capture_tokens: true, capture_duration: true, capture_model: true,
     capture_prompt: true, capture_response: true, capture_request_meta: true,
     capture_response_meta: true, extract_issues_fixes: true,
+    source_lovable_agent: true, source_ai_gateway: true, source_awip_api: true,
   };
   if (isAuto && !s.enabled) {
     return new Response(JSON.stringify({ ok: true, skipped: 'autolog_disabled' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const sourceEnabledMap: Record<string, boolean> = {
+    lovable_agent: s.source_lovable_agent ?? true,
+    ai_gateway: s.source_ai_gateway ?? true,
+    awip_api: s.source_awip_api ?? true,
+  };
+  if (isAuto && sourceEnabledMap[effectiveSource] === false) {
+    return new Response(JSON.stringify({ ok: true, skipped: `source_disabled:${effectiveSource}` }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
