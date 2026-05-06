@@ -25,7 +25,25 @@ const BodySchema = z.object({
   fixes: z.string().max(2000).optional(),
   author: z.string().max(100).optional(),
   source: z.enum(['manual', 'lovable_agent', 'ai_gateway', 'awip_api']).optional(),
+  model_provider: z.string().max(60).optional(),
+  prompt_preview: z.string().max(2000).optional(),
+  response_preview: z.string().max(2000).optional(),
+  request_meta: z.record(z.unknown()).optional(),
+  response_meta: z.record(z.unknown()).optional(),
 });
+
+const PREVIEW_LEN = 500;
+const trim = (s: string | undefined | null) =>
+  s ? (s.length > PREVIEW_LEN ? s.slice(0, PREVIEW_LEN) + '…' : s) : null;
+
+function inferProvider(model: string | undefined | null): string | null {
+  if (!model) return null;
+  if (model.includes('/')) return model.split('/')[0];
+  if (/^gpt|^o\d/.test(model)) return 'openai';
+  if (/^claude/.test(model)) return 'anthropic';
+  if (/^gemini/.test(model)) return 'google';
+  return null;
+}
 
 async function inferNextUpTaskId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
   const { data: phases } = await supabase
