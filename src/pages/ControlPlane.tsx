@@ -54,6 +54,9 @@ const ControlPlane = () => {
   const [demand, setDemand] = useState<DemandRow[] | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [freshIds, setFreshIds] = useState<Set<string>>(new Set());
+  const [lastPoll, setLastPoll] = useState<Date | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "okr" | "capability">("all");
   const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const lastSeen = useRef<string | null>(null);
