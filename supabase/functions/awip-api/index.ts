@@ -15,6 +15,37 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+// ---------- redaction ----------
+// Scrub secrets from anything we persist (api_call_logs, *_events.payload).
+// Defensive: walk strings, leave non-strings alone, cap recursion depth.
+const SERVICE_TOKEN_VALUE = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+const REDACTION_PATTERNS: RegExp[] = [
+  /sk-[A-Za-z0-9_\-]{16,}/g,
+  /Bearer\s+[A-Za-z0-9._\-]+/g,
+  /eyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/g,
+];
+function redactString(s: string): string {
+  let out = s;
+  for (const re of REDACTION_PATTERNS) out = out.replace(re, "[REDACTED]");
+  if (SERVICE_TOKEN_VALUE && out.includes(SERVICE_TOKEN_VALUE)) {
+    out = out.split(SERVICE_TOKEN_VALUE).join("[REDACTED]");
+  }
+  return out;
+}
+export function redact<T>(value: T, depth = 0): T {
+  if (depth > 8) return value;
+  if (typeof value === "string") return redactString(value) as unknown as T;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1)) as unknown as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = redact(v, depth + 1);
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -96,9 +127,9 @@ async function logApiCall(entry: {
       status_code: entry.status_code,
       duration_ms: entry.duration_ms,
       tenant_id: entry.tenant_id ?? null,
-      request_summary: entry.request_summary ?? {},
-      response_summary: entry.response_summary ?? {},
-      error: entry.error ?? null,
+      request_summary: redact(entry.request_summary ?? {}),
+      response_summary: redact(entry.response_summary ?? {}),
+      error: entry.error ? redact(entry.error) : null,
     });
   } catch (e) {
     console.error(JSON.stringify({ fn: "awip-api", severity: "error", msg: "logApiCall insert failed", error: String(e) }));
@@ -185,7 +216,7 @@ async function registerCapability(req: Request, actor: string) {
   await supabase.from("capability_events").insert({
     capability_id: body.id,
     event_type: "registered",
-    payload: body,
+    payload: redact(body),
     actor,
   });
   return json({ ok: true, id: body.id });
@@ -313,7 +344,7 @@ async function ingestOkrTree(req: Request, actor: string) {
       tenant_id: tenant!.id,
       okr_node_id: ins.data.id,
       event_type: "ingested",
-      payload: { client_id: n.client_id },
+      payload: redact({ client_id: n.client_id }),
       actor,
     });
   }
@@ -356,7 +387,7 @@ async function spawnSubOkr(req: Request, parentId: string, actor: string) {
     tenant_id: parent.tenant_id,
     okr_node_id: ins.data.id,
     event_type: "spawned",
-    payload: { parent_id: parent.id, reason: body.spawned_from_reason },
+    payload: redact({ parent_id: parent.id, reason: body.spawned_from_reason }),
     actor,
   });
   return json({ ok: true, node: ins.data });
@@ -400,14 +431,14 @@ async function supersedeOkr(req: Request, oldId: string, actor: string) {
       tenant_id: old.tenant_id,
       okr_node_id: oldId,
       event_type: "superseded",
-      payload: { superseded_by: ins.data.id, reason: body.reason },
+      payload: redact({ superseded_by: ins.data.id, reason: body.reason }),
       actor,
     },
     {
       tenant_id: old.tenant_id,
       okr_node_id: ins.data.id,
       event_type: "created",
-      payload: { supersedes: oldId },
+      payload: redact({ supersedes: oldId }),
       actor,
     },
   ]);
@@ -447,7 +478,7 @@ async function ingestEvents(req: Request, actor: string) {
   const rows = events.map((e: any) => ({
     capability_id: String(e.capability_id ?? ""),
     event_type: String(e.event_type ?? ""),
-    payload: e.payload ?? {},
+    payload: redact(e.payload ?? {}),
     actor,
   }));
   if (rows.some((r: any) => !r.capability_id || !r.event_type)) {
@@ -489,7 +520,7 @@ async function getRecentEvents(url: URL) {
   return json({ events: merged, count: merged.length });
 }
 
-async function getCapabilityDemand() {
+async function getCapabilityDemand(actor: string) {
   const [capsRes, measRes, nodesRes, tenantsRes] = await Promise.all([
     supabase.from("capabilities").select("*"),
     supabase.from("okr_measurements").select("okr_node_id, required_capabilities"),
@@ -541,6 +572,44 @@ async function getCapabilityDemand() {
     b.tenant_count - a.tenant_count ||
     a.name.localeCompare(b.name)
   );
+
+  // Emit resolution_warning events for unowned/unknown capabilities with active demand.
+  // De-dupe: skip ids that already have a resolution_warning in the last 10 minutes.
+  try {
+    const candidates = demand.filter(
+      (d) =>
+        d.active_kr_count > 0 &&
+        (d.status === "unknown" || (!d.owning_module && d.status !== "unknown")),
+    );
+    if (candidates.length > 0) {
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      const { data: recent } = await supabase
+        .from("capability_events")
+        .select("capability_id")
+        .eq("event_type", "resolution_warning")
+        .in("capability_id", candidates.map((d) => d.id))
+        .gt("created_at", tenMinAgo);
+      const skip = new Set((recent ?? []).map((r: any) => r.capability_id));
+      const toInsert = candidates
+        .filter((d) => !skip.has(d.id))
+        .map((d) => ({
+          capability_id: d.id,
+          event_type: "resolution_warning",
+          actor,
+          payload: redact({
+            reason: d.status === "unknown" ? "unknown" : "unowned",
+            tenant_count: d.tenant_count,
+            active_kr_count: d.active_kr_count,
+            tenant_ids: d.tenant_ids,
+          }),
+        }));
+      if (toInsert.length > 0) {
+        await supabase.from("capability_events").insert(toInsert);
+      }
+    }
+  } catch (e) {
+    console.error(JSON.stringify({ fn: "awip-api", severity: "warn", msg: "resolution_warning emit failed", error: String(e) }));
+  }
 
   return json({ demand, tenants: tenantsRes.data ?? [] });
 }
@@ -658,7 +727,7 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
       else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
-      else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand();
+      else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand(auth.actor);
       else if (req.method === "GET" && capDetailMatch) response = await getCapabilityDetail(decodeURIComponent(capDetailMatch[1]));
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
