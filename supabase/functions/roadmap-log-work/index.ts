@@ -45,6 +45,48 @@ function inferProvider(model: string | undefined | null): string | null {
   return null;
 }
 
+// Heuristic extractor for issues/fixes from free-form AI turn output.
+// Looks for labeled sections (Issues:, Problems:, Errors:, Fixes:, Resolution:, Solution:)
+// followed by bullets / lines, and also "fixed X by Y" / "resolved …" patterns.
+function extractIssuesAndFixes(raw: string | null | undefined): { issues: string | null; fixes: string | null } {
+  if (!raw) return { issues: null, fixes: null };
+  const text = raw.replace(/\r\n/g, '\n');
+  const issueLabels = ['issues?', 'problems?', 'errors?', 'bugs?', 'blockers?', 'failures?'];
+  const fixLabels = ['fixes?', 'fixed', 'resolutions?', 'resolved', 'solutions?', 'changes?\\s+made'];
+
+  const grabSection = (labels: string[]): string | null => {
+    const re = new RegExp(
+      `(?:^|\\n)\\s*(?:#{1,6}\\s*|\\*\\*|__)?(?:${labels.join('|')})(?:\\*\\*|__)?\\s*[:\\-–]\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s|\\*\\*[A-Z]|[A-Z][A-Za-z ]{2,30}\\s*[:\\-–]\\s*\\n)|\\n\\s*\\n\\s*\\n|$)`,
+      'i',
+    );
+    const m = text.match(re);
+    if (!m) return null;
+    const body = m[1]
+      .split('\n')
+      .map((l) => l.replace(/^\s*[-*•\d.]+\s*/, '').trim())
+      .filter(Boolean)
+      .slice(0, 8)
+      .join('\n');
+    return body.trim() || null;
+  };
+
+  let issues = grabSection(issueLabels);
+  let fixes = grabSection(fixLabels);
+
+  // Fallback inline patterns
+  if (!fixes) {
+    const m = text.match(/\b(?:fixed|resolved|patched)\s+([^.\n]{5,200})/i);
+    if (m) fixes = m[0].trim();
+  }
+  if (!issues) {
+    const m = text.match(/\b(?:error|failed|exception|broke|crashed)[^.\n]{5,200}/i);
+    if (m) issues = m[0].trim();
+  }
+
+  const cap = (s: string | null) => (s && s.length > 1500 ? s.slice(0, 1500) + '…' : s);
+  return { issues: cap(issues), fixes: cap(fixes) };
+}
+
 async function inferNextUpTaskId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
   const { data: phases } = await supabase
     .from('roadmap_phases').select('id').eq('status', 'active').order('order').limit(1);
@@ -123,6 +165,13 @@ Deno.serve(async (req) => {
   const duration_ms = b.duration_ms ?? (new Date(endedAt).getTime() - new Date(startedAt).getTime());
   const tokens_total = b.tokens_total ?? (((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null);
 
+  // Auto-extract issues/fixes from AI turn output if operator/agent didn't provide them.
+  const sourceText = [b.response_preview, b.summary].filter(Boolean).join('\n\n');
+  const extracted = extractIssuesAndFixes(sourceText);
+  const finalIssues = b.issues ?? extracted.issues;
+  const finalFixes = b.fixes ?? extracted.fixes;
+  const autoExtracted = (!b.issues && extracted.issues) || (!b.fixes && extracted.fixes);
+
   const { data, error } = await admin.from('roadmap_work_log').insert({
     task_id: taskId,
     started_at: startedAt,
@@ -134,12 +183,12 @@ Deno.serve(async (req) => {
     model: b.model ?? null,
     model_provider: b.model_provider ?? inferProvider(b.model),
     summary: b.summary ?? null,
-    issues: b.issues ?? null,
-    fixes: b.fixes ?? null,
+    issues: finalIssues,
+    fixes: finalFixes,
     prompt_preview: trim(b.prompt_preview),
     response_preview: trim(b.response_preview),
     request_meta: b.request_meta ?? {},
-    response_meta: b.response_meta ?? {},
+    response_meta: { ...(b.response_meta ?? {}), ...(autoExtracted ? { issues_fixes_auto_extracted: true } : {}) },
     author: b.author ?? userEmail ?? (isService ? 'service' : 'operator'),
     source: b.source ?? (isService ? 'awip_api' : 'manual'),
   }).select('id, task_id').single();
