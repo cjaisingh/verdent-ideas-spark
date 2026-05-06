@@ -63,11 +63,26 @@ const ControlPlane = () => {
   const [paused, setPaused] = useState(false);
   const lastSeen = useRef<string | null>(null);
   const [tgSending, setTgSending] = useState(false);
+  const [chatIds, setChatIds] = useState<number[]>([]);
+  const [selectedChatId, setSelectedChatId] = useState<string>("");
+
+  const loadChatIds = async () => {
+    const { data } = await supabase
+      .from("operator_messages")
+      .select("chat_id")
+      .eq("direction", "inbound")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    const unique = Array.from(new Set((data ?? []).map((r) => Number(r.chat_id))));
+    setChatIds(unique);
+    if (unique.length && !selectedChatId) setSelectedChatId(String(unique[0]));
+  };
 
   const sendTelegramTest = async () => {
     setTgSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("telegram-test", { body: {} });
+      const body = selectedChatId ? { chat_id: Number(selectedChatId) } : {};
+      const { data, error } = await supabase.functions.invoke("telegram-test", { body });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({ title: "Telegram ping sent", description: `chat_id ${(data as any).chat_id}` });
@@ -126,10 +141,12 @@ const ControlPlane = () => {
   useEffect(() => {
     loadDemand();
     pollEvents();
+    loadChatIds();
     if (paused) return;
     const id = setInterval(() => {
       pollEvents();
       loadDemand();
+      loadChatIds();
     }, 5000);
     return () => clearInterval(id);
   }, [paused]);
@@ -184,8 +201,25 @@ const ControlPlane = () => {
             Read-only view of the AWIP contract. Auto-refresh every 5s.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={sendTelegramTest} disabled={tgSending}>
+        <div className="flex gap-2 items-center">
+          <Select value={selectedChatId} onValueChange={setSelectedChatId}>
+            <SelectTrigger className="w-44 h-9 text-xs">
+              <SelectValue placeholder={chatIds.length ? "Pick chat" : "No chats yet"} />
+            </SelectTrigger>
+            <SelectContent>
+              {chatIds.map((id) => (
+                <SelectItem key={id} value={String(id)} className="font-mono text-xs">
+                  {id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={sendTelegramTest}
+            disabled={tgSending || !selectedChatId}
+          >
             {tgSending ? "Sending…" : "Send Telegram test"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => setPaused((p) => !p)}>
