@@ -165,6 +165,13 @@ Deno.serve(async (req) => {
   const duration_ms = b.duration_ms ?? (new Date(endedAt).getTime() - new Date(startedAt).getTime());
   const tokens_total = b.tokens_total ?? (((b.tokens_in ?? 0) + (b.tokens_out ?? 0)) || null);
 
+  // Auto-extract issues/fixes from AI turn output if operator/agent didn't provide them.
+  const sourceText = [b.response_preview, b.summary].filter(Boolean).join('\n\n');
+  const extracted = extractIssuesAndFixes(sourceText);
+  const finalIssues = b.issues ?? extracted.issues;
+  const finalFixes = b.fixes ?? extracted.fixes;
+  const autoExtracted = (!b.issues && extracted.issues) || (!b.fixes && extracted.fixes);
+
   const { data, error } = await admin.from('roadmap_work_log').insert({
     task_id: taskId,
     started_at: startedAt,
@@ -176,12 +183,12 @@ Deno.serve(async (req) => {
     model: b.model ?? null,
     model_provider: b.model_provider ?? inferProvider(b.model),
     summary: b.summary ?? null,
-    issues: b.issues ?? null,
-    fixes: b.fixes ?? null,
+    issues: finalIssues,
+    fixes: finalFixes,
     prompt_preview: trim(b.prompt_preview),
     response_preview: trim(b.response_preview),
     request_meta: b.request_meta ?? {},
-    response_meta: b.response_meta ?? {},
+    response_meta: { ...(b.response_meta ?? {}), ...(autoExtracted ? { issues_fixes_auto_extracted: true } : {}) },
     author: b.author ?? userEmail ?? (isService ? 'service' : 'operator'),
     source: b.source ?? (isService ? 'awip_api' : 'manual'),
   }).select('id, task_id').single();
