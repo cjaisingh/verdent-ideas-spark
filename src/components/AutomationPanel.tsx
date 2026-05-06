@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-type Finding = { id: string; created_at: string; severity: string; category: string | null; title: string; acknowledged: boolean };
+type Finding = {
+  id: string; created_at: string; severity: string; category: string | null;
+  title: string; acknowledged: boolean; body: string | null; area: string | null;
+  reviewer_model: string | null; diff_window_start: string | null; diff_window_end: string | null;
+};
 type TestRun = { id: string; created_at: string; suite: string; status: string; passed: number | null; failed: number | null; total: number | null; workflow_run_url: string | null };
 type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null; kind?: string | null; probe?: string | null };
 type AutoRun = { id: string; created_at: string; job: string; trigger: string; status: string; status_code: number | null; duration_ms: number | null; message: string | null };
@@ -60,11 +64,46 @@ export const AutomationPanel = () => {
   const [qaState, setQaState] = useState<RunState>("idle");
   const [reviewMsg, setReviewMsg] = useState<string | null>(null);
   const [qaMsg, setQaMsg] = useState<string | null>(null);
+  const [expandedFindings, setExpandedFindings] = useState<Set<string>>(new Set());
+
+  const toggleFinding = (id: string) => {
+    setExpandedFindings((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const ackFinding = async (id: string, value: boolean) => {
+    const { error } = await supabase.from("roadmap_review_findings" as any)
+      .update({ acknowledged: value }).eq("id", id);
+    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+  };
+
+  // Render a body with simple file:line refs detected — turn `path/to/file.ts:42`
+  // into a subtle highlight so the eye finds it. We don't link out (no editor URL).
+  const renderBody = (body: string) => {
+    const re = /([\w./@\-]+\.(?:tsx?|jsx?|css|sql|json|md|ya?ml))(?::(\d+))?/g;
+    const parts: Array<string | { file: string; line?: string }> = [];
+    let last = 0;
+    for (const m of body.matchAll(re)) {
+      const idx = m.index ?? 0;
+      if (idx > last) parts.push(body.slice(last, idx));
+      parts.push({ file: m[1], line: m[2] });
+      last = idx + m[0].length;
+    }
+    if (last < body.length) parts.push(body.slice(last));
+    return parts.map((p, i) =>
+      typeof p === "string"
+        ? <span key={i}>{p}</span>
+        : <code key={i} className="px-1 py-0.5 mx-0.5 rounded bg-muted text-foreground font-mono text-[11px]">{p.file}{p.line ? `:${p.line}` : ""}</code>
+    );
+  };
 
   const load = async () => {
     const [f, r, q, a] = await Promise.all([
-      supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged")
-        .order("created_at", { ascending: false }).limit(5),
+      supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged, body, area, reviewer_model, diff_window_start, diff_window_end")
+        .order("created_at", { ascending: false }).limit(8),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
       supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note, kind, probe")
@@ -185,17 +224,55 @@ export const AutomationPanel = () => {
         {findings.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
         ) : (
-          <ul className="divide-y divide-border">
-            {findings.map((f) => (
-              <li key={f.id} className="py-1.5 space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${sevTone(f.severity)}`}>{f.severity}</span>
-                  {f.category && <span className="text-[10px] text-muted-foreground font-mono">{f.category}</span>}
-                  <span className="text-[10px] text-muted-foreground ml-auto">{ago(f.created_at)}</span>
-                </div>
-                <div className="text-xs leading-snug">{f.title}</div>
-              </li>
-            ))}
+          <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+            {findings.map((f) => {
+              const open = expandedFindings.has(f.id);
+              return (
+                <li key={f.id} className={`py-1.5 ${f.acknowledged ? "opacity-60" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleFinding(f.id)}
+                    className="w-full text-left space-y-0.5 group"
+                    aria-expanded={open}
+                  >
+                    <div className="flex items-center gap-2">
+                      {open ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${sevTone(f.severity)}`}>{f.severity}</span>
+                      {f.category && <span className="text-[10px] text-muted-foreground font-mono">{f.category}</span>}
+                      {f.area && <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[40%]" title={f.area}>· {f.area}</span>}
+                      {f.acknowledged && <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-label="acknowledged" />}
+                      <span className="text-[10px] text-muted-foreground ml-auto">{ago(f.created_at)}</span>
+                    </div>
+                    <div className="text-xs leading-snug pl-5 group-hover:text-foreground">{f.title}</div>
+                  </button>
+                  {open && (
+                    <div className="mt-2 ml-5 rounded border border-border bg-muted/30 p-2 space-y-2">
+                      {f.body ? (
+                        <div className="text-[12px] leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
+                          {renderBody(f.body)}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-muted-foreground italic">No additional context provided by reviewer.</div>
+                      )}
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground font-mono pt-1 border-t border-border/60">
+                        <span>{f.reviewer_model ?? "unknown model"}</span>
+                        {f.diff_window_start && f.diff_window_end && (
+                          <span title={`window: ${f.diff_window_start} → ${f.diff_window_end}`}>
+                            window {ago(f.diff_window_start)} → {ago(f.diff_window_end)}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); ackFinding(f.id, !f.acknowledged); }}
+                          className="ml-auto px-2 py-0.5 rounded border border-border hover:bg-muted hover:text-foreground"
+                        >
+                          {f.acknowledged ? "Unacknowledge" : "Acknowledge"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
