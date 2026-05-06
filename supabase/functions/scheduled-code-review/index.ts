@@ -41,6 +41,9 @@ Deno.serve(async (req) => {
         });
       } catch (e) { console.error("automation_runs insert failed", e); }
     };
+    const maybeAlert = async (reason: string, message: string, payload: Record<string, unknown> = {}) => {
+      await dispatchAlert(sbLog, "scheduled-code-review", reason, message, payload);
+    };
 
     if (!triggeredByCron && !auth.startsWith("Bearer ")) {
       await recordRun("error", 401, !SERVICE_TOKEN
