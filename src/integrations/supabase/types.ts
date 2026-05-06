@@ -550,6 +550,42 @@ export type Database = {
         }
         Relationships: []
       }
+      roadmap_autolog_skips: {
+        Row: {
+          author: string | null
+          created_at: string
+          id: string
+          model: string | null
+          reason: string
+          request_meta: Json
+          source: string
+          summary: string | null
+          task_id: string | null
+        }
+        Insert: {
+          author?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          reason: string
+          request_meta?: Json
+          source: string
+          summary?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          author?: string | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          reason?: string
+          request_meta?: Json
+          source?: string
+          summary?: string | null
+          task_id?: string | null
+        }
+        Relationships: []
+      }
       roadmap_comments: {
         Row: {
           author: string

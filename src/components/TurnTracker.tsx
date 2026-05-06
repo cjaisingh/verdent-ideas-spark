@@ -107,12 +107,25 @@ export const TurnTracker = ({ nextUpTaskId }: { nextUpTaskId: string | null }) =
       enabled: true, capture_tokens: true, capture_duration: true, capture_model: true,
       capture_response: true, capture_response_meta: true, extract_issues_fixes: true,
     };
+    const recordSkip = async (reason: string) => {
+      const { data: u2 } = await supabase.auth.getUser();
+      await supabase.from("roadmap_autolog_skips" as any).insert({
+        source: "lovable_agent",
+        reason,
+        task_id: nextUpTaskId ?? null,
+        author: u2.user?.email ?? "operator",
+        model: parsed.model ?? null,
+        summary: (parsed.text ?? "").slice(0, 500) || null,
+      });
+    };
     if (!s.enabled) {
+      await recordSkip("autolog_disabled");
       toast({ title: "Auto-log disabled", description: "Enable it in Auto-log settings to record this turn." });
       reset();
       return;
     }
     if (s.source_lovable_agent === false) {
+      await recordSkip("source_disabled:lovable_agent");
       toast({ title: "Source disabled", description: "Lovable agent source is turned off in Auto-log settings." });
       reset();
       return;
