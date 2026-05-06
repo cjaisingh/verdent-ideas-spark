@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink } from "lucide-react";
+import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type Finding = { id: string; created_at: string; severity: string; category: string | null; title: string; acknowledged: boolean };
 type TestRun = { id: string; created_at: string; suite: string; status: string; passed: number | null; failed: number | null; total: number | null; workflow_run_url: string | null };
 type QaCheck = { id: string; phase_key: string; criterion: string; status: string; last_checked_at: string | null; note: string | null };
+type AutoRun = { id: string; created_at: string; job: string; trigger: string; status: string; status_code: number | null; duration_ms: number | null; message: string | null };
 
 const ago = (iso: string | null) => {
   if (!iso) return "never";
@@ -53,6 +54,7 @@ export const AutomationPanel = () => {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [runs, setRuns] = useState<TestRun[]>([]);
   const [qa, setQa] = useState<QaCheck[]>([]);
+  const [autoRuns, setAutoRuns] = useState<AutoRun[]>([]);
 
   const [reviewState, setReviewState] = useState<RunState>("idle");
   const [qaState, setQaState] = useState<RunState>("idle");
@@ -60,17 +62,20 @@ export const AutomationPanel = () => {
   const [qaMsg, setQaMsg] = useState<string | null>(null);
 
   const load = async () => {
-    const [f, r, q] = await Promise.all([
+    const [f, r, q, a] = await Promise.all([
       supabase.from("roadmap_review_findings" as any).select("id, created_at, severity, category, title, acknowledged")
         .order("created_at", { ascending: false }).limit(5),
       supabase.from("test_runs" as any).select("id, created_at, suite, status, passed, failed, total, workflow_run_url")
         .order("created_at", { ascending: false }).limit(4),
       supabase.from("qa_checks" as any).select("id, phase_key, criterion, status, last_checked_at, note")
         .order("phase_key").order("criterion"),
+      supabase.from("automation_runs" as any).select("id, created_at, job, trigger, status, status_code, duration_ms, message")
+        .order("created_at", { ascending: false }).limit(40),
     ]);
     setFindings(((f.data ?? []) as unknown) as Finding[]);
     setRuns(((r.data ?? []) as unknown) as TestRun[]);
     setQa(((q.data ?? []) as unknown) as QaCheck[]);
+    setAutoRuns(((a.data ?? []) as unknown) as AutoRun[]);
   };
 
   useEffect(() => {
@@ -80,9 +85,12 @@ export const AutomationPanel = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_review_findings" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "test_runs" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "qa_checks" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "automation_runs" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, []);
+
+  const lastRunFor = (job: string) => autoRuns.find((r) => r.job === job) ?? null;
 
   const runReview = async () => {
     setReviewState("running");
@@ -133,6 +141,33 @@ export const AutomationPanel = () => {
   }, {});
 
   const lastRunAt = runs[0]?.created_at ?? null;
+  const lastReview = lastRunFor("scheduled-code-review");
+  const lastQa = lastRunFor("qa-validate");
+  const lastTestPost = lastRunFor("record-test-run");
+
+  const LastRun = ({ run, emptyHint }: { run: AutoRun | null; emptyHint: string }) => {
+    if (!run) return <div className="text-[10px] text-muted-foreground italic">{emptyHint}</div>;
+    const isErr = run.status === "error";
+    const isPartial = run.status === "partial";
+    const Icon = isErr ? AlertTriangle : CheckCircle2;
+    const tone = isErr
+      ? "border-destructive/40 bg-destructive/5 text-destructive"
+      : isPartial
+      ? "border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+      : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400";
+    return (
+      <div className={`text-[11px] rounded border px-2 py-1.5 ${tone} space-y-0.5`}>
+        <div className="flex items-center gap-1.5 font-mono text-[10px]">
+          <Icon className="h-3 w-3 shrink-0" />
+          <span className="uppercase">{run.status}</span>
+          {run.status_code != null && <span>· {run.status_code}</span>}
+          <span>· {run.trigger}</span>
+          <span className="ml-auto opacity-70">{ago(run.created_at)}</span>
+        </div>
+        {run.message && <div className="leading-snug break-words" title={run.message}>{run.message}</div>}
+      </div>
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -146,6 +181,7 @@ export const AutomationPanel = () => {
           <span>openai/gpt-5 · weekly Mon 06:00 UTC</span>
           {reviewMsg && <span className={statusTone(reviewState === "error" ? "fail" : "pass")}>{reviewMsg}</span>}
         </div>
+        <LastRun run={lastReview} emptyHint="No runs recorded yet — click Run now to test." />
         {findings.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">No findings yet.</div>
         ) : (
@@ -182,6 +218,7 @@ export const AutomationPanel = () => {
           <span>nightly 02:00 UTC via GitHub Actions</span>
           {lastRunAt && <span>last: {ago(lastRunAt)}</span>}
         </div>
+        <LastRun run={lastTestPost} emptyHint="No nightly POSTs received — once GitHub Actions runs, the latest call (incl. 401s) appears here." />
         {runs.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2">No runs recorded yet — first nightly will appear here.</div>
         ) : (
@@ -209,6 +246,7 @@ export const AutomationPanel = () => {
           <span>weekly Fri 16:00 UTC</span>
           {qaMsg && <span className={statusTone(qaState === "error" ? "fail" : "pass")}>{qaMsg}</span>}
         </div>
+        <LastRun run={lastQa} emptyHint="No probe runs recorded yet — click Run probes to test." />
         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
           {Object.entries(phaseGroups).map(([phase, items]) => (
             <div key={phase}>

@@ -146,6 +146,42 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_runs: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          id: string
+          job: string
+          message: string | null
+          status: string
+          status_code: number | null
+          trigger: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          job: string
+          message?: string | null
+          status: string
+          status_code?: number | null
+          trigger?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          job?: string
+          message?: string | null
+          status?: string
+          status_code?: number | null
+          trigger?: string
+        }
+        Relationships: []
+      }
       capabilities: {
         Row: {
           created_at: string

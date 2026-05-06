@@ -37,18 +37,37 @@ const PROBES: Record<string, Probe> = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN")!;
+  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
   const provided = req.headers.get("x-service-token");
-  if (provided !== SERVICE_TOKEN) {
-    const auth = req.headers.get("authorization") ?? "";
-    if (!auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
+  const auth = req.headers.get("authorization") ?? "";
+  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+  const trigger = triggeredByCron ? "cron" : "manual";
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const startedAt = Date.now();
+  const recordRun = async (status: string, status_code: number, message: string, detail: Record<string, unknown> = {}) => {
+    try {
+      await sb.from("automation_runs").insert({
+        job: "qa-validate", trigger, status, status_code,
+        duration_ms: Date.now() - startedAt, message, detail,
+      });
+    } catch (e) { console.error("automation_runs insert failed", e); }
+  };
+
+  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
+    await recordRun("error", 401, !SERVICE_TOKEN
+      ? "AWIP_SERVICE_TOKEN secret is missing in Lovable Cloud — cron cannot authenticate."
+      : "Missing service token and no Authorization header.");
+    return json({ error: "unauthorized" }, 401);
   }
 
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: checks, error } = await sb.from("qa_checks").select("id, kind, probe");
-  if (error) return json({ error: error.message }, 500);
+  if (error) {
+    await recordRun("error", 500, `qa_checks query failed: ${error.message}`);
+    return json({ error: error.message }, 500);
+  }
 
   let updated = 0;
+  const failures: string[] = [];
   for (const c of checks ?? []) {
     if (c.kind !== "probe" || !c.probe) continue;
     const probe = PROBES[c.probe];
@@ -61,10 +80,15 @@ Deno.serve(async (req) => {
       updated++;
     } catch (e) {
       console.error("probe error", c.probe, e);
+      failures.push(`${c.probe}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  return json({ ok: true, probes_run: updated });
+  const totalChecks = (checks ?? []).length;
+  await recordRun(failures.length ? "partial" : "ok", failures.length ? 207 : 200,
+    `${updated} probes updated${failures.length ? ` · ${failures.length} failed` : ""}`,
+    { probes_run: updated, total_checks: totalChecks, failures });
+  return json({ ok: true, probes_run: updated, checked: updated, count: updated });
 });
 
 function json(p: unknown, s = 200) {
