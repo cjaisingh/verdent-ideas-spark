@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const navCls = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-1.5 rounded-md text-sm ${
@@ -13,6 +15,33 @@ const OperatorLayout = () => {
     await supabase.auth.signOut();
     navigate("/auth");
   };
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("approval_queue_decisions")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "approval_queue" },
+        (payload) => {
+          const next = payload.new as { id: string; status: string; activity?: string; decided_by?: string };
+          const prev = payload.old as { status: string };
+          if (prev?.status === next?.status) return;
+          if (next.status === "approved") {
+            toast.success(`Approval approved`, {
+              description: `${next.activity ?? "request"} • by ${next.decided_by ?? "operator"} • ${next.id.slice(0, 8)}`,
+            });
+          } else if (next.status === "rejected") {
+            toast.error(`Approval rejected`, {
+              description: `${next.activity ?? "request"} • by ${next.decided_by ?? "operator"} • ${next.id.slice(0, 8)}`,
+            });
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
