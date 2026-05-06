@@ -319,7 +319,7 @@ async function ingestOkrTree(req: Request, actor: string) {
   }
 
   const response = { ok: true, tenant_id: tenant!.id, created, warnings };
-  await storeIdempotency("okr_ingest", idemKey, tenant!.id, response);
+  await storeIdempotency("okr_ingest", idemKey, tenant!.id, response, bodyHash);
   return json(response);
 }
 
