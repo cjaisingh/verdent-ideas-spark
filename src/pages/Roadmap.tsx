@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { InlineEdit } from "@/components/InlineEdit";
+import { TurnTracker } from "@/components/TurnTracker";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -275,16 +276,19 @@ const Roadmap = () => {
             View master plan <ExternalLink className="h-3 w-3" />
           </Link>
         </div>
-        {nextUp && (
-          <button
-            onClick={() => setSelectedTaskId(nextUp.task.id)}
-            className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-3 py-2 transition"
-          >
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Next up</div>
-            <div className="text-sm font-medium">{nextUp.task.title}</div>
-            <div className="text-xs text-muted-foreground font-mono">{nextUp.phase.key} · {nextUp.sprint.key}</div>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
+          {nextUp && (
+            <button
+              onClick={() => setSelectedTaskId(nextUp.task.id)}
+              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-3 py-2 transition"
+            >
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Next up</div>
+              <div className="text-sm font-medium">{nextUp.task.title}</div>
+              <div className="text-xs text-muted-foreground font-mono">{nextUp.phase.key} · {nextUp.sprint.key}</div>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
