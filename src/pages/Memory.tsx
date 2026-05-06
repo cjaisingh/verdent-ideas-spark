@@ -103,6 +103,21 @@ export default function Memory() {
     loadStats();
   };
 
+  const purgeAll = async (table: string) => {
+    const row = stats.find((s) => s.table_name === table);
+    const count = row?.row_count ?? 0;
+    if (!window.confirm(`Delete ALL ${count.toLocaleString()} rows from ${table}? This cannot be undone.`)) return;
+    setPurging(`all:${table}`);
+    const { data, error } = await supabase.rpc("purge_all_rows" as any, { _table: table });
+    setPurging(null);
+    if (error) {
+      toast({ title: "Purge failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Deleted ${Number(data ?? 0).toLocaleString()} row(s) from ${table}` });
+    loadStats();
+  };
+
   // ---- Autolog
   const [autolog, setAutolog] = useState<AutoLog | null>(null);
 
@@ -262,7 +277,7 @@ export default function Memory() {
                   <th className="px-3 py-2 font-medium text-right">Rows</th>
                   <th className="px-3 py-2 font-medium">Oldest</th>
                   <th className="px-3 py-2 font-medium text-right">Retention (days)</th>
-                  <th className="px-3 py-2 w-24" />
+                  <th className="px-3 py-2 w-44" />
                 </tr>
               </thead>
               <tbody>
@@ -284,14 +299,27 @@ export default function Memory() {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={purging === r.table_name || r.retention_days === 0}
-                        onClick={() => purge(r.table_name)}
-                      >
-                        {purging === r.table_name ? "…" : "Purge"}
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={purging?.startsWith("all:") || purging === r.table_name || r.retention_days === 0}
+                          onClick={() => purge(r.table_name)}
+                          title="Delete rows older than the retention window"
+                        >
+                          {purging === r.table_name ? "…" : "Purge"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          disabled={!!purging || r.row_count === 0}
+                          onClick={() => purgeAll(r.table_name)}
+                          title="Delete every row in this table"
+                        >
+                          {purging === `all:${r.table_name}` ? "…" : "Delete all"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
