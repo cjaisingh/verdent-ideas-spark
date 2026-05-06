@@ -307,8 +307,91 @@ export default function Memory() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Audit log */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <History className="h-4 w-4" /> Memory audit log
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={loadAudit} disabled={loadingAudit}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${loadingAudit ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-3">
+            Every change to retention windows, auto-log capture toggles, and agent memory files. Newest first, last 100 entries.
+          </p>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/40 text-left">
+                <tr>
+                  <th className="px-3 py-2 font-medium">When</th>
+                  <th className="px-3 py-2 font-medium">Scope</th>
+                  <th className="px-3 py-2 font-medium">Entry</th>
+                  <th className="px-3 py-2 font-medium">Action</th>
+                  <th className="px-3 py-2 font-medium">Change</th>
+                  <th className="px-3 py-2 font-medium">Actor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.map((r) => (
+                  <tr key={r.id} className="border-t border-border align-top">
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2"><Badge variant="outline" className="text-[10px]">{r.scope}</Badge></td>
+                    <td className="px-3 py-2 font-mono">{r.entry_key}</td>
+                    <td className="px-3 py-2">
+                      <Badge
+                        variant={r.action === "removed" ? "destructive" : r.action === "added" ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {r.action}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground max-w-md">
+                      {r.action === "updated" ? (
+                        <span>
+                          <span className="line-through">{fmtVal(r.old_value)}</span>
+                          {" → "}
+                          <span className="text-foreground">{fmtVal(r.new_value)}</span>
+                        </span>
+                      ) : r.action === "added" ? (
+                        <span className="text-foreground">{fmtVal(r.new_value)}</span>
+                      ) : (
+                        <span className="line-through">{fmtVal(r.old_value)}</span>
+                      )}
+                      {r.note ? <div className="text-muted-foreground italic mt-0.5">{r.note}</div> : null}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{r.actor ?? "—"}</td>
+                  </tr>
+                ))}
+                {audit.length === 0 && !loadingAudit && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">
+                      No audit entries yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
+}
+
+function fmtVal(v: any): string {
+  if (v == null) return "—";
+  if (typeof v === "object") {
+    const keys = Object.keys(v);
+    if (keys.length === 1) return String(v[keys[0]]);
+    return JSON.stringify(v);
+  }
+  return String(v);
 }
 
 function Row({
