@@ -66,7 +66,7 @@ Database changes go through migrations only — never edit `src/integrations/sup
 
 ## CI / nightly tests
 
-The nightly workflow (`.github/workflows/nightly.yml`) runs vitest unit + e2e suites at 02:00 UTC and posts a summary to the `record-test-run` edge function so results show up on `/roadmap`.
+The nightly workflow (`.github/workflows/nightly.yml`) runs vitest unit + e2e suites at 02:00 UTC and posts a summary to the `record-test-run` edge function so results show up on `/roadmap` (Automation card) and `/runbook`. See [docs/automation.md](docs/automation.md) for the full pipeline.
 
 That POST is authenticated with the same `AWIP_SERVICE_TOKEN` used by the API. Until the token is configured as a GitHub Actions secret, the workflow will run but the report step will fail with `401 unauthorized`.
 
