@@ -547,6 +547,39 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
+                                    {/* Activity timeline */}
+                                    {(() => {
+                                      const acts = activityByTask.get(task.id) ?? [];
+                                      if (acts.length === 0) return null;
+                                      const trunc = (v: string | null) => {
+                                        if (!v) return <span className="italic text-muted-foreground">empty</span>;
+                                        const s = v.length > 60 ? v.slice(0, 60) + "…" : v;
+                                        return <span className="font-mono">"{s}"</span>;
+                                      };
+                                      return (
+                                        <div className="space-y-1.5 border-t border-border pt-2">
+                                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Activity</div>
+                                          <div className="space-y-1 max-h-48 overflow-auto">
+                                            {acts.map((a) => (
+                                              <div key={a.id} className="text-[11px] flex gap-2 items-start">
+                                                <span className="font-mono text-muted-foreground tabular-nums shrink-0">
+                                                  {new Date(a.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                                </span>
+                                                <span className="text-muted-foreground">{a.author_label ?? "system"}</span>
+                                                <span className="flex-1">
+                                                  {a.field === "status" ? (
+                                                    <>changed <span className="font-semibold">status</span> from <span className="font-mono">{a.old_value ?? "—"}</span> to <span className="font-mono">{a.new_value ?? "—"}</span></>
+                                                  ) : (
+                                                    <>edited <span className="font-semibold">{a.field}</span>: {trunc(a.old_value)} → {trunc(a.new_value)}</>
+                                                  )}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* Work log */}
                                     <div className="space-y-2 border-t border-border pt-2">
                                       <div className="flex items-center justify-between">
