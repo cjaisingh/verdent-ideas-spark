@@ -363,8 +363,14 @@ const ControlPlane = () => {
 {JSON.stringify(botError.detail, null, 2)}
               </pre>
             )}
-            <div className="text-[11px] text-muted-foreground font-mono">
-              at {new Date(botError.at).toLocaleTimeString()}
+            <div className="text-[11px] text-muted-foreground font-mono flex justify-between gap-2">
+              <span>at {new Date(botError.at).toLocaleTimeString()}</span>
+              {botNextRetryAt && !botLoading && (
+                <span>
+                  next retry in {Math.max(0, Math.ceil((botNextRetryAt - Date.now()) / 1000))}s
+                  {botFailCount.current > 1 ? ` (attempt ${botFailCount.current + 1})` : ""}
+                </span>
+              )}
             </div>
           </div>
         )}
