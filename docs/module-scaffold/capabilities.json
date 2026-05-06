@@ -1,0 +1,22 @@
+{
+  "module": "occupancy_module",
+  "capabilities": [
+    {
+      "id": "desk_utilisation_measurement",
+      "name": "Desk utilisation measurement",
+      "description": "Hourly occupancy per desk, aggregated to daily and peak-hour rollups.",
+      "status": "planned",
+      "version": "0.1.0",
+      "inputs_required": [{ "kind": "sensor_feed" }],
+      "outputs_provided": [{ "metric": "desk_occupancy_pct" }]
+    },
+    {
+      "id": "meeting_room_utilisation",
+      "name": "Meeting room utilisation",
+      "status": "planned",
+      "version": "0.1.0",
+      "inputs_required": [{ "kind": "calendar_feed" }, { "kind": "sensor_feed" }],
+      "outputs_provided": [{ "metric": "room_utilisation_pct" }]
+    }
+  ]
+}

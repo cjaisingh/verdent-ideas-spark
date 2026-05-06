@@ -1,0 +1,33 @@
+# {{MODULE_NAME}}
+
+Part of the **AWIP** constellation. Owned capabilities register with [AWIP Core](../awip-core) via `POST /capabilities/register`.
+
+## What this module does
+
+> _Replace this with one paragraph: what real-world signal or action does this module own?_
+
+## Capabilities owned
+
+See `capabilities.json`. Each entry is registered with Core on deploy via the `register` edge function.
+
+## Required secrets
+
+| Secret | Where to get it |
+|---|---|
+| `AWIP_SERVICE_TOKEN` | Same value as Core's `AWIP_SERVICE_TOKEN` |
+| `AWIP_CORE_URL` | Core's Supabase URL, e.g. `https://<core-ref>.supabase.co` |
+
+## Registering after deploy
+
+```bash
+curl -X POST "https://<this-project-ref>.supabase.co/functions/v1/register" \
+  -H "Authorization: Bearer <this-project-anon-key>"
+```
+
+## Calling Core
+
+```ts
+const r = await fetch(`${Deno.env.get("AWIP_CORE_URL")}/functions/v1/awip-api/capabilities`, {
+  headers: { "x-awip-service-token": Deno.env.get("AWIP_SERVICE_TOKEN")! },
+});
+```

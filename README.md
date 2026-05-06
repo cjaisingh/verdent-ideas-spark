@@ -7,6 +7,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Architecture overview](docs/architecture.md) — data model, event streams, how consumers read them
 - [API reference](docs/api.md) — every `/awip-api` endpoint with examples
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
+- [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
 - [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys
 - [Changelog](CHANGELOG.md) — major v1 milestones
