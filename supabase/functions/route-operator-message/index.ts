@@ -60,6 +60,10 @@ async function classify(text: string) {
   let tokens_in: number | null = null;
   let tokens_out: number | null = null;
   let result: { activity: string; summary: string; risk: 'low' | 'medium' | 'high'; payload: Record<string, unknown> } | null = null;
+  let finishReason: string | null = null;
+  let responsePreview: string | null = null;
+  let toolCallName: string | null = null;
+  let httpStatus: number | null = null;
   try {
     const res = await fetch(AI_URL, {
       method: 'POST',
@@ -78,6 +82,7 @@ async function classify(text: string) {
         tool_choice: { type: 'function', function: { name: 'classify_operator_intent' } },
       }),
     });
+    httpStatus = res.status;
     if (!res.ok) {
       const detail = await res.text();
       issues = `AI gateway ${res.status}: ${detail.slice(0, 500)}`;
@@ -88,7 +93,12 @@ async function classify(text: string) {
     const data = await res.json();
     tokens_in = data.usage?.prompt_tokens ?? null;
     tokens_out = data.usage?.completion_tokens ?? null;
+    finishReason = data.choices?.[0]?.finish_reason ?? null;
     const call = data.choices?.[0]?.message?.tool_calls?.[0];
+    toolCallName = call?.function?.name ?? null;
+    responsePreview = call?.function?.arguments
+      ?? data.choices?.[0]?.message?.content
+      ?? null;
     if (!call?.function?.arguments) {
       issues = 'No tool call returned';
       throw new Error('No tool call returned');
@@ -96,7 +106,6 @@ async function classify(text: string) {
     result = JSON.parse(call.function.arguments);
     return result!;
   } finally {
-    // Fire-and-forget auto work log.
     const endedAt = new Date();
     const summary = result
       ? `Classified operator message → ${result.activity} (risk=${result.risk})`
@@ -107,10 +116,23 @@ async function classify(text: string) {
       duration_ms: endedAt.getTime() - startedAt.getTime(),
       tokens_in, tokens_out,
       model,
+      model_provider: 'google',
       summary,
       issues,
       source: 'awip_api',
       author: 'route-operator-message',
+      prompt_preview: text,
+      response_preview: responsePreview,
+      request_meta: {
+        endpoint: AI_URL,
+        tool_choice: 'classify_operator_intent',
+        system: 'classify operator messages',
+      },
+      response_meta: {
+        http_status: httpStatus,
+        finish_reason: finishReason,
+        tool_call: toolCallName,
+      },
     }).catch((e) => console.error('autoLog failed', e));
   }
 }

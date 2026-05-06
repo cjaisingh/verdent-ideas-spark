@@ -25,7 +25,25 @@ const BodySchema = z.object({
   fixes: z.string().max(2000).optional(),
   author: z.string().max(100).optional(),
   source: z.enum(['manual', 'lovable_agent', 'ai_gateway', 'awip_api']).optional(),
+  model_provider: z.string().max(60).optional(),
+  prompt_preview: z.string().max(2000).optional(),
+  response_preview: z.string().max(2000).optional(),
+  request_meta: z.record(z.unknown()).optional(),
+  response_meta: z.record(z.unknown()).optional(),
 });
+
+const PREVIEW_LEN = 500;
+const trim = (s: string | undefined | null) =>
+  s ? (s.length > PREVIEW_LEN ? s.slice(0, PREVIEW_LEN) + '…' : s) : null;
+
+function inferProvider(model: string | undefined | null): string | null {
+  if (!model) return null;
+  if (model.includes('/')) return model.split('/')[0];
+  if (/^gpt|^o\d/.test(model)) return 'openai';
+  if (/^claude/.test(model)) return 'anthropic';
+  if (/^gemini/.test(model)) return 'google';
+  return null;
+}
 
 async function inferNextUpTaskId(supabase: ReturnType<typeof createClient>): Promise<string | null> {
   const { data: phases } = await supabase
@@ -114,9 +132,14 @@ Deno.serve(async (req) => {
     tokens_out: b.tokens_out ?? null,
     tokens_total,
     model: b.model ?? null,
+    model_provider: b.model_provider ?? inferProvider(b.model),
     summary: b.summary ?? null,
     issues: b.issues ?? null,
     fixes: b.fixes ?? null,
+    prompt_preview: trim(b.prompt_preview),
+    response_preview: trim(b.response_preview),
+    request_meta: b.request_meta ?? {},
+    response_meta: b.response_meta ?? {},
     author: b.author ?? userEmail ?? (isService ? 'service' : 'operator'),
     source: b.source ?? (isService ? 'awip_api' : 'manual'),
   }).select('id, task_id').single();
