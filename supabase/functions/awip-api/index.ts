@@ -7,6 +7,7 @@
 //   POST /okr/:id/supersede                -> supersede an OKR with a new node
 //   GET  /okr/tree?tenant_id=...           -> fetch full tree (incl. superseded)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { scanLesson, describeIssues } from "./lessonSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1347,6 +1348,14 @@ async function createLesson(req: Request, actor: string) {
   const lesson = (body.lesson ?? "").toString().trim();
   if (!lesson) return json({ error: "lesson required" }, 400);
   if (lesson.length > 500) return json({ error: "lesson too long (max 500)" }, 400);
+  const issues = scanLesson(lesson);
+  if (issues.length > 0) {
+    return json({
+      error: `lesson appears to contain sensitive data (${describeIssues(issues)}); remove it before saving`,
+      code: "lesson_unsafe",
+      issues: issues.map((i) => ({ kind: i.kind })),
+    }, 400);
+  }
   const scope = LESSON_SCOPES.includes(body.scope) ? body.scope : "global";
   const source = LESSON_SOURCES.includes(body.source) ? body.source : "manual";
   const { data, error } = await supabase.from("copilot_lessons").insert({
@@ -1360,7 +1369,17 @@ async function createLesson(req: Request, actor: string) {
 async function updateLesson(req: Request, id: string) {
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, unknown> = {};
-  if (typeof body.lesson === "string") patch.lesson = body.lesson;
+  if (typeof body.lesson === "string") {
+    const issues = scanLesson(body.lesson);
+    if (issues.length > 0) {
+      return json({
+        error: `lesson appears to contain sensitive data (${describeIssues(issues)}); remove it before saving`,
+        code: "lesson_unsafe",
+        issues: issues.map((i) => ({ kind: i.kind })),
+      }, 400);
+    }
+    patch.lesson = body.lesson;
+  }
   if (LESSON_SCOPES.includes(body.scope)) patch.scope = body.scope;
   if (typeof body.active === "boolean") patch.active = body.active;
   if (Object.keys(patch).length === 0) return json({ error: "nothing to update" }, 400);
