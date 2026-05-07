@@ -65,6 +65,9 @@ interface AuditEntry {
   result_count: number | null;
   duration_ms: number;
   error_code: string | null;
+  rejected: boolean;
+  rejection_reason: string | null;
+  requested: Record<string, unknown> | null;
 }
 function audit(e: AuditEntry) {
   // Single-line JSON keeps it easy to filter in the logs UI.
