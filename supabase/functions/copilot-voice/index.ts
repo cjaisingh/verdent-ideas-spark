@@ -318,6 +318,21 @@ async function dispatchTool(name: string, args: any, session: Session) {
       return callAwip(`/events/recent?limit=${args.limit ?? 50}`, "GET", jwt);
     case "get_okr_tree":
       return callAwip(`/okr/tree?tenant_id=${args.tenant_id}`, "GET", jwt);
+    case "list_notebook": {
+      const qs = new URLSearchParams();
+      if (args.kind) qs.set("kind", args.kind);
+      if (args.status) qs.set("status", args.status);
+      if (args.search) qs.set("search", args.search);
+      if (args.limit) qs.set("limit", String(args.limit));
+      const q = qs.toString();
+      return callAwip(`/notebook${q ? `?${q}` : ""}`, "GET", jwt);
+    }
+    case "add_notebook_entry":
+      return callAwip(`/notebook`, "POST", jwt, args);
+    case "update_notebook_entry": {
+      const { id, ...rest } = args;
+      return callAwip(`/notebook/${id}`, "PATCH", jwt, rest);
+    }
     default:
       return { status: 400, data: { error: `unknown tool ${name}` } };
   }
