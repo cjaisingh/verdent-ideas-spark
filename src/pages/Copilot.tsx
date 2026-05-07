@@ -212,6 +212,29 @@ export default function Copilot() {
     setAutoMuteReason(null);
   };
 
+  // Switch to a different Copilot agent. Persists the choice and announces the switch
+  // in the transcript. The new persona takes effect immediately for any subsequent
+  // turn (the audio session keeps running; we just changed metadata + voice ref).
+  const switchAgent = async (agentId: string, source: "manual" | "wake-word" = "manual") => {
+    const target = agents.find((a) => a.id === agentId);
+    if (!target) return;
+    setActiveAgentId(agentId);
+    const eff = effective(target);
+    ttsVoiceRef.current = eff.tts_voice;
+    append({
+      who: "system",
+      text: `→ switched to ${target.name}${source === "wake-word" ? " (wake word)" : ""}`,
+      ts: Date.now(),
+    });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("copilot_settings").upsert(
+        { user_id: user.id, active_agent_id: agentId },
+        { onConflict: "user_id" },
+      );
+    }
+  };
+
   const start = async () => {
     setConnecting(true);
     try {
