@@ -89,6 +89,32 @@ export default function Runbooks() {
     setDraft(r);
   };
 
+  const newFromTemplate = (t: RunbookTemplate) => {
+    setSelectedId(null);
+    setDraft({
+      ...blank(),
+      title: t.title,
+      slug: slugify(t.id),
+      summary: t.summary,
+      format: t.format,
+      body: t.body,
+      steps: t.steps.map((s) => ({ ...s })),
+      tags: [...t.tags],
+    });
+    toast.success(`Loaded template: ${t.title}`);
+  };
+
+  const insertTemplateSteps = (t: RunbookTemplate) => {
+    if (!draft) return;
+    const tags = Array.from(new Set([...(draft.tags ?? []), ...t.tags]));
+    setDraft({
+      ...draft,
+      steps: [...draft.steps, ...t.steps.map((s) => ({ ...s }))],
+      tags,
+    });
+    toast.success(`Inserted ${t.steps.length} steps from "${t.title}"`);
+  };
+
   const save = async () => {
     if (!draft) return;
     if (!draft.title.trim()) { toast.error("Title required"); return; }
