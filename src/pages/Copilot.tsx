@@ -102,11 +102,15 @@ export default function Copilot() {
 
   const stop = () => {
     try { wsRef.current?.close(); } catch {}
-    try { procRef.current?.disconnect(); } catch {}
+    try { workletRef.current?.disconnect(); } catch {}
+    try { workletRef.current?.port.close(); } catch {}
+    try { micSourceRef.current?.disconnect(); } catch {}
     try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
     try { micCtxRef.current?.close(); } catch {}
     try { playCtxRef.current?.close(); } catch {}
     wsRef.current = null;
+    workletRef.current = null;
+    micSourceRef.current = null;
     micCtxRef.current = null;
     playCtxRef.current = null;
     streamRef.current = null;
