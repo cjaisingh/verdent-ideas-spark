@@ -604,6 +604,26 @@ export default function Copilot() {
             <span className="text-xs text-muted-foreground tabular-nums">{micGain.toFixed(2)}×</span>
           </div>
           <Slider value={[micGain]} min={0} max={2} step={0.05} onValueChange={(v) => setMicGain(v[0])} />
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {[
+              { label: "Low", value: 0.7 },
+              { label: "Medium", value: 1.0 },
+              { label: "High", value: 1.5 },
+            ].map((p) => {
+              const active = Math.abs(micGain - p.value) < 0.03;
+              return (
+                <Button
+                  key={p.label}
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  className="h-9"
+                  onClick={() => setMicGain(p.value)}
+                >
+                  {p.label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="space-y-2">
