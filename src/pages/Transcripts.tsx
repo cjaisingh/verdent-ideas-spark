@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2 } from "lucide-react";
+import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { scanLesson, describeIssues } from "@/lib/lessonSafety";
 
 type Transcript = {
   id: string;
@@ -114,6 +115,15 @@ const Transcripts = () => {
   };
 
   const saveLesson = async (lesson: string) => {
+    const issues = scanLesson(lesson);
+    if (issues.length > 0) {
+      toast({
+        title: "Blocked: sensitive data detected",
+        description: `Remove ${describeIssues(issues)} before saving this lesson.`,
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       await callApi("/lessons", {
         method: "POST",
@@ -240,12 +250,26 @@ const Transcripts = () => {
                         <div>
                           <p className="text-xs font-medium uppercase text-muted-foreground mb-1">Suggested lessons</p>
                           <div className="space-y-2">
-                            {analysis.suggested_lessons.map((l, i) => (
-                              <div key={i} className="flex items-start justify-between gap-2 p-2 border rounded-md">
-                                <p className="text-sm flex-1">{l}</p>
-                                <Button size="sm" variant="outline" onClick={() => saveLesson(l)}>Save lesson</Button>
-                              </div>
-                            ))}
+                            {analysis.suggested_lessons.map((l, i) => {
+                              const issues = scanLesson(l);
+                              const unsafe = issues.length > 0;
+                              return (
+                                <div key={i} className={cn("flex items-start justify-between gap-2 p-2 border rounded-md", unsafe && "border-destructive/50 bg-destructive/5")}>
+                                  <div className="flex-1 space-y-1">
+                                    <p className="text-sm">{l}</p>
+                                    {unsafe && (
+                                      <p className="text-xs text-destructive flex items-center gap-1">
+                                        <ShieldAlert className="h-3 w-3" />
+                                        Blocked: contains {describeIssues(issues)}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Button size="sm" variant="outline" disabled={unsafe} onClick={() => saveLesson(l)}>
+                                    {unsafe ? "Unsafe" : "Save lesson"}
+                                  </Button>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
