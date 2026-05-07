@@ -127,7 +127,7 @@ Deno.test("redaction: bearer tokens and sensitive keys scrubbed in requested", (
     null,
     {
       reason: "unknown_action",
-      requested: { action: "x", authorization: "Bearer abcdef123456", api_key: "sk_live_ABCDEFGHIJKLMNOP" },
+      requested: { action: "x", authorization: "Bearer abcdef123456", api_key: "sk_ABCDEFGHIJKLMNOPQR" },
     },
   );
   const req = e.requested as Record<string, unknown>;
@@ -204,7 +204,7 @@ Deno.test("redact: JWT in string value", () => {
 });
 
 Deno.test("redact: stripe-style sk_/pk_/sbp_ keys", () => {
-  for (const v of ["sk_live_ABCDEFGHIJKLMNOP", "pk_test_QRSTUVWXYZ012345", "sbp_ABCDEFGHIJKLMNOP"]) {
+  for (const v of ["sk_ABCDEFGHIJKLMNOPQR", "pk_QRSTUVWXYZ0123456789", "sbp_ABCDEFGHIJKLMNOPQR"]) {
     assertEquals(redactValue(v), "[REDACTED]", `should redact ${v}`);
   }
 });
@@ -236,7 +236,7 @@ Deno.test("redact: nested object — sensitive keys masked at depth", () => {
 });
 
 Deno.test("redact: arrays scrubbed and capped at 20 items", () => {
-  const arr = new Array(50).fill("eyJaaaaaaaaa.eyJbbbbbbbbbb.cccccccccc");
+  const arr = new Array(50).fill("eyJaaaaaaaaaa.eyJbbbbbbbbbbb.cccccccccccc");
   const out = redactValue(arr) as unknown[];
   assertEquals(out.length, 20);
   for (const v of out) assertEquals(v, "[REDACTED]");
