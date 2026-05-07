@@ -18,6 +18,7 @@ const groups = [
       { url: "/api-logs", title: "API logs", icon: ScrollText },
       { url: "/control-plane", title: "Control plane", icon: Settings2 },
       { url: "/copilot", title: "Copilot", icon: Mic },
+      { url: "/copilot/agents", title: "Copilot agents", icon: Mic },
     ],
   },
   {
