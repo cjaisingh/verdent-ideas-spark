@@ -56,6 +56,7 @@ export default function Copilot() {
   const [outVolume, setOutVolume] = useState(1.0);
   const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [autoMuteReason, setAutoMuteReason] = useState<string | null>(null);
 
   // Voice/STT settings (persisted)
   const [sttModel, setSttModel] = useState("nova-3");
@@ -98,6 +99,76 @@ export default function Copilot() {
     if (outGainRef.current) outGainRef.current.gain.value = outVolume;
   }, [outVolume]);
 
+  // ---- Auto-mute on lost audio focus / call interruption ----
+  // Respects the user's manual mute: if they muted themselves, we never auto-unmute.
+  const userMutedRef = useRef(muted);
+  useEffect(() => {
+    if (!autoMuteReason) userMutedRef.current = muted;
+  }, [muted, autoMuteReason]);
+
+  const applyAutoMute = (reason: string) => {
+    setAutoMuteReason((prev) => prev ?? reason);
+    setMuted(true);
+    toast.warning(`Copilot auto-muted: ${reason}`);
+  };
+  const clearAutoMute = () => {
+    setAutoMuteReason((prev) => {
+      if (!prev) return null;
+      setMuted(userMutedRef.current);
+      toast.info("Copilot mic restored");
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    if (!active) return;
+    const onVisibility = () => {
+      if (document.hidden) applyAutoMute("tab hidden");
+      else if (autoMuteReason === "tab hidden") clearAutoMute();
+    };
+    const onBlur = () => applyAutoMute("window lost focus");
+    const onFocus = () => {
+      if (autoMuteReason === "window lost focus") clearAutoMute();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
+    const micCtx = micCtxRef.current;
+    const playCtx = playCtxRef.current;
+    const onCtxState = () => {
+      const s = micCtx?.state as string | undefined;
+      if (s === "suspended" || s === "interrupted") {
+        applyAutoMute("audio focus lost (call?)");
+      } else if (s === "running" && autoMuteReason === "audio focus lost (call?)") {
+        clearAutoMute();
+      }
+    };
+    micCtx?.addEventListener("statechange", onCtxState);
+    playCtx?.addEventListener("statechange", onCtxState);
+
+    const track = streamRef.current?.getAudioTracks()[0];
+    const onTrackEnded = () => applyAutoMute("microphone released");
+    const onTrackMute = () => applyAutoMute("microphone muted by system");
+    const onTrackUnmute = () => {
+      if (autoMuteReason === "microphone muted by system") clearAutoMute();
+    };
+    track?.addEventListener("ended", onTrackEnded);
+    track?.addEventListener("mute", onTrackMute);
+    track?.addEventListener("unmute", onTrackUnmute);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      micCtx?.removeEventListener("statechange", onCtxState);
+      playCtx?.removeEventListener("statechange", onCtxState);
+      track?.removeEventListener("ended", onTrackEnded);
+      track?.removeEventListener("mute", onTrackMute);
+      track?.removeEventListener("unmute", onTrackUnmute);
+    };
+  }, [active, autoMuteReason]);
+
   const append = (line: LogLine) => setLog((l) => [...l.slice(-40), line]);
 
   const stop = () => {
@@ -120,6 +191,7 @@ export default function Copilot() {
     setAgentState("idle");
     setMicLevel(0);
     setPttHeld(false);
+    setAutoMuteReason(null);
   };
 
   const start = async () => {
@@ -425,8 +497,18 @@ export default function Copilot() {
           )}
         </div>
 
-        <div className="text-sm font-medium uppercase tracking-wide">
-          {connecting ? "Connecting…" : !active ? "Idle" : muted ? "Muted" : pttMode && !pttHeld ? "Push to talk" : agentState}
+        <div className="text-sm font-medium uppercase tracking-wide text-center">
+          {connecting
+            ? "Connecting…"
+            : !active
+            ? "Idle"
+            : autoMuteReason
+            ? `Auto-muted · ${autoMuteReason}`
+            : muted
+            ? "Muted"
+            : pttMode && !pttHeld
+            ? "Push to talk"
+            : agentState}
         </div>
 
         {/* Mic level meter */}
@@ -466,7 +548,10 @@ export default function Copilot() {
             <Button size="lg" onClick={start} disabled={connecting}>Start session</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setMuted((m) => !m)}>
+              <Button variant="outline" onClick={() => {
+                setAutoMuteReason(null);
+                setMuted((m) => !m);
+              }}>
                 {muted ? "Unmute" : "Mute"}
               </Button>
               <Button size="lg" variant="destructive" onClick={stop}>End session</Button>
