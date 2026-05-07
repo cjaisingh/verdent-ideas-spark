@@ -78,6 +78,18 @@ Deno.serve(async (req) => {
       if (error) return json(500, { error: error.message });
       return json(200, { data });
     }
+    case "list_all_columns": {
+      const { data, error } = await svc.rpc("db_list_all_columns");
+      if (error) return json(500, { error: error.message });
+      return json(200, { data });
+    }
+    case "refresh_counts": {
+      const { error: aErr } = await svc.rpc("db_analyze_public");
+      if (aErr) return json(500, { error: aErr.message });
+      const { data, error } = await svc.rpc("db_list_tables");
+      if (error) return json(500, { error: error.message });
+      return json(200, { data });
+    }
     default:
       return json(400, { error: "unknown_action" });
   }
