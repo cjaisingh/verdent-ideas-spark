@@ -259,8 +259,18 @@ export default function Copilot() {
                 setMicLevel(Math.min(1, lvlAccum * 1.8));
                 lvlFrames = 0;
               }
-              const gated = mutedRef.current || (pttModeRef.current && !pttHeldRef.current);
-              if (gated) {
+              const muteOrPtt = mutedRef.current || (pttModeRef.current && !pttHeldRef.current);
+              // Noise gate (always-on mode only — PTT already gates explicitly).
+              let gateClosed = false;
+              if (!pttModeRef.current && noiseGateRef.current > 0) {
+                if (rms >= noiseGateRef.current) {
+                  gateHoldRef.current = 300; // ms hold-open after voice
+                } else {
+                  gateHoldRef.current = Math.max(0, gateHoldRef.current - 20);
+                  if (gateHoldRef.current === 0) gateClosed = true;
+                }
+              }
+              if (muteOrPtt || gateClosed) {
                 ws.send(new ArrayBuffer(pcm.byteLength));
               } else {
                 ws.send(pcm);
