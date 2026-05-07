@@ -20,6 +20,7 @@ import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
 import { CopilotKnowledgeCard } from "@/components/copilot/CopilotKnowledgeCard";
 import { CopilotOnboardingCard } from "@/components/copilot/CopilotOnboardingCard";
 import { LessonsLoadedCard } from "@/components/copilot/LessonsLoadedCard";
+import { PendingLessonCard, type PendingLesson } from "@/components/copilot/PendingLessonCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
@@ -60,6 +61,8 @@ export default function Copilot() {
   const [connecting, setConnecting] = useState(false);
   const [agentState, setAgentState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [log, setLog] = useState<LogLine[]>([]);
+  const [pendingLesson, setPendingLesson] = useState<PendingLesson | null>(null);
+  const [savingLesson, setSavingLesson] = useState(false);
 
   // Controls (persisted per operator in copilot_settings)
   const [pttMode, setPttMode] = useState(false);
