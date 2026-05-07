@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
 } from "lucide-react";
 
 const groups = [
