@@ -88,6 +88,8 @@ export default function Copilot() {
   const pttModeRef = useRef(pttMode);
   const pttHeldRef = useRef(pttHeld);
   const micGainRef = useRef(micGain);
+  const noiseGateRef = useRef(noiseGate);
+  const gateHoldRef = useRef(0); // ms remaining of "open" hold-over
   const mutedRef = useRef(muted);
   useEffect(() => { pttModeRef.current = pttMode; }, [pttMode]);
   useEffect(() => { pttHeldRef.current = pttHeld; }, [pttHeld]);
