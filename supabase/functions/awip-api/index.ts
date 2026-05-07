@@ -1080,6 +1080,194 @@ async function listApprovals(url: URL) {
   return json({ approvals: data, count: data?.length ?? 0 });
 }
 
+// ---------- onboarding checklist ----------
+// The agent runs through this BEFORE executing: confirm goal, acknowledge required
+// capabilities, request any required approvals, then mark ready_to_execute.
+
+const ONBOARDING_ITEMS = [
+  "goal_confirmed",
+  "capabilities_acknowledged",
+  "approvals_requested",
+  "ready_to_execute",
+] as const;
+type OnboardingItem = typeof ONBOARDING_ITEMS[number];
+
+function emptyChecklist() {
+  const c: Record<string, { done: boolean; at: string | null; note: string | null }> = {};
+  for (const k of ONBOARDING_ITEMS) c[k] = { done: false, at: null, note: null };
+  return c;
+}
+
+async function startOnboarding(req: Request, actor: string, userId?: string) {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const intent: string = String(body.intent ?? "").trim();
+  if (!intent) return json({ error: "missing intent" }, 400);
+
+  const capability_id: string | null = body.capability_id ? String(body.capability_id) : null;
+  const activity: string | null = body.activity ? String(body.activity) : null;
+  const goal_text: string | null = body.goal ? String(body.goal) : null;
+  const requestedRisk: "low" | "medium" | "high" =
+    ["low", "medium", "high"].includes(body.risk) ? body.risk : "medium";
+
+  // Required capabilities: the requested one + its inputs_required (if registered).
+  const required_capabilities: string[] = [];
+  if (capability_id) {
+    required_capabilities.push(capability_id);
+    const { data: cap } = await supabase
+      .from("capabilities")
+      .select("id, inputs_required")
+      .eq("id", capability_id)
+      .maybeSingle();
+    if (cap?.inputs_required && Array.isArray(cap.inputs_required)) {
+      for (const dep of cap.inputs_required) {
+        if (typeof dep === "string" && !required_capabilities.includes(dep)) {
+          required_capabilities.push(dep);
+        }
+      }
+    }
+  }
+
+  // Required approvals: based on agent scope verdict.
+  const scope = await resolveActiveScope(req, userId);
+  const required_approvals: string[] = [];
+  let scopeVerdict: any = null;
+  if (scope) {
+    const verdict = checkScope(scope, {
+      capability_id,
+      tables: Array.isArray(body.tables) ? body.tables : [],
+      risk: requestedRisk,
+    });
+    scopeVerdict = verdict;
+    if (!verdict.ok) {
+      for (const v of verdict.violations) required_approvals.push(v.code);
+    }
+  }
+  // Anything medium/high also needs human approval per policy default.
+  if (requestedRisk !== "low" && !required_approvals.includes("human_approval")) {
+    required_approvals.push("human_approval");
+  }
+
+  const { data, error } = await supabase
+    .from("agent_onboarding_sessions")
+    .insert({
+      agent_slug: scope?.agent_slug ?? "unknown",
+      actor,
+      user_id: userId ?? null,
+      intent,
+      goal_text,
+      capability_id,
+      activity,
+      risk: requestedRisk,
+      required_capabilities,
+      required_approvals,
+      checklist: emptyChecklist(),
+      status: "pending",
+      notes: scopeVerdict && !scopeVerdict.ok
+        ? `Scope verdict: ${scopeVerdict.violations.map((v: any) => v.reason).join(" ")}`
+        : null,
+    })
+    .select("*")
+    .single();
+  if (error) return json({ error: error.message }, 500);
+
+  return json({
+    ok: true,
+    session: data,
+    scope_verdict: scopeVerdict,
+    instructions: [
+      "1. Read 'goal_text' back to the operator and call /onboarding/:id/confirm with item='goal_confirmed' once they agree.",
+      "2. List 'required_capabilities' to the operator and confirm with item='capabilities_acknowledged'.",
+      "3. For each entry in 'required_approvals', call POST /approvals/request, then confirm with item='approvals_requested' (include approval_id in notes).",
+      "4. Only after all three are done, set item='ready_to_execute'. The session.status flips to 'ready' and the agent may execute.",
+      "Never skip an item. If the operator declines, set status='aborted' via /onboarding/:id/confirm with item='ready_to_execute' and value=false.",
+    ],
+  });
+}
+
+async function confirmOnboarding(req: Request, sessionId: string, actor: string) {
+  let body: any;
+  try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
+  const item: string = String(body.item ?? "");
+  if (!ONBOARDING_ITEMS.includes(item as OnboardingItem)) {
+    return json({ error: `invalid item; expected one of ${ONBOARDING_ITEMS.join(", ")}` }, 400);
+  }
+  const value: boolean = body.value !== false; // default true
+  const note: string | null = body.notes ? String(body.notes) : null;
+  const approval_id: string | null = body.approval_id ? String(body.approval_id) : null;
+
+  const { data: cur, error: getErr } = await supabase
+    .from("agent_onboarding_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (getErr) return json({ error: getErr.message }, 500);
+  if (!cur) return json({ error: "onboarding session not found" }, 404);
+
+  const checklist = { ...(cur.checklist ?? emptyChecklist()) } as Record<string, any>;
+  checklist[item] = { done: value, at: new Date().toISOString(), note, by: actor };
+
+  let status = cur.status as string;
+  let completed_at: string | null = cur.completed_at;
+  if (item === "ready_to_execute") {
+    if (value) {
+      // Require all prior items done first.
+      const missing = ONBOARDING_ITEMS.filter((k) => k !== "ready_to_execute" && !checklist[k]?.done);
+      if (missing.length) {
+        return json({
+          ok: false,
+          error: "prerequisites_incomplete",
+          missing,
+          message: `Cannot mark ready_to_execute; first complete: ${missing.join(", ")}.`,
+        }, 409);
+      }
+      status = "ready";
+      completed_at = new Date().toISOString();
+    } else {
+      status = "aborted";
+      completed_at = new Date().toISOString();
+    }
+  } else if (status === "pending") {
+    status = "in_progress";
+  }
+
+  const update: Record<string, unknown> = { checklist, status };
+  if (completed_at) update.completed_at = completed_at;
+  if (approval_id) update.approval_id = approval_id;
+
+  const { data: upd, error: updErr } = await supabase
+    .from("agent_onboarding_sessions")
+    .update(update)
+    .eq("id", sessionId)
+    .select("*")
+    .single();
+  if (updErr) return json({ error: updErr.message }, 500);
+  return json({ ok: true, session: upd });
+}
+
+async function getOnboarding(sessionId: string) {
+  const { data, error } = await supabase
+    .from("agent_onboarding_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!data) return json({ error: "not found" }, 404);
+  return json({ session: data });
+}
+
+async function listOnboarding(url: URL) {
+  const status = url.searchParams.get("status");
+  const agent = url.searchParams.get("agent");
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
+  let q = supabase.from("agent_onboarding_sessions").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (status) q = q.eq("status", status);
+  if (agent) q = q.eq("agent_slug", agent);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+  return json({ sessions: data, count: data?.length ?? 0 });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
