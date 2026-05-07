@@ -240,6 +240,74 @@ export default function Copilot() {
 
   useEffect(() => () => stop(), []);
 
+  // Load persisted settings on mount.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setSettingsLoaded(true); return; }
+      const { data, error } = await supabase
+        .from("copilot_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!error && data) {
+        setSttModel(data.stt_model);
+        setTtsVoice(data.tts_voice);
+        setLanguage(data.language);
+        setGreeting(data.greeting);
+        setPttMode(data.ptt_mode);
+        setMicGain(Number(data.mic_gain));
+        setOutVolume(Number(data.out_volume));
+      }
+      setSettingsLoaded(true);
+    })();
+  }, []);
+
+  // Debounced auto-save of audio knobs (sliders / toggle).
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const t = setTimeout(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("copilot_settings").upsert({
+        user_id: user.id,
+        stt_model: sttModel,
+        tts_voice: ttsVoice,
+        language,
+        greeting,
+        ptt_mode: pttMode,
+        mic_gain: micGain,
+        out_volume: outVolume,
+      }, { onConflict: "user_id" });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [settingsLoaded, pttMode, micGain, outVolume]);
+
+  const saveVoiceSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const { error } = await supabase.from("copilot_settings").upsert({
+        user_id: user.id,
+        stt_model: sttModel,
+        tts_voice: ttsVoice,
+        language,
+        greeting,
+        ptt_mode: pttMode,
+        mic_gain: micGain,
+        out_volume: outVolume,
+      }, { onConflict: "user_id" });
+      if (error) throw error;
+      toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
+      setSettingsOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const transmitting = active && !muted && (!pttMode || pttHeld);
   const stateColor = !transmitting && active
     ? "bg-muted"
