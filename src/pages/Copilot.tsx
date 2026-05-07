@@ -20,6 +20,7 @@ import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
 import { CopilotKnowledgeCard } from "@/components/copilot/CopilotKnowledgeCard";
 import { CopilotOnboardingCard } from "@/components/copilot/CopilotOnboardingCard";
 import { LessonsLoadedCard } from "@/components/copilot/LessonsLoadedCard";
+import { PendingLessonCard, type PendingLesson } from "@/components/copilot/PendingLessonCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
@@ -60,6 +61,8 @@ export default function Copilot() {
   const [connecting, setConnecting] = useState(false);
   const [agentState, setAgentState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [log, setLog] = useState<LogLine[]>([]);
+  const [pendingLesson, setPendingLesson] = useState<PendingLesson | null>(null);
+  const [savingLesson, setSavingLesson] = useState(false);
 
   // Controls (persisted per operator in copilot_settings)
   const [pttMode, setPttMode] = useState(false);
@@ -240,6 +243,8 @@ export default function Copilot() {
     setMicLevel(0);
     setPttHeld(false);
     setAutoMuteReason(null);
+    setPendingLesson(null);
+    setSavingLesson(false);
   };
 
   // Switch to a different Copilot agent. Persists the choice and announces the switch
@@ -377,6 +382,19 @@ export default function Copilot() {
             setAgentState("speaking");
           } else if (m.type === "AgentAudioDone" || m.type === "AgentTurnComplete") {
             setAgentState("listening");
+          } else if (m.type === "pending_lesson") {
+            setPendingLesson({
+              token: m.token, lesson: m.lesson, scope: m.scope, staged_at: m.staged_at ?? Date.now(),
+            });
+            setSavingLesson(false);
+          } else if (m.type === "pending_lesson_cleared") {
+            setPendingLesson(null);
+            setSavingLesson(false);
+            if (m.reason === "saved") toast.success("Lesson saved");
+            else if (m.reason === "expired") toast.warning("Staged lesson expired");
+          } else if (m.type === "pending_lesson_error") {
+            setSavingLesson(false);
+            toast.error(m.error || "Could not save lesson");
           } else if (m.type === "error") {
             toast.error(m.error || "Copilot error");
             stop();
@@ -627,6 +645,34 @@ export default function Copilot() {
       <CopilotOnboardingCard />
 
       <LessonsLoadedCard />
+
+      {pendingLesson && (
+        <PendingLessonCard
+          pending={pendingLesson}
+          saving={savingLesson}
+          onConfirm={(lesson, scope) => {
+            const ws = wsRef.current;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+              toast.error("Not connected");
+              return;
+            }
+            setSavingLesson(true);
+            ws.send(JSON.stringify({
+              type: "confirm_pending_lesson",
+              token: pendingLesson.token,
+              lesson, scope,
+            }));
+          }}
+          onCancel={() => {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "cancel_pending_lesson" }));
+            }
+            setPendingLesson(null);
+            setSavingLesson(false);
+          }}
+        />
+      )}
 
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">

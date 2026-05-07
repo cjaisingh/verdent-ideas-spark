@@ -179,9 +179,11 @@ const TOOLS = [
     function: {
       name: "remember_lesson",
       description:
-        "Save a durable rule the operator wants you to follow on every future turn. " +
+        "Stage a durable rule for the operator to confirm before it's saved. " +
         "Call this when the operator says 'learn from this', 'remember that', 'next time…', or 'from now on…'. " +
-        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII.",
+        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII. " +
+        "Returns a confirmation_token. After calling, read the lesson back and ask the operator to confirm; " +
+        "then call confirm_lesson with the token, or cancel_pending_lesson if they decline or want to edit.",
       parameters: {
         type: "object",
         properties: {
@@ -191,6 +193,29 @@ const TOOLS = [
         required: ["lesson"],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "confirm_lesson",
+      description:
+        "Commit a previously staged lesson. Only call AFTER the operator has explicitly confirmed " +
+        "(e.g. 'yes', 'save it', 'go ahead'). Pass the confirmation_token returned by remember_lesson.",
+      parameters: {
+        type: "object",
+        properties: { confirmation_token: { type: "string" } },
+        required: ["confirmation_token"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancel_pending_lesson",
+      description: "Discard a staged lesson if the operator says no, cancel, or wants to rephrase it.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
   {
@@ -234,8 +259,11 @@ NOTEBOOK:
 - When the operator dictates a thought, todo, research note, issue, or suggestion, call add_notebook_entry. Pick the right kind and craft a short title; put the rest in body.
 - For "mark X resolved", "pin that", "archive it", call update_notebook_entry. Read the entry's title back when confirming, never the UUID.
 
-LEARNING:
-- When the operator says "learn from this", "remember that", "next time…", "from now on…", or otherwise teaches you a preference, call remember_lesson with a single-sentence imperative rule (≤500 chars). Then briefly confirm out loud, e.g. "Got it, I'll remember that." Never store secrets, credentials, or PII.
+LEARNING (two-step, mandatory):
+1. When the operator says "learn from this", "remember that", "next time…", "from now on…", or otherwise teaches you a preference, call remember_lesson FIRST with a single-sentence imperative rule (≤500 chars). This stages the lesson — it is NOT saved yet. The operator will see it on screen and can edit it.
+2. Read the staged lesson back briefly, e.g. "Got it — staged: 'Always X'. Confirm to save, or tell me what to change." Then wait.
+3. Only after the operator says yes / save it / go ahead, call confirm_lesson with the token. If they say no, cancel, or want to rephrase, call cancel_pending_lesson.
+Never call confirm_lesson without an immediately preceding explicit verbal confirmation. Never store secrets, credentials, or PII.
 - For "what have you learned" / "list lessons", call list_lessons.
 - For "forget that" / "unlearn …", call forget_lesson with the matching id (look it up via list_lessons first if needed).
 - Lessons currently in force are listed under "LESSONS LEARNED" below — honour them on every turn.
@@ -270,12 +298,20 @@ type StagedDecision = {
   staged_at: number;
 };
 type Lesson = { id: string; lesson: string; scope: string; active: boolean };
+type StagedLesson = {
+  token: string;
+  lesson: string;
+  scope: "global" | "notebook" | "approvals" | "voice_style";
+  staged_at: number;
+};
 type Session = {
   jwt: string;
   user_id: string;
   staged: StagedDecision | null;
+  staged_lesson: StagedLesson | null;
   lessons: Lesson[];
   model: string;
+  notify: ((evt: Record<string, unknown>) => void) | null;
 };
 
 const STAGE_TTL_MS = 5 * 60 * 1000;
@@ -392,14 +428,55 @@ async function dispatchTool(name: string, args: any, session: Session) {
       return callAwip(`/notebook/${id}`, "PATCH", jwt, rest);
     }
     case "remember_lesson": {
-      const result = await callAwip(`/lessons`, "POST", jwt, {
-        lesson: args.lesson, scope: args.scope ?? "global", source: "voice",
+      const lesson = (args.lesson ?? "").toString().trim();
+      if (!lesson) return { status: 400, data: { error: "lesson required" } };
+      if (lesson.length > 500) return { status: 400, data: { error: "lesson too long (max 500)" } };
+      const allowedScopes = ["global","notebook","approvals","voice_style"] as const;
+      const scope = (allowedScopes as readonly string[]).includes(args.scope) ? args.scope : "global";
+      const token = crypto.randomUUID();
+      session.staged_lesson = { token, lesson, scope, staged_at: Date.now() };
+      session.notify?.({
+        type: "pending_lesson",
+        token, lesson, scope,
+        staged_at: session.staged_lesson.staged_at,
       });
-      // Refresh local cache so it applies to the very next turn.
+      return {
+        status: 200,
+        data: {
+          confirmation_token: token,
+          lesson, scope,
+          instructions: "Lesson is STAGED only. Read it back to the operator and ask them to confirm. " +
+            "Then call confirm_lesson with this token only after they say yes. " +
+            "If they want to change it, call cancel_pending_lesson and propose a revised version.",
+        },
+      };
+    }
+    case "confirm_lesson": {
+      const staged = session.staged_lesson;
+      if (!staged) return { status: 400, data: { error: "no lesson staged. Call remember_lesson first." } };
+      if (staged.token !== args.confirmation_token) {
+        return { status: 400, data: { error: "confirmation_token does not match staged lesson" } };
+      }
+      if (Date.now() - staged.staged_at > STAGE_TTL_MS) {
+        session.staged_lesson = null;
+        session.notify?.({ type: "pending_lesson_cleared", reason: "expired" });
+        return { status: 410, data: { error: "staged lesson expired. Re-stage with remember_lesson." } };
+      }
+      const result = await callAwip(`/lessons`, "POST", jwt, {
+        lesson: staged.lesson, scope: staged.scope, source: "voice",
+      });
+      session.staged_lesson = null;
+      session.notify?.({ type: "pending_lesson_cleared", reason: "saved" });
       if (result.status === 200 && (result.data as any)?.lesson) {
         session.lessons = [...session.lessons, (result.data as any).lesson];
       }
       return result;
+    }
+    case "cancel_pending_lesson": {
+      const had = !!session.staged_lesson;
+      session.staged_lesson = null;
+      if (had) session.notify?.({ type: "pending_lesson_cleared", reason: "cancelled" });
+      return { status: 200, data: { cancelled: had } };
     }
     case "list_lessons":
       return callAwip(`/lessons?active=true`, "GET", jwt);
@@ -500,7 +577,13 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
   let dg: WebSocket | null = null;
-  const session: Session = { jwt: "", user_id: "", staged: null, lessons: [], model: "openai/gpt-5-mini" };
+  const notify = (evt: Record<string, unknown>) => {
+    try { client.send(JSON.stringify(evt)); } catch {}
+  };
+  const session: Session = {
+    jwt: "", user_id: "", staged: null, staged_lesson: null,
+    lessons: [], model: "openai/gpt-5-mini", notify,
+  };
   let history: any[] = [];
   let thinking = false;
   let transcriptId: string | null = null;
@@ -555,6 +638,45 @@ Deno.serve(async (req) => {
             console.warn("UpdateSpeak failed", e);
           }
         }
+        return;
+      }
+
+      // UI-driven confirmation of a staged lesson (operator clicked "Save" on the card).
+      if (msg.type === "confirm_pending_lesson") {
+        const staged = session.staged_lesson;
+        if (!staged) { notify({ type: "pending_lesson_cleared", reason: "missing" }); return; }
+        if (msg.token && msg.token !== staged.token) {
+          notify({ type: "pending_lesson_error", error: "token mismatch" });
+          return;
+        }
+        // Allow inline edits from the UI before committing.
+        const finalLesson = typeof msg.lesson === "string" && msg.lesson.trim()
+          ? msg.lesson.trim() : staged.lesson;
+        const finalScope = ["global","notebook","approvals","voice_style"].includes(msg.scope)
+          ? msg.scope : staged.scope;
+        if (finalLesson.length > 500) {
+          notify({ type: "pending_lesson_error", error: "lesson too long (max 500)" });
+          return;
+        }
+        const result = await callAwip(`/lessons`, "POST", session.jwt, {
+          lesson: finalLesson, scope: finalScope, source: "voice",
+        });
+        session.staged_lesson = null;
+        if (result.status === 200 && (result.data as any)?.lesson) {
+          session.lessons = [...session.lessons, (result.data as any).lesson];
+          notify({ type: "pending_lesson_cleared", reason: "saved" });
+          if (dg && dg.readyState === WebSocket.OPEN) {
+            try { dg.send(JSON.stringify({ type: "InjectAgentMessage", content: "Saved." })); } catch {}
+          }
+        } else {
+          notify({ type: "pending_lesson_error", error: (result.data as any)?.error ?? "save failed" });
+        }
+        return;
+      }
+      if (msg.type === "cancel_pending_lesson") {
+        const had = !!session.staged_lesson;
+        session.staged_lesson = null;
+        if (had) notify({ type: "pending_lesson_cleared", reason: "cancelled" });
         return;
       }
 
