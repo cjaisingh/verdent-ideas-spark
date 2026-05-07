@@ -24,6 +24,24 @@ A modular, capability-driven operator platform: every business function is a reg
 **Purpose.** Tie roadmap tasks to `okr_nodes` and `okr_measurements` so progress is measured against outcomes, not output.
 **Success criteria.** Every active sprint links to one or more OKRs; measurements update task health automatically.
 
+### Phase 5 — Entity & Tenant Resolution (planned)
+Canonical entity model, alias resolver, tenant_node graph. Foundation for ingest.
+
+### Phase 6 — Ingest & Canonicalisation (planned)
+Source adapters, conflict detection, supersede semantics, idempotent writes.
+
+### Phase 6b — Ingest Observability (planned)
+Per-source dashboards, conflict review UI, replay.
+
+### Phase 7 — Connector Marketplace (planned)
+Third-party capability connectors, manifest validation, install/uninstall flow. *(Phase 8 reserved — OKR-driven slot once Phase 4 produces signal.)*
+
+### Phase 9 — Multi-tenant Hardening (planned)
+Per-tenant RLS audit, quota, isolation tests, tenant admin surface. *(Phase 10 reserved — OKR-driven slot.)*
+
+### Phase 11 — Public API & SDK (planned)
+Stable contract surface, versioning, generated SDK, docs site.
+
 ## Module map
 
 - **awip-api** — central capability invocation surface (edge function)
