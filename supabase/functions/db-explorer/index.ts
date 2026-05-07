@@ -166,24 +166,24 @@ Deno.serve(async (req) => {
     resultCnt: number | null,
     rejection?: { reason: string; requested?: Record<string, unknown> | null },
   ) => {
-    const rejected = !!rejection || status >= 400;
-    audit({
-      ts: new Date().toISOString(),
-      request_id: requestId,
-      user_id: userId,
-      action: auditAction,
-      table: auditTable,
-      limit: auditLimit,
-      offset: auditOffset,
+    const entry = buildAuditEntry(
+      {
+        requestId,
+        userId,
+        action: auditAction,
+        table: auditTable,
+        limit: auditLimit,
+        offset: auditOffset,
+        startedAt,
+        requested,
+      },
       status,
-      result_count: resultCnt,
-      duration_ms: Date.now() - startedAt,
-      error_code: errorCode,
-      rejected,
-      rejection_reason: rejection?.reason ?? (rejected ? errorCode : null),
-      requested: rejection?.requested ?? (rejected ? requested : null),
-    });
-    if (userId) recordRateHit(userId, rejected);
+      errorCode,
+      resultCnt,
+      rejection,
+    );
+    audit(entry);
+    if (userId) recordRateHit(userId, entry.rejected);
     return json(status, payload, requestId);
   };
 
