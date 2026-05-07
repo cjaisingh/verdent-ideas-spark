@@ -248,6 +248,26 @@ export default function Runbooks() {
               <span>{draft ? (draft.id ? "Edit runbook" : "New runbook") : "Pick a runbook"}</span>
               {draft && (
                 <div className="flex gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <Sparkles className="h-4 w-4 mr-1" /> Insert template
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-72">
+                      <DropdownMenuLabel>Append steps from…</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {RUNBOOK_TEMPLATES.map((t) => (
+                        <DropdownMenuItem key={t.id} onClick={() => insertTemplateSteps(t)}
+                          className="flex flex-col items-start gap-0.5">
+                          <span className="font-medium">{t.title}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {t.steps.length} steps · {t.tags.join(", ")}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {draft.id && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
