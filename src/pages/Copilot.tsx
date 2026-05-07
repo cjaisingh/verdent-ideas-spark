@@ -73,6 +73,13 @@ export default function Copilot() {
   const streamRef = useRef<MediaStream | null>(null);
   const playHeadRef = useRef<number>(0);
   const outGainRef = useRef<GainNode | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll transcript to bottom on new messages.
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [log]);
 
   // Live refs for audio callback (avoids stale closure on state).
   const pttModeRef = useRef(pttMode);
@@ -493,27 +500,43 @@ export default function Copilot() {
         </div>
       </Card>
 
-      <Card className="p-4 max-h-[40vh] overflow-y-auto space-y-3">
-        {log.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Conversation will appear here.</p>
-        ) : (
-          log.map((l, i) => (
-            <div key={i} className="text-sm">
-              <span
-                className={
-                  l.who === "you"
-                    ? "font-semibold text-foreground"
-                    : l.who === "copilot"
-                    ? "font-semibold text-primary"
-                    : "font-medium text-muted-foreground"
-                }
-              >
-                {l.who === "you" ? "You" : l.who === "copilot" ? "Copilot" : "System"}:
-              </span>{" "}
-              <span className="text-foreground">{l.text}</span>
-            </div>
-          ))
-        )}
+      <Card className="p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/40">
+          <div className="text-sm font-medium">Transcript</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground tabular-nums">{log.length} turns</span>
+            {log.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setLog([])}>Clear</Button>
+            )}
+          </div>
+        </div>
+        <div ref={transcriptRef} className="max-h-[45vh] overflow-y-auto p-4 space-y-2">
+          {log.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Conversation will appear here.</p>
+          ) : (
+            log.map((l, i) => (
+              <div key={i} className="text-sm flex gap-3">
+                <span className="text-xs text-muted-foreground tabular-nums shrink-0 pt-0.5 w-16">
+                  {new Date(l.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span
+                    className={
+                      l.who === "you"
+                        ? "font-semibold text-foreground"
+                        : l.who === "copilot"
+                        ? "font-semibold text-primary"
+                        : "font-medium text-muted-foreground"
+                    }
+                  >
+                    {l.who === "you" ? "You" : l.who === "copilot" ? "Copilot" : "System"}:
+                  </span>{" "}
+                  <span className="text-foreground break-words">{l.text}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </Card>
 
       <p className="text-xs text-muted-foreground">
