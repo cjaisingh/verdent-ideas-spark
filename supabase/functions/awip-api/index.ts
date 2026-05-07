@@ -1523,6 +1523,10 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && path === "/lessons") response = await createLesson(req, auth.actor);
       else if (req.method === "PATCH" && lessonIdMatch) response = await updateLesson(req, lessonIdMatch[1]);
       else if (req.method === "DELETE" && lessonIdMatch) response = await deleteLesson(lessonIdMatch[1]);
+      else if (req.method === "GET" && path === "/transcripts") response = await listTranscripts(url);
+      else if (req.method === "GET" && transcriptIdMatch) response = await getTranscript(transcriptIdMatch[1]);
+      else if (req.method === "DELETE" && transcriptIdMatch) response = await deleteTranscript(transcriptIdMatch[1]);
+      else if (req.method === "POST" && transcriptAnalyzeMatch) response = await analyzeTranscript(transcriptAnalyzeMatch[1]);
       else response = json({ error: "not found", path }, 404);
     }
     }
