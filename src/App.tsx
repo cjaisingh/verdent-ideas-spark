@@ -61,6 +61,7 @@ const App = () => (
             <Route path="/copilot/agents" element={<CopilotAgents />} />
             <Route path="/copilot/profile" element={<CopilotProfile />} />
             <Route path="/copilot/lessons" element={<Lessons />} />
+            <Route path="/copilot/transcripts" element={<Transcripts />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
             <Route path="/db-audit" element={<DbAuditLogs />} />
