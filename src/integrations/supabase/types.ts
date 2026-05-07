@@ -1732,6 +1732,18 @@ export type Database = {
     }
     Functions: {
       auto_purge_if_enabled: { Args: never; Returns: number }
+      awip_rag_search: {
+        Args: { _limit?: number; _q: string }
+        Returns: {
+          chunk_id: string
+          content: string
+          doc_id: string
+          heading: string
+          path: string
+          rank: number
+          title: string
+        }[]
+      }
       db_analyze_public: { Args: never; Returns: undefined }
       db_list_all_columns: {
         Args: never
