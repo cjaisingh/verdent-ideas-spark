@@ -6,6 +6,10 @@ const SUPABASE_ANON_KEY =
 const SERVICE_TOKEN = process.env.E2E_AWIP_SERVICE_TOKEN;
 const OPERATOR_EMAIL = process.env.E2E_OPERATOR_EMAIL;
 const OPERATOR_PASSWORD = process.env.E2E_OPERATOR_PASSWORD;
+// Optional: a user with ONLY the operator role (no admin). Used to verify
+// admin-only tables/RPCs reject non-admin operators. If absent, those tests skip.
+const OPERATOR_ONLY_EMAIL = process.env.E2E_OPERATOR_ONLY_EMAIL;
+const OPERATOR_ONLY_PASSWORD = process.env.E2E_OPERATOR_ONLY_PASSWORD;
 
 export const env = {
   SUPABASE_URL: SUPABASE_URL!,
@@ -13,6 +17,9 @@ export const env = {
   SERVICE_TOKEN: SERVICE_TOKEN ?? "",
   OPERATOR_EMAIL: OPERATOR_EMAIL ?? "",
   OPERATOR_PASSWORD: OPERATOR_PASSWORD ?? "",
+  OPERATOR_ONLY_EMAIL: OPERATOR_ONLY_EMAIL ?? "",
+  OPERATOR_ONLY_PASSWORD: OPERATOR_ONLY_PASSWORD ?? "",
+  HAS_OPERATOR_ONLY: Boolean(OPERATOR_ONLY_EMAIL && OPERATOR_ONLY_PASSWORD),
   FN_URL: `${SUPABASE_URL}/functions/v1/awip-api`,
 };
 
@@ -44,6 +51,23 @@ export async function operatorClient() {
     password: env.OPERATOR_PASSWORD,
   });
   if (error) throw new Error(`Operator sign-in failed: ${error.message}`);
+  return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
+}
+
+/**
+ * Operator-only user (operator role, NOT admin). Used to assert admin-only
+ * tables / RPCs reject non-admin operators. Skips when env not provided.
+ */
+export async function operatorOnlyClient() {
+  if (!env.HAS_OPERATOR_ONLY) {
+    throw new Error("E2E_OPERATOR_ONLY_EMAIL/PASSWORD not configured");
+  }
+  const c = anonClient();
+  const { data, error } = await c.auth.signInWithPassword({
+    email: env.OPERATOR_ONLY_EMAIL,
+    password: env.OPERATOR_ONLY_PASSWORD,
+  });
+  if (error) throw new Error(`Operator-only sign-in failed: ${error.message}`);
   return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
 }
 
