@@ -386,7 +386,7 @@ Deno.serve(async (req) => {
                 thinking = true;
                 history.push({ role: "user", content: m.content });
                 try {
-                  const reply = await think(history, jwt);
+                  const reply = await think(history, session);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
                     dg!.send(JSON.stringify({ type: "InjectAgentMessage", content: reply }));
