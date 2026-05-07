@@ -18,6 +18,7 @@ import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { AgentSelector } from "@/components/copilot/AgentSelector";
 import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
 import { CopilotKnowledgeCard } from "@/components/copilot/CopilotKnowledgeCard";
+import { CopilotOnboardingCard } from "@/components/copilot/CopilotOnboardingCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
