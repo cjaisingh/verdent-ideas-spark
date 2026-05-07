@@ -357,6 +357,10 @@ Deno.serve(async (req) => {
           client.close(4401, "unauthorized");
           return;
         }
+        // Apply per-session settings overrides from client.
+        if (msg.settings && typeof msg.settings === "object") {
+          settings = { ...settings, ...msg.settings };
+        }
         // Open Deepgram Voice Agent socket.
         dg = new WebSocket("wss://agent.deepgram.com/v1/agent/converse", [
           "token", DEEPGRAM_API_KEY,
@@ -369,15 +373,14 @@ Deno.serve(async (req) => {
               output: { encoding: "linear16", sample_rate: 24000, container: "none" },
             },
             agent: {
-              language: "en",
-              listen: { provider: { type: "deepgram", model: "nova-3" } },
+              language: settings.language,
+              listen: { provider: { type: "deepgram", model: settings.stt_model } },
               think: {
-                // We supply replies via InjectAgentMessage; use a no-op provider.
                 provider: { type: "open_ai", model: "gpt-4o-mini", temperature: 0.3 },
                 prompt: SYSTEM_PROMPT,
               },
-              speak: { provider: { type: "deepgram", model: "aura-2-orion-en" } },
-              greeting: "Copilot ready.",
+              speak: { provider: { type: "deepgram", model: settings.tts_voice } },
+              greeting: settings.greeting,
             },
           }));
           client.send(JSON.stringify({ type: "ready" }));
