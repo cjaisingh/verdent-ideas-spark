@@ -334,7 +334,7 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
   let dg: WebSocket | null = null;
-  let jwt = "";
+  const session: Session = { jwt: "", staged: null };
   let history: any[] = [];
   let thinking = false;
 
