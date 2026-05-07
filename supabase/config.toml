@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.copilot-voice]
 verify_jwt = false
+
+[functions.copilot-noop-llm]
+verify_jwt = false

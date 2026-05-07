@@ -478,11 +478,17 @@ Deno.serve(async (req) => {
             agent: {
               language: settings.language,
               listen: { provider: { type: "deepgram", model: settings.stt_model } },
+              // No-op think provider: we generate the actual reply ourselves
+              // (see ConversationText handler below) and inject via
+              // InjectAgentMessage. This stops Deepgram's built-in brain from
+              // also replying, which previously produced two voiced answers.
               think: {
-                provider: { type: "open_ai", model: "gpt-4o-mini", temperature: 0.3 },
-                prompt: settings.system_prompt
-                  ? `${SYSTEM_PROMPT}\n\n--- Active agent persona ---\n${settings.system_prompt}`
-                  : SYSTEM_PROMPT,
+                provider: { type: "open_ai", model: "noop", temperature: 0 },
+                endpoint: {
+                  url: `${SUPABASE_URL}/functions/v1/copilot-noop-llm/v1/chat/completions`,
+                  headers: {},
+                },
+                prompt: "Respond with an empty string. Another system handles replies.",
               },
               speak: { provider: { type: "deepgram", model: settings.tts_voice } },
               greeting: settings.greeting,
