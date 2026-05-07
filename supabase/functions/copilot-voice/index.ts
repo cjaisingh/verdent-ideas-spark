@@ -428,14 +428,55 @@ async function dispatchTool(name: string, args: any, session: Session) {
       return callAwip(`/notebook/${id}`, "PATCH", jwt, rest);
     }
     case "remember_lesson": {
-      const result = await callAwip(`/lessons`, "POST", jwt, {
-        lesson: args.lesson, scope: args.scope ?? "global", source: "voice",
+      const lesson = (args.lesson ?? "").toString().trim();
+      if (!lesson) return { status: 400, data: { error: "lesson required" } };
+      if (lesson.length > 500) return { status: 400, data: { error: "lesson too long (max 500)" } };
+      const allowedScopes = ["global","notebook","approvals","voice_style"] as const;
+      const scope = (allowedScopes as readonly string[]).includes(args.scope) ? args.scope : "global";
+      const token = crypto.randomUUID();
+      session.staged_lesson = { token, lesson, scope, staged_at: Date.now() };
+      session.notify?.({
+        type: "pending_lesson",
+        token, lesson, scope,
+        staged_at: session.staged_lesson.staged_at,
       });
-      // Refresh local cache so it applies to the very next turn.
+      return {
+        status: 200,
+        data: {
+          confirmation_token: token,
+          lesson, scope,
+          instructions: "Lesson is STAGED only. Read it back to the operator and ask them to confirm. " +
+            "Then call confirm_lesson with this token only after they say yes. " +
+            "If they want to change it, call cancel_pending_lesson and propose a revised version.",
+        },
+      };
+    }
+    case "confirm_lesson": {
+      const staged = session.staged_lesson;
+      if (!staged) return { status: 400, data: { error: "no lesson staged. Call remember_lesson first." } };
+      if (staged.token !== args.confirmation_token) {
+        return { status: 400, data: { error: "confirmation_token does not match staged lesson" } };
+      }
+      if (Date.now() - staged.staged_at > STAGE_TTL_MS) {
+        session.staged_lesson = null;
+        session.notify?.({ type: "pending_lesson_cleared", reason: "expired" });
+        return { status: 410, data: { error: "staged lesson expired. Re-stage with remember_lesson." } };
+      }
+      const result = await callAwip(`/lessons`, "POST", jwt, {
+        lesson: staged.lesson, scope: staged.scope, source: "voice",
+      });
+      session.staged_lesson = null;
+      session.notify?.({ type: "pending_lesson_cleared", reason: "saved" });
       if (result.status === 200 && (result.data as any)?.lesson) {
         session.lessons = [...session.lessons, (result.data as any).lesson];
       }
       return result;
+    }
+    case "cancel_pending_lesson": {
+      const had = !!session.staged_lesson;
+      session.staged_lesson = null;
+      if (had) session.notify?.({ type: "pending_lesson_cleared", reason: "cancelled" });
+      return { status: 200, data: { cancelled: had } };
     }
     case "list_lessons":
       return callAwip(`/lessons?active=true`, "GET", jwt);
