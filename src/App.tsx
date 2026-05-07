@@ -26,6 +26,7 @@ import Notebook from "./pages/Notebook";
 import MasterPlan from "./pages/MasterPlan";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
+import CopilotProfile from "./pages/CopilotProfile";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
