@@ -245,7 +245,14 @@ export default function Copilot() {
       ws.onopen = () => ws.send(JSON.stringify({
         type: "auth",
         jwt,
-        settings: { stt_model: sttModel, tts_voice: ttsVoice, language, greeting },
+        settings: {
+          stt_model: sttModel,
+          tts_voice: activeAgent?.tts_voice ?? ttsVoice,
+          language: activeAgent?.language ?? language,
+          greeting: activeAgent?.default_greeting ?? greeting,
+          agent_slug: activeAgent?.slug ?? null,
+          system_prompt: activeAgent?.system_prompt ?? null,
+        },
       }));
 
       ws.onmessage = (ev) => {
