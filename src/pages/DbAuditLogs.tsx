@@ -33,16 +33,33 @@ const PAGE_SIZE = 100;
 const STATUS_BUCKETS = ["any", "2xx", "4xx", "5xx", "429"] as const;
 
 export default function DbAuditLogs() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [actionF, setActionF] = useState("any");
-  const [tableF, setTableF] = useState("");
-  const [statusF, setStatusF] = useState<(typeof STATUS_BUCKETS)[number]>("any");
-  const [reqIdF, setReqIdF] = useState("");
-  const [rejectedOnly, setRejectedOnly] = useState(false);
+  const [actionF, setActionF] = useState(() => searchParams.get("action") ?? "any");
+  const [tableF, setTableF] = useState(() => searchParams.get("table") ?? "");
+  const [statusF, setStatusF] = useState<(typeof STATUS_BUCKETS)[number]>(() => {
+    const s = searchParams.get("status");
+    return (STATUS_BUCKETS as readonly string[]).includes(s ?? "") ? (s as typeof STATUS_BUCKETS[number]) : "any";
+  });
+  const [reqIdF, setReqIdF] = useState(() => searchParams.get("req") ?? "");
+  const [rejectedOnly, setRejectedOnly] = useState(() => searchParams.get("rejected") === "1");
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Mirror filter state into the URL so the view is shareable. Only writes
+  // params that differ from defaults to keep the URL clean.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (actionF !== "any") next.set("action", actionF);
+    if (tableF.trim()) next.set("table", tableF.trim());
+    if (statusF !== "any") next.set("status", statusF);
+    if (reqIdF.trim()) next.set("req", reqIdF.trim());
+    if (rejectedOnly) next.set("rejected", "1");
+    setSearchParams(next, { replace: true });
+  }, [actionF, tableF, statusF, reqIdF, rejectedOnly, setSearchParams]);
+
 
   // Build a query with the current filters applied. Cursor is keyset on
   // (created_at, id) so we keep stable ordering even across millisecond ties.
