@@ -58,7 +58,7 @@ const supabase = createClient(
 );
 
 // Auth: require either a valid operator JWT OR the AWIP_SERVICE_TOKEN header (for cross-project calls).
-async function authorize(req: Request): Promise<{ ok: boolean; actor: string; error?: string }> {
+async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; error?: string }> {
   const serviceToken = Deno.env.get("AWIP_SERVICE_TOKEN");
   const provided = req.headers.get("x-awip-service-token");
   if (serviceToken && provided && provided === serviceToken) {
@@ -75,7 +75,90 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; er
     .eq("user_id", data.user.id);
   const isOp = roles?.some((r) => r.role === "operator" || r.role === "admin");
   if (!isOp) return { ok: false, actor: "", error: "not operator" };
-  return { ok: true, actor: `user:${data.user.id}` };
+  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id };
+}
+
+// ---------- agent scope enforcement ----------
+const RISK_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
+
+type Scope = {
+  agent_id: string | null;
+  agent_slug: string | null;
+  capability_ids: string[];   // empty => unrestricted
+  tables: string[];           // empty => unrestricted
+  max_risk: "low" | "medium" | "high";
+  source: string;
+};
+
+async function resolveActiveScope(req: Request, userId?: string): Promise<Scope | null> {
+  // 1) Header override (e.g., service calls) — slug from x-copilot-agent
+  const headerSlug = req.headers.get("x-copilot-agent");
+  let agentRow: any = null;
+  if (headerSlug) {
+    const { data } = await supabase.from("copilot_agents")
+      .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
+      .eq("slug", headerSlug).maybeSingle();
+    if (data?.enabled) agentRow = data;
+  }
+  // 2) Per-user active agent
+  if (!agentRow && userId) {
+    const { data: settings } = await supabase.from("copilot_settings")
+      .select("active_agent_id").eq("user_id", userId).maybeSingle();
+    if (settings?.active_agent_id) {
+      const { data } = await supabase.from("copilot_agents")
+        .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
+        .eq("id", settings.active_agent_id).maybeSingle();
+      if (data?.enabled) agentRow = data;
+    }
+  }
+  if (!agentRow) return null; // no active agent => no scope enforcement
+
+  // 3) Intersect with the user's profile narrowing
+  let narrowedCaps: string[] = [];
+  let narrowedTables: string[] = [];
+  let narrowedRisk: "low" | "medium" | "high" = "high";
+  if (userId) {
+    const { data: prof } = await supabase.from("copilot_profiles")
+      .select("narrowed_capability_ids, narrowed_tables, narrowed_max_risk")
+      .eq("user_id", userId).maybeSingle();
+    if (prof) {
+      narrowedCaps = prof.narrowed_capability_ids ?? [];
+      narrowedTables = prof.narrowed_tables ?? [];
+      narrowedRisk = (prof.narrowed_max_risk ?? "high") as any;
+    }
+  }
+  const intersect = (a: string[], b: string[]) =>
+    a.length === 0 ? b : b.length === 0 ? a : a.filter((x) => b.includes(x));
+  const minRisk = (a: string, b: string): "low" | "medium" | "high" =>
+    (RISK_RANK[a] <= RISK_RANK[b] ? a : b) as any;
+
+  return {
+    agent_id: agentRow.id,
+    agent_slug: agentRow.slug,
+    capability_ids: intersect(agentRow.allowed_capability_ids ?? [], narrowedCaps),
+    tables: intersect(agentRow.allowed_tables ?? [], narrowedTables),
+    max_risk: minRisk(agentRow.max_risk ?? "high", narrowedRisk),
+    source: headerSlug ? "header" : "session",
+  };
+}
+
+function checkScope(scope: Scope, opts: {
+  capability_id?: string | null;
+  tables?: string[];
+  risk?: "low" | "medium" | "high";
+}): { ok: true } | { ok: false; reason: string } {
+  if (opts.capability_id && scope.capability_ids.length > 0
+      && !scope.capability_ids.includes(opts.capability_id)) {
+    return { ok: false, reason: `capability '${opts.capability_id}' not in agent scope` };
+  }
+  if (opts.tables && opts.tables.length && scope.tables.length > 0) {
+    const bad = opts.tables.filter((t) => !scope.tables.includes(t));
+    if (bad.length) return { ok: false, reason: `tables not in agent scope: ${bad.join(", ")}` };
+  }
+  if (opts.risk && RISK_RANK[opts.risk] > RISK_RANK[scope.max_risk]) {
+    return { ok: false, reason: `risk '${opts.risk}' exceeds agent max_risk '${scope.max_risk}'` };
+  }
+  return { ok: true };
 }
 
 async function logApiCall(entry: {
