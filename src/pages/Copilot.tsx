@@ -166,38 +166,31 @@ export default function Copilot() {
             setAgentState("listening");
             setConnecting(false);
             const src = micCtx.createMediaStreamSource(stream);
-            const proc = micCtx.createScriptProcessor(4096, 1, 1);
-            procRef.current = proc;
+            micSourceRef.current = src;
+            const node = new AudioWorkletNode(micCtx, "copilot-mic", {
+              numberOfInputs: 1,
+              numberOfOutputs: 0,
+              channelCount: 1,
+            });
+            workletRef.current = node;
+            node.port.postMessage({ gain: micGainRef.current });
             let lvlAccum = 0, lvlFrames = 0;
-            proc.onaudioprocess = (e) => {
+            node.port.onmessage = (ev) => {
               if (ws.readyState !== WebSocket.OPEN) return;
-              const f32 = e.inputBuffer.getChannelData(0);
-              const gain = micGainRef.current;
-              // RMS for level meter (pre-mute, post-gain).
-              let sumSq = 0;
-              const i16 = new Int16Array(f32.length);
-              for (let i = 0; i < f32.length; i++) {
-                const s = Math.max(-1, Math.min(1, f32[i] * gain));
-                i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-                sumSq += s * s;
-              }
-              const rms = Math.sqrt(sumSq / f32.length);
+              const { pcm, rms } = ev.data as { pcm: ArrayBuffer; rms: number };
               lvlAccum = Math.max(lvlAccum * 0.7, rms);
               if (++lvlFrames >= 3) {
                 setMicLevel(Math.min(1, lvlAccum * 1.8));
                 lvlFrames = 0;
               }
-              // Gating: mute, or PTT mode and not held.
               const gated = mutedRef.current || (pttModeRef.current && !pttHeldRef.current);
               if (gated) {
-                // Send silence to keep stream alive but not transmit speech.
-                ws.send(new Int16Array(f32.length).buffer);
+                ws.send(new ArrayBuffer(pcm.byteLength));
               } else {
-                ws.send(i16.buffer);
+                ws.send(pcm);
               }
             };
-            src.connect(proc);
-            proc.connect(micCtx.destination);
+            src.connect(node);
             setActive(true);
           } else if (m.type === "ConversationText") {
             append({ who: m.role === "user" ? "you" : "copilot", text: m.content, ts: Date.now() });
