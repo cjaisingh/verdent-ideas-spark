@@ -19,6 +19,7 @@ import { AgentSelector } from "@/components/copilot/AgentSelector";
 import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
 import { CopilotKnowledgeCard } from "@/components/copilot/CopilotKnowledgeCard";
 import { CopilotOnboardingCard } from "@/components/copilot/CopilotOnboardingCard";
+import { LessonsLoadedCard } from "@/components/copilot/LessonsLoadedCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
@@ -624,6 +625,8 @@ export default function Copilot() {
       <CopilotKnowledgeCard />
 
       <CopilotOnboardingCard />
+
+      <LessonsLoadedCard />
 
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
