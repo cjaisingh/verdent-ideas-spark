@@ -151,9 +151,21 @@ export default function DbAuditLogs() {
             Persisted, already-redacted audit entries from the db-explorer edge function. Streams live.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toast.success("Filtered view link copied");
+            }}
+          >
+            <Link2 className="h-4 w-4 mr-2" /> Copy link
+          </Button>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </div>
 
       <Card>
