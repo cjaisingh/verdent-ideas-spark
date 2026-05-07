@@ -22,6 +22,7 @@ bun run test:e2e
 |---|---|
 | `e2e/auth.test.ts` | Operator can sign in; bad password rejected; anon session has no user |
 | `e2e/rls.test.ts` | Anon cannot read `tenants` / `api_call_logs`; operator can read `tenants` / `capabilities`; operator client cannot directly write to `okr_nodes` / `idempotency_keys` (writes go through edge fn) |
+| `e2e/rls-matrix.test.ts` | Full RLS access matrix — every public table is checked: anon SELECT/INSERT blocked, operator SELECT allowed, managed tables block direct INSERT. Plus an RPC matrix: anon rejected from `grant_user_role`, `revoke_user_role`, `list_users_with_roles`, `purge_*`, `retention_stats`; operator can call `retention_stats` |
 | `e2e/edge-function.test.ts` | 401 on no/invalid auth; 200 with operator JWT; service-token header authorizes; wrong service token rejected; `POST /okr/ingest` is idempotent on replay; validation returns 400 |
 
 ## Adding a CI job
