@@ -14,6 +14,7 @@ import ControlPlane from "./pages/ControlPlane";
 import CapabilityDetail from "./pages/CapabilityDetail";
 import ApiExplorer from "./pages/ApiExplorer";
 import DbExplorer from "./pages/DbExplorer";
+import DbAuditLogs from "./pages/DbAuditLogs";
 import Admin from "./pages/Admin";
 import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
