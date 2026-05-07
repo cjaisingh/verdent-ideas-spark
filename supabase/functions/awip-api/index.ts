@@ -805,6 +805,67 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
 
   const RISK_MAP: Record<string, string> = { low: "safe", medium: "risky", high: "blocker", safe: "safe", risky: "risky", blocker: "blocker", unknown: "unknown" };
   const risk = RISK_MAP[String(body.risk ?? "unknown")] ?? "unknown";
+
+  // ----- Agent scope enforcement -----
+  // Resolves the caller's active Copilot agent (header override or session) intersected
+  // with the user's profile narrowing, then checks capability/tables/risk.
+  const scope = await resolveActiveScope(req, userId);
+  if (scope) {
+    const requestedRiskNorm: "low" | "medium" | "high" =
+      risk === "safe" ? "low" : risk === "risky" ? "medium" : risk === "blocker" ? "high" : "high";
+    const requestedTables: string[] = Array.isArray(body.intent_payload?.tables)
+      ? body.intent_payload.tables.filter((t: unknown) => typeof t === "string")
+      : [];
+    const verdict = checkScope(scope, {
+      capability_id: body.capability_id,
+      tables: requestedTables,
+      risk: requestedRiskNorm,
+    });
+    if (!verdict.ok) {
+      // Queue as auto-rejected so operators can audit / override.
+      const { data: rej } = await supabase
+        .from("approval_queue")
+        .insert({
+          activity: body.activity,
+          risk,
+          intent_payload: body.intent_payload ?? {},
+          requested_by: body.requested_by ?? actor,
+          tenant_id: body.tenant_id ?? null,
+          requesting_module: body.requesting_module,
+          capability_id: body.capability_id,
+          callback_url: body.callback_url ?? null,
+          idempotency_key: body.idempotency_key ?? null,
+          status: "rejected",
+          decided_by: "system:agent_scope",
+          decided_at: new Date().toISOString(),
+          result: { reason: "agent_scope", detail: verdict.reason, agent: scope.agent_slug },
+        })
+        .select("id, status")
+        .single();
+      await supabase.from("capability_events").insert({
+        capability_id: body.capability_id,
+        event_type: "approval_rejected_scope",
+        actor,
+        payload: redact({
+          approval_id: rej?.id,
+          activity: body.activity,
+          risk,
+          requesting_module: body.requesting_module,
+          agent: scope.agent_slug,
+          reason: verdict.reason,
+        }),
+      });
+      return json({
+        ok: false,
+        error: "agent_scope_violation",
+        reason: verdict.reason,
+        agent: scope.agent_slug,
+        approval_id: rej?.id ?? null,
+        status: "rejected",
+      }, 403);
+    }
+  }
+
   const { data: ins, error } = await supabase
     .from("approval_queue")
     .insert({
