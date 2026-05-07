@@ -151,9 +151,8 @@ export default function DbAuditLogs() {
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
-                  <>
+                  <Fragment key={r.id}>
                     <TableRow
-                      key={r.id}
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() => setExpanded((e) => (e === r.id ? null : r.id))}
                     >
@@ -176,7 +175,7 @@ export default function DbAuditLogs() {
                       </TableCell>
                     </TableRow>
                     {expanded === r.id && (
-                      <TableRow key={`${r.id}-x`}>
+                      <TableRow>
                         <TableCell colSpan={9} className="bg-muted/30">
                           <pre className="text-xs whitespace-pre-wrap break-all">
 {JSON.stringify({ user_id: r.user_id, error_code: r.error_code, requested: r.requested }, null, 2)}
@@ -184,7 +183,7 @@ export default function DbAuditLogs() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 ))}
                 {!loading && rows.length === 0 && (
                   <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground text-sm py-6">
