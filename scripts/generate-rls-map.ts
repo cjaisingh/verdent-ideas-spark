@@ -45,60 +45,25 @@ WHERE n.nspname = 'public' AND p.prosecdef = true
 ORDER BY p.proname
 `;
 
-function runPsql(sql: string): unknown[] {
-  const r = spawnSync(
-    "psql",
-    ["-At", "-F", "\u0001", "-c", `COPY (${sql.trim().replace(/;$/, "")}) TO STDOUT WITH CSV`],
-    { encoding: "utf8" },
-  );
+function runPsqlJson(sql: string): unknown[] {
+  // Wrap in jsonb_agg so output is a single line — robust against newlines/quotes in cells.
+  const wrapped = `SELECT COALESCE(jsonb_agg(t), '[]'::jsonb) FROM (${sql.trim().replace(/;$/, "")}) t`;
+  const r = spawnSync("psql", ["-At", "-c", wrapped], { encoding: "utf8" });
   if (r.status !== 0) {
     console.error(r.stderr);
     throw new Error(`psql failed (${r.status})`);
   }
-  // Parse simple CSV (no embedded newlines in our output)
-  const lines = r.stdout.split("\n").filter(Boolean);
-  return lines.map((l) => parseCsvLine(l));
-}
-
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cur = "";
-  let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQ) {
-      if (c === '"' && line[i + 1] === '"') {
-        cur += '"';
-        i++;
-      } else if (c === '"') {
-        inQ = false;
-      } else cur += c;
-    } else {
-      if (c === ",") {
-        out.push(cur);
-        cur = "";
-      } else if (c === '"') inQ = true;
-      else cur += c;
-    }
-  }
-  out.push(cur);
-  return out;
+  return JSON.parse(r.stdout.trim() || "[]");
 }
 
 function loadPolicies(): PolicyRow[] {
-  const rows = runPsql(POLICY_SQL) as string[][];
-  return rows.map(([tablename, cmd, qual, with_check]) => ({
-    tablename,
-    cmd,
-    qual: qual || null,
-    with_check: with_check || null,
-  }));
+  return runPsqlJson(POLICY_SQL) as PolicyRow[];
 }
 
 function loadFunctions(): FunctionRow[] {
-  const rows = runPsql(FN_SQL) as string[][];
-  return rows.map(([fname, def]) => {
-    const m = def.match(/has_role\([^,]+,\s*'(admin|operator|user)'/);
+  const rows = runPsqlJson(FN_SQL) as Array<{ fname: string; def: string }>;
+  return rows.map(({ fname, def }) => {
+    const m = def?.match(/has_role\([^,]+,\s*'(admin|operator|user)'/);
     return { fname, has_role_check: m ? m[1] : null };
   });
 }
