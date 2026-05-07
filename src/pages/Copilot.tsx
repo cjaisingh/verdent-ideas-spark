@@ -396,6 +396,7 @@ export default function Copilot() {
         ptt_mode: pttMode,
         mic_gain: micGain,
         out_volume: outVolume,
+        noise_gate: noiseGate,
       }, { onConflict: "user_id" });
       if (error) throw error;
       toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
