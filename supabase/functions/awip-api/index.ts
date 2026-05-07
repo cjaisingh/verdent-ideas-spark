@@ -1297,6 +1297,8 @@ Deno.serve(async (req) => {
       const capDetailMatch = path.match(/^\/capabilities\/([^\/]+)\/demand-detail$/i);
       const approvalDecideMatch = path.match(/^\/approvals\/([0-9a-f-]+)\/decide$/i);
       const approvalGetMatch = path.match(/^\/approvals\/([0-9a-f-]+)$/i);
+      const onboardingConfirmMatch = path.match(/^\/onboarding\/([0-9a-f-]+)\/confirm$/i);
+      const onboardingGetMatch = path.match(/^\/onboarding\/([0-9a-f-]+)$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
@@ -1312,6 +1314,10 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor);
       else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1]);
       else if (req.method === "GET" && path === "/approvals") response = await listApprovals(url);
+      else if (req.method === "POST" && path === "/onboarding/start") response = await startOnboarding(req, auth.actor, auth.user_id);
+      else if (req.method === "POST" && onboardingConfirmMatch) response = await confirmOnboarding(req, onboardingConfirmMatch[1], auth.actor);
+      else if (req.method === "GET" && onboardingGetMatch) response = await getOnboarding(onboardingGetMatch[1]);
+      else if (req.method === "GET" && path === "/onboarding") response = await listOnboarding(url);
       else response = json({ error: "not found", path }, 404);
     }
     }
