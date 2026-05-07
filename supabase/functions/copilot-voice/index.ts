@@ -267,7 +267,7 @@ async function dispatchTool(name: string, args: any, session: Session) {
 
 
 // ---------- LLM "think" step ----------
-async function think(history: any[], jwt: string): Promise<string> {
+async function think(history: any[], session: Session): Promise<string> {
   const messages = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
   // Up to 3 tool-call rounds.
   for (let round = 0; round < 3; round++) {
