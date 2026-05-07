@@ -467,12 +467,24 @@ async function think(history: any[], session: Session): Promise<string> {
 
 // ---------- Authorize JWT ----------
 const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-async function isOperator(jwt: string): Promise<boolean> {
+async function authorizeOperator(jwt: string): Promise<{ ok: boolean; user_id?: string }> {
   const { data, error } = await supa.auth.getUser(jwt);
-  if (error || !data.user) return false;
+  if (error || !data.user) return { ok: false };
   const { data: roles } = await supa
     .from("user_roles").select("role").eq("user_id", data.user.id);
-  return !!roles?.some((r: any) => r.role === "operator" || r.role === "admin");
+  const ok = !!roles?.some((r: any) => r.role === "operator" || r.role === "admin");
+  return { ok, user_id: ok ? data.user.id : undefined };
+}
+
+async function loadOperatorContext(user_id: string): Promise<{ lessons: Lesson[]; model: string }> {
+  const [lessonsRes, settingsRes] = await Promise.all([
+    supa.from("copilot_lessons").select("id,lesson,scope,active").eq("active", true).order("created_at", { ascending: false }).limit(50),
+    supa.from("copilot_settings").select("model").eq("user_id", user_id).maybeSingle(),
+  ]);
+  return {
+    lessons: (lessonsRes.data ?? []) as Lesson[],
+    model: (settingsRes.data?.model as string) || "openai/gpt-5-mini",
+  };
 }
 
 // ---------- WebSocket bridge ----------
