@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronUp, Wrench, Database, ShieldAlert } from "lucide-react";
+import { ChevronDown, ChevronUp, Wrench, Database, ShieldAlert, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import type { CopilotAgent, AgentOverride } from "@/hooks/useCopilotAgents";
 
@@ -30,6 +31,10 @@ export function AgentScopeCard({ agent, override, onSaveOverride }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [voice, setVoice] = useState(override?.tts_voice ?? "");
   const [greeting, setGreeting] = useState(override?.greeting ?? "");
+  // null === "use global / setting from copilot_settings"
+  const [micGain, setMicGain] = useState<number | null>(override?.mic_gain ?? null);
+  const [outVolume, setOutVolume] = useState<number | null>(override?.out_volume ?? null);
+  const [noiseGate, setNoiseGate] = useState<number | null>(override?.noise_gate ?? null);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -38,6 +43,9 @@ export function AgentScopeCard({ agent, override, onSaveOverride }: Props) {
       await onSaveOverride({
         tts_voice: voice.trim() ? voice : null,
         greeting: greeting.trim() ? greeting : null,
+        mic_gain: micGain,
+        out_volume: outVolume,
+        noise_gate: noiseGate,
       });
       toast.success(`Overrides saved for ${agent.name}`);
     } catch (e: any) {
@@ -45,6 +53,14 @@ export function AgentScopeCard({ agent, override, onSaveOverride }: Props) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const reset = () => {
+    setVoice("");
+    setGreeting("");
+    setMicGain(null);
+    setOutVolume(null);
+    setNoiseGate(null);
   };
 
   return (
@@ -109,9 +125,9 @@ export function AgentScopeCard({ agent, override, onSaveOverride }: Props) {
       </Button>
 
       {expanded && (
-        <div className="space-y-3 pt-1 border-t">
+        <div className="space-y-4 pt-1 border-t">
           <div className="space-y-1.5 pt-3">
-            <Label className="text-xs">Voice (override)</Label>
+            <Label className="text-xs">Voice</Label>
             <Select value={voice || "__default"} onValueChange={(v) => setVoice(v === "__default" ? "" : v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -120,17 +136,68 @@ export function AgentScopeCard({ agent, override, onSaveOverride }: Props) {
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-1.5">
-            <Label className="text-xs">Greeting (override)</Label>
+            <Label className="text-xs">Greeting</Label>
             <Input
               value={greeting}
               onChange={(e) => setGreeting(e.target.value)}
               placeholder={agent.default_greeting}
             />
           </div>
-          <Button size="sm" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save overrides"}
-          </Button>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Mic gain</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {micGain === null ? "global" : `${micGain.toFixed(2)}×`}
+              </span>
+            </div>
+            <Slider
+              value={[micGain ?? 1.0]}
+              min={0} max={2} step={0.05}
+              onValueChange={(v) => setMicGain(v[0])}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Output volume</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {outVolume === null ? "global" : `${Math.round(outVolume * 100)}%`}
+              </span>
+            </div>
+            <Slider
+              value={[outVolume ?? 1.0]}
+              min={0} max={1.5} step={0.05}
+              onValueChange={(v) => setOutVolume(v[0])}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Noise gate</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {noiseGate === null
+                  ? "global"
+                  : noiseGate === 0 ? "Off" : `${(noiseGate * 100).toFixed(1)}%`}
+              </span>
+            </div>
+            <Slider
+              value={[noiseGate ?? 0.02]}
+              min={0} max={0.2} step={0.005}
+              onValueChange={(v) => setNoiseGate(v[0])}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button size="sm" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save overrides"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={reset}>
+              <RotateCcw className="size-3 mr-1" /> Reset all
+            </Button>
+          </div>
         </div>
       )}
     </Card>
