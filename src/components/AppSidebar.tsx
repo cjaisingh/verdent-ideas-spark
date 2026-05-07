@@ -19,6 +19,7 @@ const groups = [
       { url: "/control-plane", title: "Control plane", icon: Settings2 },
       { url: "/copilot", title: "Copilot", icon: Mic },
       { url: "/copilot/agents", title: "Copilot agents", icon: Mic },
+      { url: "/copilot/profile", title: "Copilot profile", icon: UserCircle2 },
     ],
   },
   {
