@@ -641,6 +641,45 @@ Deno.serve(async (req) => {
         return;
       }
 
+      // UI-driven confirmation of a staged lesson (operator clicked "Save" on the card).
+      if (msg.type === "confirm_pending_lesson") {
+        const staged = session.staged_lesson;
+        if (!staged) { notify({ type: "pending_lesson_cleared", reason: "missing" }); return; }
+        if (msg.token && msg.token !== staged.token) {
+          notify({ type: "pending_lesson_error", error: "token mismatch" });
+          return;
+        }
+        // Allow inline edits from the UI before committing.
+        const finalLesson = typeof msg.lesson === "string" && msg.lesson.trim()
+          ? msg.lesson.trim() : staged.lesson;
+        const finalScope = ["global","notebook","approvals","voice_style"].includes(msg.scope)
+          ? msg.scope : staged.scope;
+        if (finalLesson.length > 500) {
+          notify({ type: "pending_lesson_error", error: "lesson too long (max 500)" });
+          return;
+        }
+        const result = await callAwip(`/lessons`, "POST", session.jwt, {
+          lesson: finalLesson, scope: finalScope, source: "voice",
+        });
+        session.staged_lesson = null;
+        if (result.status === 200 && (result.data as any)?.lesson) {
+          session.lessons = [...session.lessons, (result.data as any).lesson];
+          notify({ type: "pending_lesson_cleared", reason: "saved" });
+          if (dg && dg.readyState === WebSocket.OPEN) {
+            try { dg.send(JSON.stringify({ type: "InjectAgentMessage", content: "Saved." })); } catch {}
+          }
+        } else {
+          notify({ type: "pending_lesson_error", error: (result.data as any)?.error ?? "save failed" });
+        }
+        return;
+      }
+      if (msg.type === "cancel_pending_lesson") {
+        const had = !!session.staged_lesson;
+        session.staged_lesson = null;
+        if (had) notify({ type: "pending_lesson_cleared", reason: "cancelled" });
+        return;
+      }
+
       if (msg.type === "auth") {
         session.jwt = msg.jwt;
         const authz = await authorizeOperator(session.jwt);
