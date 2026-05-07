@@ -281,14 +281,16 @@ export default function Copilot() {
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
+      // Precedence: explicit session settings win (operator master pref);
+      // active agent fields are fallbacks when the session field is empty.
       ws.onopen = () => ws.send(JSON.stringify({
         type: "auth",
         jwt,
         settings: {
           stt_model: sttModel,
-          tts_voice: activeAgent?.tts_voice ?? ttsVoice,
-          language: activeAgent?.language ?? language,
-          greeting: activeAgent?.default_greeting ?? greeting,
+          tts_voice: ttsVoice || activeAgent?.tts_voice,
+          language: language || activeAgent?.language,
+          greeting: greeting || activeAgent?.default_greeting,
           agent_slug: activeAgent?.slug ?? null,
           system_prompt: activeAgent?.system_prompt ?? null,
         },
