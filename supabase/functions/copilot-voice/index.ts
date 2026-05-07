@@ -34,8 +34,10 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "decide_approval",
-      description: "Approve or reject a pending approval by id.",
+      name: "propose_decision",
+      description:
+        "Stage an approval decision for operator confirmation. Returns a human-readable summary and a confirmation_token. " +
+        "MUST be called before confirm_decision. Read the summary back to the operator and ask them to confirm out loud.",
       parameters: {
         type: "object",
         properties: {
@@ -44,6 +46,35 @@ const TOOLS = [
           note: { type: "string" },
         },
         required: ["id", "decision"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "confirm_decision",
+      description:
+        "Commit a previously proposed decision. Only call AFTER the operator has explicitly confirmed " +
+        "(e.g. 'yes', 'go ahead', 'confirm'). Pass the confirmation_token returned by propose_decision.",
+      parameters: {
+        type: "object",
+        properties: {
+          confirmation_token: { type: "string" },
+        },
+        required: ["confirmation_token"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancel_pending_decision",
+      description: "Discard a staged decision if the operator says no, cancel, or wants to change it.",
+      parameters: {
+        type: "object",
+        properties: { confirmation_token: { type: "string" } },
         additionalProperties: false,
       },
     },
@@ -91,8 +122,17 @@ const SYSTEM_PROMPT = `You are AWIP Copilot — the operator's hands-free voice 
 British English, conversational, brief. Reply in 1-3 short sentences unless asked for detail.
 You can inspect AWIP state and act on approvals via the provided tools.
 When the operator asks "what's pending" or "anything to look at", call list_pending_approvals.
-Never read out UUIDs or long IDs aloud — summarise instead. Confirm before approving anything.
+Never read out UUIDs or long IDs aloud — summarise instead.
+
+APPROVAL FLOW (two steps, mandatory):
+1. When the operator wants to approve or reject something, call propose_decision FIRST.
+   Then read the returned summary aloud and ask: "Shall I confirm?" (or similar).
+2. Only after the operator says yes / go ahead / confirm, call confirm_decision with the token.
+   If they say no, cancel, wait, or change anything, call cancel_pending_decision.
+Never call confirm_decision without an immediately preceding explicit verbal confirmation.
+
 If unsure, ask one short clarifying question.`;
+
 
 // ---------- AWIP tool dispatcher ----------
 async function callAwip(path: string, method: string, jwt: string, body?: unknown) {
@@ -109,14 +149,111 @@ async function callAwip(path: string, method: string, jwt: string, body?: unknow
   catch { return { status: res.status, data: text }; }
 }
 
-async function dispatchTool(name: string, args: any, jwt: string) {
+type StagedDecision = {
+  token: string;
+  id: string;
+  decision: "approved" | "rejected";
+  note?: string;
+  activity: string;
+  risk: string;
+  module: string;
+  summary: string;
+  staged_at: number;
+};
+type Session = { jwt: string; staged: StagedDecision | null };
+
+const STAGE_TTL_MS = 5 * 60 * 1000;
+
+function summariseApproval(item: any, decision: string, note?: string): string {
+  const activity = item?.activity ?? "unknown activity";
+  const risk = item?.risk ?? "unknown";
+  const module = item?.requesting_module ?? "unknown module";
+  const payloadPreview = item?.intent_payload
+    ? JSON.stringify(item.intent_payload).slice(0, 200)
+    : "";
+  return [
+    `About to ${decision === "approved" ? "APPROVE" : "REJECT"} a ${risk}-risk ${activity}`,
+    `from ${module}.`,
+    payloadPreview ? `Details: ${payloadPreview}.` : "",
+    note ? `Note: "${note}".` : "",
+    `Confirm to commit.`,
+  ].filter(Boolean).join(" ");
+}
+
+async function dispatchTool(name: string, args: any, session: Session) {
+  const jwt = session.jwt;
   switch (name) {
     case "list_pending_approvals":
       return callAwip("/approvals?status=pending", "GET", jwt);
-    case "decide_approval":
-      return callAwip(`/approvals/${args.id}/decide`, "POST", jwt, {
-        decision: args.decision, note: args.note,
+
+    case "propose_decision": {
+      if (!["approved", "rejected"].includes(args.decision)) {
+        return { status: 400, data: { error: "decision must be approved or rejected" } };
+      }
+      const fetched = await callAwip(`/approvals/${args.id}`, "GET", jwt);
+      if (fetched.status !== 200) {
+        return { status: fetched.status, data: { error: "could not fetch approval", detail: fetched.data } };
+      }
+      const item = (fetched.data as any)?.approval ?? fetched.data;
+      if (!item || item.status !== "pending") {
+        return {
+          status: 409,
+          data: { error: `approval is not pending (status=${item?.status ?? "unknown"})` },
+        };
+      }
+      const token = crypto.randomUUID();
+      const summary = summariseApproval(item, args.decision, args.note);
+      session.staged = {
+        token,
+        id: args.id,
+        decision: args.decision,
+        note: args.note,
+        activity: item.activity,
+        risk: item.risk,
+        module: item.requesting_module ?? "unknown",
+        summary,
+        staged_at: Date.now(),
+      };
+      return {
+        status: 200,
+        data: {
+          confirmation_token: token,
+          summary,
+          activity: item.activity,
+          risk: item.risk,
+          module: item.requesting_module,
+          decision: args.decision,
+          instructions: "Read the summary aloud and ask the operator to confirm. " +
+            "Then call confirm_decision with this token only after they say yes.",
+        },
+      };
+    }
+
+    case "confirm_decision": {
+      const staged = session.staged;
+      if (!staged) {
+        return { status: 400, data: { error: "no decision staged. Call propose_decision first." } };
+      }
+      if (staged.token !== args.confirmation_token) {
+        return { status: 400, data: { error: "confirmation_token does not match staged decision" } };
+      }
+      if (Date.now() - staged.staged_at > STAGE_TTL_MS) {
+        session.staged = null;
+        return { status: 410, data: { error: "staged decision expired. Re-propose." } };
+      }
+      const result = await callAwip(`/approvals/${staged.id}/decide`, "POST", jwt, {
+        decision: staged.decision, note: staged.note,
       });
+      session.staged = null;
+      return result;
+    }
+
+    case "cancel_pending_decision": {
+      const had = !!session.staged;
+      session.staged = null;
+      return { status: 200, data: { cancelled: had } };
+    }
+
     case "list_capabilities":
       return callAwip(`/capabilities${args.status ? `?status=${args.status}` : ""}`, "GET", jwt);
     case "recent_events":
@@ -128,8 +265,9 @@ async function dispatchTool(name: string, args: any, jwt: string) {
   }
 }
 
+
 // ---------- LLM "think" step ----------
-async function think(history: any[], jwt: string): Promise<string> {
+async function think(history: any[], session: Session): Promise<string> {
   const messages = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
   // Up to 3 tool-call rounds.
   for (let round = 0; round < 3; round++) {
@@ -159,7 +297,7 @@ async function think(history: any[], jwt: string): Promise<string> {
       for (const tc of msg.tool_calls) {
         let args: any = {};
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
-        const result = await dispatchTool(tc.function.name, args, jwt);
+        const result = await dispatchTool(tc.function.name, args, session);
         messages.push({
           role: "tool",
           tool_call_id: tc.id,
@@ -196,7 +334,7 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
   let dg: WebSocket | null = null;
-  let jwt = "";
+  const session: Session = { jwt: "", staged: null };
   let history: any[] = [];
   let thinking = false;
 
@@ -207,8 +345,8 @@ Deno.serve(async (req) => {
       try { msg = JSON.parse(ev.data); } catch { return; }
 
       if (msg.type === "auth") {
-        jwt = msg.jwt;
-        if (!(await isOperator(jwt))) {
+        session.jwt = msg.jwt;
+        if (!(await isOperator(session.jwt))) {
           client.send(JSON.stringify({ type: "error", error: "not_operator" }));
           client.close(4401, "unauthorized");
           return;
@@ -248,7 +386,7 @@ Deno.serve(async (req) => {
                 thinking = true;
                 history.push({ role: "user", content: m.content });
                 try {
-                  const reply = await think(history, jwt);
+                  const reply = await think(history, session);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
                     dg!.send(JSON.stringify({ type: "InjectAgentMessage", content: reply }));
