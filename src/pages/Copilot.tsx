@@ -243,6 +243,8 @@ export default function Copilot() {
     setMicLevel(0);
     setPttHeld(false);
     setAutoMuteReason(null);
+    setPendingLesson(null);
+    setSavingLesson(false);
   };
 
   // Switch to a different Copilot agent. Persists the choice and announces the switch
