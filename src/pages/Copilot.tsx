@@ -37,6 +37,7 @@ const BRAIN_MODELS = [
   { value: "openai/gpt-5", label: "GPT-5 (premium)" },
   { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash (cheap & fast)" },
 ];
+const TTS_VOICES = [
   { value: "aura-2-orion-en", label: "Aura-2 Orion (male, en)" },
   { value: "aura-2-helios-en", label: "Aura-2 Helios (male, en)" },
   { value: "aura-2-luna-en", label: "Aura-2 Luna (female, en)" },
