@@ -337,6 +337,12 @@ Deno.serve(async (req) => {
   const session: Session = { jwt: "", staged: null };
   let history: any[] = [];
   let thinking = false;
+  let settings = {
+    stt_model: "nova-3",
+    tts_voice: "aura-2-orion-en",
+    language: "en",
+    greeting: "Copilot ready.",
+  };
 
   client.onmessage = async (ev) => {
     // Client first sends auth, then we open Deepgram.
