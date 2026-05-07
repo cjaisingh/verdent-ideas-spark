@@ -49,13 +49,22 @@ export default function Copilot() {
   const [agentState, setAgentState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [log, setLog] = useState<LogLine[]>([]);
 
-  // Controls
-  const [pttMode, setPttMode] = useState(false); // false = always-on (hands-free), true = push-to-talk
+  // Controls (persisted per operator in copilot_settings)
+  const [pttMode, setPttMode] = useState(false);
   const [pttHeld, setPttHeld] = useState(false);
-  const [micGain, setMicGain] = useState(1.0);   // 0..2
-  const [outVolume, setOutVolume] = useState(1.0); // 0..1.5
-  const [micLevel, setMicLevel] = useState(0); // 0..1, smoothed RMS
+  const [micGain, setMicGain] = useState(1.0);
+  const [outVolume, setOutVolume] = useState(1.0);
+  const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+
+  // Voice/STT settings (persisted)
+  const [sttModel, setSttModel] = useState("nova-3");
+  const [ttsVoice, setTtsVoice] = useState("aura-2-orion-en");
+  const [language, setLanguage] = useState("en");
+  const [greeting, setGreeting] = useState("Copilot ready.");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
