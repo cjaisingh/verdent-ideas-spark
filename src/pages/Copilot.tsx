@@ -97,6 +97,7 @@ export default function Copilot() {
     micGainRef.current = micGain;
     workletRef.current?.port.postMessage({ gain: micGain });
   }, [micGain]);
+  useEffect(() => { noiseGateRef.current = noiseGate; }, [noiseGate]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => {
     if (outGainRef.current) outGainRef.current.gain.value = outVolume;
