@@ -31,10 +31,16 @@ export default function DbExplorer() {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  const callExplorer = async <T,>(body: Record<string, unknown>): Promise<T | null> => {
+    const { data, error } = await supabase.functions.invoke("db-explorer", { body });
+    if (error) { toast.error(error.message); return null; }
+    if (data?.error) { toast.error(data.error); return null; }
+    return (data?.data ?? null) as T | null;
+  };
+
   const loadTables = async () => {
-    const { data, error } = await supabase.rpc("db_list_tables");
-    if (error) { toast.error(error.message); return; }
-    setTables((data || []) as TableInfo[]);
+    const data = await callExplorer<TableInfo[]>({ action: "list_tables" });
+    if (data) setTables(data);
   };
 
   useEffect(() => { loadTables(); }, []);
@@ -42,14 +48,12 @@ export default function DbExplorer() {
   const loadTable = async (name: string, p = 0) => {
     setLoading(true);
     setSelected(name); setPage(p);
-    const [colsRes, rowsRes] = await Promise.all([
-      supabase.rpc("db_list_columns", { _table: name }),
-      supabase.rpc("db_preview_rows", { _table: name, _limit: PAGE_SIZE, _offset: p * PAGE_SIZE }),
+    const [cols, rws] = await Promise.all([
+      callExplorer<ColumnInfo[]>({ action: "list_columns", table: name }),
+      callExplorer<any[]>({ action: "preview_rows", table: name, limit: PAGE_SIZE, offset: p * PAGE_SIZE }),
     ]);
-    if (colsRes.error) toast.error(colsRes.error.message);
-    if (rowsRes.error) toast.error(rowsRes.error.message);
-    setColumns((colsRes.data || []) as ColumnInfo[]);
-    setRows(Array.isArray(rowsRes.data) ? (rowsRes.data as any[]) : []);
+    setColumns(cols ?? []);
+    setRows(Array.isArray(rws) ? rws : []);
     setLoading(false);
   };
 
