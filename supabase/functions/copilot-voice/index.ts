@@ -269,7 +269,14 @@ type StagedDecision = {
   summary: string;
   staged_at: number;
 };
-type Session = { jwt: string; staged: StagedDecision | null };
+type Lesson = { id: string; lesson: string; scope: string; active: boolean };
+type Session = {
+  jwt: string;
+  user_id: string;
+  staged: StagedDecision | null;
+  lessons: Lesson[];
+  model: string;
+};
 
 const STAGE_TTL_MS = 5 * 60 * 1000;
 
