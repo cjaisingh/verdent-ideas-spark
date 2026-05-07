@@ -543,11 +543,29 @@ Deno.serve(async (req) => {
 
       if (msg.type === "auth") {
         session.jwt = msg.jwt;
-        if (!(await isOperator(session.jwt))) {
+        const authz = await authorizeOperator(session.jwt);
+        if (!authz.ok || !authz.user_id) {
           client.send(JSON.stringify({ type: "error", error: "not_operator" }));
           client.close(4401, "unauthorized");
           return;
         }
+        session.user_id = authz.user_id;
+        try {
+          const ctx = await loadOperatorContext(authz.user_id);
+          session.lessons = ctx.lessons;
+          session.model = ctx.model;
+        } catch (e) {
+          console.warn("loadOperatorContext failed", e);
+        }
+        // Subscribe to live lesson changes so future turns reflect them.
+        try {
+          supa.channel(`lessons-${authz.user_id}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "copilot_lessons" }, async () => {
+              const ctx = await loadOperatorContext(authz.user_id!);
+              session.lessons = ctx.lessons;
+            })
+            .subscribe();
+        } catch (e) { console.warn("realtime subscribe failed", e); }
         // Apply per-session settings overrides from client.
         if (msg.settings && typeof msg.settings === "object") {
           settings = { ...settings, ...msg.settings };
