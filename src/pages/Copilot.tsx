@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useCopilotAgents } from "@/hooks/useCopilotAgents";
 import { AgentSelector } from "@/components/copilot/AgentSelector";
 import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
+import { CopilotKnowledgeCard } from "@/components/copilot/CopilotKnowledgeCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
@@ -583,6 +584,8 @@ export default function Copilot() {
           onSaveOverride={(patch) => upsertOverride(activeAgentRaw.id, patch)}
         />
       )}
+
+      <CopilotKnowledgeCard />
 
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
