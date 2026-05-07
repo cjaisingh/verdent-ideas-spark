@@ -13,7 +13,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Plus, Save, Trash2, GripVertical, ArrowUp, ArrowDown, X } from "lucide-react";
+import { BookOpen, Plus, Save, Trash2, GripVertical, ArrowUp, ArrowDown, X, Sparkles } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RUNBOOK_TEMPLATES, type RunbookTemplate } from "@/lib/runbook-templates";
 import { toast } from "sonner";
 
 interface Step { title: string; detail?: string }
