@@ -587,6 +587,39 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_lessons: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          lesson: string
+          scope: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lesson: string
+          scope?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lesson?: string
+          scope?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       copilot_profiles: {
         Row: {
           context_notes: string | null
@@ -653,6 +686,7 @@ export type Database = {
           greeting: string
           language: string
           mic_gain: number
+          model: string
           noise_gate: number
           out_volume: number
           ptt_mode: boolean
@@ -667,6 +701,7 @@ export type Database = {
           greeting?: string
           language?: string
           mic_gain?: number
+          model?: string
           noise_gate?: number
           out_volume?: number
           ptt_mode?: boolean
@@ -681,6 +716,7 @@ export type Database = {
           greeting?: string
           language?: string
           mic_gain?: number
+          model?: string
           noise_gate?: number
           out_volume?: number
           ptt_mode?: boolean
