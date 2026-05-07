@@ -191,6 +191,7 @@ export default function Copilot() {
     setAgentState("idle");
     setMicLevel(0);
     setPttHeld(false);
+    setAutoMuteReason(null);
   };
 
   const start = async () => {
