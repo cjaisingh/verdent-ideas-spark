@@ -21,6 +21,7 @@ const groups = [
       { url: "/copilot/agents", title: "Copilot agents", icon: Mic },
       { url: "/copilot/profile", title: "Copilot profile", icon: UserCircle2 },
       { url: "/copilot/lessons", title: "Copilot lessons", icon: GraduationCap },
+      { url: "/copilot/transcripts", title: "Copilot transcripts", icon: MessageSquareText },
     ],
   },
   {
