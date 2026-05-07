@@ -69,7 +69,8 @@ export default function Copilot() {
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
   const playCtxRef = useRef<AudioContext | null>(null);
-  const procRef = useRef<ScriptProcessorNode | null>(null);
+  const workletRef = useRef<AudioWorkletNode | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playHeadRef = useRef<number>(0);
   const outGainRef = useRef<GainNode | null>(null);
