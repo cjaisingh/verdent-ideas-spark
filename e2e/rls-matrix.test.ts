@@ -59,10 +59,8 @@ describe("RLS matrix — direct client writes blocked on managed tables", () => 
  * Privileged RPC matrix.
  * Each function self-checks role and must reject anon. Operator is the bootstrap user
  * (granted both operator + admin), so admin-gated RPCs succeed; we only assert they
- * do not throw a permission error.
+ * do not throw a permission error. RPC names come from the generated map.
  */
-const ADMIN_RPCS = ["grant_user_role", "revoke_user_role", "list_users_with_roles"] as const;
-const OPERATOR_RPCS = ["purge_expired_rows", "purge_all_rows", "retention_stats"] as const;
 
 describe("RPC matrix — anon cannot call privileged RPCs", () => {
   for (const fn of [...ADMIN_RPCS, ...OPERATOR_RPCS]) {
