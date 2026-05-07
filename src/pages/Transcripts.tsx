@@ -5,9 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2, ShieldAlert, GraduationCap, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { scanLesson, describeIssues } from "@/lib/lessonSafety";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type LessonScope = "global" | "notebook" | "approvals" | "voice_style";
+type LessonDraft = { text: string; scope: LessonScope };
+const SCOPES: LessonScope[] = ["global", "notebook", "approvals", "voice_style"];
 
 type Transcript = {
   id: string;
@@ -63,6 +69,42 @@ const Transcripts = () => {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, LessonDraft>>({});
+  const [savingTurnId, setSavingTurnId] = useState<string | null>(null);
+
+  const startDraft = (turn: Turn) => {
+    const seed = turn.content.trim().slice(0, 300);
+    setDrafts(d => ({ ...d, [turn.id]: { text: `Learn from this: ${seed}`, scope: "global" } }));
+  };
+  const updateDraft = (id: string, patch: Partial<LessonDraft>) =>
+    setDrafts(d => ({ ...d, [id]: { ...d[id], ...patch } }));
+  const cancelDraft = (id: string) =>
+    setDrafts(d => { const n = { ...d }; delete n[id]; return n; });
+
+  const saveDraft = async (turnId: string) => {
+    const draft = drafts[turnId];
+    if (!draft) return;
+    const text = draft.text.trim();
+    if (!text) { toast({ title: "Lesson is empty", variant: "destructive" }); return; }
+    if (text.length > 500) { toast({ title: "Lesson must be ≤ 500 chars", variant: "destructive" }); return; }
+    const issues = scanLesson(text);
+    if (issues.length > 0) {
+      toast({ title: "Blocked: sensitive data", description: `Remove ${describeIssues(issues)}.`, variant: "destructive" });
+      return;
+    }
+    setSavingTurnId(turnId);
+    try {
+      await callApi("/lessons", {
+        method: "POST",
+        body: JSON.stringify({ lesson: text, scope: draft.scope, source: "manual", active: true }),
+      });
+      toast({ title: "Lesson saved" });
+      cancelDraft(turnId);
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally { setSavingTurnId(null); }
+  };
+
 
   const refresh = async () => {
     setLoading(true);
@@ -285,6 +327,7 @@ const Transcripts = () => {
                     <div className="space-y-2">
                       {turns.map(t => {
                         const isDiv = divergedOrd === t.ord;
+                        const draft = drafts[t.id];
                         return (
                           <div
                             key={t.id}
@@ -303,8 +346,68 @@ const Transcripts = () => {
                                 <span className="text-xs text-muted-foreground">{t.latency_ms}ms</span>
                               )}
                               {isDiv && <Badge variant="destructive" className="text-xs">divergence</Badge>}
+                              {!draft && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="ml-auto h-7 px-2 text-xs"
+                                  onClick={() => startDraft(t)}
+                                  title="Create a lesson from this turn"
+                                >
+                                  <GraduationCap className="h-3.5 w-3.5 mr-1" /> Learn from this
+                                </Button>
+                              )}
                             </div>
                             <p className="text-sm whitespace-pre-wrap">{t.content}</p>
+                            {draft && (
+                              <div className="mt-3 space-y-2 p-2 rounded-md border border-primary/40 bg-primary/5">
+                                <p className="text-xs text-muted-foreground">Review the lesson before saving — nothing is stored yet.</p>
+                                <Textarea
+                                  value={draft.text}
+                                  onChange={(e) => updateDraft(t.id, { text: e.target.value })}
+                                  rows={3}
+                                  maxLength={600}
+                                  className="text-sm"
+                                />
+                                {(() => {
+                                  const issues = scanLesson(draft.text.trim());
+                                  return issues.length > 0 ? (
+                                    <div className="flex items-start gap-2 text-xs text-destructive">
+                                      <ShieldAlert className="h-3.5 w-3.5 mt-0.5" />
+                                      <span>Blocked: contains {describeIssues(issues)}.</span>
+                                    </div>
+                                  ) : null;
+                                })()}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-muted-foreground">Scope</span>
+                                  <Select value={draft.scope} onValueChange={(v) => updateDraft(t.id, { scope: v as LessonScope })}>
+                                    <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {SCOPES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                  <span className="text-xs text-muted-foreground ml-auto">{draft.text.trim().length}/500</span>
+                                  <Button size="sm" variant="ghost" onClick={() => cancelDraft(t.id)} disabled={savingTurnId === t.id}>
+                                    <X className="h-4 w-4 mr-1" /> Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => saveDraft(t.id)}
+                                    disabled={
+                                      savingTurnId === t.id ||
+                                      !draft.text.trim() ||
+                                      draft.text.trim().length > 500 ||
+                                      scanLesson(draft.text.trim()).length > 0
+                                    }
+                                  >
+                                    {savingTurnId === t.id
+                                      ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                      : <Check className="h-4 w-4 mr-1" />}
+                                    Save lesson
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
