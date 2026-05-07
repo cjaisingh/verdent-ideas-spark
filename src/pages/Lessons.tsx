@@ -32,6 +32,22 @@ const Lessons = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editScope, setEditScope] = useState<typeof SCOPES[number]>("global");
+  const [scopeFilter, setScopeFilter] = useState<"all" | typeof SCOPES[number]>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [search, setSearch] = useState("");
+
+  const counts = SCOPES.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = lessons.filter(l => l.scope === s).length;
+    return acc;
+  }, { all: lessons.length });
+
+  const filtered = lessons.filter(l => {
+    if (scopeFilter !== "all" && l.scope !== scopeFilter) return false;
+    if (statusFilter === "active" && !l.active) return false;
+    if (statusFilter === "inactive" && l.active) return false;
+    if (search && !l.lesson.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const startEdit = (l: Lesson) => {
     setEditingId(l.id);
@@ -151,11 +167,53 @@ const Lessons = () => {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="py-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant={scopeFilter === "all" ? "default" : "outline"}
+              onClick={() => setScopeFilter("all")}
+            >
+              All <Badge variant="secondary" className="ml-2">{counts.all}</Badge>
+            </Button>
+            {SCOPES.map(s => (
+              <Button
+                key={s}
+                size="sm"
+                variant={scopeFilter === s ? "default" : "outline"}
+                onClick={() => setScopeFilter(s)}
+              >
+                {s} <Badge variant="secondary" className="ml-2">{counts[s] ?? 0}</Badge>
+              </Button>
+            ))}
+            <div className="ml-auto flex items-center gap-2">
+              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active only</SelectItem>
+                  <SelectItem value="inactive">Inactive only</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-48 h-9"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="space-y-2">
-        {lessons.length === 0 && !loading && (
-          <p className="text-sm text-muted-foreground text-center py-12">No lessons yet. Teach Copilot something.</p>
+        {filtered.length === 0 && !loading && (
+          <p className="text-sm text-muted-foreground text-center py-12">
+            {lessons.length === 0 ? "No lessons yet. Teach Copilot something." : "No lessons match these filters."}
+          </p>
         )}
-        {lessons.map((l) => {
+        {filtered.map((l) => {
           const isEditing = editingId === l.id;
           return (
             <Card key={l.id} className={l.active ? "" : "opacity-60"}>
