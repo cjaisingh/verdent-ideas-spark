@@ -254,6 +254,74 @@ export type Database = {
         }
         Relationships: []
       }
+      awip_doc_chunks: {
+        Row: {
+          content: string
+          created_at: string
+          doc_id: string
+          heading: string | null
+          id: string
+          ord: number
+          tsv: unknown
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          doc_id: string
+          heading?: string | null
+          id?: string
+          ord?: number
+          tsv?: unknown
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          doc_id?: string
+          heading?: string | null
+          id?: string
+          ord?: number
+          tsv?: unknown
+        }
+        Relationships: [
+          {
+            foreignKeyName: "awip_doc_chunks_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "awip_docs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      awip_docs: {
+        Row: {
+          created_at: string
+          id: string
+          path: string
+          sha: string | null
+          source: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          path: string
+          sha?: string | null
+          source?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          path?: string
+          sha?: string | null
+          source?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       capabilities: {
         Row: {
           created_at: string
