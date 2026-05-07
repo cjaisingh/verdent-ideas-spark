@@ -16,8 +16,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers": "x-request-id",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
