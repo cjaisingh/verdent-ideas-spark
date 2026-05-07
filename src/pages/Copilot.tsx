@@ -56,6 +56,7 @@ export default function Copilot() {
   const [outVolume, setOutVolume] = useState(1.0);
   const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [autoMuteReason, setAutoMuteReason] = useState<string | null>(null);
 
   // Voice/STT settings (persisted)
   const [sttModel, setSttModel] = useState("nova-3");
