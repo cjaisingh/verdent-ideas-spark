@@ -251,6 +251,7 @@ Deno.serve(async (req) => {
       rejection_reason: rejection?.reason ?? (rejected ? errorCode : null),
       requested: rejection?.requested ?? (rejected ? requested : null),
     });
+    if (userId) recordRateHit(userId, rejected);
     return json(status, payload, requestId);
   };
 
