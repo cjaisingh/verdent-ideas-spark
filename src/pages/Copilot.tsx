@@ -626,6 +626,8 @@ export default function Copilot() {
 
       <CopilotOnboardingCard />
 
+      <LessonsLoadedCard />
+
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
           <div
