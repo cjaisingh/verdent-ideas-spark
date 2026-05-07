@@ -246,6 +246,7 @@ export default function Copilot() {
     setPttHeld(false);
     setAutoMuteReason(null);
     setPendingLesson(null);
+    setLessonsApplied(null);
     setSavingLesson(false);
   };
 
