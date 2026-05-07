@@ -881,6 +881,8 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
       risk: requestedRiskNorm,
     });
     if (!verdict.ok) {
+      const primary = verdict.violations[0];
+      const summary = verdict.violations.map((v) => v.reason).join(" ");
       // Queue as auto-rejected so operators can audit / override.
       const { data: rej } = await supabase
         .from("approval_queue")
@@ -897,7 +899,13 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
           status: "rejected",
           decided_by: "system:agent_scope",
           decided_at: new Date().toISOString(),
-          result: { reason: "agent_scope", detail: verdict.reason, agent: scope.agent_slug },
+          result: {
+            reason: "agent_scope",
+            agent: scope.agent_slug,
+            summary,
+            violations: verdict.violations,
+            suggestions: verdict.violations.map((v) => v.suggestion),
+          },
         })
         .select("id, status")
         .single();
@@ -911,16 +919,25 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
           risk,
           requesting_module: body.requesting_module,
           agent: scope.agent_slug,
-          reason: verdict.reason,
+          violations: verdict.violations,
         }),
       });
       return json({
         ok: false,
         error: "agent_scope_violation",
-        reason: verdict.reason,
         agent: scope.agent_slug,
         approval_id: rej?.id ?? null,
         status: "rejected",
+        // Structured payload the agent should surface to the user verbatim.
+        primary_reason: primary.reason,
+        violations: verdict.violations,
+        suggestions: verdict.violations.map((v) => v.suggestion),
+        next_steps: [
+          "Read 'violations[].reason' for the exact rule that fired.",
+          "Apply 'suggestions[0]' if it is a 'retry_with_*' action — it is the safest in-scope alternative.",
+          "If suggestion is 'switch_agent_or_request_grant', surface it to the operator instead of retrying.",
+          "If suggestion is 'queue_for_human_approval', re-submit through /approvals/request and wait for a decision.",
+        ],
       }, 403);
     }
   }
