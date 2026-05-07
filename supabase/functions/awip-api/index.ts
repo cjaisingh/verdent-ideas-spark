@@ -1410,6 +1410,7 @@ Deno.serve(async (req) => {
       const onboardingGetMatch = path.match(/^\/onboarding\/([0-9a-f-]+)$/i);
 
       const notebookUpdateMatch = path.match(/^\/notebook\/([0-9a-f-]+)$/i);
+      const lessonIdMatch = path.match(/^\/lessons\/([0-9a-f-]+)$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
@@ -1432,6 +1433,10 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && path === "/notebook") response = await listNotebook(url);
       else if (req.method === "POST" && path === "/notebook") response = await createNotebookEntry(req, auth.actor);
       else if (req.method === "PATCH" && notebookUpdateMatch) response = await updateNotebookEntry(req, notebookUpdateMatch[1]);
+      else if (req.method === "GET" && path === "/lessons") response = await listLessons(url);
+      else if (req.method === "POST" && path === "/lessons") response = await createLesson(req, auth.actor);
+      else if (req.method === "PATCH" && lessonIdMatch) response = await updateLesson(req, lessonIdMatch[1]);
+      else if (req.method === "DELETE" && lessonIdMatch) response = await deleteLesson(lessonIdMatch[1]);
       else response = json({ error: "not found", path }, 404);
     }
     }
