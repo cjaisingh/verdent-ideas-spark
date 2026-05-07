@@ -1217,6 +1217,48 @@ export type Database = {
         }
         Relationships: []
       }
+      runbooks: {
+        Row: {
+          author: string | null
+          body: string
+          created_at: string
+          format: string
+          id: string
+          slug: string
+          steps: Json
+          summary: string | null
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string | null
+          body?: string
+          created_at?: string
+          format?: string
+          id?: string
+          slug: string
+          steps?: Json
+          summary?: string | null
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author?: string | null
+          body?: string
+          created_at?: string
+          format?: string
+          id?: string
+          slug?: string
+          steps?: Json
+          summary?: string | null
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_gateway_logs: {
         Row: {
           attempt: number
