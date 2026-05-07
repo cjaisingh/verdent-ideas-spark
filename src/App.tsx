@@ -19,6 +19,7 @@ import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import Runbook from "./pages/Runbook";
+import Runbooks from "./pages/Runbooks";
 import Memory from "./pages/Memory";
 import Notebook from "./pages/Notebook";
 import MasterPlan from "./pages/MasterPlan";
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
+            <Route path="/runbooks" element={<Runbooks />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
