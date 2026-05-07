@@ -229,6 +229,16 @@ export default function DbAuditLogs() {
               </TableBody>
             </Table>
           </div>
+          <div className="flex items-center justify-center pt-4">
+            {hasMore ? (
+              <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore || loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loadingMore ? "animate-spin" : ""}`} />
+                {loadingMore ? "Loading…" : `Load more (${PAGE_SIZE})`}
+              </Button>
+            ) : rows.length > 0 ? (
+              <span className="text-xs text-muted-foreground">End of audit log.</span>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     </div>
