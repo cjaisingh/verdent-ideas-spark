@@ -174,6 +174,46 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "remember_lesson",
+      description:
+        "Save a durable rule the operator wants you to follow on every future turn. " +
+        "Call this when the operator says 'learn from this', 'remember that', 'next time…', or 'from now on…'. " +
+        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII.",
+      parameters: {
+        type: "object",
+        properties: {
+          lesson: { type: "string", description: "One-sentence rule, ≤500 chars." },
+          scope: { type: "string", enum: ["global","notebook","approvals","voice_style"] },
+        },
+        required: ["lesson"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_lessons",
+      description: "List active lessons Copilot has been taught.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "forget_lesson",
+      description: "Delete a previously saved lesson by id (when operator says 'forget that' / 'unlearn that').",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `You are AWIP Copilot — the operator's hands-free voice assistant while driving.
