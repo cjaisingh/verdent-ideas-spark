@@ -6,6 +6,10 @@ const SUPABASE_ANON_KEY =
 const SERVICE_TOKEN = process.env.E2E_AWIP_SERVICE_TOKEN;
 const OPERATOR_EMAIL = process.env.E2E_OPERATOR_EMAIL;
 const OPERATOR_PASSWORD = process.env.E2E_OPERATOR_PASSWORD;
+// Optional: a user with ONLY the operator role (no admin). Used to verify
+// admin-only tables/RPCs reject non-admin operators. If absent, those tests skip.
+const OPERATOR_ONLY_EMAIL = process.env.E2E_OPERATOR_ONLY_EMAIL;
+const OPERATOR_ONLY_PASSWORD = process.env.E2E_OPERATOR_ONLY_PASSWORD;
 
 export const env = {
   SUPABASE_URL: SUPABASE_URL!,
@@ -13,6 +17,9 @@ export const env = {
   SERVICE_TOKEN: SERVICE_TOKEN ?? "",
   OPERATOR_EMAIL: OPERATOR_EMAIL ?? "",
   OPERATOR_PASSWORD: OPERATOR_PASSWORD ?? "",
+  OPERATOR_ONLY_EMAIL: OPERATOR_ONLY_EMAIL ?? "",
+  OPERATOR_ONLY_PASSWORD: OPERATOR_ONLY_PASSWORD ?? "",
+  HAS_OPERATOR_ONLY: Boolean(OPERATOR_ONLY_EMAIL && OPERATOR_ONLY_PASSWORD),
   FN_URL: `${SUPABASE_URL}/functions/v1/awip-api`,
 };
 
