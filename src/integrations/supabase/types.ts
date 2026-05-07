@@ -349,6 +349,45 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_settings: {
+        Row: {
+          created_at: string
+          greeting: string
+          language: string
+          mic_gain: number
+          out_volume: number
+          ptt_mode: boolean
+          stt_model: string
+          tts_voice: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          greeting?: string
+          language?: string
+          mic_gain?: number
+          out_volume?: number
+          ptt_mode?: boolean
+          stt_model?: string
+          tts_voice?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          greeting?: string
+          language?: string
+          mic_gain?: number
+          out_volume?: number
+          ptt_mode?: boolean
+          stt_model?: string
+          tts_voice?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       db_explorer_audit: {
         Row: {
           action: string | null
