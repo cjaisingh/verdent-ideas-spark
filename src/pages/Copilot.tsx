@@ -531,15 +531,24 @@ export default function Copilot() {
         {/* Mic level meter */}
         {active && (
           <div className="w-full max-w-xs">
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="relative h-2 rounded-full bg-muted overflow-hidden">
               <div
                 className={`h-full transition-[width] duration-75 ${
                   micLevel > 0.85 ? "bg-destructive" : micLevel > 0.5 ? "bg-amber-500" : "bg-emerald-500"
                 } ${transmitting ? "" : "opacity-30"}`}
                 style={{ width: `${Math.round(micLevel * 100)}%` }}
               />
+              {!pttMode && noiseGate > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-px bg-foreground/70"
+                  style={{ left: `${Math.min(100, noiseGate * 1.8 * 100)}%` }}
+                  title={`Noise gate: ${(noiseGate * 100).toFixed(1)}%`}
+                />
+              )}
             </div>
-            <div className="text-xs text-muted-foreground text-center mt-1">Mic level</div>
+            <div className="text-xs text-muted-foreground text-center mt-1">
+              Mic level{!pttMode && noiseGate > 0 && " · gate marker"}
+            </div>
           </div>
         )}
 
