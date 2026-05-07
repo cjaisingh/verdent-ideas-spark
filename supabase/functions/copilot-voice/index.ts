@@ -337,11 +337,20 @@ Deno.serve(async (req) => {
   const session: Session = { jwt: "", staged: null };
   let history: any[] = [];
   let thinking = false;
-  let settings = {
+  let settings: {
+    stt_model: string;
+    tts_voice: string;
+    language: string;
+    greeting: string;
+    agent_slug?: string | null;
+    system_prompt?: string | null;
+  } = {
     stt_model: "nova-3",
     tts_voice: "aura-2-orion-en",
     language: "en",
     greeting: "Copilot ready.",
+    agent_slug: null,
+    system_prompt: null,
   };
 
   client.onmessage = async (ev) => {
@@ -377,7 +386,9 @@ Deno.serve(async (req) => {
               listen: { provider: { type: "deepgram", model: settings.stt_model } },
               think: {
                 provider: { type: "open_ai", model: "gpt-4o-mini", temperature: 0.3 },
-                prompt: SYSTEM_PROMPT,
+                prompt: settings.system_prompt
+                  ? `${SYSTEM_PROMPT}\n\n--- Active agent persona ---\n${settings.system_prompt}`
+                  : SYSTEM_PROMPT,
               },
               speak: { provider: { type: "deepgram", model: settings.tts_voice } },
               greeting: settings.greeting,

@@ -14,6 +14,9 @@ import {
 import { Mic, MicOff, Loader2, Volume2, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCopilotAgents } from "@/hooks/useCopilotAgents";
+import { AgentSelector } from "@/components/copilot/AgentSelector";
+import { AgentScopeCard } from "@/components/copilot/AgentScopeCard";
 
 type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
@@ -67,6 +70,17 @@ export default function Copilot() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Multi-agent catalog (shared) + per-user overrides + the operator's active pick.
+  const { agents, effective, overrideByAgent, upsertOverride, loaded: agentsLoaded } = useCopilotAgents();
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const activeAgentRaw = agents.find((a) => a.id === activeAgentId) ?? null;
+  const activeAgent = activeAgentRaw ? effective(activeAgentRaw) : null;
+  const ttsVoiceRef = useRef<string>(ttsVoice);
+  useEffect(() => {
+    if (activeAgent) ttsVoiceRef.current = activeAgent.tts_voice;
+    else ttsVoiceRef.current = ttsVoice;
+  }, [activeAgent, ttsVoice]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
@@ -198,6 +212,29 @@ export default function Copilot() {
     setAutoMuteReason(null);
   };
 
+  // Switch to a different Copilot agent. Persists the choice and announces the switch
+  // in the transcript. The new persona takes effect immediately for any subsequent
+  // turn (the audio session keeps running; we just changed metadata + voice ref).
+  const switchAgent = async (agentId: string, source: "manual" | "wake-word" = "manual") => {
+    const target = agents.find((a) => a.id === agentId);
+    if (!target) return;
+    setActiveAgentId(agentId);
+    const eff = effective(target);
+    ttsVoiceRef.current = eff.tts_voice;
+    append({
+      who: "system",
+      text: `→ switched to ${target.name}${source === "wake-word" ? " (wake word)" : ""}`,
+      ts: Date.now(),
+    });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("copilot_settings").upsert(
+        { user_id: user.id, active_agent_id: agentId },
+        { onConflict: "user_id" },
+      );
+    }
+  };
+
   const start = async () => {
     setConnecting(true);
     try {
@@ -231,7 +268,14 @@ export default function Copilot() {
       ws.onopen = () => ws.send(JSON.stringify({
         type: "auth",
         jwt,
-        settings: { stt_model: sttModel, tts_voice: ttsVoice, language, greeting },
+        settings: {
+          stt_model: sttModel,
+          tts_voice: activeAgent?.tts_voice ?? ttsVoice,
+          language: activeAgent?.language ?? language,
+          greeting: activeAgent?.default_greeting ?? greeting,
+          agent_slug: activeAgent?.slug ?? null,
+          system_prompt: activeAgent?.system_prompt ?? null,
+        },
       }));
 
       ws.onmessage = (ev) => {
@@ -280,6 +324,18 @@ export default function Copilot() {
             setActive(true);
           } else if (m.type === "ConversationText") {
             append({ who: m.role === "user" ? "you" : "copilot", text: m.content, ts: Date.now() });
+            // Wake-word agent switching: scan user utterances for "hey <wake>" or bare "<wake>" at start.
+            if (m.role === "user" && typeof m.content === "string") {
+              const norm = m.content.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+              const first = norm.split(/\s+/);
+              const tryWake = first[0] === "hey" ? first[1] : first[0];
+              if (tryWake) {
+                const target = agents.find((a) => a.enabled && a.wake_word.toLowerCase() === tryWake);
+                if (target && target.id !== activeAgentId) {
+                  switchAgent(target.id, "wake-word");
+                }
+              }
+            }
           } else if (m.type === "UserStartedSpeaking") {
             setAgentState("listening");
             playHeadRef.current = playCtxRef.current!.currentTime;
@@ -356,10 +412,18 @@ export default function Copilot() {
         setMicGain(Number(data.mic_gain));
         setOutVolume(Number(data.out_volume));
         if (data.noise_gate != null) setNoiseGate(Number(data.noise_gate));
+        if ((data as any).active_agent_id) setActiveAgentId((data as any).active_agent_id);
       }
       setSettingsLoaded(true);
     })();
   }, []);
+
+  // Default the active agent to the first enabled one if the user hasn't picked yet.
+  useEffect(() => {
+    if (!agentsLoaded || !settingsLoaded || activeAgentId) return;
+    const first = agents.find((a) => a.enabled);
+    if (first) setActiveAgentId(first.id);
+  }, [agentsLoaded, settingsLoaded, activeAgentId, agents]);
 
   // Debounced auto-save of audio knobs (sliders / toggle).
   useEffect(() => {
@@ -495,6 +559,16 @@ export default function Copilot() {
           </SheetContent>
         </Sheet>
       </div>
+
+      <AgentSelector agents={agents} activeId={activeAgentId} onSelect={(id) => switchAgent(id, "manual")} />
+
+      {activeAgentRaw && (
+        <AgentScopeCard
+          agent={activeAgentRaw}
+          override={overrideByAgent.get(activeAgentRaw.id) ?? null}
+          onSaveOverride={(patch) => upsertOverride(activeAgentRaw.id, patch)}
+        />
+      )}
 
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
