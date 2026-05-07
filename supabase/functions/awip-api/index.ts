@@ -1495,6 +1495,8 @@ Deno.serve(async (req) => {
 
       const notebookUpdateMatch = path.match(/^\/notebook\/([0-9a-f-]+)$/i);
       const lessonIdMatch = path.match(/^\/lessons\/([0-9a-f-]+)$/i);
+      const transcriptIdMatch = path.match(/^\/transcripts\/([0-9a-f-]+)$/i);
+      const transcriptAnalyzeMatch = path.match(/^\/transcripts\/([0-9a-f-]+)\/analyze$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
