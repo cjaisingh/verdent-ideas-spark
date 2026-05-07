@@ -142,22 +142,81 @@ async function resolveActiveScope(req: Request, userId?: string): Promise<Scope 
   };
 }
 
+type ScopeViolation = {
+  code: "capability_out_of_scope" | "tables_out_of_scope" | "risk_exceeds_max";
+  reason: string;
+  detail: Record<string, unknown>;
+  suggestion: { action: string; description: string; payload?: Record<string, unknown> };
+};
+
 function checkScope(scope: Scope, opts: {
   capability_id?: string | null;
   tables?: string[];
   risk?: "low" | "medium" | "high";
-}): { ok: true } | { ok: false; reason: string } {
+}): { ok: true } | { ok: false; violations: ScopeViolation[] } {
+  const violations: ScopeViolation[] = [];
+
   if (opts.capability_id && scope.capability_ids.length > 0
       && !scope.capability_ids.includes(opts.capability_id)) {
-    return { ok: false, reason: `capability '${opts.capability_id}' not in agent scope` };
+    // Best-effort nearest match: same prefix before first ':' / '.' / '-'
+    const sep = /[:.\-/]/;
+    const prefix = opts.capability_id.split(sep)[0];
+    const nearest = scope.capability_ids
+      .filter((c) => c.startsWith(prefix + ".") || c.startsWith(prefix + ":") || c.startsWith(prefix + "-") || c === prefix)
+      .slice(0, 5);
+    violations.push({
+      code: "capability_out_of_scope",
+      reason: `Capability '${opts.capability_id}' is not in agent '${scope.agent_slug}' scope.`,
+      detail: { requested: opts.capability_id, allowed_count: scope.capability_ids.length, nearest_in_scope: nearest },
+      suggestion: nearest.length
+        ? {
+            action: "retry_with_capability",
+            description: `Retry using a capability the agent can call (closest match: ${nearest[0]}).`,
+            payload: { capability_id: nearest[0] },
+          }
+        : {
+            action: "switch_agent_or_request_grant",
+            description: `No similar capability in scope. Switch to an agent that owns '${opts.capability_id}' or ask an admin to add it to '${scope.agent_slug}.allowed_capability_ids'.`,
+          },
+    });
   }
+
   if (opts.tables && opts.tables.length && scope.tables.length > 0) {
     const bad = opts.tables.filter((t) => !scope.tables.includes(t));
-    if (bad.length) return { ok: false, reason: `tables not in agent scope: ${bad.join(", ")}` };
+    if (bad.length) {
+      const allowedSubset = opts.tables.filter((t) => scope.tables.includes(t));
+      violations.push({
+        code: "tables_out_of_scope",
+        reason: `Tables not in agent scope: ${bad.join(", ")}.`,
+        detail: { requested: opts.tables, denied: bad, allowed_intersection: allowedSubset },
+        suggestion: allowedSubset.length
+          ? {
+              action: "retry_with_subset",
+              description: `Re-issue the call against only the allowed tables (${allowedSubset.join(", ")}); ${bad.join(", ")} would need a separate request from an agent that owns them.`,
+              payload: { tables: allowedSubset },
+            }
+          : {
+              action: "switch_agent_or_request_grant",
+              description: `No requested table is in scope. Switch agents or ask an admin to add ${bad.join(", ")} to '${scope.agent_slug}.allowed_tables'.`,
+            },
+      });
+    }
   }
+
   if (opts.risk && RISK_RANK[opts.risk] > RISK_RANK[scope.max_risk]) {
-    return { ok: false, reason: `risk '${opts.risk}' exceeds agent max_risk '${scope.max_risk}'` };
+    violations.push({
+      code: "risk_exceeds_max",
+      reason: `Requested risk '${opts.risk}' exceeds agent max_risk '${scope.max_risk}'.`,
+      detail: { requested_risk: opts.risk, max_risk: scope.max_risk, agent: scope.agent_slug },
+      suggestion: {
+        action: "queue_for_human_approval",
+        description: `Lower the action's risk if possible, or submit it to /approvals/request as a 'pending' item so an operator can decide. Do not bypass.`,
+        payload: { risk: scope.max_risk },
+      },
+    });
   }
+
+  if (violations.length) return { ok: false, violations };
   return { ok: true };
 }
 
@@ -822,6 +881,8 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
       risk: requestedRiskNorm,
     });
     if (!verdict.ok) {
+      const primary = verdict.violations[0];
+      const summary = verdict.violations.map((v) => v.reason).join(" ");
       // Queue as auto-rejected so operators can audit / override.
       const { data: rej } = await supabase
         .from("approval_queue")
@@ -838,7 +899,13 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
           status: "rejected",
           decided_by: "system:agent_scope",
           decided_at: new Date().toISOString(),
-          result: { reason: "agent_scope", detail: verdict.reason, agent: scope.agent_slug },
+          result: {
+            reason: "agent_scope",
+            agent: scope.agent_slug,
+            summary,
+            violations: verdict.violations,
+            suggestions: verdict.violations.map((v) => v.suggestion),
+          },
         })
         .select("id, status")
         .single();
@@ -852,16 +919,25 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
           risk,
           requesting_module: body.requesting_module,
           agent: scope.agent_slug,
-          reason: verdict.reason,
+          violations: verdict.violations,
         }),
       });
       return json({
         ok: false,
         error: "agent_scope_violation",
-        reason: verdict.reason,
         agent: scope.agent_slug,
         approval_id: rej?.id ?? null,
         status: "rejected",
+        // Structured payload the agent should surface to the user verbatim.
+        primary_reason: primary.reason,
+        violations: verdict.violations,
+        suggestions: verdict.violations.map((v) => v.suggestion),
+        next_steps: [
+          "Read 'violations[].reason' for the exact rule that fired.",
+          "Apply 'suggestions[0]' if it is a 'retry_with_*' action — it is the safest in-scope alternative.",
+          "If suggestion is 'switch_agent_or_request_grant', surface it to the operator instead of retrying.",
+          "If suggestion is 'queue_for_human_approval', re-submit through /approvals/request and wait for a decision.",
+        ],
       }, 403);
     }
   }
