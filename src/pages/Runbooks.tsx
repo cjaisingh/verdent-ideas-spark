@@ -187,7 +187,27 @@ export default function Runbooks() {
             Operator procedures stored as Markdown or YAML with ordered steps.
           </p>
         </div>
-        <Button onClick={newRunbook}><Plus className="h-4 w-4 mr-2" /> New</Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Sparkles className="h-4 w-4 mr-2" /> Templates
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Start a new runbook from…</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {RUNBOOK_TEMPLATES.map((t) => (
+                <DropdownMenuItem key={t.id} onClick={() => newFromTemplate(t)}
+                  className="flex flex-col items-start gap-0.5">
+                  <span className="font-medium">{t.title}</span>
+                  <span className="text-[11px] text-muted-foreground line-clamp-2">{t.summary}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={newRunbook}><Plus className="h-4 w-4 mr-2" /> New</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4">
