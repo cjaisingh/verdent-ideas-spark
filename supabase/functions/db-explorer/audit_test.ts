@@ -127,7 +127,7 @@ Deno.test("redaction: bearer tokens and sensitive keys scrubbed in requested", (
     null,
     {
       reason: "unknown_action",
-      requested: { action: "x", authorization: "Bearer abcdef123456", api_key: "sk_live_ABCDEFGHIJKLMNOP" },
+      requested: { action: "x", authorization: "Bearer abcdef123456", api_key: "sk_ABCDEFGHIJKLMNOPQR" },
     },
   );
   const req = e.requested as Record<string, unknown>;
@@ -191,4 +191,133 @@ Deno.test("env override: AUDIT_MAX_ERROR_LEN truncates error_code", () => {
     Deno.env.delete("AUDIT_MAX_ERROR_LEN");
     reloadRedactionConfig();
   }
+});
+
+// ─── Comprehensive redaction coverage ──────────────────────────────────────
+
+import { redactValue, redactErrorMessage } from "./audit.ts";
+
+Deno.test("redact: JWT in string value", () => {
+  const jwt = "eyJabcdefghij.eyJklmnopqrst.signature1234567";
+  assertEquals(redactValue(jwt), "[REDACTED]");
+  assertEquals(redactValue({ note: jwt }), { note: "[REDACTED]" });
+});
+
+Deno.test("redact: stripe-style sk_/pk_/sbp_ keys", () => {
+  for (const v of ["sk_ABCDEFGHIJKLMNOPQR", "pk_QRSTUVWXYZ0123456789", "sbp_ABCDEFGHIJKLMNOPQR"]) {
+    assertEquals(redactValue(v), "[REDACTED]", `should redact ${v}`);
+  }
+});
+
+Deno.test("redact: Bearer token in value", () => {
+  assertEquals(redactValue("Bearer abc12345xyz"), "[REDACTED]");
+});
+
+Deno.test("redact: every default sensitive key is masked", () => {
+  const sample = {
+    token: "x", secret: "x", password: "x", passwd: "x",
+    api_key: "x", apiKey: "x", authorization: "x",
+    cookie: "x", session: "x", jwt: "x", bearer: "x",
+    "x-awip-service-token": "x",
+  };
+  const out = redactValue(sample) as Record<string, unknown>;
+  for (const k of Object.keys(sample)) {
+    assertEquals(out[k], "[REDACTED]", `key ${k} should be redacted`);
+  }
+});
+
+Deno.test("redact: nested object — sensitive keys masked at depth", () => {
+  const out = redactValue({
+    safe: "ok",
+    inner: { deeper: { token: "leak", note: "fine" } },
+  }) as Record<string, Record<string, Record<string, unknown>>>;
+  assertEquals(out.inner.deeper.token, "[REDACTED]");
+  assertEquals(out.inner.deeper.note, "fine");
+});
+
+Deno.test("redact: arrays scrubbed and capped at 20 items", () => {
+  const arr = new Array(50).fill("eyJaaaaaaaaaa.eyJbbbbbbbbbbb.cccccccccccc");
+  const out = redactValue(arr) as unknown[];
+  assertEquals(out.length, 20);
+  for (const v of out) assertEquals(v, "[REDACTED]");
+});
+
+Deno.test("redact: depth cap returns [truncated]", () => {
+  Deno.env.set("AUDIT_MAX_DEPTH", "2");
+  reloadRedactionConfig();
+  try {
+    const out = redactValue({ a: { b: { c: { d: "deep" } } } }) as Record<string, unknown>;
+    // a (depth 1) -> b (depth 2) — at depth 2 returns "[truncated]"
+    assertEquals(((out.a as Record<string, unknown>).b), "[truncated]");
+  } finally {
+    Deno.env.delete("AUDIT_MAX_DEPTH");
+    reloadRedactionConfig();
+  }
+});
+
+Deno.test("redact: long strings truncated to MAX_STRING_LEN with ellipsis", () => {
+  const big = "a".repeat(500);
+  const out = redactValue(big) as string;
+  assertEquals(out.length, 201); // 200 + "…"
+  assert(out.endsWith("…"));
+});
+
+Deno.test("redactErrorMessage: postgres DSN scrubbed", () => {
+  const out = redactErrorMessage("connect failed at postgres://user:pw@host/db");
+  assert(out!.includes("[REDACTED_DSN]"));
+  assert(!out!.includes("postgres://"));
+  assert(!out!.includes("pw"));
+});
+
+Deno.test("redactErrorMessage: http(s) URLs scrubbed", () => {
+  const out = redactErrorMessage("rpc 500 at https://internal.example.com/secret?token=abc");
+  assert(out!.includes("[REDACTED_URL]"));
+  assert(!out!.includes("internal.example.com"));
+});
+
+Deno.test("redactErrorMessage: JWT-bearing message fully replaced", () => {
+  const jwt = "eyJabcdefghij.eyJklmnopqrst.signature1234567";
+  assertEquals(redactErrorMessage(`failed: ${jwt}`), "[REDACTED]");
+});
+
+Deno.test("redactErrorMessage: truncates to MAX_ERROR_LEN", () => {
+  const out = redactErrorMessage("x".repeat(500));
+  assertEquals(out!.length, 121); // default 120 + "…"
+  assert(out!.endsWith("…"));
+});
+
+Deno.test("redactErrorMessage: null/empty passthrough", () => {
+  assertEquals(redactErrorMessage(null), null);
+  assertEquals(redactErrorMessage(undefined), null);
+  assertEquals(redactErrorMessage(""), null);
+});
+
+Deno.test("buildAuditEntry: redacts requested across rejection path", () => {
+  const e = buildAuditEntry(
+    baseCtx({ action: "list_columns", requested: { authorization: "Bearer abc12345xyz" } }),
+    400,
+    "rpc failed at https://leak.example.com/x",
+    null,
+    {
+      reason: "boom at https://other.example.com",
+      requested: { token: "eyJabcdefghij.eyJklmnopqrst.signature1234567", note: "ok" },
+    },
+  );
+  const req = e.requested as Record<string, unknown>;
+  assertEquals(req.token, "[REDACTED]");
+  assertEquals(req.note, "ok");
+  assert((e.error_code as string).includes("[REDACTED_URL]"));
+  assert((e.rejection_reason as string).includes("[REDACTED_URL]"));
+});
+
+Deno.test("buildAuditEntry: success path — no requested leakage even if context had sensitive key", () => {
+  const e = buildAuditEntry(
+    baseCtx({ action: "list_tables", requested: { token: "leak" } }),
+    200,
+    null,
+    1,
+  );
+  // Successful (non-rejected) entries set requested to null entirely.
+  assertEquals(e.requested, null);
+  assertEquals(e.rejected, false);
 });
