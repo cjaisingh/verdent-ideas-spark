@@ -249,6 +249,51 @@ Deno.serve(async (req) => {
       .eq('id', messageId);
   }
 
+  // Conversational reply for low-risk chitchat / status / unknown — voice note back to operator.
+  const conversationalActivities = new Set(['smalltalk', 'query_status', 'unknown']);
+  if (decision === 'approve' && chatId && conversationalActivities.has(classification.activity)) {
+    try {
+      // Gather lightweight operator context
+      const [{ data: pending }, { data: recentEvents }] = await Promise.all([
+        supabase.from('approval_queue')
+          .select('activity, risk, requested_by, created_at')
+          .eq('status', 'pending').order('created_at', { ascending: false }).limit(5),
+        supabase.from('okr_node_events')
+          .select('event_type, created_at').order('created_at', { ascending: false }).limit(5),
+      ]);
+
+      const ctx = {
+        pending_approvals: pending ?? [],
+        recent_okr_events: recentEvents ?? [],
+        now: new Date().toISOString(),
+      };
+
+      const aiRes = await fetch(AI_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'openai/gpt-5-mini',
+          messages: [
+            { role: 'system', content: 'You are AWIP, the operator\'s automation copilot. Reply briefly and naturally — under 40 words, British English, conversational tone suitable for a voice note while driving. Never read JSON aloud; summarise. If asked about status, use the provided context.' },
+            { role: 'user', content: `Operator said: "${text}"\n\nContext:\n${JSON.stringify(ctx)}` },
+          ],
+        }),
+      });
+      const aiData = await aiRes.json();
+      const reply = aiData?.choices?.[0]?.message?.content?.trim();
+      if (reply) {
+        const voiceUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/telegram-send-voice`;
+        await fetch(voiceUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-service-token': serviceToken },
+          body: JSON.stringify({ chat_id: chatId, text: reply }),
+        }).catch((e) => console.error('telegram-send-voice failed', e));
+      }
+    } catch (e) {
+      console.error('conversational reply failed', e);
+    }
+  }
+
   let approvalId: string | null = null;
   if (decision === 'needs_approval' || decision === 'reject') {
     const { data: approval, error: insErr } = await supabase
