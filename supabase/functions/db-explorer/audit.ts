@@ -18,14 +18,61 @@ export interface AuditEntry {
   requested: Record<string, unknown> | null;
 }
 
-const SENSITIVE_KEY_RE = /(token|secret|password|passwd|api[_-]?key|authorization|cookie|session|jwt|bearer|x-awip-service-token)/i;
-const SENSITIVE_VALUE_RES: RegExp[] = [
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
-  /\b(sk|pk|rk|sbp)_[A-Za-z0-9]{16,}\b/,
-  /\bBearer\s+[A-Za-z0-9._-]{8,}/i,
-];
-const MAX_STRING_LEN = 200;
-const MAX_DEPTH = 4;
+// Defaults — can be overridden via env vars (no redeploy needed; just update
+// the secret/env and restart the function from the dashboard).
+const DEFAULT_SENSITIVE_KEYS = "token,secret,password,passwd,api_key,apikey,authorization,cookie,session,jwt,bearer,x-awip-service-token";
+const DEFAULT_SENSITIVE_VALUE_PATTERNS = [
+  "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b",
+  "\\b(sk|pk|rk|sbp)_[A-Za-z0-9]{16,}\\b",
+  "\\bBearer\\s+[A-Za-z0-9._-]{8,}",
+].join("|||");
+
+function envOr(name: string, fallback: string): string {
+  try {
+    // deno-lint-ignore no-explicit-any
+    const v = (globalThis as any).Deno?.env?.get?.(name);
+    return typeof v === "string" && v.length > 0 ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function envInt(name: string, fallback: number): number {
+  const raw = envOr(name, "");
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// Comma-separated list of substrings; matched case-insensitively against keys.
+function buildKeyRegex(): RegExp {
+  const list = envOr("AUDIT_REDACT_KEYS", DEFAULT_SENSITIVE_KEYS)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return list.length ? new RegExp(`(${list.join("|")})`, "i") : /a^/;
+}
+// "|||"-separated raw regex sources (so commas can appear inside patterns).
+function buildValuePatterns(): RegExp[] {
+  const raw = envOr("AUDIT_REDACT_VALUE_PATTERNS", DEFAULT_SENSITIVE_VALUE_PATTERNS);
+  return raw.split("|||").map((s) => s.trim()).filter(Boolean).map((src) => {
+    try { return new RegExp(src, "i"); } catch { return /a^/; }
+  });
+}
+
+let SENSITIVE_KEY_RE = buildKeyRegex();
+let SENSITIVE_VALUE_RES = buildValuePatterns();
+let MAX_STRING_LEN = envInt("AUDIT_MAX_STRING_LEN", 200);
+let MAX_DEPTH = envInt("AUDIT_MAX_DEPTH", 4);
+let MAX_ERROR_LEN = envInt("AUDIT_MAX_ERROR_LEN", 120);
+
+// Exported so tests (and an admin endpoint, if added) can reload after env changes.
+export function reloadRedactionConfig() {
+  SENSITIVE_KEY_RE = buildKeyRegex();
+  SENSITIVE_VALUE_RES = buildValuePatterns();
+  MAX_STRING_LEN = envInt("AUDIT_MAX_STRING_LEN", 200);
+  MAX_DEPTH = envInt("AUDIT_MAX_DEPTH", 4);
+  MAX_ERROR_LEN = envInt("AUDIT_MAX_ERROR_LEN", 120);
+}
 
 export function redactValue(v: unknown, depth = 0): unknown {
   if (v == null) return v;
@@ -49,7 +96,7 @@ export function redactErrorMessage(msg: string | null | undefined): string | nul
     .replace(/\bpostgres:\/\/[^\s'"]+/gi, "[REDACTED_DSN]")
     .replace(/\bhttps?:\/\/[^\s'"]+/gi, "[REDACTED_URL]");
   for (const re of SENSITIVE_VALUE_RES) if (re.test(cleaned)) return "[REDACTED]";
-  return cleaned.length > 120 ? cleaned.slice(0, 120) + "…" : cleaned;
+  return cleaned.length > MAX_ERROR_LEN ? cleaned.slice(0, MAX_ERROR_LEN) + "…" : cleaned;
 }
 
 export function resultCount(data: unknown): number | null {
