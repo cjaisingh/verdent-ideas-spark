@@ -44,11 +44,20 @@ const MAX_PREVIEW_OFFSET = 100_000;
 // Body size cap (defense in depth; clients only send tiny JSON).
 const MAX_BODY_BYTES = 4 * 1024;
 
-const json = (status: number, body: unknown) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
+const json = (status: number, body: unknown, requestId?: string) =>
+  new Response(
+    JSON.stringify(
+      requestId && body && typeof body === "object" ? { ...(body as object), request_id: requestId } : body,
+    ),
+    {
+      status,
+      headers: {
+        ...cors,
+        "Content-Type": "application/json",
+        ...(requestId ? { "x-request-id": requestId } : {}),
+      },
+    },
+  );
 
 // Structured audit log emitted to edge function logs as a single JSON line.
 // Captures: action, table, limit/offset, result size, status code, user id,
