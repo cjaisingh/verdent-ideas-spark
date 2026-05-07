@@ -1349,6 +1349,27 @@ export type Database = {
     }
     Functions: {
       auto_purge_if_enabled: { Args: never; Returns: number }
+      db_list_columns: {
+        Args: { _table: string }
+        Returns: {
+          column_default: string
+          column_name: string
+          data_type: string
+          is_nullable: string
+        }[]
+      }
+      db_list_tables: {
+        Args: never
+        Returns: {
+          row_count: number
+          size_bytes: number
+          table_name: string
+        }[]
+      }
+      db_preview_rows: {
+        Args: { _limit?: number; _offset?: number; _table: string }
+        Returns: Json
+      }
       grant_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
