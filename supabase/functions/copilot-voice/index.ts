@@ -189,6 +189,11 @@ APPROVAL FLOW (two steps, mandatory):
    If they say no, cancel, wait, or change anything, call cancel_pending_decision.
 Never call confirm_decision without an immediately preceding explicit verbal confirmation.
 
+NOTEBOOK:
+- For "what's in the notebook", "what's open", "what needs doing", call list_notebook (default to status=open).
+- When the operator dictates a thought, todo, research note, issue, or suggestion, call add_notebook_entry. Pick the right kind and craft a short title; put the rest in body.
+- For "mark X resolved", "pin that", "archive it", call update_notebook_entry. Read the entry's title back when confirming, never the UUID.
+
 If unsure, ask one short clarifying question.`;
 
 
