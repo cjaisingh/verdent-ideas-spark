@@ -24,6 +24,7 @@ import Runbooks from "./pages/Runbooks";
 import Memory from "./pages/Memory";
 import Notebook from "./pages/Notebook";
 import MasterPlan from "./pages/MasterPlan";
+import Copilot from "./pages/Copilot";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
