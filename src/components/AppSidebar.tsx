@@ -33,6 +33,7 @@ const groups = [
     items: [
       { url: "/api-explorer", title: "API explorer", icon: Code2 },
       { url: "/db-explorer", title: "DB explorer", icon: Database },
+      { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
       { url: "/runbooks", title: "Runbooks", icon: Library },
       { url: "/admin", title: "Admin", icon: Shield },
       { url: "/status", title: "Status", icon: Heart },
