@@ -281,6 +281,17 @@ Deno.serve(async (req) => {
   }
   userId = userRes.user.id;
 
+  const rl = checkRateLimit(userId);
+  if (!rl.allowed) {
+    return finish(
+      429,
+      { error: "rate_limited", reason: rl.reason, retry_after_ms: rl.retry_after_ms },
+      "rate_limited",
+      null,
+      { reason: rl.reason, requested: { retry_after_ms: rl.retry_after_ms } },
+    );
+  }
+
   const { data: isOp, error: roleErr } = await userClient.rpc("has_role", {
     _user_id: userRes.user.id,
     _role: "operator",
