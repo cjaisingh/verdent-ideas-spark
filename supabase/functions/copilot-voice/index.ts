@@ -494,7 +494,6 @@ async function dispatchTool(name: string, args: any, session: Session) {
 
 
 // ---------- LLM "think" step ----------
-async function think(history: any[], session: Session): Promise<string> {
 // Score lesson relevance to the current user utterance. Heuristic but explainable:
 // scope match always counts; topic-keyword overlap surfaces things the operator just mentioned.
 const SCOPE_TRIGGERS: Record<string, string[]> = {
@@ -813,7 +812,7 @@ Deno.serve(async (req) => {
                 recordTurn("user", m.content);
                 const t0 = Date.now();
                 try {
-                  const reply = await think(history, session);
+                  const reply = await think(history, session, m.content);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
                     recordTurn("assistant", reply, Date.now() - t0);
