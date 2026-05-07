@@ -89,7 +89,10 @@ export default function Copilot() {
   const mutedRef = useRef(muted);
   useEffect(() => { pttModeRef.current = pttMode; }, [pttMode]);
   useEffect(() => { pttHeldRef.current = pttHeld; }, [pttHeld]);
-  useEffect(() => { micGainRef.current = micGain; }, [micGain]);
+  useEffect(() => {
+    micGainRef.current = micGain;
+    workletRef.current?.port.postMessage({ gain: micGain });
+  }, [micGain]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => {
     if (outGainRef.current) outGainRef.current.gain.value = outVolume;
