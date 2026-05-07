@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
   let dg: WebSocket | null = null;
-  const session: Session = { jwt: "", staged: null };
+  const session: Session = { jwt: "", user_id: "", staged: null, lessons: [], model: "openai/gpt-5-mini" };
   let history: any[] = [];
   let thinking = false;
   let settings: {
