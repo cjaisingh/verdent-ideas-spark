@@ -297,7 +297,7 @@ async function think(history: any[], session: Session): Promise<string> {
       for (const tc of msg.tool_calls) {
         let args: any = {};
         try { args = JSON.parse(tc.function.arguments || "{}"); } catch {}
-        const result = await dispatchTool(tc.function.name, args, jwt);
+        const result = await dispatchTool(tc.function.name, args, session);
         messages.push({
           role: "tool",
           tool_call_id: tc.id,
