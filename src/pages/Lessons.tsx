@@ -155,24 +155,65 @@ const Lessons = () => {
         {lessons.length === 0 && !loading && (
           <p className="text-sm text-muted-foreground text-center py-12">No lessons yet. Teach Copilot something.</p>
         )}
-        {lessons.map((l) => (
-          <Card key={l.id} className={l.active ? "" : "opacity-60"}>
-            <CardContent className="py-3 flex items-center gap-3">
-              <Switch checked={l.active} onCheckedChange={(v) => toggle(l.id, v)} />
-              <div className="flex-1">
-                <p className="text-sm">{l.lesson}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className="text-xs">{l.scope}</Badge>
-                  <Badge variant="outline" className="text-xs">{l.source}</Badge>
-                  <span className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span>
+        {lessons.map((l) => {
+          const isEditing = editingId === l.id;
+          return (
+            <Card key={l.id} className={l.active ? "" : "opacity-60"}>
+              <CardContent className="py-3 flex items-start gap-3">
+                <Switch checked={l.active} onCheckedChange={(v) => toggle(l.id, v)} className="mt-1" />
+                <div className="flex-1 space-y-2">
+                  {isEditing ? (
+                    <>
+                      <Textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        maxLength={500}
+                        rows={3}
+                      />
+                      <div className="flex items-center gap-2">
+                        <Select value={editScope} onValueChange={(v) => setEditScope(v as typeof SCOPES[number])}>
+                          <SelectTrigger className="w-40 h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SCOPES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <span className="text-xs text-muted-foreground">{editText.length}/500</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm">{l.lesson}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{l.scope}</Badge>
+                        <Badge variant="outline" className="text-xs">{l.source}</Badge>
+                        <span className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString()}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => remove(l.id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+                {isEditing ? (
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => saveEdit(l.id)} disabled={!editText.trim()}>
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={cancelEdit}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => startEdit(l)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => remove(l.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
