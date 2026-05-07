@@ -418,6 +418,13 @@ export default function Copilot() {
     })();
   }, []);
 
+  // Default the active agent to the first enabled one if the user hasn't picked yet.
+  useEffect(() => {
+    if (!agentsLoaded || !settingsLoaded || activeAgentId) return;
+    const first = agents.find((a) => a.enabled);
+    if (first) setActiveAgentId(first.id);
+  }, [agentsLoaded, settingsLoaded, activeAgentId, agents]);
+
   // Debounced auto-save of audio knobs (sliders / toggle).
   useEffect(() => {
     if (!settingsLoaded) return;
