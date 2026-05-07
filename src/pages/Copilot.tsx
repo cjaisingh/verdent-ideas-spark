@@ -301,6 +301,18 @@ export default function Copilot() {
             setActive(true);
           } else if (m.type === "ConversationText") {
             append({ who: m.role === "user" ? "you" : "copilot", text: m.content, ts: Date.now() });
+            // Wake-word agent switching: scan user utterances for "hey <wake>" or bare "<wake>" at start.
+            if (m.role === "user" && typeof m.content === "string") {
+              const norm = m.content.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
+              const first = norm.split(/\s+/);
+              const tryWake = first[0] === "hey" ? first[1] : first[0];
+              if (tryWake) {
+                const target = agents.find((a) => a.enabled && a.wake_word.toLowerCase() === tryWake);
+                if (target && target.id !== activeAgentId) {
+                  switchAgent(target.id, "wake-word");
+                }
+              }
+            }
           } else if (m.type === "UserStartedSpeaking") {
             setAgentState("listening");
             playHeadRef.current = playCtxRef.current!.currentTime;
