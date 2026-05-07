@@ -5,9 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks/use-toast";
-import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2, ShieldAlert } from "lucide-react";
+import { MessageSquareText, RefreshCw, Trash2, Sparkles, AlertTriangle, Loader2, ShieldAlert, GraduationCap, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { scanLesson, describeIssues } from "@/lib/lessonSafety";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type LessonScope = "global" | "notebook" | "approvals" | "voice_style";
+type LessonDraft = { text: string; scope: LessonScope };
+const SCOPES: LessonScope[] = ["global", "notebook", "approvals", "voice_style"];
 
 type Transcript = {
   id: string;
