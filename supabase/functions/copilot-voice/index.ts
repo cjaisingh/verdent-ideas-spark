@@ -503,6 +503,23 @@ Deno.serve(async (req) => {
   const session: Session = { jwt: "", user_id: "", staged: null, lessons: [], model: "openai/gpt-5-mini" };
   let history: any[] = [];
   let thinking = false;
+  let transcriptId: string | null = null;
+  let turnOrd = 0;
+
+  const recordTurn = async (role: "user" | "assistant", content: string, latency_ms?: number) => {
+    if (!transcriptId || !content) return;
+    try {
+      turnOrd += 1;
+      await supa.from("copilot_transcript_turns").insert({
+        transcript_id: transcriptId, ord: turnOrd, role, content,
+        model: role === "assistant" ? session.model : null,
+        latency_ms: latency_ms ?? null,
+      });
+      await supa.from("copilot_transcripts")
+        .update({ turn_count: turnOrd, ended_at: new Date().toISOString() })
+        .eq("id", transcriptId);
+    } catch (e) { console.warn("recordTurn failed", e); }
+  };
   let settings: {
     stt_model: string;
     tts_voice: string;
