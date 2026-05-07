@@ -35,11 +35,22 @@ export default function DbExplorer() {
   const [rows, setRows] = useState<any[]>([]);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
 
   const callExplorer = async <T,>(body: Record<string, unknown>): Promise<T | null> => {
-    const { data, error } = await supabase.functions.invoke("db-explorer", { body });
-    if (error) { toast.error(error.message); return null; }
-    if (data?.error) { toast.error(data.error); return null; }
+    const requestId =
+      (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const { data, error } = await supabase.functions.invoke("db-explorer", {
+      body,
+      headers: { "x-request-id": requestId },
+    });
+    // Edge function echoes request_id in body and x-request-id header.
+    const respId = (data && typeof data === "object" && (data as { request_id?: string }).request_id) || requestId;
+    setLastRequestId(respId);
+    if (error) { toast.error(`${error.message} · req ${respId.slice(0, 8)}`); return null; }
+    if (data?.error) { toast.error(`${data.error} · req ${respId.slice(0, 8)}`); return null; }
     return (data?.data ?? null) as T | null;
   };
 
