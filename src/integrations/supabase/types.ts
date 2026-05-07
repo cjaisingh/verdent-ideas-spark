@@ -1391,6 +1391,15 @@ export type Database = {
     }
     Functions: {
       auto_purge_if_enabled: { Args: never; Returns: number }
+      db_analyze_public: { Args: never; Returns: undefined }
+      db_list_all_columns: {
+        Args: never
+        Returns: {
+          column_name: string
+          data_type: string
+          table_name: string
+        }[]
+      }
       db_list_columns: {
         Args: { _table: string }
         Returns: {
