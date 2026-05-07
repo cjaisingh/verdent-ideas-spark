@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
 } from "lucide-react";
 
 const groups = [
@@ -33,6 +33,7 @@ const groups = [
     items: [
       { url: "/api-explorer", title: "API explorer", icon: Code2 },
       { url: "/db-explorer", title: "DB explorer", icon: Database },
+      { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
       { url: "/runbooks", title: "Runbooks", icon: Library },
       { url: "/admin", title: "Admin", icon: Shield },
       { url: "/status", title: "Status", icon: Heart },

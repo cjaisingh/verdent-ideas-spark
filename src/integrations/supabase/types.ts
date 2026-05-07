@@ -349,6 +349,60 @@ export type Database = {
         }
         Relationships: []
       }
+      db_explorer_audit: {
+        Row: {
+          action: string | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          id: string
+          limit: number | null
+          offset: number | null
+          rejected: boolean
+          rejection_reason: string | null
+          request_id: string
+          requested: Json | null
+          result_count: number | null
+          status: number
+          table: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          limit?: number | null
+          offset?: number | null
+          rejected?: boolean
+          rejection_reason?: string | null
+          request_id: string
+          requested?: Json | null
+          result_count?: number | null
+          status: number
+          table?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          limit?: number | null
+          offset?: number | null
+          rejected?: boolean
+          rejection_reason?: string | null
+          request_id?: string
+          requested?: Json | null
+          result_count?: number | null
+          status?: number
+          table?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           created_at: string

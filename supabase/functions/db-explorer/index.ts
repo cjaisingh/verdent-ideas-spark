@@ -113,8 +113,33 @@ const json = (status: number, body: unknown, requestId?: string) =>
 // Supabase logs UI when investigating suspicious access patterns.
 import { buildAuditEntry, resultCount, type AuditEntry } from "./audit.ts";
 
+// Module-scope service client used only to persist audit rows. The console
+// line is kept too — DB inserts are best-effort and never block the response.
+const auditSvc = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
+
 function audit(e: AuditEntry) {
   console.log("audit " + JSON.stringify({ kind: "db_explorer_audit", ...e }));
+  // Fire-and-forget DB persist (already-redacted values).
+  auditSvc
+    .from("db_explorer_audit")
+    .insert({
+      request_id: e.request_id,
+      user_id: e.user_id,
+      action: e.action,
+      table: e.table,
+      limit: e.limit,
+      offset: e.offset,
+      status: e.status,
+      result_count: e.result_count,
+      duration_ms: e.duration_ms,
+      error_code: e.error_code,
+      rejected: e.rejected,
+      rejection_reason: e.rejection_reason,
+      requested: e.requested,
+    })
+    .then(({ error }) => {
+      if (error) console.log("audit_persist_error " + JSON.stringify({ msg: error.message }));
+    });
 }
 
 // In-memory cache of the public table list per cold-start (cheap safety net;

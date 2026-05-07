@@ -14,6 +14,7 @@ import ControlPlane from "./pages/ControlPlane";
 import CapabilityDetail from "./pages/CapabilityDetail";
 import ApiExplorer from "./pages/ApiExplorer";
 import DbExplorer from "./pages/DbExplorer";
+import DbAuditLogs from "./pages/DbAuditLogs";
 import Admin from "./pages/Admin";
 import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
+            <Route path="/db-audit" element={<DbAuditLogs />} />
             <Route path="/runbooks" element={<Runbooks />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />
