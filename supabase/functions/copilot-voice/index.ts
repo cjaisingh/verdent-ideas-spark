@@ -337,11 +337,20 @@ Deno.serve(async (req) => {
   const session: Session = { jwt: "", staged: null };
   let history: any[] = [];
   let thinking = false;
-  let settings = {
+  let settings: {
+    stt_model: string;
+    tts_voice: string;
+    language: string;
+    greeting: string;
+    agent_slug?: string | null;
+    system_prompt?: string | null;
+  } = {
     stt_model: "nova-3",
     tts_voice: "aura-2-orion-en",
     language: "en",
     greeting: "Copilot ready.",
+    agent_slug: null,
+    system_prompt: null,
   };
 
   client.onmessage = async (ev) => {
