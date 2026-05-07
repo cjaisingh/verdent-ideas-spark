@@ -1377,7 +1377,91 @@ async function deleteLesson(id: string) {
   return json({ ok: true });
 }
 
-// ---------- router ----------
+// ---------- copilot transcripts ----------
+
+async function listTranscripts(url: URL) {
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
+  const { data, error } = await supabase
+    .from("copilot_transcripts")
+    .select("id, user_id, agent_slug, model, started_at, ended_at, turn_count, summary, analyzed_at")
+    .order("started_at", { ascending: false })
+    .limit(limit);
+  if (error) return json({ error: error.message }, 500);
+  return json({ transcripts: data ?? [], count: data?.length ?? 0 });
+}
+
+async function getTranscript(id: string) {
+  const { data: tr, error } = await supabase
+    .from("copilot_transcripts").select("*").eq("id", id).maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!tr) return json({ error: "not found" }, 404);
+  const { data: turns } = await supabase
+    .from("copilot_transcript_turns").select("*").eq("transcript_id", id).order("ord");
+  return json({ transcript: tr, turns: turns ?? [] });
+}
+
+async function deleteTranscript(id: string) {
+  const { error } = await supabase.from("copilot_transcripts").delete().eq("id", id);
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true });
+}
+
+async function analyzeTranscript(id: string) {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) return json({ error: "ai gateway not configured" }, 500);
+  const { data: tr } = await supabase
+    .from("copilot_transcripts").select("*").eq("id", id).maybeSingle();
+  if (!tr) return json({ error: "not found" }, 404);
+  const { data: turns } = await supabase
+    .from("copilot_transcript_turns").select("ord, role, content, latency_ms")
+    .eq("transcript_id", id).order("ord");
+  if (!turns?.length) return json({ error: "no turns to analyze" }, 400);
+
+  const { data: lessons } = await supabase
+    .from("copilot_lessons").select("lesson, scope").eq("active", true);
+  const lessonBlock = (lessons ?? []).map((l: any) => `- [${l.scope}] ${l.lesson}`).join("\n") || "(none)";
+
+  const transcriptText = turns.map((t: any) =>
+    `[${t.ord}] ${t.role.toUpperCase()}${t.latency_ms ? ` (${t.latency_ms}ms)` : ""}: ${t.content}`
+  ).join("\n");
+
+  const sys = `You analyse Copilot voice transcripts for a single operator. Identify the FIRST turn where the assistant diverged from what the operator wanted (misunderstanding, wrong tool, ignored a lesson, hallucination, refusal, repetition). Return strict JSON:
+{
+  "diverged_at_ord": <int|null>,        // ord of the first problematic assistant turn, null if conversation is fine
+  "divergence_summary": "<one sentence>",
+  "likely_causes": ["<short cause>", ...],   // 1-4 items
+  "suggested_lessons": ["<imperative rule under 140 chars>", ...] // 0-3 items, empty if none warranted
+}
+Active lessons (these were already in force):
+${lessonBlock}`;
+
+  const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}` },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro",
+      messages: [
+        { role: "system", content: sys },
+        { role: "user", content: `Transcript (model=${tr.model ?? "?"}, agent=${tr.agent_slug ?? "?"}):\n\n${transcriptText}` },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  });
+  if (!aiRes.ok) {
+    const t = await aiRes.text();
+    return json({ error: "ai gateway failed", detail: t.slice(0, 300) }, aiRes.status);
+  }
+  const aiBody = await aiRes.json();
+  let analysis: any = {};
+  try { analysis = JSON.parse(aiBody.choices?.[0]?.message?.content ?? "{}"); } catch {}
+
+  await supabase.from("copilot_transcripts").update({
+    analysis, analyzed_at: new Date().toISOString(),
+    summary: analysis.divergence_summary ?? null,
+  }).eq("id", id);
+
+  return json({ ok: true, analysis });
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
