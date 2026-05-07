@@ -53,6 +53,7 @@ export default function Copilot() {
   const [pttMode, setPttMode] = useState(false);
   const [pttHeld, setPttHeld] = useState(false);
   const [micGain, setMicGain] = useState(1.0);
+  const [noiseGate, setNoiseGate] = useState(0.02); // RMS threshold 0..0.5
   const [outVolume, setOutVolume] = useState(1.0);
   const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
