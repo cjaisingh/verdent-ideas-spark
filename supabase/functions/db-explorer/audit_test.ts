@@ -153,3 +153,42 @@ Deno.test("resultCount handles arrays, objects, and null", () => {
   assertEquals(resultCount(null), null);
   assertEquals(resultCount("str"), null);
 });
+
+import { reloadRedactionConfig } from "./audit.ts";
+
+Deno.test("env override: AUDIT_REDACT_KEYS adds custom sensitive key", () => {
+  Deno.env.set("AUDIT_REDACT_KEYS", "token,my_custom_field");
+  reloadRedactionConfig();
+  try {
+    const e = buildAuditEntry(
+      baseCtx({ action: "list_columns" }),
+      400,
+      "unknown_action",
+      null,
+      { reason: "x", requested: { my_custom_field: "leak-me", other: "ok" } },
+    );
+    const req = e.requested as Record<string, unknown>;
+    assertEquals(req.my_custom_field, "[REDACTED]");
+    assertEquals(req.other, "ok");
+  } finally {
+    Deno.env.delete("AUDIT_REDACT_KEYS");
+    reloadRedactionConfig();
+  }
+});
+
+Deno.test("env override: AUDIT_MAX_ERROR_LEN truncates error_code", () => {
+  Deno.env.set("AUDIT_MAX_ERROR_LEN", "10");
+  reloadRedactionConfig();
+  try {
+    const e = buildAuditEntry(
+      baseCtx({ action: "preview_rows" }),
+      500,
+      "this is a long error message",
+      null,
+    );
+    assertEquals((e.error_code as string).length, 11); // 10 + ellipsis
+  } finally {
+    Deno.env.delete("AUDIT_MAX_ERROR_LEN");
+    reloadRedactionConfig();
+  }
+});
