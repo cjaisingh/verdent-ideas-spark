@@ -119,8 +119,16 @@ Deno.serve(async (req) => {
   let auditTable: string | null = null;
   let auditLimit: number | null = null;
   let auditOffset: number | null = null;
+  let requested: Record<string, unknown> | null = null;
 
-  const finish = (status: number, payload: unknown, errorCode: string | null, resultCnt: number | null) => {
+  const finish = (
+    status: number,
+    payload: unknown,
+    errorCode: string | null,
+    resultCnt: number | null,
+    rejection?: { reason: string; requested?: Record<string, unknown> | null },
+  ) => {
+    const rejected = !!rejection || status >= 400;
     audit({
       ts: new Date().toISOString(),
       request_id: requestId,
@@ -133,46 +141,79 @@ Deno.serve(async (req) => {
       result_count: resultCnt,
       duration_ms: Date.now() - startedAt,
       error_code: errorCode,
+      rejected,
+      rejection_reason: rejection?.reason ?? (rejected ? errorCode : null),
+      requested: rejection?.requested ?? (rejected ? requested : null),
     });
     return json(status, payload);
   };
 
-  if (req.method !== "POST") return finish(405, { error: "method_not_allowed" }, "method_not_allowed", null);
+  if (req.method !== "POST") {
+    return finish(405, { error: "method_not_allowed" }, "method_not_allowed", null, {
+      reason: `method_not_allowed:${req.method}`,
+      requested: { method: req.method },
+    });
+  }
 
   const auth = req.headers.get("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ")) return finish(401, { error: "missing_bearer" }, "missing_bearer", null);
+  if (!auth.startsWith("Bearer ")) {
+    return finish(401, { error: "missing_bearer" }, "missing_bearer", null, {
+      reason: "missing_bearer",
+      requested: { has_auth_header: !!req.headers.get("Authorization") },
+    });
+  }
 
   const userClient = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: auth } },
   });
   const { data: userRes, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userRes?.user) return finish(401, { error: "invalid_token" }, "invalid_token", null);
+  if (userErr || !userRes?.user) {
+    return finish(401, { error: "invalid_token" }, "invalid_token", null, {
+      reason: userErr?.message ?? "invalid_token",
+    });
+  }
   userId = userRes.user.id;
 
   const { data: isOp, error: roleErr } = await userClient.rpc("has_role", {
     _user_id: userRes.user.id,
     _role: "operator",
   } as never);
-  if (roleErr || !isOp) return finish(403, { error: "operator_required" }, "operator_required", null);
+  if (roleErr || !isOp) {
+    return finish(403, { error: "operator_required" }, "operator_required", null, {
+      reason: roleErr?.message ?? "operator_role_missing",
+    });
+  }
 
   let raw: string;
   try {
     raw = await req.text();
   } catch {
-    return finish(400, { error: "invalid_body" }, "invalid_body", null);
+    return finish(400, { error: "invalid_body" }, "invalid_body", null, { reason: "body_read_failed" });
   }
-  if (raw.length > MAX_BODY_BYTES) return finish(413, { error: "body_too_large" }, "body_too_large", null);
+  if (raw.length > MAX_BODY_BYTES) {
+    return finish(413, { error: "body_too_large" }, "body_too_large", null, {
+      reason: "body_too_large",
+      requested: { body_bytes: raw.length, max_bytes: MAX_BODY_BYTES },
+    });
+  }
 
   let body: { action?: string; table?: string; limit?: number; offset?: number };
   try {
     body = raw ? JSON.parse(raw) : {};
   } catch {
-    return finish(400, { error: "invalid_json" }, "invalid_json", null);
+    return finish(400, { error: "invalid_json" }, "invalid_json", null, {
+      reason: "invalid_json",
+      requested: { body_preview: raw.slice(0, 200) },
+    });
   }
+  requested = body as Record<string, unknown>;
 
   const action = body.action;
   if (typeof action !== "string" || !ALLOWED_ACTIONS.has(action)) {
-    return finish(400, { error: "unknown_action" }, "unknown_action", null);
+    return finish(400, { error: "unknown_action" }, "unknown_action", null, {
+      reason: "unknown_action",
+      requested: { action: body.action ?? null },
+    });
   }
   auditAction = action;
   if (typeof body.table === "string") auditTable = body.table;
