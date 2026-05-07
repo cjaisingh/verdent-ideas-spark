@@ -49,6 +49,33 @@ const json = (status: number, body: unknown) =>
     headers: { ...cors, "Content-Type": "application/json" },
   });
 
+// Structured audit log emitted to edge function logs as a single JSON line.
+// Captures: action, table, limit/offset, result size, status code, user id,
+// duration, request id, and any error code. Designed to be greppable in the
+// Supabase logs UI when investigating suspicious access patterns.
+interface AuditEntry {
+  ts: string;
+  request_id: string;
+  user_id: string | null;
+  action: string | null;
+  table: string | null;
+  limit: number | null;
+  offset: number | null;
+  status: number;
+  result_count: number | null;
+  duration_ms: number;
+  error_code: string | null;
+}
+function audit(e: AuditEntry) {
+  // Single-line JSON keeps it easy to filter in the logs UI.
+  console.log("audit " + JSON.stringify({ kind: "db_explorer_audit", ...e }));
+}
+function resultCount(data: unknown): number | null {
+  if (Array.isArray(data)) return data.length;
+  if (data && typeof data === "object") return Object.keys(data).length;
+  return null;
+}
+
 // In-memory cache of the public table list per cold-start (cheap safety net;
 // every preview/columns call still confirms the name is in the live set).
 let tableCache: { at: number; names: Set<string> } | null = null;
