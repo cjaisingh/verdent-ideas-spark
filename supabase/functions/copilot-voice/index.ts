@@ -386,7 +386,9 @@ Deno.serve(async (req) => {
               listen: { provider: { type: "deepgram", model: settings.stt_model } },
               think: {
                 provider: { type: "open_ai", model: "gpt-4o-mini", temperature: 0.3 },
-                prompt: SYSTEM_PROMPT,
+                prompt: settings.system_prompt
+                  ? `${SYSTEM_PROMPT}\n\n--- Active agent persona ---\n${settings.system_prompt}`
+                  : SYSTEM_PROMPT,
               },
               speak: { provider: { type: "deepgram", model: settings.tts_voice } },
               greeting: settings.greeting,
