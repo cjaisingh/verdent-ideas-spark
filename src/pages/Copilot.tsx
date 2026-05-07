@@ -560,6 +560,16 @@ export default function Copilot() {
         </Sheet>
       </div>
 
+      <AgentSelector agents={agents} activeId={activeAgentId} onSelect={(id) => switchAgent(id, "manual")} />
+
+      {activeAgentRaw && (
+        <AgentScopeCard
+          agent={activeAgentRaw}
+          override={overrideByAgent.get(activeAgentRaw.id) ?? null}
+          onSaveOverride={(patch) => upsertOverride(activeAgentRaw.id, patch)}
+        />
+      )}
+
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
           <div
