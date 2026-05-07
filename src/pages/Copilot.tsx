@@ -555,6 +555,20 @@ export default function Copilot() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label className="text-sm">Brain (LLM model)</Label>
+                <Select value={brainModel} onValueChange={setBrainModel}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {BRAIN_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Applies on the next session. Lessons taught via voice are honoured by every brain.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label className="text-sm">TTS voice</Label>
                 <Select value={ttsVoice} onValueChange={setTtsVoice}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
