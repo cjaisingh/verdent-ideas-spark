@@ -100,6 +100,62 @@ Deno.serve(async (req) => {
       return json({ ok: true, results: data ?? [] });
     }
 
+    if (path === "/scope-map" && (req.method === "GET" || req.method === "POST")) {
+      // Optional filter: ?slug=lovable  or  body { slug }
+      let slug: string | null = url.searchParams.get("slug");
+      if (!slug && req.method === "POST") {
+        try { slug = (await req.json())?.slug ?? null; } catch { /* no body */ }
+      }
+
+      let agentsQ = admin
+        .from("copilot_agents")
+        .select("slug,name,wake_word,enabled,max_risk,allowed_capability_ids,allowed_tables")
+        .order("order", { ascending: true });
+      if (slug) agentsQ = agentsQ.eq("slug", slug);
+      const { data: agents, error: aErr } = await agentsQ;
+      if (aErr) return json({ error: aErr.message }, 500);
+
+      // Capability metadata for everything any returned agent can call.
+      const capIds = Array.from(new Set((agents ?? []).flatMap((a) => a.allowed_capability_ids ?? [])));
+      const { data: caps } = capIds.length
+        ? await admin.from("capabilities").select("id,name,status,version,owning_module").in("id", capIds)
+        : { data: [] as any[] };
+      const capMap = new Map((caps ?? []).map((c) => [c.id, c]));
+
+      // Table physical sizes / row counts for context.
+      const { data: tables } = await admin.rpc("db_list_tables");
+      const tableMap = new Map((tables ?? []).map((t: any) => [t.table_name, t]));
+
+      const RISK_RANK = { low: 1, medium: 2, high: 3 } as const;
+      const result = (agents ?? []).map((a) => ({
+        slug: a.slug,
+        name: a.name,
+        wake_word: a.wake_word,
+        enabled: a.enabled,
+        max_risk: a.max_risk,
+        max_risk_rank: RISK_RANK[a.max_risk as keyof typeof RISK_RANK] ?? 0,
+        capabilities: (a.allowed_capability_ids ?? []).map((id: string) => ({
+          id,
+          ...(capMap.get(id) ?? { unknown: true }),
+        })),
+        tables: (a.allowed_tables ?? []).map((t: string) => ({
+          name: t,
+          ...(tableMap.get(t) ?? { unknown: true }),
+        })),
+        counts: {
+          capabilities: (a.allowed_capability_ids ?? []).length,
+          tables: (a.allowed_tables ?? []).length,
+        },
+      }));
+
+      return json({
+        ok: true,
+        risk_ranks: RISK_RANK,
+        generated_at: new Date().toISOString(),
+        agents: result,
+      });
+    }
+
     return json({ error: "not_found", path }, 404);
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
