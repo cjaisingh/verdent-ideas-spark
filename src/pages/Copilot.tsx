@@ -487,7 +487,10 @@ export default function Copilot() {
         noise_gate: noiseGate,
       }, { onConflict: "user_id" });
       if (error) throw error;
-      toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
+      toast.success(
+        "Voice settings saved" +
+          (active ? " — voice applied live; language/greeting take effect on next session" : "")
+      );
       setSettingsOpen(false);
     } catch (e: any) {
       toast.error(e.message || "Failed to save");
