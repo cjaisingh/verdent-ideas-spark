@@ -71,6 +71,17 @@ export default function Copilot() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  // Multi-agent catalog (shared) + per-user overrides + the operator's active pick.
+  const { agents, effective, overrideByAgent, upsertOverride, loaded: agentsLoaded } = useCopilotAgents();
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const activeAgentRaw = agents.find((a) => a.id === activeAgentId) ?? null;
+  const activeAgent = activeAgentRaw ? effective(activeAgentRaw) : null;
+  const ttsVoiceRef = useRef<string>(ttsVoice);
+  useEffect(() => {
+    if (activeAgent) ttsVoiceRef.current = activeAgent.tts_voice;
+    else ttsVoiceRef.current = ttsVoice;
+  }, [activeAgent, ttsVoice]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
   const playCtxRef = useRef<AudioContext | null>(null);
