@@ -73,6 +73,13 @@ export default function Copilot() {
   const streamRef = useRef<MediaStream | null>(null);
   const playHeadRef = useRef<number>(0);
   const outGainRef = useRef<GainNode | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll transcript to bottom on new messages.
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [log]);
 
   // Live refs for audio callback (avoids stale closure on state).
   const pttModeRef = useRef(pttMode);
