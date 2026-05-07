@@ -466,6 +466,7 @@ export default function Copilot() {
       await supabase.from("copilot_settings").upsert({
         user_id: user.id,
         stt_model: sttModel,
+        model: brainModel,
         tts_voice: ttsVoice,
         language,
         greeting,
