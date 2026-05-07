@@ -179,9 +179,11 @@ const TOOLS = [
     function: {
       name: "remember_lesson",
       description:
-        "Save a durable rule the operator wants you to follow on every future turn. " +
+        "Stage a durable rule for the operator to confirm before it's saved. " +
         "Call this when the operator says 'learn from this', 'remember that', 'next time…', or 'from now on…'. " +
-        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII.",
+        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII. " +
+        "Returns a confirmation_token. After calling, read the lesson back and ask the operator to confirm; " +
+        "then call confirm_lesson with the token, or cancel_pending_lesson if they decline or want to edit.",
       parameters: {
         type: "object",
         properties: {
@@ -191,6 +193,29 @@ const TOOLS = [
         required: ["lesson"],
         additionalProperties: false,
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "confirm_lesson",
+      description:
+        "Commit a previously staged lesson. Only call AFTER the operator has explicitly confirmed " +
+        "(e.g. 'yes', 'save it', 'go ahead'). Pass the confirmation_token returned by remember_lesson.",
+      parameters: {
+        type: "object",
+        properties: { confirmation_token: { type: "string" } },
+        required: ["confirmation_token"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancel_pending_lesson",
+      description: "Discard a staged lesson if the operator says no, cancel, or wants to rephrase it.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
     },
   },
   {
@@ -234,8 +259,11 @@ NOTEBOOK:
 - When the operator dictates a thought, todo, research note, issue, or suggestion, call add_notebook_entry. Pick the right kind and craft a short title; put the rest in body.
 - For "mark X resolved", "pin that", "archive it", call update_notebook_entry. Read the entry's title back when confirming, never the UUID.
 
-LEARNING:
-- When the operator says "learn from this", "remember that", "next time…", "from now on…", or otherwise teaches you a preference, call remember_lesson with a single-sentence imperative rule (≤500 chars). Then briefly confirm out loud, e.g. "Got it, I'll remember that." Never store secrets, credentials, or PII.
+LEARNING (two-step, mandatory):
+1. When the operator says "learn from this", "remember that", "next time…", "from now on…", or otherwise teaches you a preference, call remember_lesson FIRST with a single-sentence imperative rule (≤500 chars). This stages the lesson — it is NOT saved yet. The operator will see it on screen and can edit it.
+2. Read the staged lesson back briefly, e.g. "Got it — staged: 'Always X'. Confirm to save, or tell me what to change." Then wait.
+3. Only after the operator says yes / save it / go ahead, call confirm_lesson with the token. If they say no, cancel, or want to rephrase, call cancel_pending_lesson.
+Never call confirm_lesson without an immediately preceding explicit verbal confirmation. Never store secrets, credentials, or PII.
 - For "what have you learned" / "list lessons", call list_lessons.
 - For "forget that" / "unlearn …", call forget_lesson with the matching id (look it up via list_lessons first if needed).
 - Lessons currently in force are listed under "LESSONS LEARNED" below — honour them on every turn.
