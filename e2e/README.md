@@ -35,6 +35,10 @@ bun run test:e2e
 
 `bun run test:rls-coverage` runs the three RLS test files via vitest's JSON reporter and emits a markdown coverage matrix to `reports/rls-coverage.md` (and to stdout). Each table row shows pass/fail/skip per role × action (anon R/W, operator-only R, operator R/W, admin R), each RPC row shows pass/fail/skip per role, and any failures are listed with their error message for quick triage. Pass `--json` for machine-readable output, or `--out path.md` to change the destination. Exits non-zero on any failed assertion so it can gate CI.
 
+### Generated policy map (single source of truth)
+
+The lists of tables, admin-only tables, self-row tables, write-blocked tables, and operator/admin RPCs used by `rls-matrix.test.ts` and `rls-role-matrix.test.ts` are **generated** from `pg_policies` + `pg_proc` into `e2e/rls-policy-map.generated.ts`. Run `bun run rls:generate` after any RLS migration; CI runs `bun run rls:verify` (regenerate + `git diff --exit-code`) on every PR via `.github/workflows/rls-map-verify.yml` and fails the merge if the committed map drifts from the live schema. This means adding a new table or changing a policy automatically expands the test surface — there are no hand-maintained constants to update.
+
 ## Adding a CI job
 
 The `quality` job in `.github/workflows/ci.yml` runs unit tests only. To add full e2e, create a separate job (e.g. `e2e-staging.yml` triggered after `deploy-staging.yml`) that exports the env vars from GitHub Environment secrets and runs `bun run test:e2e`.
