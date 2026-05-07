@@ -32,6 +32,22 @@ const Lessons = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [editScope, setEditScope] = useState<typeof SCOPES[number]>("global");
+  const [scopeFilter, setScopeFilter] = useState<"all" | typeof SCOPES[number]>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [search, setSearch] = useState("");
+
+  const counts = SCOPES.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = lessons.filter(l => l.scope === s).length;
+    return acc;
+  }, { all: lessons.length });
+
+  const filtered = lessons.filter(l => {
+    if (scopeFilter !== "all" && l.scope !== scopeFilter) return false;
+    if (statusFilter === "active" && !l.active) return false;
+    if (statusFilter === "inactive" && l.active) return false;
+    if (search && !l.lesson.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   const startEdit = (l: Lesson) => {
     setEditingId(l.id);
