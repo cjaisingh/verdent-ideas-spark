@@ -497,8 +497,18 @@ export default function Copilot() {
           )}
         </div>
 
-        <div className="text-sm font-medium uppercase tracking-wide">
-          {connecting ? "Connecting…" : !active ? "Idle" : muted ? "Muted" : pttMode && !pttHeld ? "Push to talk" : agentState}
+        <div className="text-sm font-medium uppercase tracking-wide text-center">
+          {connecting
+            ? "Connecting…"
+            : !active
+            ? "Idle"
+            : autoMuteReason
+            ? `Auto-muted · ${autoMuteReason}`
+            : muted
+            ? "Muted"
+            : pttMode && !pttHeld
+            ? "Push to talk"
+            : agentState}
         </div>
 
         {/* Mic level meter */}
