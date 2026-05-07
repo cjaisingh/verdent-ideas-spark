@@ -54,6 +54,23 @@ export async function operatorClient() {
   return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
 }
 
+/**
+ * Operator-only user (operator role, NOT admin). Used to assert admin-only
+ * tables / RPCs reject non-admin operators. Skips when env not provided.
+ */
+export async function operatorOnlyClient() {
+  if (!env.HAS_OPERATOR_ONLY) {
+    throw new Error("E2E_OPERATOR_ONLY_EMAIL/PASSWORD not configured");
+  }
+  const c = anonClient();
+  const { data, error } = await c.auth.signInWithPassword({
+    email: env.OPERATOR_ONLY_EMAIL,
+    password: env.OPERATOR_ONLY_PASSWORD,
+  });
+  if (error) throw new Error(`Operator-only sign-in failed: ${error.message}`);
+  return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
+}
+
 export async function callFn(
   path: string,
   init: RequestInit & { auth?: "jwt" | "service" | "none"; jwt?: string } = {},
