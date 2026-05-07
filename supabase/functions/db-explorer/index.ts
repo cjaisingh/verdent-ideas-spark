@@ -44,6 +44,54 @@ const MAX_PREVIEW_OFFSET = 100_000;
 // Body size cap (defense in depth; clients only send tiny JSON).
 const MAX_BODY_BYTES = 4 * 1024;
 
+// Per-user rate limit. In-memory + per-instance (no shared primitive yet) — so
+// a determined attacker hitting many cold instances can exceed this, but it
+// stops single-client brute-force table guessing while audit logs stay intact.
+// Sliding window: at most RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_MS.
+// Stricter sub-limit on rejected validation attempts (table guessing).
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 120;            // total requests / minute / user
+const RATE_LIMIT_REJECT_MAX = 20;      // rejected requests / minute / user
+interface RateBucket { hits: number[]; rejects: number[] }
+const rateBuckets = new Map<string, RateBucket>();
+function pruneBucket(arr: number[], cutoff: number) {
+  let i = 0;
+  while (i < arr.length && arr[i] < cutoff) i++;
+  if (i > 0) arr.splice(0, i);
+}
+function checkRateLimit(userId: string): { allowed: true } | { allowed: false; reason: string; retry_after_ms: number } {
+  const now = Date.now();
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  let b = rateBuckets.get(userId);
+  if (!b) { b = { hits: [], rejects: [] }; rateBuckets.set(userId, b); }
+  pruneBucket(b.hits, cutoff);
+  pruneBucket(b.rejects, cutoff);
+  if (b.hits.length >= RATE_LIMIT_MAX) {
+    return { allowed: false, reason: "rate_limit_total", retry_after_ms: RATE_LIMIT_WINDOW_MS - (now - b.hits[0]) };
+  }
+  if (b.rejects.length >= RATE_LIMIT_REJECT_MAX) {
+    return { allowed: false, reason: "rate_limit_rejects", retry_after_ms: RATE_LIMIT_WINDOW_MS - (now - b.rejects[0]) };
+  }
+  return { allowed: true };
+}
+function recordRateHit(userId: string, rejected: boolean) {
+  const b = rateBuckets.get(userId);
+  if (!b) return;
+  const now = Date.now();
+  b.hits.push(now);
+  if (rejected) b.rejects.push(now);
+}
+// Light periodic GC so the map doesn't grow unbounded across long-lived instances.
+setInterval(() => {
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS * 2;
+  for (const [k, b] of rateBuckets) {
+    pruneBucket(b.hits, cutoff);
+    pruneBucket(b.rejects, cutoff);
+    if (b.hits.length === 0 && b.rejects.length === 0) rateBuckets.delete(k);
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+
 const json = (status: number, body: unknown, requestId?: string) =>
   new Response(
     JSON.stringify(
