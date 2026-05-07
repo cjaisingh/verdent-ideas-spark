@@ -778,7 +778,7 @@ async function getCapabilityDetail(capId: string) {
 
 // ---------- approvals ----------
 
-async function requestApproval(req: Request, actor: string) {
+async function requestApproval(req: Request, actor: string, userId?: string) {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   const required = ["capability_id", "activity", "requesting_module"];
