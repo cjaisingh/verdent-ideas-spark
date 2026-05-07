@@ -82,6 +82,20 @@ export default function Copilot() {
     else ttsVoiceRef.current = ttsVoice;
   }, [activeAgent, ttsVoice]);
 
+  // Apply the active agent's per-user audio overrides (mic_gain, out_volume, noise_gate)
+  // to the live runtime when the agent switches. Null fields fall back to global settings.
+  const lastAppliedOverrideAgentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ov = activeAgent?._override;
+    const aid = activeAgent?.id ?? null;
+    if (!aid || lastAppliedOverrideAgentRef.current === aid) return;
+    lastAppliedOverrideAgentRef.current = aid;
+    if (!ov) return;
+    if (ov.mic_gain != null) setMicGain(Number(ov.mic_gain));
+    if (ov.out_volume != null) setOutVolume(Number(ov.out_volume));
+    if (ov.noise_gate != null) setNoiseGate(Number(ov.noise_gate));
+  }, [activeAgent]);
+
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
   const playCtxRef = useRef<AudioContext | null>(null);
