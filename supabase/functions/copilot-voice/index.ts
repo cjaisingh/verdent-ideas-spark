@@ -149,14 +149,111 @@ async function callAwip(path: string, method: string, jwt: string, body?: unknow
   catch { return { status: res.status, data: text }; }
 }
 
-async function dispatchTool(name: string, args: any, jwt: string) {
+type StagedDecision = {
+  token: string;
+  id: string;
+  decision: "approved" | "rejected";
+  note?: string;
+  activity: string;
+  risk: string;
+  module: string;
+  summary: string;
+  staged_at: number;
+};
+type Session = { jwt: string; staged: StagedDecision | null };
+
+const STAGE_TTL_MS = 5 * 60 * 1000;
+
+function summariseApproval(item: any, decision: string, note?: string): string {
+  const activity = item?.activity ?? "unknown activity";
+  const risk = item?.risk ?? "unknown";
+  const module = item?.requesting_module ?? "unknown module";
+  const payloadPreview = item?.intent_payload
+    ? JSON.stringify(item.intent_payload).slice(0, 200)
+    : "";
+  return [
+    `About to ${decision === "approved" ? "APPROVE" : "REJECT"} a ${risk}-risk ${activity}`,
+    `from ${module}.`,
+    payloadPreview ? `Details: ${payloadPreview}.` : "",
+    note ? `Note: "${note}".` : "",
+    `Confirm to commit.`,
+  ].filter(Boolean).join(" ");
+}
+
+async function dispatchTool(name: string, args: any, session: Session) {
+  const jwt = session.jwt;
   switch (name) {
     case "list_pending_approvals":
       return callAwip("/approvals?status=pending", "GET", jwt);
-    case "decide_approval":
-      return callAwip(`/approvals/${args.id}/decide`, "POST", jwt, {
-        decision: args.decision, note: args.note,
+
+    case "propose_decision": {
+      if (!["approved", "rejected"].includes(args.decision)) {
+        return { status: 400, data: { error: "decision must be approved or rejected" } };
+      }
+      const fetched = await callAwip(`/approvals/${args.id}`, "GET", jwt);
+      if (fetched.status !== 200) {
+        return { status: fetched.status, data: { error: "could not fetch approval", detail: fetched.data } };
+      }
+      const item = (fetched.data as any)?.approval ?? fetched.data;
+      if (!item || item.status !== "pending") {
+        return {
+          status: 409,
+          data: { error: `approval is not pending (status=${item?.status ?? "unknown"})` },
+        };
+      }
+      const token = crypto.randomUUID();
+      const summary = summariseApproval(item, args.decision, args.note);
+      session.staged = {
+        token,
+        id: args.id,
+        decision: args.decision,
+        note: args.note,
+        activity: item.activity,
+        risk: item.risk,
+        module: item.requesting_module ?? "unknown",
+        summary,
+        staged_at: Date.now(),
+      };
+      return {
+        status: 200,
+        data: {
+          confirmation_token: token,
+          summary,
+          activity: item.activity,
+          risk: item.risk,
+          module: item.requesting_module,
+          decision: args.decision,
+          instructions: "Read the summary aloud and ask the operator to confirm. " +
+            "Then call confirm_decision with this token only after they say yes.",
+        },
+      };
+    }
+
+    case "confirm_decision": {
+      const staged = session.staged;
+      if (!staged) {
+        return { status: 400, data: { error: "no decision staged. Call propose_decision first." } };
+      }
+      if (staged.token !== args.confirmation_token) {
+        return { status: 400, data: { error: "confirmation_token does not match staged decision" } };
+      }
+      if (Date.now() - staged.staged_at > STAGE_TTL_MS) {
+        session.staged = null;
+        return { status: 410, data: { error: "staged decision expired. Re-propose." } };
+      }
+      const result = await callAwip(`/approvals/${staged.id}/decide`, "POST", jwt, {
+        decision: staged.decision, note: staged.note,
       });
+      session.staged = null;
+      return result;
+    }
+
+    case "cancel_pending_decision": {
+      const had = !!session.staged;
+      session.staged = null;
+      return { status: 200, data: { cancelled: had } };
+    }
+
     case "list_capabilities":
       return callAwip(`/capabilities${args.status ? `?status=${args.status}` : ""}`, "GET", jwt);
     case "recent_events":
@@ -167,6 +264,7 @@ async function dispatchTool(name: string, args: any, jwt: string) {
       return { status: 400, data: { error: `unknown tool ${name}` } };
   }
 }
+
 
 // ---------- LLM "think" step ----------
 async function think(history: any[], jwt: string): Promise<string> {
