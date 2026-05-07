@@ -1268,6 +1268,62 @@ async function listOnboarding(url: URL) {
   return json({ sessions: data, count: data?.length ?? 0 });
 }
 
+// ---------- notebook ----------
+
+const NOTEBOOK_KINDS = ["thought", "issue", "research", "suggestion", "todo"] as const;
+const NOTEBOOK_STATUSES = ["open", "in_progress", "resolved", "archived"] as const;
+
+async function listNotebook(url: URL) {
+  const kind = url.searchParams.get("kind");
+  const status = url.searchParams.get("status");
+  const search = url.searchParams.get("search");
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
+  let q = supabase.from("notebook_entries").select("*")
+    .order("pinned", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+  if (kind) q = q.eq("kind", kind);
+  if (status) q = q.eq("status", status);
+  if (search) q = q.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+  return json({ entries: data, count: data?.length ?? 0 });
+}
+
+async function createNotebookEntry(req: Request, actor: string) {
+  const body = await req.json().catch(() => ({}));
+  if (!body.title) return json({ error: "title required" }, 400);
+  const kind = NOTEBOOK_KINDS.includes(body.kind) ? body.kind : "thought";
+  const status = NOTEBOOK_STATUSES.includes(body.status) ? body.status : "open";
+  const { data, error } = await supabase.from("notebook_entries").insert({
+    title: body.title,
+    body: body.body ?? null,
+    kind,
+    status,
+    tags: Array.isArray(body.tags) ? body.tags : [],
+    pinned: !!body.pinned,
+    author: body.author ?? actor,
+  }).select("*").single();
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, entry: data });
+}
+
+async function updateNotebookEntry(req: Request, id: string) {
+  const body = await req.json().catch(() => ({}));
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (typeof body.title === "string") patch.title = body.title;
+  if (typeof body.body === "string" || body.body === null) patch.body = body.body;
+  if (NOTEBOOK_KINDS.includes(body.kind)) patch.kind = body.kind;
+  if (NOTEBOOK_STATUSES.includes(body.status)) patch.status = body.status;
+  if (Array.isArray(body.tags)) patch.tags = body.tags;
+  if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
+  const { data, error } = await supabase.from("notebook_entries")
+    .update(patch).eq("id", id).select("*").maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!data) return json({ error: "not found" }, 404);
+  return json({ ok: true, entry: data });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
@@ -1300,6 +1356,8 @@ Deno.serve(async (req) => {
       const onboardingConfirmMatch = path.match(/^\/onboarding\/([0-9a-f-]+)\/confirm$/i);
       const onboardingGetMatch = path.match(/^\/onboarding\/([0-9a-f-]+)$/i);
 
+      const notebookUpdateMatch = path.match(/^\/notebook\/([0-9a-f-]+)$/i);
+
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
@@ -1318,6 +1376,9 @@ Deno.serve(async (req) => {
       else if (req.method === "POST" && onboardingConfirmMatch) response = await confirmOnboarding(req, onboardingConfirmMatch[1], auth.actor);
       else if (req.method === "GET" && onboardingGetMatch) response = await getOnboarding(onboardingGetMatch[1]);
       else if (req.method === "GET" && path === "/onboarding") response = await listOnboarding(url);
+      else if (req.method === "GET" && path === "/notebook") response = await listNotebook(url);
+      else if (req.method === "POST" && path === "/notebook") response = await createNotebookEntry(req, auth.actor);
+      else if (req.method === "PATCH" && notebookUpdateMatch) response = await updateNotebookEntry(req, notebookUpdateMatch[1]);
       else response = json({ error: "not found", path }, 404);
     }
     }
