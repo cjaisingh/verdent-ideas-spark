@@ -116,6 +116,18 @@ export default function DbExplorer() {
           <p className="text-sm text-muted-foreground">
             Read-only view of every table in the AWIP backend. Operator access only.
           </p>
+          {lastRequestId && (
+            <p className="text-xs text-muted-foreground font-mono mt-1">
+              last request id:{" "}
+              <button
+                className="underline hover:text-foreground"
+                onClick={() => { navigator.clipboard?.writeText(lastRequestId); toast.success("Copied request id"); }}
+                title="Click to copy — use to grep audit logs"
+              >
+                {lastRequestId}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={loadTables}>
