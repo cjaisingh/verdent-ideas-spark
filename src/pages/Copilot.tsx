@@ -355,6 +355,7 @@ export default function Copilot() {
         setPttMode(data.ptt_mode);
         setMicGain(Number(data.mic_gain));
         setOutVolume(Number(data.out_volume));
+        if (data.noise_gate != null) setNoiseGate(Number(data.noise_gate));
       }
       setSettingsLoaded(true);
     })();
