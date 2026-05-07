@@ -7,7 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Trash2, Plus, RefreshCw, GraduationCap } from "lucide-react";
+import { Trash2, Plus, RefreshCw, GraduationCap, Pencil, Check, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 type Lesson = {
   id: string;
