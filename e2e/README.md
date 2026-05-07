@@ -28,7 +28,7 @@ bun run test:e2e
 
 ## Security suite
 
-`bun run test:security` runs only `security-audit.test.ts` + `rls-matrix.test.ts`. CI runs this on every change under `supabase/migrations/` and nightly via `.github/workflows/security-audit.yml`. The linter assertion needs `SUPABASE_ACCESS_TOKEN` (a Supabase Personal Access Token) and `SUPABASE_PROJECT_REF`; without them the linter test self-skips and only the role checks run.
+`bun run test:security` runs only `security-audit.test.ts` + `rls-matrix.test.ts`. CI runs this on **every pull request to `main`** (so it can be a required status check that blocks merges if new linter warnings appear), on pushes that touch `supabase/migrations/`, and nightly via `.github/workflows/security-audit.yml`. The linter assertion needs `SUPABASE_ACCESS_TOKEN` (a Supabase Personal Access Token) and `SUPABASE_PROJECT_REF`; without them the linter test self-skips and only the role checks run. To enforce blocking, mark the **"Linter + RLS matrix"** check as required in GitHub branch protection for `main`.
 
 ## Adding a CI job
 

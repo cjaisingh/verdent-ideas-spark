@@ -6,7 +6,12 @@ name: Security audit
 #   E2E_OPERATOR_EMAIL, E2E_OPERATOR_PASSWORD,
 #   SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF
 on:
+  pull_request:
+    # Run on every PR so the job appears as a required status check.
+    # Mark "Linter + RLS matrix" required in branch protection to block merges.
+    branches: [main]
   push:
+    branches: [main]
     paths:
       - "supabase/migrations/**"
       - "e2e/security-audit.test.ts"
