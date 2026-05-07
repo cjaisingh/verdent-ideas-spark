@@ -4,7 +4,14 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Mic, MicOff, Loader2, Volume2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Mic, MicOff, Loader2, Volume2, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -13,19 +20,51 @@ type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 const PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 const WS_URL = `wss://${PROJECT_ID}.functions.supabase.co/copilot-voice`;
 
+const STT_MODELS = [
+  { value: "nova-3", label: "Nova-3 (latest, best accuracy)" },
+  { value: "nova-2", label: "Nova-2 (proven, fast)" },
+  { value: "nova-2-conversationalai", label: "Nova-2 conversational" },
+  { value: "enhanced", label: "Enhanced (legacy)" },
+];
+const TTS_VOICES = [
+  { value: "aura-2-orion-en", label: "Aura-2 Orion (male, en)" },
+  { value: "aura-2-helios-en", label: "Aura-2 Helios (male, en)" },
+  { value: "aura-2-luna-en", label: "Aura-2 Luna (female, en)" },
+  { value: "aura-2-stella-en", label: "Aura-2 Stella (female, en)" },
+  { value: "aura-asteria-en", label: "Aura Asteria (female, en)" },
+  { value: "aura-arcas-en", label: "Aura Arcas (male, en)" },
+];
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "en-GB", label: "English (UK)" },
+  { value: "en-US", label: "English (US)" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+];
+
 export default function Copilot() {
   const [active, setActive] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [agentState, setAgentState] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [log, setLog] = useState<LogLine[]>([]);
 
-  // Controls
-  const [pttMode, setPttMode] = useState(false); // false = always-on (hands-free), true = push-to-talk
+  // Controls (persisted per operator in copilot_settings)
+  const [pttMode, setPttMode] = useState(false);
   const [pttHeld, setPttHeld] = useState(false);
-  const [micGain, setMicGain] = useState(1.0);   // 0..2
-  const [outVolume, setOutVolume] = useState(1.0); // 0..1.5
-  const [micLevel, setMicLevel] = useState(0); // 0..1, smoothed RMS
+  const [micGain, setMicGain] = useState(1.0);
+  const [outVolume, setOutVolume] = useState(1.0);
+  const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
+
+  // Voice/STT settings (persisted)
+  const [sttModel, setSttModel] = useState("nova-3");
+  const [ttsVoice, setTtsVoice] = useState("aura-2-orion-en");
+  const [language, setLanguage] = useState("en");
+  const [greeting, setGreeting] = useState("Copilot ready.");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const micCtxRef = useRef<AudioContext | null>(null);
@@ -95,7 +134,11 @@ export default function Copilot() {
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
-      ws.onopen = () => ws.send(JSON.stringify({ type: "auth", jwt }));
+      ws.onopen = () => ws.send(JSON.stringify({
+        type: "auth",
+        jwt,
+        settings: { stt_model: sttModel, tts_voice: ttsVoice, language, greeting },
+      }));
 
       ws.onmessage = (ev) => {
         if (typeof ev.data === "string") {
@@ -197,6 +240,74 @@ export default function Copilot() {
 
   useEffect(() => () => stop(), []);
 
+  // Load persisted settings on mount.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setSettingsLoaded(true); return; }
+      const { data, error } = await supabase
+        .from("copilot_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!error && data) {
+        setSttModel(data.stt_model);
+        setTtsVoice(data.tts_voice);
+        setLanguage(data.language);
+        setGreeting(data.greeting);
+        setPttMode(data.ptt_mode);
+        setMicGain(Number(data.mic_gain));
+        setOutVolume(Number(data.out_volume));
+      }
+      setSettingsLoaded(true);
+    })();
+  }, []);
+
+  // Debounced auto-save of audio knobs (sliders / toggle).
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    const t = setTimeout(async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from("copilot_settings").upsert({
+        user_id: user.id,
+        stt_model: sttModel,
+        tts_voice: ttsVoice,
+        language,
+        greeting,
+        ptt_mode: pttMode,
+        mic_gain: micGain,
+        out_volume: outVolume,
+      }, { onConflict: "user_id" });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [settingsLoaded, pttMode, micGain, outVolume]);
+
+  const saveVoiceSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const { error } = await supabase.from("copilot_settings").upsert({
+        user_id: user.id,
+        stt_model: sttModel,
+        tts_voice: ttsVoice,
+        language,
+        greeting,
+        ptt_mode: pttMode,
+        mic_gain: micGain,
+        out_volume: outVolume,
+      }, { onConflict: "user_id" });
+      if (error) throw error;
+      toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
+      setSettingsOpen(false);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to save");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const transmitting = active && !muted && (!pttMode || pttHeld);
   const stateColor = !transmitting && active
     ? "bg-muted"
@@ -209,11 +320,80 @@ export default function Copilot() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-semibold">Copilot</h1>
-        <p className="text-sm text-muted-foreground">
-          Hands-free voice console. Powered by Deepgram Voice Agent + AWIP tools.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Copilot</h1>
+          <p className="text-sm text-muted-foreground">
+            Hands-free voice console. Powered by Deepgram Voice Agent + AWIP tools.
+          </p>
+        </div>
+        <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings2 className="size-4 mr-2" /> Session settings
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Session settings</SheetTitle>
+              <SheetDescription>
+                Voice and STT options for your Copilot. Saved to your operator profile.
+                Changes apply on the next session start.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="py-6 space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm">Speech-to-text model</Label>
+                <Select value={sttModel} onValueChange={setSttModel}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STT_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">TTS voice</Label>
+                <Select value={ttsVoice} onValueChange={setTtsVoice}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TTS_VOICES.map((v) => (
+                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm" htmlFor="greeting">Greeting</Label>
+                <Input
+                  id="greeting"
+                  value={greeting}
+                  onChange={(e) => setGreeting(e.target.value)}
+                  placeholder="Copilot ready."
+                />
+                <p className="text-xs text-muted-foreground">Spoken when a session starts.</p>
+              </div>
+            </div>
+            <SheetFooter>
+              <Button variant="ghost" onClick={() => setSettingsOpen(false)}>Cancel</Button>
+              <Button onClick={saveVoiceSettings} disabled={savingSettings}>
+                {savingSettings ? "Saving…" : "Save"}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       </div>
 
       <Card className="p-8 flex flex-col items-center gap-6">
