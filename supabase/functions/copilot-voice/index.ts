@@ -298,12 +298,20 @@ type StagedDecision = {
   staged_at: number;
 };
 type Lesson = { id: string; lesson: string; scope: string; active: boolean };
+type StagedLesson = {
+  token: string;
+  lesson: string;
+  scope: "global" | "notebook" | "approvals" | "voice_style";
+  staged_at: number;
+};
 type Session = {
   jwt: string;
   user_id: string;
   staged: StagedDecision | null;
+  staged_lesson: StagedLesson | null;
   lessons: Lesson[];
   model: string;
+  notify: ((evt: Record<string, unknown>) => void) | null;
 };
 
 const STAGE_TTL_MS = 5 * 60 * 1000;
