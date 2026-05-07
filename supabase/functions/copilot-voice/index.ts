@@ -636,10 +636,13 @@ Deno.serve(async (req) => {
               if (m.type === "ConversationText" && m.role === "user" && !thinking) {
                 thinking = true;
                 history.push({ role: "user", content: m.content });
+                recordTurn("user", m.content);
+                const t0 = Date.now();
                 try {
                   const reply = await think(history, session);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
+                    recordTurn("assistant", reply, Date.now() - t0);
                     dg!.send(JSON.stringify({ type: "InjectAgentMessage", content: reply }));
                   }
                 } catch (e) {
