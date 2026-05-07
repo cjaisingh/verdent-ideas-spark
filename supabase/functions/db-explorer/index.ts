@@ -108,44 +108,71 @@ async function assertValidTable(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
-  if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
+
+  const startedAt = Date.now();
+  const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+  let userId: string | null = null;
+  let auditAction: string | null = null;
+  let auditTable: string | null = null;
+  let auditLimit: number | null = null;
+  let auditOffset: number | null = null;
+
+  const finish = (status: number, payload: unknown, errorCode: string | null, resultCnt: number | null) => {
+    audit({
+      ts: new Date().toISOString(),
+      request_id: requestId,
+      user_id: userId,
+      action: auditAction,
+      table: auditTable,
+      limit: auditLimit,
+      offset: auditOffset,
+      status,
+      result_count: resultCnt,
+      duration_ms: Date.now() - startedAt,
+      error_code: errorCode,
+    });
+    return json(status, payload);
+  };
+
+  if (req.method !== "POST") return finish(405, { error: "method_not_allowed" }, "method_not_allowed", null);
 
   const auth = req.headers.get("Authorization") ?? "";
-  if (!auth.startsWith("Bearer ")) return json(401, { error: "missing_bearer" });
+  if (!auth.startsWith("Bearer ")) return finish(401, { error: "missing_bearer" }, "missing_bearer", null);
 
-  // Verify the caller and check operator role under their JWT (RLS-safe).
   const userClient = createClient(SUPABASE_URL, ANON, {
     global: { headers: { Authorization: auth } },
   });
   const { data: userRes, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userRes?.user) return json(401, { error: "invalid_token" });
+  if (userErr || !userRes?.user) return finish(401, { error: "invalid_token" }, "invalid_token", null);
+  userId = userRes.user.id;
 
   const { data: isOp, error: roleErr } = await userClient.rpc("has_role", {
     _user_id: userRes.user.id,
     _role: "operator",
   } as never);
-  if (roleErr || !isOp) return json(403, { error: "operator_required" });
+  if (roleErr || !isOp) return finish(403, { error: "operator_required" }, "operator_required", null);
 
-  // Parse + size-limit body.
   let raw: string;
   try {
     raw = await req.text();
   } catch {
-    return json(400, { error: "invalid_body" });
+    return finish(400, { error: "invalid_body" }, "invalid_body", null);
   }
-  if (raw.length > MAX_BODY_BYTES) return json(413, { error: "body_too_large" });
+  if (raw.length > MAX_BODY_BYTES) return finish(413, { error: "body_too_large" }, "body_too_large", null);
 
   let body: { action?: string; table?: string; limit?: number; offset?: number };
   try {
     body = raw ? JSON.parse(raw) : {};
   } catch {
-    return json(400, { error: "invalid_json" });
+    return finish(400, { error: "invalid_json" }, "invalid_json", null);
   }
 
   const action = body.action;
   if (typeof action !== "string" || !ALLOWED_ACTIONS.has(action)) {
-    return json(400, { error: "unknown_action" });
+    return finish(400, { error: "unknown_action" }, "unknown_action", null);
   }
+  auditAction = action;
+  if (typeof body.table === "string") auditTable = body.table;
 
   const svc = createClient(SUPABASE_URL, SERVICE, {
     auth: { persistSession: false },
@@ -155,60 +182,61 @@ Deno.serve(async (req) => {
     switch (action) {
       case "list_tables": {
         const { data, error } = await svc.rpc("db_list_tables");
-        if (error) return json(500, { error: error.message });
-        // Refresh the in-memory cache opportunistically.
+        if (error) return finish(500, { error: error.message }, "rpc_error", null);
         tableCache = {
           at: Date.now(),
           names: new Set(((data as Array<{ table_name: string }>) ?? []).map((r) => r.table_name)),
         };
-        return json(200, { data });
+        return finish(200, { data }, null, resultCount(data));
       }
       case "list_all_columns": {
         const { data, error } = await svc.rpc("db_list_all_columns");
-        if (error) return json(500, { error: error.message });
-        return json(200, { data });
+        if (error) return finish(500, { error: error.message }, "rpc_error", null);
+        return finish(200, { data }, null, resultCount(data));
       }
       case "list_columns": {
         const check = await assertValidTable(svc, body.table);
-        if (!check.ok) return json(check.status, { error: check.error });
-        const { data, error } = await svc.rpc("db_list_columns", {
-          _table: check.name,
-        } as never);
-        if (error) return json(500, { error: error.message });
-        return json(200, { data });
+        if (!check.ok) return finish(check.status, { error: check.error }, check.error, null);
+        auditTable = check.name;
+        const { data, error } = await svc.rpc("db_list_columns", { _table: check.name } as never);
+        if (error) return finish(500, { error: error.message }, "rpc_error", null);
+        return finish(200, { data }, null, resultCount(data));
       }
       case "preview_rows": {
         const check = await assertValidTable(svc, body.table);
-        if (!check.ok) return json(check.status, { error: check.error });
+        if (!check.ok) return finish(check.status, { error: check.error }, check.error, null);
+        auditTable = check.name;
 
         const rawLimit = Number.isFinite(body.limit as number) ? Math.floor(body.limit as number) : 50;
         const rawOffset = Number.isFinite(body.offset as number) ? Math.floor(body.offset as number) : 0;
         const limit = Math.min(Math.max(rawLimit, 1), MAX_PREVIEW_LIMIT);
         const offset = Math.min(Math.max(rawOffset, 0), MAX_PREVIEW_OFFSET);
+        auditLimit = limit;
+        auditOffset = offset;
 
         const { data, error } = await svc.rpc("db_preview_rows", {
           _table: check.name,
           _limit: limit,
           _offset: offset,
         } as never);
-        if (error) return json(500, { error: error.message });
-        return json(200, { data, limit, offset });
+        if (error) return finish(500, { error: error.message }, "rpc_error", null);
+        return finish(200, { data, limit, offset }, null, resultCount(data));
       }
       case "refresh_counts": {
         const { error: aErr } = await svc.rpc("db_analyze_public");
-        if (aErr) return json(500, { error: aErr.message });
+        if (aErr) return finish(500, { error: aErr.message }, "rpc_error", null);
         const { data, error } = await svc.rpc("db_list_tables");
-        if (error) return json(500, { error: error.message });
+        if (error) return finish(500, { error: error.message }, "rpc_error", null);
         tableCache = {
           at: Date.now(),
           names: new Set(((data as Array<{ table_name: string }>) ?? []).map((r) => r.table_name)),
         };
-        return json(200, { data });
+        return finish(200, { data }, null, resultCount(data));
       }
     }
   } catch (e) {
-    return json(500, { error: (e as Error).message ?? "internal_error" });
+    return finish(500, { error: (e as Error).message ?? "internal_error" }, "internal_error", null);
   }
 
-  return json(400, { error: "unknown_action" });
+  return finish(400, { error: "unknown_action" }, "unknown_action", null);
 });
