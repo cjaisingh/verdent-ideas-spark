@@ -41,6 +41,69 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_onboarding_sessions: {
+        Row: {
+          activity: string | null
+          actor: string
+          agent_slug: string
+          approval_id: string | null
+          capability_id: string | null
+          checklist: Json
+          completed_at: string | null
+          created_at: string
+          goal_text: string | null
+          id: string
+          intent: string
+          notes: string | null
+          required_approvals: string[]
+          required_capabilities: string[]
+          risk: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          activity?: string | null
+          actor: string
+          agent_slug: string
+          approval_id?: string | null
+          capability_id?: string | null
+          checklist?: Json
+          completed_at?: string | null
+          created_at?: string
+          goal_text?: string | null
+          id?: string
+          intent: string
+          notes?: string | null
+          required_approvals?: string[]
+          required_capabilities?: string[]
+          risk?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          activity?: string | null
+          actor?: string
+          agent_slug?: string
+          approval_id?: string | null
+          capability_id?: string | null
+          checklist?: Json
+          completed_at?: string | null
+          created_at?: string
+          goal_text?: string | null
+          id?: string
+          intent?: string
+          notes?: string | null
+          required_approvals?: string[]
+          required_capabilities?: string[]
+          risk?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       alert_log: {
         Row: {
           created_at: string
