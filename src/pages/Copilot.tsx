@@ -412,6 +412,7 @@ export default function Copilot() {
         setMicGain(Number(data.mic_gain));
         setOutVolume(Number(data.out_volume));
         if (data.noise_gate != null) setNoiseGate(Number(data.noise_gate));
+        if ((data as any).active_agent_id) setActiveAgentId((data as any).active_agent_id);
       }
       setSettingsLoaded(true);
     })();
