@@ -1,58 +1,56 @@
-# Fix: session voice settings now apply (and apply live)
+## Goal
 
-Two bugs stack together today:
+Add a self-learning loop to Copilot voice. When you say "learn from this", "remember that", "next time…", or "from now on…", Copilot extracts a concise rule and stores it in a new `copilot_lessons` table. Active lessons are injected into the system prompt on every turn, so behaviour persists across sessions. Also add a UI-flippable model toggle (gpt-5-mini ↔ gemini-2.5-pro) to A/B intelligence vs cost.
 
-1. The active Copilot agent silently overrides the session voice — `tts_voice: activeAgent?.tts_voice ?? ttsVoice` in `Copilot.tsx` means an agent always wins, so the dropdown in the Settings sheet looks saved but does nothing.
-2. Even when the right field changes, the voice is only sent to Deepgram once at socket open. Mid-session changes require restarting the session.
+## Why this addresses the transcript
 
-## Changes
+In recent sessions Copilot has felt "less intelligent" not because of raw model capability but because:
+- Each session starts with zero memory of prior corrections.
+- Trigger phrases like "learn from this" have no handler — the model just acknowledges politely and forgets.
+- There's no way to switch brains when one feels weak on a given topic.
 
-### 1. `src/pages/Copilot.tsx` — flip precedence
-In the WebSocket auth payload (~line 284), treat the operator's session settings as the master preference, with the agent as fallback:
-```ts
-tts_voice: ttsVoice || activeAgent?.tts_voice,
-language: language || activeAgent?.language,
-greeting: greeting || activeAgent?.default_greeting,
-```
-Per-agent voice overrides on `AgentScopeCard` still work — they live on `copilot_agent_overrides` and are merged into `activeAgent.tts_voice` via `effective()`. The session-level pick simply wins when set.
+Lessons + a model toggle fix all three without touching Deepgram config.
 
-### 2. `src/pages/Copilot.tsx` — live-apply on change
-Add a small effect that, when `ttsVoice` changes while a session is active, sends a control frame over the existing WebSocket:
-```ts
-useEffect(() => {
-  if (!active || !wsRef.current) return;
-  if (wsRef.current.readyState !== WebSocket.OPEN) return;
-  wsRef.current.send(JSON.stringify({ type: "update_voice", voice: ttsVoice }));
-}, [ttsVoice, active]);
-```
-Update `ttsVoiceRef.current` in the same effect so the rest of the app stays in sync.
+## Database
 
-Also drop the "restart session to apply" hint from `saveVoiceSettings` toast — it's no longer needed for voice.
+New migration:
 
-### 3. `supabase/functions/copilot-voice/index.ts` — proxy to Deepgram
-In the client `onmessage` handler, before the `auth` branch handling, add a case:
-```ts
-if (msg.type === "update_voice" && typeof msg.voice === "string") {
-  settings.tts_voice = msg.voice;
-  if (dg && dg.readyState === WebSocket.OPEN) {
-    dg.send(JSON.stringify({
-      type: "UpdateSpeak",
-      speak: { provider: { type: "deepgram", model: msg.voice } },
-    }));
-  }
-  return;
-}
-```
-This uses Deepgram Voice Agent's `UpdateSpeak` control message, which swaps the TTS model on a live converse session without dropping audio. The cached `settings.tts_voice` ensures any subsequent reconnect keeps the new voice.
+- `copilot_lessons` table:
+  - `id uuid pk`, `lesson text not null` (≤500 chars, validation trigger), `scope text not null default 'global'` (`global` | `notebook` | `approvals` | `voice_style`), `source text not null default 'voice'` (`voice` | `manual`), `active boolean not null default true`, `created_by text`, `created_at`, `updated_at`.
+  - Operator/admin RLS for select/insert/update/delete.
+  - Added to `supabase_realtime` publication.
+  - `updated_at` trigger.
+- Extend `copilot_settings` with `model text not null default 'openai/gpt-5-mini'` (allowed: `openai/gpt-5-mini`, `google/gemini-2.5-pro`, `openai/gpt-5`, `google/gemini-2.5-flash`).
 
-### 4. Deploy
-Redeploy `copilot-voice` so the new control message is recognized.
+## Edge function changes
+
+`supabase/functions/awip-api/index.ts`:
+- `GET /lessons?active=true` — list.
+- `POST /lessons` — create (body: `{ lesson, scope?, source? }`), idempotent.
+- `PATCH /lessons/:id` — toggle active / edit text / change scope.
+- `DELETE /lessons/:id` — remove.
+
+`supabase/functions/copilot-voice/index.ts`:
+- On `auth`, fetch operator's `copilot_settings.model` (default `openai/gpt-5-mini`) and load active lessons. Cache both in the `Session` object.
+- Subscribe to realtime `copilot_lessons` inserts/updates/deletes for this session and refresh the cache.
+- Build system prompt per `think()` as `SYSTEM_PROMPT + "\n\nLESSONS LEARNED (always honour):\n- …"`.
+- Pass `session.model` to the AI Gateway request instead of hard-coded `openai/gpt-5-mini`.
+- Add tools:
+  - `remember_lesson({ lesson, scope? })` — POSTs to `/lessons`.
+  - `list_lessons()` — GETs `/lessons?active=true`.
+  - `forget_lesson({ id })` — DELETE.
+- Extend system prompt with: "When the operator says 'learn from this', 'remember that', 'next time…', or 'from now on…', call `remember_lesson` with a one-sentence rule, then briefly confirm ('Got it, I'll remember that.'). Never store secrets, names of individuals, or PII."
+
+## UI changes
+
+- New page `src/pages/Lessons.tsx` (list, toggle active, edit, delete; filter by scope; same design language as `Notebook.tsx`).
+- Route `/lessons` added in `App.tsx`, inside `RequireAuth` + `OperatorLayout`.
+- Sidebar entry in `AppSidebar.tsx` ("Lessons", under Copilot section).
+- Small card on `/copilot` showing active lesson count + link.
+- Model selector on `/copilot` (or in `CopilotProfile.tsx`) — dropdown bound to `copilot_settings.model`. Live-applies on next turn.
 
 ## Out of scope
-- Live-applying language and greeting mid-session (those need a session restart on Deepgram's side; we'll keep the existing toast hint for those two fields only).
-- UI copy changes beyond the toast — the dropdown labels are already clear.
 
-## Acceptance
-- Open `/copilot` → Settings sheet → change "TTS voice" → click Save. The next thing the agent says uses the new voice, no restart required.
-- With no session active, save persists in `copilot_settings.tts_voice` and is applied on the next session start.
-- The per-agent voice override on `AgentScopeCard` still works when the session voice is left at its default.
+- Auto-extracting lessons without an explicit trigger (would create noisy memory).
+- Per-agent lesson scoping (single global pool for now; `scope` field reserved for future).
+- Vector retrieval — short list injected into prompt is sufficient until we exceed ~30 lessons.

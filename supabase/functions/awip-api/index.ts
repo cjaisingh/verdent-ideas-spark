@@ -1324,6 +1324,59 @@ async function updateNotebookEntry(req: Request, id: string) {
   return json({ ok: true, entry: data });
 }
 
+// ---------- copilot lessons ----------
+
+const LESSON_SCOPES = ["global", "notebook", "approvals", "voice_style"] as const;
+const LESSON_SOURCES = ["voice", "manual"] as const;
+
+async function listLessons(url: URL) {
+  const activeParam = url.searchParams.get("active");
+  const scope = url.searchParams.get("scope");
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100", 10) || 100, 200);
+  let q = supabase.from("copilot_lessons").select("*").order("created_at", { ascending: false }).limit(limit);
+  if (activeParam === "true") q = q.eq("active", true);
+  else if (activeParam === "false") q = q.eq("active", false);
+  if (scope) q = q.eq("scope", scope);
+  const { data, error } = await q;
+  if (error) return json({ error: error.message }, 500);
+  return json({ lessons: data, count: data?.length ?? 0 });
+}
+
+async function createLesson(req: Request, actor: string) {
+  const body = await req.json().catch(() => ({}));
+  const lesson = (body.lesson ?? "").toString().trim();
+  if (!lesson) return json({ error: "lesson required" }, 400);
+  if (lesson.length > 500) return json({ error: "lesson too long (max 500)" }, 400);
+  const scope = LESSON_SCOPES.includes(body.scope) ? body.scope : "global";
+  const source = LESSON_SOURCES.includes(body.source) ? body.source : "manual";
+  const { data, error } = await supabase.from("copilot_lessons").insert({
+    lesson, scope, source, created_by: actor,
+    active: typeof body.active === "boolean" ? body.active : true,
+  }).select("*").single();
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, lesson: data });
+}
+
+async function updateLesson(req: Request, id: string) {
+  const body = await req.json().catch(() => ({}));
+  const patch: Record<string, unknown> = {};
+  if (typeof body.lesson === "string") patch.lesson = body.lesson;
+  if (LESSON_SCOPES.includes(body.scope)) patch.scope = body.scope;
+  if (typeof body.active === "boolean") patch.active = body.active;
+  if (Object.keys(patch).length === 0) return json({ error: "nothing to update" }, 400);
+  const { data, error } = await supabase.from("copilot_lessons")
+    .update(patch).eq("id", id).select("*").maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!data) return json({ error: "not found" }, 404);
+  return json({ ok: true, lesson: data });
+}
+
+async function deleteLesson(id: string) {
+  const { error } = await supabase.from("copilot_lessons").delete().eq("id", id);
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true });
+}
+
 // ---------- router ----------
 
 Deno.serve(async (req) => {
@@ -1357,6 +1410,7 @@ Deno.serve(async (req) => {
       const onboardingGetMatch = path.match(/^\/onboarding\/([0-9a-f-]+)$/i);
 
       const notebookUpdateMatch = path.match(/^\/notebook\/([0-9a-f-]+)$/i);
+      const lessonIdMatch = path.match(/^\/lessons\/([0-9a-f-]+)$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
@@ -1379,6 +1433,10 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && path === "/notebook") response = await listNotebook(url);
       else if (req.method === "POST" && path === "/notebook") response = await createNotebookEntry(req, auth.actor);
       else if (req.method === "PATCH" && notebookUpdateMatch) response = await updateNotebookEntry(req, notebookUpdateMatch[1]);
+      else if (req.method === "GET" && path === "/lessons") response = await listLessons(url);
+      else if (req.method === "POST" && path === "/lessons") response = await createLesson(req, auth.actor);
+      else if (req.method === "PATCH" && lessonIdMatch) response = await updateLesson(req, lessonIdMatch[1]);
+      else if (req.method === "DELETE" && lessonIdMatch) response = await deleteLesson(lessonIdMatch[1]);
       else response = json({ error: "not found", path }, 404);
     }
     }

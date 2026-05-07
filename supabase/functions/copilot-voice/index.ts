@@ -174,6 +174,46 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "remember_lesson",
+      description:
+        "Save a durable rule the operator wants you to follow on every future turn. " +
+        "Call this when the operator says 'learn from this', 'remember that', 'next time…', or 'from now on…'. " +
+        "Phrase the lesson as a one-sentence imperative rule. Never store secrets, credentials, or PII.",
+      parameters: {
+        type: "object",
+        properties: {
+          lesson: { type: "string", description: "One-sentence rule, ≤500 chars." },
+          scope: { type: "string", enum: ["global","notebook","approvals","voice_style"] },
+        },
+        required: ["lesson"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_lessons",
+      description: "List active lessons Copilot has been taught.",
+      parameters: { type: "object", properties: {}, additionalProperties: false },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "forget_lesson",
+      description: "Delete a previously saved lesson by id (when operator says 'forget that' / 'unlearn that').",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `You are AWIP Copilot — the operator's hands-free voice assistant while driving.
@@ -193,6 +233,12 @@ NOTEBOOK:
 - For "what's in the notebook", "what's open", "what needs doing", call list_notebook (default to status=open).
 - When the operator dictates a thought, todo, research note, issue, or suggestion, call add_notebook_entry. Pick the right kind and craft a short title; put the rest in body.
 - For "mark X resolved", "pin that", "archive it", call update_notebook_entry. Read the entry's title back when confirming, never the UUID.
+
+LEARNING:
+- When the operator says "learn from this", "remember that", "next time…", "from now on…", or otherwise teaches you a preference, call remember_lesson with a single-sentence imperative rule (≤500 chars). Then briefly confirm out loud, e.g. "Got it, I'll remember that." Never store secrets, credentials, or PII.
+- For "what have you learned" / "list lessons", call list_lessons.
+- For "forget that" / "unlearn …", call forget_lesson with the matching id (look it up via list_lessons first if needed).
+- Lessons currently in force are listed under "LESSONS LEARNED" below — honour them on every turn.
 
 If unsure, ask one short clarifying question.`;
 
@@ -223,7 +269,14 @@ type StagedDecision = {
   summary: string;
   staged_at: number;
 };
-type Session = { jwt: string; staged: StagedDecision | null };
+type Lesson = { id: string; lesson: string; scope: string; active: boolean };
+type Session = {
+  jwt: string;
+  user_id: string;
+  staged: StagedDecision | null;
+  lessons: Lesson[];
+  model: string;
+};
 
 const STAGE_TTL_MS = 5 * 60 * 1000;
 
@@ -338,6 +391,25 @@ async function dispatchTool(name: string, args: any, session: Session) {
       const { id, ...rest } = args;
       return callAwip(`/notebook/${id}`, "PATCH", jwt, rest);
     }
+    case "remember_lesson": {
+      const result = await callAwip(`/lessons`, "POST", jwt, {
+        lesson: args.lesson, scope: args.scope ?? "global", source: "voice",
+      });
+      // Refresh local cache so it applies to the very next turn.
+      if (result.status === 200 && (result.data as any)?.lesson) {
+        session.lessons = [...session.lessons, (result.data as any).lesson];
+      }
+      return result;
+    }
+    case "list_lessons":
+      return callAwip(`/lessons?active=true`, "GET", jwt);
+    case "forget_lesson": {
+      const result = await callAwip(`/lessons/${args.id}`, "DELETE", jwt);
+      if (result.status === 200) {
+        session.lessons = session.lessons.filter(l => l.id !== args.id);
+      }
+      return result;
+    }
     default:
       return { status: 400, data: { error: `unknown tool ${name}` } };
   }
@@ -346,7 +418,11 @@ async function dispatchTool(name: string, args: any, session: Session) {
 
 // ---------- LLM "think" step ----------
 async function think(history: any[], session: Session): Promise<string> {
-  const messages = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+  const lessonBlock = session.lessons.length
+    ? `\n\nLESSONS LEARNED (always honour these unless the operator overrides):\n` +
+      session.lessons.map(l => `- ${l.lesson}`).join("\n")
+    : "";
+  const messages = [{ role: "system", content: SYSTEM_PROMPT + lessonBlock }, ...history];
   // Up to 3 tool-call rounds.
   for (let round = 0; round < 3; round++) {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -356,7 +432,7 @@ async function think(history: any[], session: Session): Promise<string> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: session.model || "openai/gpt-5-mini",
         messages,
         tools: TOOLS,
         tool_choice: "auto",
@@ -391,12 +467,24 @@ async function think(history: any[], session: Session): Promise<string> {
 
 // ---------- Authorize JWT ----------
 const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-async function isOperator(jwt: string): Promise<boolean> {
+async function authorizeOperator(jwt: string): Promise<{ ok: boolean; user_id?: string }> {
   const { data, error } = await supa.auth.getUser(jwt);
-  if (error || !data.user) return false;
+  if (error || !data.user) return { ok: false };
   const { data: roles } = await supa
     .from("user_roles").select("role").eq("user_id", data.user.id);
-  return !!roles?.some((r: any) => r.role === "operator" || r.role === "admin");
+  const ok = !!roles?.some((r: any) => r.role === "operator" || r.role === "admin");
+  return { ok, user_id: ok ? data.user.id : undefined };
+}
+
+async function loadOperatorContext(user_id: string): Promise<{ lessons: Lesson[]; model: string }> {
+  const [lessonsRes, settingsRes] = await Promise.all([
+    supa.from("copilot_lessons").select("id,lesson,scope,active").eq("active", true).order("created_at", { ascending: false }).limit(50),
+    supa.from("copilot_settings").select("model").eq("user_id", user_id).maybeSingle(),
+  ]);
+  return {
+    lessons: (lessonsRes.data ?? []) as Lesson[],
+    model: (settingsRes.data?.model as string) || "openai/gpt-5-mini",
+  };
 }
 
 // ---------- WebSocket bridge ----------
@@ -412,7 +500,7 @@ Deno.serve(async (req) => {
 
   const { socket: client, response } = Deno.upgradeWebSocket(req);
   let dg: WebSocket | null = null;
-  const session: Session = { jwt: "", staged: null };
+  const session: Session = { jwt: "", user_id: "", staged: null, lessons: [], model: "openai/gpt-5-mini" };
   let history: any[] = [];
   let thinking = false;
   let settings: {
@@ -455,11 +543,29 @@ Deno.serve(async (req) => {
 
       if (msg.type === "auth") {
         session.jwt = msg.jwt;
-        if (!(await isOperator(session.jwt))) {
+        const authz = await authorizeOperator(session.jwt);
+        if (!authz.ok || !authz.user_id) {
           client.send(JSON.stringify({ type: "error", error: "not_operator" }));
           client.close(4401, "unauthorized");
           return;
         }
+        session.user_id = authz.user_id;
+        try {
+          const ctx = await loadOperatorContext(authz.user_id);
+          session.lessons = ctx.lessons;
+          session.model = ctx.model;
+        } catch (e) {
+          console.warn("loadOperatorContext failed", e);
+        }
+        // Subscribe to live lesson changes so future turns reflect them.
+        try {
+          supa.channel(`lessons-${authz.user_id}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "copilot_lessons" }, async () => {
+              const ctx = await loadOperatorContext(authz.user_id!);
+              session.lessons = ctx.lessons;
+            })
+            .subscribe();
+        } catch (e) { console.warn("realtime subscribe failed", e); }
         // Apply per-session settings overrides from client.
         if (msg.settings && typeof msg.settings === "object") {
           settings = { ...settings, ...msg.settings };

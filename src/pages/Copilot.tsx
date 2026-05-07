@@ -31,6 +31,12 @@ const STT_MODELS = [
   { value: "nova-2-conversationalai", label: "Nova-2 conversational" },
   { value: "enhanced", label: "Enhanced (legacy)" },
 ];
+const BRAIN_MODELS = [
+  { value: "openai/gpt-5-mini", label: "GPT-5 mini (fast, default)" },
+  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro (smartest, slower)" },
+  { value: "openai/gpt-5", label: "GPT-5 (premium)" },
+  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash (cheap & fast)" },
+];
 const TTS_VOICES = [
   { value: "aura-2-orion-en", label: "Aura-2 Orion (male, en)" },
   { value: "aura-2-helios-en", label: "Aura-2 Helios (male, en)" },
@@ -66,6 +72,7 @@ export default function Copilot() {
 
   // Voice/STT settings (persisted)
   const [sttModel, setSttModel] = useState("nova-3");
+  const [brainModel, setBrainModel] = useState("openai/gpt-5-mini");
   const [ttsVoice, setTtsVoice] = useState("aura-2-orion-en");
   const [language, setLanguage] = useState("en");
   const [greeting, setGreeting] = useState("Copilot ready.");
@@ -429,6 +436,7 @@ export default function Copilot() {
         .maybeSingle();
       if (!error && data) {
         setSttModel(data.stt_model);
+        if ((data as any).model) setBrainModel((data as any).model);
         setTtsVoice(data.tts_voice);
         setLanguage(data.language);
         setGreeting(data.greeting);
@@ -458,6 +466,7 @@ export default function Copilot() {
       await supabase.from("copilot_settings").upsert({
         user_id: user.id,
         stt_model: sttModel,
+        model: brainModel,
         tts_voice: ttsVoice,
         language,
         greeting,
@@ -478,6 +487,7 @@ export default function Copilot() {
       const { error } = await supabase.from("copilot_settings").upsert({
         user_id: user.id,
         stt_model: sttModel,
+        model: brainModel,
         tts_voice: ttsVoice,
         language,
         greeting,
@@ -543,6 +553,20 @@ export default function Copilot() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Brain (LLM model)</Label>
+                <Select value={brainModel} onValueChange={setBrainModel}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {BRAIN_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Applies on the next session. Lessons taught via voice are honoured by every brain.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm">TTS voice</Label>

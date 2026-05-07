@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap,
 } from "lucide-react";
 
 const groups = [
@@ -20,6 +20,7 @@ const groups = [
       { url: "/copilot", title: "Copilot", icon: Mic },
       { url: "/copilot/agents", title: "Copilot agents", icon: Mic },
       { url: "/copilot/profile", title: "Copilot profile", icon: UserCircle2 },
+      { url: "/copilot/lessons", title: "Copilot lessons", icon: GraduationCap },
     ],
   },
   {
