@@ -155,7 +155,7 @@ Deno.serve(async (req) => {
       rejection_reason: rejection?.reason ?? (rejected ? errorCode : null),
       requested: rejection?.requested ?? (rejected ? requested : null),
     });
-    return json(status, payload);
+    return json(status, payload, requestId);
   };
 
   if (req.method !== "POST") {
