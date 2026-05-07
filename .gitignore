@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# RLS coverage report output
+reports/
+.vitest-rls-coverage.json
