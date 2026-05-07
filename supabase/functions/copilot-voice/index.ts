@@ -391,6 +391,25 @@ async function dispatchTool(name: string, args: any, session: Session) {
       const { id, ...rest } = args;
       return callAwip(`/notebook/${id}`, "PATCH", jwt, rest);
     }
+    case "remember_lesson": {
+      const result = await callAwip(`/lessons`, "POST", jwt, {
+        lesson: args.lesson, scope: args.scope ?? "global", source: "voice",
+      });
+      // Refresh local cache so it applies to the very next turn.
+      if (result.status === 200 && (result.data as any)?.lesson) {
+        session.lessons = [...session.lessons, (result.data as any).lesson];
+      }
+      return result;
+    }
+    case "list_lessons":
+      return callAwip(`/lessons?active=true`, "GET", jwt);
+    case "forget_lesson": {
+      const result = await callAwip(`/lessons/${args.id}`, "DELETE", jwt);
+      if (result.status === 200) {
+        session.lessons = session.lessons.filter(l => l.id !== args.id);
+      }
+      return result;
+    }
     default:
       return { status: 400, data: { error: `unknown tool ${name}` } };
   }
