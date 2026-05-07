@@ -24,7 +24,12 @@ bun run test:e2e
 | `e2e/rls.test.ts` | Anon cannot read `tenants` / `api_call_logs`; operator can read `tenants` / `capabilities`; operator client cannot directly write to `okr_nodes` / `idempotency_keys` (writes go through edge fn) |
 | `e2e/rls-matrix.test.ts` | Full RLS access matrix — every public table is checked: anon SELECT/INSERT blocked, operator SELECT allowed, managed tables block direct INSERT. Plus an RPC matrix: anon rejected from `grant_user_role`, `revoke_user_role`, `list_users_with_roles`, `purge_*`, `retention_stats`; operator can call `retention_stats` |
 | `e2e/edge-function.test.ts` | 401 on no/invalid auth; 200 with operator JWT; service-token header authorizes; wrong service token rejected; `POST /okr/ingest` is idempotent on replay; validation returns 400 |
+| `e2e/security-audit.test.ts` | Calls the Supabase Management API linter and asserts no warnings outside the documented allow-list (the 7 self-checking SECURITY DEFINER functions). Plus role smoke checks on `user_roles`, `role_change_audit`, `has_role`, `grant_user_role`, `api_call_logs` |
+
+## Security suite
+
+`bun run test:security` runs only `security-audit.test.ts` + `rls-matrix.test.ts`. CI runs this on every change under `supabase/migrations/` and nightly via `.github/workflows/security-audit.yml`. The linter assertion needs `SUPABASE_ACCESS_TOKEN` (a Supabase Personal Access Token) and `SUPABASE_PROJECT_REF`; without them the linter test self-skips and only the role checks run.
 
 ## Adding a CI job
 
-The `quality` job in `.github/workflows/ci.yml` runs unit tests only. To add e2e, create a separate job (e.g. `e2e-staging.yml` triggered after `deploy-staging.yml`) that exports the env vars from GitHub Environment secrets and runs `bun run test:e2e`.
+The `quality` job in `.github/workflows/ci.yml` runs unit tests only. To add full e2e, create a separate job (e.g. `e2e-staging.yml` triggered after `deploy-staging.yml`) that exports the env vars from GitHub Environment secrets and runs `bun run test:e2e`.
