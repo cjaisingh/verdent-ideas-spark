@@ -355,6 +355,7 @@ export type Database = {
           greeting: string
           language: string
           mic_gain: number
+          noise_gate: number
           out_volume: number
           ptt_mode: boolean
           stt_model: string
@@ -367,6 +368,7 @@ export type Database = {
           greeting?: string
           language?: string
           mic_gain?: number
+          noise_gate?: number
           out_volume?: number
           ptt_mode?: boolean
           stt_model?: string
@@ -379,6 +381,7 @@ export type Database = {
           greeting?: string
           language?: string
           mic_gain?: number
+          noise_gate?: number
           out_volume?: number
           ptt_mode?: boolean
           stt_model?: string

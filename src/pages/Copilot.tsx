@@ -53,6 +53,7 @@ export default function Copilot() {
   const [pttMode, setPttMode] = useState(false);
   const [pttHeld, setPttHeld] = useState(false);
   const [micGain, setMicGain] = useState(1.0);
+  const [noiseGate, setNoiseGate] = useState(0.02); // RMS threshold 0..0.5
   const [outVolume, setOutVolume] = useState(1.0);
   const [micLevel, setMicLevel] = useState(0);
   const [muted, setMuted] = useState(false);
@@ -87,6 +88,8 @@ export default function Copilot() {
   const pttModeRef = useRef(pttMode);
   const pttHeldRef = useRef(pttHeld);
   const micGainRef = useRef(micGain);
+  const noiseGateRef = useRef(noiseGate);
+  const gateHoldRef = useRef(0); // ms remaining of "open" hold-over
   const mutedRef = useRef(muted);
   useEffect(() => { pttModeRef.current = pttMode; }, [pttMode]);
   useEffect(() => { pttHeldRef.current = pttHeld; }, [pttHeld]);
@@ -94,6 +97,7 @@ export default function Copilot() {
     micGainRef.current = micGain;
     workletRef.current?.port.postMessage({ gain: micGain });
   }, [micGain]);
+  useEffect(() => { noiseGateRef.current = noiseGate; }, [noiseGate]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => {
     if (outGainRef.current) outGainRef.current.gain.value = outVolume;
@@ -255,8 +259,18 @@ export default function Copilot() {
                 setMicLevel(Math.min(1, lvlAccum * 1.8));
                 lvlFrames = 0;
               }
-              const gated = mutedRef.current || (pttModeRef.current && !pttHeldRef.current);
-              if (gated) {
+              const muteOrPtt = mutedRef.current || (pttModeRef.current && !pttHeldRef.current);
+              // Noise gate (always-on mode only — PTT already gates explicitly).
+              let gateClosed = false;
+              if (!pttModeRef.current && noiseGateRef.current > 0) {
+                if (rms >= noiseGateRef.current) {
+                  gateHoldRef.current = 300; // ms hold-open after voice
+                } else {
+                  gateHoldRef.current = Math.max(0, gateHoldRef.current - 20);
+                  if (gateHoldRef.current === 0) gateClosed = true;
+                }
+              }
+              if (muteOrPtt || gateClosed) {
                 ws.send(new ArrayBuffer(pcm.byteLength));
               } else {
                 ws.send(pcm);
@@ -341,6 +355,7 @@ export default function Copilot() {
         setPttMode(data.ptt_mode);
         setMicGain(Number(data.mic_gain));
         setOutVolume(Number(data.out_volume));
+        if (data.noise_gate != null) setNoiseGate(Number(data.noise_gate));
       }
       setSettingsLoaded(true);
     })();
@@ -361,10 +376,11 @@ export default function Copilot() {
         ptt_mode: pttMode,
         mic_gain: micGain,
         out_volume: outVolume,
+        noise_gate: noiseGate,
       }, { onConflict: "user_id" });
     }, 600);
     return () => clearTimeout(t);
-  }, [settingsLoaded, pttMode, micGain, outVolume]);
+  }, [settingsLoaded, pttMode, micGain, outVolume, noiseGate]);
 
   const saveVoiceSettings = async () => {
     setSavingSettings(true);
@@ -380,6 +396,7 @@ export default function Copilot() {
         ptt_mode: pttMode,
         mic_gain: micGain,
         out_volume: outVolume,
+        noise_gate: noiseGate,
       }, { onConflict: "user_id" });
       if (error) throw error;
       toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
@@ -514,15 +531,24 @@ export default function Copilot() {
         {/* Mic level meter */}
         {active && (
           <div className="w-full max-w-xs">
-            <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div className="relative h-2 rounded-full bg-muted overflow-hidden">
               <div
                 className={`h-full transition-[width] duration-75 ${
                   micLevel > 0.85 ? "bg-destructive" : micLevel > 0.5 ? "bg-amber-500" : "bg-emerald-500"
                 } ${transmitting ? "" : "opacity-30"}`}
                 style={{ width: `${Math.round(micLevel * 100)}%` }}
               />
+              {!pttMode && noiseGate > 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-px bg-foreground/70"
+                  style={{ left: `${Math.min(100, noiseGate * 1.8 * 100)}%` }}
+                  title={`Noise gate: ${(noiseGate * 100).toFixed(1)}%`}
+                />
+              )}
             </div>
-            <div className="text-xs text-muted-foreground text-center mt-1">Mic level</div>
+            <div className="text-xs text-muted-foreground text-center mt-1">
+              Mic level{!pttMode && noiseGate > 0 && " · gate marker"}
+            </div>
           </div>
         )}
 
@@ -578,6 +604,26 @@ export default function Copilot() {
             <span className="text-xs text-muted-foreground tabular-nums">{micGain.toFixed(2)}×</span>
           </div>
           <Slider value={[micGain]} min={0} max={2} step={0.05} onValueChange={(v) => setMicGain(v[0])} />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm flex items-center gap-2"><Mic className="size-4" /> Noise gate</Label>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {noiseGate === 0 ? "Off" : `${(noiseGate * 100).toFixed(1)}%`}
+            </span>
+          </div>
+          <Slider
+            value={[noiseGate]}
+            min={0}
+            max={0.2}
+            step={0.005}
+            onValueChange={(v) => setNoiseGate(v[0])}
+          />
+          <p className="text-xs text-muted-foreground">
+            In always-on mode, mic input below this RMS level is sent as silence (300 ms hold-over). Set to 0 to disable.
+            {pttMode && " — Disabled while push-to-talk is on."}
+          </p>
         </div>
 
         <div className="space-y-2">
