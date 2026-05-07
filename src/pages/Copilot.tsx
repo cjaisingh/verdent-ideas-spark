@@ -380,6 +380,19 @@ export default function Copilot() {
             setAgentState("speaking");
           } else if (m.type === "AgentAudioDone" || m.type === "AgentTurnComplete") {
             setAgentState("listening");
+          } else if (m.type === "pending_lesson") {
+            setPendingLesson({
+              token: m.token, lesson: m.lesson, scope: m.scope, staged_at: m.staged_at ?? Date.now(),
+            });
+            setSavingLesson(false);
+          } else if (m.type === "pending_lesson_cleared") {
+            setPendingLesson(null);
+            setSavingLesson(false);
+            if (m.reason === "saved") toast.success("Lesson saved");
+            else if (m.reason === "expired") toast.warning("Staged lesson expired");
+          } else if (m.type === "pending_lesson_error") {
+            setSavingLesson(false);
+            toast.error(m.error || "Could not save lesson");
           } else if (m.type === "error") {
             toast.error(m.error || "Copilot error");
             stop();
