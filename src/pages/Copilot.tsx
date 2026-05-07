@@ -80,9 +80,15 @@ export default function Copilot() {
   const activeAgent = activeAgentRaw ? effective(activeAgentRaw) : null;
   const ttsVoiceRef = useRef<string>(ttsVoice);
   useEffect(() => {
-    if (activeAgent) ttsVoiceRef.current = activeAgent.tts_voice;
-    else ttsVoiceRef.current = ttsVoice;
-  }, [activeAgent, ttsVoice]);
+    const next = ttsVoice || activeAgent?.tts_voice || ttsVoiceRef.current;
+    ttsVoiceRef.current = next;
+    // Live-apply mid-session: tell the voice bridge to swap Deepgram TTS without restart.
+    if (active && wsRef.current?.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: "update_voice", voice: next }));
+      } catch {}
+    }
+  }, [activeAgent, ttsVoice, active]);
 
   // Apply the active agent's per-user audio overrides (mic_gain, out_volume, noise_gate)
   // to the live runtime when the agent switches. Null fields fall back to global settings.
