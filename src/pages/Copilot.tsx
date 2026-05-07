@@ -72,6 +72,7 @@ export default function Copilot() {
 
   // Voice/STT settings (persisted)
   const [sttModel, setSttModel] = useState("nova-3");
+  const [brainModel, setBrainModel] = useState("openai/gpt-5-mini");
   const [ttsVoice, setTtsVoice] = useState("aura-2-orion-en");
   const [language, setLanguage] = useState("en");
   const [greeting, setGreeting] = useState("Copilot ready.");
