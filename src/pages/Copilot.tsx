@@ -548,7 +548,10 @@ export default function Copilot() {
             <Button size="lg" onClick={start} disabled={connecting}>Start session</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setMuted((m) => !m)}>
+              <Button variant="outline" onClick={() => {
+                setAutoMuteReason(null);
+                setMuted((m) => !m);
+              }}>
                 {muted ? "Unmute" : "Mute"}
               </Button>
               <Button size="lg" variant="destructive" onClick={stop}>End session</Button>
