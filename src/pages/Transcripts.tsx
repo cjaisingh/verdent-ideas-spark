@@ -327,6 +327,7 @@ const Transcripts = () => {
                     <div className="space-y-2">
                       {turns.map(t => {
                         const isDiv = divergedOrd === t.ord;
+                        const draft = drafts[t.id];
                         return (
                           <div
                             key={t.id}
@@ -345,8 +346,68 @@ const Transcripts = () => {
                                 <span className="text-xs text-muted-foreground">{t.latency_ms}ms</span>
                               )}
                               {isDiv && <Badge variant="destructive" className="text-xs">divergence</Badge>}
+                              {!draft && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="ml-auto h-7 px-2 text-xs"
+                                  onClick={() => startDraft(t)}
+                                  title="Create a lesson from this turn"
+                                >
+                                  <GraduationCap className="h-3.5 w-3.5 mr-1" /> Learn from this
+                                </Button>
+                              )}
                             </div>
                             <p className="text-sm whitespace-pre-wrap">{t.content}</p>
+                            {draft && (
+                              <div className="mt-3 space-y-2 p-2 rounded-md border border-primary/40 bg-primary/5">
+                                <p className="text-xs text-muted-foreground">Review the lesson before saving — nothing is stored yet.</p>
+                                <Textarea
+                                  value={draft.text}
+                                  onChange={(e) => updateDraft(t.id, { text: e.target.value })}
+                                  rows={3}
+                                  maxLength={600}
+                                  className="text-sm"
+                                />
+                                {(() => {
+                                  const issues = scanLesson(draft.text.trim());
+                                  return issues.length > 0 ? (
+                                    <div className="flex items-start gap-2 text-xs text-destructive">
+                                      <ShieldAlert className="h-3.5 w-3.5 mt-0.5" />
+                                      <span>Blocked: contains {describeIssues(issues)}.</span>
+                                    </div>
+                                  ) : null;
+                                })()}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-muted-foreground">Scope</span>
+                                  <Select value={draft.scope} onValueChange={(v) => updateDraft(t.id, { scope: v as LessonScope })}>
+                                    <SelectTrigger className="h-8 w-[150px]"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      {SCOPES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                  <span className="text-xs text-muted-foreground ml-auto">{draft.text.trim().length}/500</span>
+                                  <Button size="sm" variant="ghost" onClick={() => cancelDraft(t.id)} disabled={savingTurnId === t.id}>
+                                    <X className="h-4 w-4 mr-1" /> Cancel
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => saveDraft(t.id)}
+                                    disabled={
+                                      savingTurnId === t.id ||
+                                      !draft.text.trim() ||
+                                      draft.text.trim().length > 500 ||
+                                      scanLesson(draft.text.trim()).length > 0
+                                    }
+                                  >
+                                    {savingTurnId === t.id
+                                      ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                      : <Check className="h-4 w-4 mr-1" />}
+                                    Save lesson
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
