@@ -376,10 +376,11 @@ export default function Copilot() {
         ptt_mode: pttMode,
         mic_gain: micGain,
         out_volume: outVolume,
+        noise_gate: noiseGate,
       }, { onConflict: "user_id" });
     }, 600);
     return () => clearTimeout(t);
-  }, [settingsLoaded, pttMode, micGain, outVolume]);
+  }, [settingsLoaded, pttMode, micGain, outVolume, noiseGate]);
 
   const saveVoiceSettings = async () => {
     setSavingSettings(true);
