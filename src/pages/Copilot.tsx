@@ -599,6 +599,26 @@ export default function Copilot() {
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
+            <Label className="text-sm flex items-center gap-2"><Mic className="size-4" /> Noise gate</Label>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {noiseGate === 0 ? "Off" : `${(noiseGate * 100).toFixed(1)}%`}
+            </span>
+          </div>
+          <Slider
+            value={[noiseGate]}
+            min={0}
+            max={0.2}
+            step={0.005}
+            onValueChange={(v) => setNoiseGate(v[0])}
+          />
+          <p className="text-xs text-muted-foreground">
+            In always-on mode, mic input below this RMS level is sent as silence (300 ms hold-over). Set to 0 to disable.
+            {pttMode && " — Disabled while push-to-talk is on."}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
             <Label className="text-sm flex items-center gap-2"><Volume2 className="size-4" /> Output volume</Label>
             <span className="text-xs text-muted-foreground tabular-nums">{Math.round(outVolume * 100)}%</span>
           </div>
