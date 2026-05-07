@@ -13,10 +13,21 @@ import {
   CLIENT_WRITE_BLOCKED,
   OPERATOR_RPCS,
 } from "./rls-policy-map.generated";
+import { INSERT_FIXTURES, isRlsDenial } from "./rls-fixtures";
 
 beforeAll(() => requireEnv());
 
 const TABLES = ALL_TABLES;
+
+// Sanity: every table in the generated map must have a fixture, otherwise
+// the insert tests below would silently fall back to {} and might pass for
+// the wrong reason (NOT NULL violation instead of RLS).
+describe("RLS matrix — fixture coverage", () => {
+  it("every table has a realistic insert fixture", () => {
+    const missing = TABLES.filter((t) => !INSERT_FIXTURES[t]);
+    expect(missing, `add fixtures in e2e/rls-fixtures.ts for: ${missing.join(", ")}`).toEqual([]);
+  });
+});
 
 describe("RLS matrix — anon is blocked everywhere", () => {
   for (const t of TABLES) {
@@ -26,10 +37,14 @@ describe("RLS matrix — anon is blocked everywhere", () => {
       expect(error !== null || (data ?? []).length === 0).toBe(true);
     });
 
-    it(`anon cannot insert into ${t}`, async () => {
+    it(`anon insert ${t} → rejected by RLS (not constraint)`, async () => {
       const c = anonClient();
-      const { error } = await c.from(t as never).insert({} as never);
-      expect(error).not.toBeNull();
+      const { error } = await c.from(t as never).insert(INSERT_FIXTURES[t] as never);
+      expect(error, "insert with realistic payload should still error").not.toBeNull();
+      expect(
+        isRlsDenial(error),
+        `expected RLS denial, got ${error?.code}: ${error?.message}`,
+      ).toBe(true);
     });
   }
 });
@@ -47,10 +62,15 @@ describe("RLS matrix — operator JWT can read every operator table", () => {
 
 describe("RLS matrix — direct client writes blocked on managed tables", () => {
   for (const t of CLIENT_WRITE_BLOCKED) {
-    it(`operator cannot directly insert into ${t}`, async () => {
+    it(`operator insert ${t} → rejected by RLS (not constraint)`, async () => {
       const { client } = await operatorClient();
-      const { error } = await client.from(t as never).insert({} as never);
+      const fixture = INSERT_FIXTURES[t] ?? {};
+      const { error } = await client.from(t as never).insert(fixture as never);
       expect(error).not.toBeNull();
+      expect(
+        isRlsDenial(error),
+        `expected RLS denial on ${t}, got ${error?.code}: ${error?.message}`,
+      ).toBe(true);
     });
   }
 });
