@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 interface TableInfo { table_name: string; row_count: number; size_bytes: number }
 interface ColumnInfo { column_name: string; data_type: string; is_nullable: string; column_default: string | null }
+interface AllColumn { table_name: string; column_name: string; data_type: string }
 
 const formatBytes = (b: number) => {
   if (!b) return "0 B";
@@ -24,7 +25,11 @@ const PAGE_SIZE = 50;
 
 export default function DbExplorer() {
   const [tables, setTables] = useState<TableInfo[]>([]);
+  const [allColumns, setAllColumns] = useState<AllColumn[]>([]);
   const [filter, setFilter] = useState("");
+  const [minRows, setMinRows] = useState<string>("");
+  const [colFilter, setColFilter] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [rows, setRows] = useState<any[]>([]);
@@ -43,7 +48,19 @@ export default function DbExplorer() {
     if (data) setTables(data);
   };
 
-  useEffect(() => { loadTables(); }, []);
+  const loadAllColumns = async () => {
+    const data = await callExplorer<AllColumn[]>({ action: "list_all_columns" });
+    if (data) setAllColumns(data);
+  };
+
+  const refreshCounts = async () => {
+    setRefreshing(true);
+    const data = await callExplorer<TableInfo[]>({ action: "refresh_counts" });
+    if (data) { setTables(data); toast.success("Counts refreshed"); }
+    setRefreshing(false);
+  };
+
+  useEffect(() => { loadTables(); loadAllColumns(); }, []);
 
   const loadTable = async (name: string, p = 0) => {
     setLoading(true);
@@ -57,10 +74,26 @@ export default function DbExplorer() {
     setLoading(false);
   };
 
-  const filtered = useMemo(
-    () => tables.filter((t) => t.table_name.toLowerCase().includes(filter.toLowerCase())),
-    [tables, filter]
-  );
+  const tablesWithColumn = useMemo(() => {
+    const q = colFilter.trim().toLowerCase();
+    if (!q) return null;
+    const set = new Set<string>();
+    for (const c of allColumns) {
+      if (c.column_name.toLowerCase().includes(q)) set.add(c.table_name);
+    }
+    return set;
+  }, [allColumns, colFilter]);
+
+  const filtered = useMemo(() => {
+    const min = Number(minRows) || 0;
+    const q = filter.toLowerCase();
+    return tables.filter((t) => {
+      if (q && !t.table_name.toLowerCase().includes(q)) return false;
+      if (min > 0 && Math.max(0, t.row_count) < min) return false;
+      if (tablesWithColumn && !tablesWithColumn.has(t.table_name)) return false;
+      return true;
+    });
+  }, [tables, filter, minRows, tablesWithColumn]);
 
   return (
     <div className="p-6 space-y-4">
@@ -73,16 +106,35 @@ export default function DbExplorer() {
             Read-only view of every table in the AWIP backend. Operator access only.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadTables}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadTables}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Reload
+          </Button>
+          <Button variant="default" size="sm" onClick={refreshCounts} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh counts
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Tables ({filtered.length})</CardTitle>
-            <Input placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} className="mt-2" />
+          <CardHeader className="pb-2 space-y-2">
+            <CardTitle className="text-sm">Tables ({filtered.length}/{tables.length})</CardTitle>
+            <Input placeholder="Search by table name…" value={filter}
+              onChange={(e) => setFilter(e.target.value)} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Min rows" type="number" min={0} value={minRows}
+                onChange={(e) => setMinRows(e.target.value)} />
+              <Input placeholder="Has column…" value={colFilter}
+                onChange={(e) => setColFilter(e.target.value)} />
+            </div>
+            {(filter || minRows || colFilter) && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs"
+                onClick={() => { setFilter(""); setMinRows(""); setColFilter(""); }}>
+                Clear filters
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[70vh]">
