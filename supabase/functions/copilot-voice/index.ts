@@ -587,7 +587,15 @@ Deno.serve(async (req) => {
         if (msg.settings && typeof msg.settings === "object") {
           settings = { ...settings, ...msg.settings };
         }
-        // Open Deepgram Voice Agent socket.
+        // Open transcript record for this session.
+        try {
+          const { data: t } = await supa.from("copilot_transcripts").insert({
+            user_id: session.user_id,
+            agent_slug: settings.agent_slug ?? null,
+            model: session.model,
+          }).select("id").single();
+          transcriptId = t?.id ?? null;
+        } catch (e) { console.warn("transcript create failed", e); }
         dg = new WebSocket("wss://agent.deepgram.com/v1/agent/converse", [
           "token", DEEPGRAM_API_KEY,
         ]);
