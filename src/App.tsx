@@ -54,6 +54,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
+            <Route path="/db-audit" element={<DbAuditLogs />} />
             <Route path="/runbooks" element={<Runbooks />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />
