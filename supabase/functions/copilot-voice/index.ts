@@ -494,10 +494,61 @@ async function dispatchTool(name: string, args: any, session: Session) {
 
 
 // ---------- LLM "think" step ----------
-async function think(history: any[], session: Session): Promise<string> {
-  const lessonBlock = session.lessons.length
-    ? `\n\nLESSONS LEARNED (always honour these unless the operator overrides):\n` +
-      session.lessons.map(l => `- ${l.lesson}`).join("\n")
+// Score lesson relevance to the current user utterance. Heuristic but explainable:
+// scope match always counts; topic-keyword overlap surfaces things the operator just mentioned.
+const SCOPE_TRIGGERS: Record<string, string[]> = {
+  approvals: ["approve", "approval", "reject", "decision", "confirm", "pending", "decide"],
+  notebook: ["note", "notebook", "todo", "thought", "idea", "remind", "research", "issue"],
+  voice_style: ["sound", "voice", "tone", "speak", "say", "british", "brief", "short", "verbose"],
+  global: [],
+};
+const STOPWORDS = new Set(["the","a","an","to","of","in","on","for","and","or","is","it","this","that","my","your","please","i","we","be","do","with","at","by","as","from","about"]);
+function tokens(s: string): Set<string> {
+  return new Set(
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+      .filter((w) => w.length >= 4 && !STOPWORDS.has(w))
+  );
+}
+type AppliedLesson = { id: string; lesson: string; scope: string; reason: string; score: number };
+function selectAppliedLessons(userText: string, lessons: Lesson[]): AppliedLesson[] {
+  const utter = (userText || "").toLowerCase();
+  const userToks = tokens(userText || "");
+  const out: AppliedLesson[] = [];
+  for (const l of lessons) {
+    const reasons: string[] = [];
+    let score = 1; // baseline: every active lesson is at least nominally in force
+    if (l.scope === "global") { score += 1; reasons.push("global scope (always applies)"); }
+    const triggers = SCOPE_TRIGGERS[l.scope] ?? [];
+    const hitTrigger = triggers.find((t) => utter.includes(t));
+    if (hitTrigger) { score += 3; reasons.push(`turn mentions "${hitTrigger}" (matches ${l.scope} scope)`); }
+    const lessonToks = tokens(l.lesson);
+    const overlap = [...lessonToks].filter((t) => userToks.has(t));
+    if (overlap.length > 0) {
+      score += Math.min(overlap.length, 3);
+      reasons.push(`shares keyword${overlap.length > 1 ? "s" : ""}: ${overlap.slice(0, 3).join(", ")}`);
+    }
+    if (l.scope !== "global" && !hitTrigger && overlap.length === 0) {
+      reasons.push(`${l.scope} scope (no direct match this turn)`);
+    }
+    out.push({ id: l.id, lesson: l.lesson, scope: l.scope, reason: reasons.join("; "), score });
+  }
+  // Sort by relevance, then by scope priority (global first when tied).
+  out.sort((a, b) => b.score - a.score || a.scope.localeCompare(b.scope));
+  return out;
+}
+
+async function think(history: any[], session: Session, userText: string): Promise<string> {
+  const applied = selectAppliedLessons(userText, session.lessons);
+  // Notify the client which lessons we're carrying into this turn and why.
+  session.notify?.({
+    type: "lessons_applied",
+    at: Date.now(),
+    user_text: userText.slice(0, 280),
+    applied: applied.map((a) => ({ id: a.id, lesson: a.lesson, scope: a.scope, reason: a.reason, score: a.score })),
+  });
+  const lessonBlock = applied.length
+    ? `\n\nLESSONS LEARNED (always honour these unless the operator overrides). Each line: [score · scope] lesson — why selected.\n` +
+      applied.map((a) => `- [${a.score}·${a.scope}] ${a.lesson} — ${a.reason || "active"}`).join("\n")
     : "";
   const messages = [{ role: "system", content: SYSTEM_PROMPT + lessonBlock }, ...history];
   // Up to 3 tool-call rounds.
@@ -761,7 +812,7 @@ Deno.serve(async (req) => {
                 recordTurn("user", m.content);
                 const t0 = Date.now();
                 try {
-                  const reply = await think(history, session);
+                  const reply = await think(history, session, m.content);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
                     recordTurn("assistant", reply, Date.now() - t0);
