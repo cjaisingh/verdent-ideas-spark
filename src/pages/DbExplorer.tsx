@@ -106,16 +106,35 @@ export default function DbExplorer() {
             Read-only view of every table in the AWIP backend. Operator access only.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadTables}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadTables}>
+            <RefreshCw className="h-4 w-4 mr-2" /> Reload
+          </Button>
+          <Button variant="default" size="sm" onClick={refreshCounts} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh counts
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Tables ({filtered.length})</CardTitle>
-            <Input placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} className="mt-2" />
+          <CardHeader className="pb-2 space-y-2">
+            <CardTitle className="text-sm">Tables ({filtered.length}/{tables.length})</CardTitle>
+            <Input placeholder="Search by table name…" value={filter}
+              onChange={(e) => setFilter(e.target.value)} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Min rows" type="number" min={0} value={minRows}
+                onChange={(e) => setMinRows(e.target.value)} />
+              <Input placeholder="Has column…" value={colFilter}
+                onChange={(e) => setColFilter(e.target.value)} />
+            </div>
+            {(filter || minRows || colFilter) && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs"
+                onClick={() => { setFilter(""); setMinRows(""); setColFilter(""); }}>
+                Clear filters
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-[70vh]">
