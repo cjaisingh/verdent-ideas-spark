@@ -23,6 +23,7 @@ import {
   OPERATOR_RPCS,
   SELF_ROW_ONLY_TABLES,
 } from "./rls-policy-map.generated";
+import { INSERT_FIXTURES, isRlsDenial } from "./rls-fixtures";
 
 beforeAll(() => requireEnv());
 
