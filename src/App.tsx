@@ -13,6 +13,7 @@ import ApiLogs from "./pages/ApiLogs";
 import ControlPlane from "./pages/ControlPlane";
 import CapabilityDetail from "./pages/CapabilityDetail";
 import ApiExplorer from "./pages/ApiExplorer";
+import DbExplorer from "./pages/DbExplorer";
 import Admin from "./pages/Admin";
 import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/notebook" element={<Notebook />} />
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
+            <Route path="/db-explorer" element={<DbExplorer />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
