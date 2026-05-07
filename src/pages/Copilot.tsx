@@ -652,6 +652,26 @@ export default function Copilot() {
             <span className="text-xs text-muted-foreground tabular-nums">{Math.round(outVolume * 100)}%</span>
           </div>
           <Slider value={[outVolume]} min={0} max={1.5} step={0.05} onValueChange={(v) => setOutVolume(v[0])} />
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {[
+              { label: "Low", value: 0.5 },
+              { label: "Medium", value: 1.0 },
+              { label: "High", value: 1.4 },
+            ].map((p) => {
+              const active = Math.abs(outVolume - p.value) < 0.03;
+              return (
+                <Button
+                  key={p.label}
+                  size="sm"
+                  variant={active ? "default" : "outline"}
+                  className="h-9"
+                  onClick={() => setOutVolume(p.value)}
+                >
+                  {p.label}
+                </Button>
+              );
+            })}
+          </div>
         </div>
       </Card>
 
