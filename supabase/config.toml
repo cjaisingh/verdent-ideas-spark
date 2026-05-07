@@ -2,3 +2,6 @@ project_id = "agzkyzyzopcgeobofjaz"
 
 [functions.telegram-webhook]
 verify_jwt = false
+
+[functions.copilot-voice]
+verify_jwt = false
