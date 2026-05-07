@@ -1,0 +1,2 @@
+ALTER TABLE public.copilot_settings
+  ADD COLUMN IF NOT EXISTS noise_gate NUMERIC NOT NULL DEFAULT 0.02;
