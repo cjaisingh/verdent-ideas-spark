@@ -116,6 +116,64 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_notebook",
+      description: "List notebook entries (thoughts, issues, research, suggestions, todos). Use to discuss what's open or what needs attention.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: { type: "string", enum: ["thought","issue","research","suggestion","todo"] },
+          status: { type: "string", enum: ["open","in_progress","resolved","archived"] },
+          search: { type: "string" },
+          limit: { type: "number" },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_notebook_entry",
+      description: "Create a new notebook entry. Use when the operator asks to capture a thought, research note, todo, issue, or suggestion.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          body: { type: "string" },
+          kind: { type: "string", enum: ["thought","issue","research","suggestion","todo"] },
+          status: { type: "string", enum: ["open","in_progress","resolved","archived"] },
+          tags: { type: "array", items: { type: "string" } },
+          pinned: { type: "boolean" },
+        },
+        required: ["title", "kind"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_notebook_entry",
+      description: "Update an existing notebook entry by id (e.g. mark resolved, change status, edit body, pin).",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          body: { type: "string" },
+          kind: { type: "string", enum: ["thought","issue","research","suggestion","todo"] },
+          status: { type: "string", enum: ["open","in_progress","resolved","archived"] },
+          tags: { type: "array", items: { type: "string" } },
+          pinned: { type: "boolean" },
+        },
+        required: ["id"],
+        additionalProperties: false,
+      },
+    },
+  },
 ];
 
 const SYSTEM_PROMPT = `You are AWIP Copilot — the operator's hands-free voice assistant while driving.
