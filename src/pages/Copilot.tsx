@@ -4,7 +4,14 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Mic, MicOff, Loader2, Volume2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Mic, MicOff, Loader2, Volume2, Settings2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -12,6 +19,29 @@ type LogLine = { who: "you" | "copilot" | "system"; text: string; ts: number };
 
 const PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID;
 const WS_URL = `wss://${PROJECT_ID}.functions.supabase.co/copilot-voice`;
+
+const STT_MODELS = [
+  { value: "nova-3", label: "Nova-3 (latest, best accuracy)" },
+  { value: "nova-2", label: "Nova-2 (proven, fast)" },
+  { value: "nova-2-conversationalai", label: "Nova-2 conversational" },
+  { value: "enhanced", label: "Enhanced (legacy)" },
+];
+const TTS_VOICES = [
+  { value: "aura-2-orion-en", label: "Aura-2 Orion (male, en)" },
+  { value: "aura-2-helios-en", label: "Aura-2 Helios (male, en)" },
+  { value: "aura-2-luna-en", label: "Aura-2 Luna (female, en)" },
+  { value: "aura-2-stella-en", label: "Aura-2 Stella (female, en)" },
+  { value: "aura-asteria-en", label: "Aura Asteria (female, en)" },
+  { value: "aura-arcas-en", label: "Aura Arcas (male, en)" },
+];
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "en-GB", label: "English (UK)" },
+  { value: "en-US", label: "English (US)" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+];
 
 export default function Copilot() {
   const [active, setActive] = useState(false);
