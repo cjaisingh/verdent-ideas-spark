@@ -31,6 +31,10 @@ bun run test:e2e
 
 `bun run test:security` runs `security-audit.test.ts` + `rls-matrix.test.ts` + `rls-role-matrix.test.ts`. CI runs this on **every pull request to `main`** (so it can be a required status check that blocks merges if new linter warnings appear), on pushes that touch `supabase/migrations/`, and nightly via `.github/workflows/security-audit.yml`. The linter assertion needs `SUPABASE_ACCESS_TOKEN` (a Supabase Personal Access Token) and `SUPABASE_PROJECT_REF`; without them the linter test self-skips and only the role checks run. To verify the **operator-only vs admin** split, also seed a non-admin operator user and set `E2E_OPERATOR_ONLY_EMAIL` / `E2E_OPERATOR_ONLY_PASSWORD` — without them the operator-only matrix self-skips. To enforce blocking, mark the **"Linter + RLS matrix"** check as required in GitHub branch protection for `main`.
 
+### Coverage report
+
+`bun run test:rls-coverage` runs the three RLS test files via vitest's JSON reporter and emits a markdown coverage matrix to `reports/rls-coverage.md` (and to stdout). Each table row shows pass/fail/skip per role × action (anon R/W, operator-only R, operator R/W, admin R), each RPC row shows pass/fail/skip per role, and any failures are listed with their error message for quick triage. Pass `--json` for machine-readable output, or `--out path.md` to change the destination. Exits non-zero on any failed assertion so it can gate CI.
+
 ## Adding a CI job
 
 The `quality` job in `.github/workflows/ci.yml` runs unit tests only. To add full e2e, create a separate job (e.g. `e2e-staging.yml` triggered after `deploy-staging.yml`) that exports the env vars from GitHub Environment secrets and runs `bun run test:e2e`.
