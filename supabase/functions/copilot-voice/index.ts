@@ -34,8 +34,10 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "decide_approval",
-      description: "Approve or reject a pending approval by id.",
+      name: "propose_decision",
+      description:
+        "Stage an approval decision for operator confirmation. Returns a human-readable summary and a confirmation_token. " +
+        "MUST be called before confirm_decision. Read the summary back to the operator and ask them to confirm out loud.",
       parameters: {
         type: "object",
         properties: {
@@ -44,6 +46,35 @@ const TOOLS = [
           note: { type: "string" },
         },
         required: ["id", "decision"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "confirm_decision",
+      description:
+        "Commit a previously proposed decision. Only call AFTER the operator has explicitly confirmed " +
+        "(e.g. 'yes', 'go ahead', 'confirm'). Pass the confirmation_token returned by propose_decision.",
+      parameters: {
+        type: "object",
+        properties: {
+          confirmation_token: { type: "string" },
+        },
+        required: ["confirmation_token"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cancel_pending_decision",
+      description: "Discard a staged decision if the operator says no, cancel, or wants to change it.",
+      parameters: {
+        type: "object",
+        properties: { confirmation_token: { type: "string" } },
         additionalProperties: false,
       },
     },
@@ -91,8 +122,17 @@ const SYSTEM_PROMPT = `You are AWIP Copilot — the operator's hands-free voice 
 British English, conversational, brief. Reply in 1-3 short sentences unless asked for detail.
 You can inspect AWIP state and act on approvals via the provided tools.
 When the operator asks "what's pending" or "anything to look at", call list_pending_approvals.
-Never read out UUIDs or long IDs aloud — summarise instead. Confirm before approving anything.
+Never read out UUIDs or long IDs aloud — summarise instead.
+
+APPROVAL FLOW (two steps, mandatory):
+1. When the operator wants to approve or reject something, call propose_decision FIRST.
+   Then read the returned summary aloud and ask: "Shall I confirm?" (or similar).
+2. Only after the operator says yes / go ahead / confirm, call confirm_decision with the token.
+   If they say no, cancel, wait, or change anything, call cancel_pending_decision.
+Never call confirm_decision without an immediately preceding explicit verbal confirmation.
+
 If unsure, ask one short clarifying question.`;
+
 
 // ---------- AWIP tool dispatcher ----------
 async function callAwip(path: string, method: string, jwt: string, body?: unknown) {
