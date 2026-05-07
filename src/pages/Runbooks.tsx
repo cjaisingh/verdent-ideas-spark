@@ -13,7 +13,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { BookOpen, Plus, Save, Trash2, GripVertical, ArrowUp, ArrowDown, X } from "lucide-react";
+import { BookOpen, Plus, Save, Trash2, GripVertical, ArrowUp, ArrowDown, X, Sparkles } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { RUNBOOK_TEMPLATES, type RunbookTemplate } from "@/lib/runbook-templates";
 import { toast } from "sonner";
 
 interface Step { title: string; detail?: string }
@@ -82,6 +87,32 @@ export default function Runbooks() {
     const r = blank();
     setSelectedId(null);
     setDraft(r);
+  };
+
+  const newFromTemplate = (t: RunbookTemplate) => {
+    setSelectedId(null);
+    setDraft({
+      ...blank(),
+      title: t.title,
+      slug: slugify(t.id),
+      summary: t.summary,
+      format: t.format,
+      body: t.body,
+      steps: t.steps.map((s) => ({ ...s })),
+      tags: [...t.tags],
+    });
+    toast.success(`Loaded template: ${t.title}`);
+  };
+
+  const insertTemplateSteps = (t: RunbookTemplate) => {
+    if (!draft) return;
+    const tags = Array.from(new Set([...(draft.tags ?? []), ...t.tags]));
+    setDraft({
+      ...draft,
+      steps: [...draft.steps, ...t.steps.map((s) => ({ ...s }))],
+      tags,
+    });
+    toast.success(`Inserted ${t.steps.length} steps from "${t.title}"`);
   };
 
   const save = async () => {
@@ -156,7 +187,27 @@ export default function Runbooks() {
             Operator procedures stored as Markdown or YAML with ordered steps.
           </p>
         </div>
-        <Button onClick={newRunbook}><Plus className="h-4 w-4 mr-2" /> New</Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Sparkles className="h-4 w-4 mr-2" /> Templates
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              <DropdownMenuLabel>Start a new runbook from…</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {RUNBOOK_TEMPLATES.map((t) => (
+                <DropdownMenuItem key={t.id} onClick={() => newFromTemplate(t)}
+                  className="flex flex-col items-start gap-0.5">
+                  <span className="font-medium">{t.title}</span>
+                  <span className="text-[11px] text-muted-foreground line-clamp-2">{t.summary}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={newRunbook}><Plus className="h-4 w-4 mr-2" /> New</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-4">
@@ -197,6 +248,26 @@ export default function Runbooks() {
               <span>{draft ? (draft.id ? "Edit runbook" : "New runbook") : "Pick a runbook"}</span>
               {draft && (
                 <div className="flex gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        <Sparkles className="h-4 w-4 mr-1" /> Insert template
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-72">
+                      <DropdownMenuLabel>Append steps from…</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {RUNBOOK_TEMPLATES.map((t) => (
+                        <DropdownMenuItem key={t.id} onClick={() => insertTemplateSteps(t)}
+                          className="flex flex-col items-start gap-0.5">
+                          <span className="font-medium">{t.title}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {t.steps.length} steps · {t.tags.join(", ")}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {draft.id && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
