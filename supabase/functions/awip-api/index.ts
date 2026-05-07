@@ -1356,6 +1356,8 @@ Deno.serve(async (req) => {
       const onboardingConfirmMatch = path.match(/^\/onboarding\/([0-9a-f-]+)\/confirm$/i);
       const onboardingGetMatch = path.match(/^\/onboarding\/([0-9a-f-]+)$/i);
 
+      const notebookUpdateMatch = path.match(/^\/notebook\/([0-9a-f-]+)$/i);
+
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
       else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
