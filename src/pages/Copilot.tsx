@@ -646,6 +646,34 @@ export default function Copilot() {
 
       <LessonsLoadedCard />
 
+      {pendingLesson && (
+        <PendingLessonCard
+          pending={pendingLesson}
+          saving={savingLesson}
+          onConfirm={(lesson, scope) => {
+            const ws = wsRef.current;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+              toast.error("Not connected");
+              return;
+            }
+            setSavingLesson(true);
+            ws.send(JSON.stringify({
+              type: "confirm_pending_lesson",
+              token: pendingLesson.token,
+              lesson, scope,
+            }));
+          }}
+          onCancel={() => {
+            const ws = wsRef.current;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "cancel_pending_lesson" }));
+            }
+            setPendingLesson(null);
+            setSavingLesson(false);
+          }}
+        />
+      )}
+
       <Card className="p-8 flex flex-col items-center gap-6">
         <div className="relative">
           <div
