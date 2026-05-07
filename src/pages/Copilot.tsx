@@ -436,6 +436,7 @@ export default function Copilot() {
         .maybeSingle();
       if (!error && data) {
         setSttModel(data.stt_model);
+        if ((data as any).model) setBrainModel((data as any).model);
         setTtsVoice(data.tts_voice);
         setLanguage(data.language);
         setGreeting(data.greeting);
