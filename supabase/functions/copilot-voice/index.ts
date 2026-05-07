@@ -359,6 +359,22 @@ Deno.serve(async (req) => {
       let msg: any;
       try { msg = JSON.parse(ev.data); } catch { return; }
 
+      // Live TTS swap — Deepgram supports UpdateSpeak on a running converse session.
+      if (msg.type === "update_voice" && typeof msg.voice === "string") {
+        settings.tts_voice = msg.voice;
+        if (dg && dg.readyState === WebSocket.OPEN) {
+          try {
+            dg.send(JSON.stringify({
+              type: "UpdateSpeak",
+              speak: { provider: { type: "deepgram", model: msg.voice } },
+            }));
+          } catch (e) {
+            console.warn("UpdateSpeak failed", e);
+          }
+        }
+        return;
+      }
+
       if (msg.type === "auth") {
         session.jwt = msg.jwt;
         if (!(await isOperator(session.jwt))) {

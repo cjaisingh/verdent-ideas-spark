@@ -80,9 +80,15 @@ export default function Copilot() {
   const activeAgent = activeAgentRaw ? effective(activeAgentRaw) : null;
   const ttsVoiceRef = useRef<string>(ttsVoice);
   useEffect(() => {
-    if (activeAgent) ttsVoiceRef.current = activeAgent.tts_voice;
-    else ttsVoiceRef.current = ttsVoice;
-  }, [activeAgent, ttsVoice]);
+    const next = ttsVoice || activeAgent?.tts_voice || ttsVoiceRef.current;
+    ttsVoiceRef.current = next;
+    // Live-apply mid-session: tell the voice bridge to swap Deepgram TTS without restart.
+    if (active && wsRef.current?.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify({ type: "update_voice", voice: next }));
+      } catch {}
+    }
+  }, [activeAgent, ttsVoice, active]);
 
   // Apply the active agent's per-user audio overrides (mic_gain, out_volume, noise_gate)
   // to the live runtime when the agent switches. Null fields fall back to global settings.
@@ -281,14 +287,16 @@ export default function Copilot() {
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
+      // Precedence: explicit session settings win (operator master pref);
+      // active agent fields are fallbacks when the session field is empty.
       ws.onopen = () => ws.send(JSON.stringify({
         type: "auth",
         jwt,
         settings: {
           stt_model: sttModel,
-          tts_voice: activeAgent?.tts_voice ?? ttsVoice,
-          language: activeAgent?.language ?? language,
-          greeting: activeAgent?.default_greeting ?? greeting,
+          tts_voice: ttsVoice || activeAgent?.tts_voice,
+          language: language || activeAgent?.language,
+          greeting: greeting || activeAgent?.default_greeting,
           agent_slug: activeAgent?.slug ?? null,
           system_prompt: activeAgent?.system_prompt ?? null,
         },
@@ -479,7 +487,10 @@ export default function Copilot() {
         noise_gate: noiseGate,
       }, { onConflict: "user_id" });
       if (error) throw error;
-      toast.success("Voice settings saved" + (active ? " — restart session to apply" : ""));
+      toast.success(
+        "Voice settings saved" +
+          (active ? " — voice applied live; language/greeting take effect on next session" : "")
+      );
       setSettingsOpen(false);
     } catch (e: any) {
       toast.error(e.message || "Failed to save");
