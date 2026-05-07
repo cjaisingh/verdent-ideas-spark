@@ -69,6 +69,42 @@ const Transcripts = () => {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, LessonDraft>>({});
+  const [savingTurnId, setSavingTurnId] = useState<string | null>(null);
+
+  const startDraft = (turn: Turn) => {
+    const seed = turn.content.trim().slice(0, 300);
+    setDrafts(d => ({ ...d, [turn.id]: { text: `Learn from this: ${seed}`, scope: "global" } }));
+  };
+  const updateDraft = (id: string, patch: Partial<LessonDraft>) =>
+    setDrafts(d => ({ ...d, [id]: { ...d[id], ...patch } }));
+  const cancelDraft = (id: string) =>
+    setDrafts(d => { const n = { ...d }; delete n[id]; return n; });
+
+  const saveDraft = async (turnId: string) => {
+    const draft = drafts[turnId];
+    if (!draft) return;
+    const text = draft.text.trim();
+    if (!text) { toast({ title: "Lesson is empty", variant: "destructive" }); return; }
+    if (text.length > 500) { toast({ title: "Lesson must be ≤ 500 chars", variant: "destructive" }); return; }
+    const issues = scanLesson(text);
+    if (issues.length > 0) {
+      toast({ title: "Blocked: sensitive data", description: `Remove ${describeIssues(issues)}.`, variant: "destructive" });
+      return;
+    }
+    setSavingTurnId(turnId);
+    try {
+      await callApi("/lessons", {
+        method: "POST",
+        body: JSON.stringify({ lesson: text, scope: draft.scope, source: "manual", active: true }),
+      });
+      toast({ title: "Lesson saved" });
+      cancelDraft(turnId);
+    } catch (e: any) {
+      toast({ title: "Save failed", description: e.message, variant: "destructive" });
+    } finally { setSavingTurnId(null); }
+  };
+
 
   const refresh = async () => {
     setLoading(true);
