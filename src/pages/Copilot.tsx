@@ -134,7 +134,11 @@ export default function Copilot() {
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
-      ws.onopen = () => ws.send(JSON.stringify({ type: "auth", jwt }));
+      ws.onopen = () => ws.send(JSON.stringify({
+        type: "auth",
+        jwt,
+        settings: { stt_model: sttModel, tts_voice: ttsVoice, language, greeting },
+      }));
 
       ws.onmessage = (ev) => {
         if (typeof ev.data === "string") {
