@@ -23,6 +23,7 @@ import {
   OPERATOR_RPCS,
   SELF_ROW_ONLY_TABLES,
 } from "./rls-policy-map.generated";
+import { INSERT_FIXTURES, isRlsDenial } from "./rls-fixtures";
 
 beforeAll(() => requireEnv());
 
@@ -35,10 +36,15 @@ describe("RLS matrix [anon] — denied across the board", () => {
       const { data, error } = await c.from(t as never).select("*").limit(1);
       expect(error !== null || (data ?? []).length === 0).toBe(true);
     });
-    it(`anon insert ${t} → blocked`, async () => {
+    it(`anon insert ${t} → rejected by RLS (not constraint)`, async () => {
       const c = anonClient();
-      const { error } = await c.from(t as never).insert({} as never);
+      const fixture = INSERT_FIXTURES[t] ?? {};
+      const { error } = await c.from(t as never).insert(fixture as never);
       expect(error).not.toBeNull();
+      expect(
+        isRlsDenial(error),
+        `expected RLS denial on ${t}, got ${error?.code}: ${error?.message}`,
+      ).toBe(true);
     });
   }
 
