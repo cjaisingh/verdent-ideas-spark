@@ -240,7 +240,12 @@ Deno.serve(async (req) => {
       }
       case "list_columns": {
         const check = await assertValidTable(svc, body.table);
-        if (!check.ok) return finish(check.status, { error: check.error }, check.error, null);
+        if (!check.ok) {
+          return finish(check.status, { error: check.error }, check.error, null, {
+            reason: check.error,
+            requested: { action, table: body.table ?? null },
+          });
+        }
         auditTable = check.name;
         const { data, error } = await svc.rpc("db_list_columns", { _table: check.name } as never);
         if (error) return finish(500, { error: error.message }, "rpc_error", null);
@@ -248,7 +253,12 @@ Deno.serve(async (req) => {
       }
       case "preview_rows": {
         const check = await assertValidTable(svc, body.table);
-        if (!check.ok) return finish(check.status, { error: check.error }, check.error, null);
+        if (!check.ok) {
+          return finish(check.status, { error: check.error }, check.error, null, {
+            reason: check.error,
+            requested: { action, table: body.table ?? null, limit: body.limit ?? null, offset: body.offset ?? null },
+          });
+        }
         auditTable = check.name;
 
         const rawLimit = Number.isFinite(body.limit as number) ? Math.floor(body.limit as number) : 50;
