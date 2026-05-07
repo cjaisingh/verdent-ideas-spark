@@ -320,11 +320,80 @@ export default function Copilot() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-semibold">Copilot</h1>
-        <p className="text-sm text-muted-foreground">
-          Hands-free voice console. Powered by Deepgram Voice Agent + AWIP tools.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Copilot</h1>
+          <p className="text-sm text-muted-foreground">
+            Hands-free voice console. Powered by Deepgram Voice Agent + AWIP tools.
+          </p>
+        </div>
+        <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings2 className="size-4 mr-2" /> Session settings
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Session settings</SheetTitle>
+              <SheetDescription>
+                Voice and STT options for your Copilot. Saved to your operator profile.
+                Changes apply on the next session start.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="py-6 space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm">Speech-to-text model</Label>
+                <Select value={sttModel} onValueChange={setSttModel}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STT_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">TTS voice</Label>
+                <Select value={ttsVoice} onValueChange={setTtsVoice}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TTS_VOICES.map((v) => (
+                      <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map((l) => (
+                      <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm" htmlFor="greeting">Greeting</Label>
+                <Input
+                  id="greeting"
+                  value={greeting}
+                  onChange={(e) => setGreeting(e.target.value)}
+                  placeholder="Copilot ready."
+                />
+                <p className="text-xs text-muted-foreground">Spoken when a session starts.</p>
+              </div>
+            </div>
+            <SheetFooter>
+              <Button variant="ghost" onClick={() => setSettingsOpen(false)}>Cancel</Button>
+              <Button onClick={saveVoiceSettings} disabled={savingSettings}>
+                {savingSettings ? "Saving…" : "Save"}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       </div>
 
       <Card className="p-8 flex flex-col items-center gap-6">
