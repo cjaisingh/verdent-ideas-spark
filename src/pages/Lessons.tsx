@@ -29,6 +29,39 @@ const Lessons = () => {
   const [newLesson, setNewLesson] = useState("");
   const [newScope, setNewScope] = useState<typeof SCOPES[number]>("global");
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editScope, setEditScope] = useState<typeof SCOPES[number]>("global");
+
+  const startEdit = (l: Lesson) => {
+    setEditingId(l.id);
+    setEditText(l.lesson);
+    setEditScope(l.scope);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const saveEdit = async (id: string) => {
+    const text = editText.trim();
+    if (!text) return;
+    if (text.length > 500) {
+      toast({ title: "Too long", description: "Keep lessons under 500 characters.", variant: "destructive" });
+      return;
+    }
+    const { error } = await supabase
+      .from("copilot_lessons")
+      .update({ lesson: text, scope: editScope })
+      .eq("id", id);
+    if (error) {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    cancelEdit();
+    load();
+  };
 
   const load = async () => {
     setLoading(true);
