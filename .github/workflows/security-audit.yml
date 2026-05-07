@@ -16,6 +16,7 @@ on:
       - "supabase/migrations/**"
       - "e2e/security-audit.test.ts"
       - "e2e/rls-matrix.test.ts"
+      - "e2e/rls-role-matrix.test.ts"
       - ".github/workflows/security-audit.yml"
   workflow_dispatch:
   schedule:
