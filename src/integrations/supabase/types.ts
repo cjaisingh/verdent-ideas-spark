@@ -349,8 +349,116 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_agent_overrides: {
+        Row: {
+          agent_id: string
+          created_at: string
+          enabled: boolean
+          greeting: string | null
+          id: string
+          mic_gain: number | null
+          noise_gate: number | null
+          out_volume: number | null
+          tts_voice: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          enabled?: boolean
+          greeting?: string | null
+          id?: string
+          mic_gain?: number | null
+          noise_gate?: number | null
+          out_volume?: number | null
+          tts_voice?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          enabled?: boolean
+          greeting?: string | null
+          id?: string
+          mic_gain?: number | null
+          noise_gate?: number | null
+          out_volume?: number | null
+          tts_voice?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_agent_overrides_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_agents: {
+        Row: {
+          allowed_capability_ids: string[]
+          allowed_tables: string[]
+          created_at: string
+          default_greeting: string
+          description: string | null
+          enabled: boolean
+          id: string
+          language: string
+          max_risk: string
+          name: string
+          order: number
+          slug: string
+          system_prompt: string
+          tts_voice: string
+          updated_at: string
+          wake_word: string
+        }
+        Insert: {
+          allowed_capability_ids?: string[]
+          allowed_tables?: string[]
+          created_at?: string
+          default_greeting?: string
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          language?: string
+          max_risk?: string
+          name: string
+          order?: number
+          slug: string
+          system_prompt?: string
+          tts_voice?: string
+          updated_at?: string
+          wake_word: string
+        }
+        Update: {
+          allowed_capability_ids?: string[]
+          allowed_tables?: string[]
+          created_at?: string
+          default_greeting?: string
+          description?: string | null
+          enabled?: boolean
+          id?: string
+          language?: string
+          max_risk?: string
+          name?: string
+          order?: number
+          slug?: string
+          system_prompt?: string
+          tts_voice?: string
+          updated_at?: string
+          wake_word?: string
+        }
+        Relationships: []
+      }
       copilot_settings: {
         Row: {
+          active_agent_id: string | null
           created_at: string
           greeting: string
           language: string
@@ -364,6 +472,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active_agent_id?: string | null
           created_at?: string
           greeting?: string
           language?: string
@@ -377,6 +486,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active_agent_id?: string | null
           created_at?: string
           greeting?: string
           language?: string
@@ -389,7 +499,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "copilot_settings_active_agent_id_fkey"
+            columns: ["active_agent_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       db_explorer_audit: {
         Row: {
