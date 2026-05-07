@@ -345,8 +345,8 @@ Deno.serve(async (req) => {
       try { msg = JSON.parse(ev.data); } catch { return; }
 
       if (msg.type === "auth") {
-        jwt = msg.jwt;
-        if (!(await isOperator(jwt))) {
+        session.jwt = msg.jwt;
+        if (!(await isOperator(session.jwt))) {
           client.send(JSON.stringify({ type: "error", error: "not_operator" }));
           client.close(4401, "unauthorized");
           return;
