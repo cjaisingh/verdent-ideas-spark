@@ -397,6 +397,12 @@ export default function Copilot() {
           } else if (m.type === "pending_lesson_error") {
             setSavingLesson(false);
             toast.error(m.error || "Could not save lesson");
+          } else if (m.type === "lessons_applied") {
+            setLessonsApplied({
+              at: m.at ?? Date.now(),
+              user_text: m.user_text ?? "",
+              applied: Array.isArray(m.applied) ? m.applied : [],
+            });
           } else if (m.type === "error") {
             toast.error(m.error || "Copilot error");
             stop();
@@ -647,6 +653,8 @@ export default function Copilot() {
       <CopilotOnboardingCard />
 
       <LessonsLoadedCard />
+
+      <AppliedLessonsCard data={lessonsApplied} />
 
       {pendingLesson && (
         <PendingLessonCard
