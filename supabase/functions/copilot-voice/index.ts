@@ -418,7 +418,11 @@ async function dispatchTool(name: string, args: any, session: Session) {
 
 // ---------- LLM "think" step ----------
 async function think(history: any[], session: Session): Promise<string> {
-  const messages = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+  const lessonBlock = session.lessons.length
+    ? `\n\nLESSONS LEARNED (always honour these unless the operator overrides):\n` +
+      session.lessons.map(l => `- ${l.lesson}`).join("\n")
+    : "";
+  const messages = [{ role: "system", content: SYSTEM_PROMPT + lessonBlock }, ...history];
   // Up to 3 tool-call rounds.
   for (let round = 0; round < 3; round++) {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -428,7 +432,7 @@ async function think(history: any[], session: Session): Promise<string> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: session.model || "openai/gpt-5-mini",
         messages,
         tools: TOOLS,
         tool_choice: "auto",
