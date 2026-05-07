@@ -503,6 +503,23 @@ Deno.serve(async (req) => {
   const session: Session = { jwt: "", user_id: "", staged: null, lessons: [], model: "openai/gpt-5-mini" };
   let history: any[] = [];
   let thinking = false;
+  let transcriptId: string | null = null;
+  let turnOrd = 0;
+
+  const recordTurn = async (role: "user" | "assistant", content: string, latency_ms?: number) => {
+    if (!transcriptId || !content) return;
+    try {
+      turnOrd += 1;
+      await supa.from("copilot_transcript_turns").insert({
+        transcript_id: transcriptId, ord: turnOrd, role, content,
+        model: role === "assistant" ? session.model : null,
+        latency_ms: latency_ms ?? null,
+      });
+      await supa.from("copilot_transcripts")
+        .update({ turn_count: turnOrd, ended_at: new Date().toISOString() })
+        .eq("id", transcriptId);
+    } catch (e) { console.warn("recordTurn failed", e); }
+  };
   let settings: {
     stt_model: string;
     tts_voice: string;
@@ -570,7 +587,15 @@ Deno.serve(async (req) => {
         if (msg.settings && typeof msg.settings === "object") {
           settings = { ...settings, ...msg.settings };
         }
-        // Open Deepgram Voice Agent socket.
+        // Open transcript record for this session.
+        try {
+          const { data: t } = await supa.from("copilot_transcripts").insert({
+            user_id: session.user_id,
+            agent_slug: settings.agent_slug ?? null,
+            model: session.model,
+          }).select("id").single();
+          transcriptId = t?.id ?? null;
+        } catch (e) { console.warn("transcript create failed", e); }
         dg = new WebSocket("wss://agent.deepgram.com/v1/agent/converse", [
           "token", DEEPGRAM_API_KEY,
         ]);
@@ -611,10 +636,13 @@ Deno.serve(async (req) => {
               if (m.type === "ConversationText" && m.role === "user" && !thinking) {
                 thinking = true;
                 history.push({ role: "user", content: m.content });
+                recordTurn("user", m.content);
+                const t0 = Date.now();
                 try {
                   const reply = await think(history, session);
                   if (reply) {
                     history.push({ role: "assistant", content: reply });
+                    recordTurn("assistant", reply, Date.now() - t0);
                     dg!.send(JSON.stringify({ type: "InjectAgentMessage", content: reply }));
                   }
                 } catch (e) {

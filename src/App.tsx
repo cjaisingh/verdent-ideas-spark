@@ -24,6 +24,7 @@ import Runbooks from "./pages/Runbooks";
 import Memory from "./pages/Memory";
 import Notebook from "./pages/Notebook";
 import Lessons from "./pages/Lessons";
+import Transcripts from "./pages/Transcripts";
 import MasterPlan from "./pages/MasterPlan";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
@@ -60,6 +61,7 @@ const App = () => (
             <Route path="/copilot/agents" element={<CopilotAgents />} />
             <Route path="/copilot/profile" element={<CopilotProfile />} />
             <Route path="/copilot/lessons" element={<Lessons />} />
+            <Route path="/copilot/transcripts" element={<Transcripts />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
             <Route path="/db-audit" element={<DbAuditLogs />} />

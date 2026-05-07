@@ -735,6 +735,92 @@ export type Database = {
           },
         ]
       }
+      copilot_transcript_turns: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          latency_ms: number | null
+          model: string | null
+          ord: number
+          role: string
+          tool_calls: Json | null
+          transcript_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          ord: number
+          role: string
+          tool_calls?: Json | null
+          transcript_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          ord?: number
+          role?: string
+          tool_calls?: Json | null
+          transcript_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_transcript_turns_transcript_id_fkey"
+            columns: ["transcript_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_transcripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      copilot_transcripts: {
+        Row: {
+          agent_slug: string | null
+          analysis: Json | null
+          analyzed_at: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          model: string | null
+          started_at: string
+          summary: string | null
+          turn_count: number
+          user_id: string | null
+        }
+        Insert: {
+          agent_slug?: string | null
+          analysis?: Json | null
+          analyzed_at?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          model?: string | null
+          started_at?: string
+          summary?: string | null
+          turn_count?: number
+          user_id?: string | null
+        }
+        Update: {
+          agent_slug?: string | null
+          analysis?: Json | null
+          analyzed_at?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          model?: string | null
+          started_at?: string
+          summary?: string | null
+          turn_count?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       db_explorer_audit: {
         Row: {
           action: string | null
