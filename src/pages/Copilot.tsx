@@ -140,6 +140,9 @@ export default function Copilot() {
       playCtxRef.current = playCtx;
       playHeadRef.current = playCtx.currentTime;
 
+      // Load mic AudioWorklet (file in /public). Lower-latency than ScriptProcessorNode.
+      await micCtx.audioWorklet.addModule("/copilot-mic-worklet.js");
+
       const outGain = playCtx.createGain();
       outGain.gain.value = outVolume;
       outGain.connect(playCtx.destination);
