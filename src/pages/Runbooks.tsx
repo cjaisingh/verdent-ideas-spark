@@ -60,7 +60,7 @@ export default function Runbooks() {
     const { data, error } = await supabase
       .from("runbooks").select("*").order("updated_at", { ascending: false });
     if (error) { toast.error(error.message); return; }
-    setList((data ?? []) as Runbook[]);
+    setList((data ?? []) as unknown as Runbook[]);
   };
 
   useEffect(() => { load(); }, []);
@@ -91,7 +91,8 @@ export default function Runbooks() {
     const slug = draft.slug || slugify(draft.title);
     const payload = {
       slug, title: draft.title, summary: draft.summary || null,
-      format: draft.format, body: draft.body, steps: draft.steps, tags: draft.tags,
+      format: draft.format, body: draft.body,
+      steps: draft.steps as unknown as never, tags: draft.tags,
     };
     if (draft.id) {
       const { error } = await supabase.from("runbooks").update(payload).eq("id", draft.id);
@@ -103,7 +104,7 @@ export default function Runbooks() {
         .insert({ ...payload, author: user?.email ?? null }).select().single();
       if (error) { toast.error(error.message); setSaving(false); return; }
       toast.success("Created");
-      setSelectedId((data as Runbook).id);
+      setSelectedId((data as unknown as Runbook).id);
     }
     setSaving(false);
     await load();
