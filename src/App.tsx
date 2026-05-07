@@ -26,6 +26,7 @@ import Notebook from "./pages/Notebook";
 import MasterPlan from "./pages/MasterPlan";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
+import CopilotProfile from "./pages/CopilotProfile";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/copilot" element={<Copilot />} />
             <Route path="/copilot/agents" element={<CopilotAgents />} />
+            <Route path="/copilot/profile" element={<CopilotProfile />} />
             <Route path="/api-explorer" element={<ApiExplorer />} />
             <Route path="/db-explorer" element={<DbExplorer />} />
             <Route path="/db-audit" element={<DbAuditLogs />} />

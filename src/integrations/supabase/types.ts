@@ -456,6 +456,65 @@ export type Database = {
         }
         Relationships: []
       }
+      copilot_profiles: {
+        Row: {
+          context_notes: string | null
+          created_at: string
+          default_agent_id: string | null
+          display_name: string | null
+          language: string
+          narrowed_capability_ids: string[]
+          narrowed_max_risk: string
+          narrowed_tables: string[]
+          pronouns: string | null
+          timezone: string
+          title: string | null
+          updated_at: string
+          user_id: string
+          verbosity: string
+        }
+        Insert: {
+          context_notes?: string | null
+          created_at?: string
+          default_agent_id?: string | null
+          display_name?: string | null
+          language?: string
+          narrowed_capability_ids?: string[]
+          narrowed_max_risk?: string
+          narrowed_tables?: string[]
+          pronouns?: string | null
+          timezone?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+          verbosity?: string
+        }
+        Update: {
+          context_notes?: string | null
+          created_at?: string
+          default_agent_id?: string | null
+          display_name?: string | null
+          language?: string
+          narrowed_capability_ids?: string[]
+          narrowed_max_risk?: string
+          narrowed_tables?: string[]
+          pronouns?: string | null
+          timezone?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+          verbosity?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "copilot_profiles_default_agent_id_fkey"
+            columns: ["default_agent_id"]
+            isOneToOne: false
+            referencedRelation: "copilot_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       copilot_settings: {
         Row: {
           active_agent_id: string | null
