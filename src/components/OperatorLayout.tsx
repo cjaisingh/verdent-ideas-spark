@@ -20,15 +20,21 @@ import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker"
 import { useViewport } from "@/hooks/use-viewport";
 import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
 import { PaneKeyboardHelp } from "@/components/PaneKeyboardHelp";
-import { useT } from "@/lib/i18n";
+import { useT, useRouteName, ROUTES } from "@/lib/i18n";
 
 const toastedDecisions = new Set<string>();
 
 const OperatorLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isOnTenants = location.pathname === "/tenants" || location.pathname.startsWith("/tenants/");
+  const tenantsPath = ROUTES.tenants;
+  const isOnTenants = location.pathname === tenantsPath || location.pathname.startsWith(`${tenantsPath}/`);
   const t = useT();
+  const routeName = useRouteName();
+  const tenantsName = routeName("tenants");
+  const brand = t("awipCore.brand");
+  const tenantsTooltip = t("nav.tooltip", { name: tenantsName, path: tenantsPath });
+  const tenantsAria = t("nav.ariaLabel", { brand, name: tenantsName, path: tenantsPath });
   const [paneState, setPaneState] = usePaneState();
   const viewport = useViewport();
   const isMobile = viewport === "mobile";
@@ -227,20 +233,20 @@ const OperatorLayout = () => {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Link
-                    to="/tenants"
+                    to={tenantsPath}
                     aria-current={isOnTenants ? "page" : undefined}
-                    aria-label={t("awipCore.ariaLabel")}
+                    aria-label={tenantsAria}
                     className={`inline-flex h-8 shrink-0 items-center rounded px-2 font-semibold text-sm leading-none transition-colors ${
                       isOnTenants
                         ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
                         : "text-foreground hover:text-primary"
                     }`}
                   >
-                    AWIP Core
+                    {brand}
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
-                  {t("awipCore.tooltip")}
+                  {tenantsTooltip}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

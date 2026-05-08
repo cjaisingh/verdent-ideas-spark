@@ -17,18 +17,36 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 type Dict = Record<string, string>;
 
+// Single source of truth for route paths + their localized display names.
+// Tooltip / aria-label copy for header links is derived from these so it can
+// never drift from the actual <Link to=...> target.
+export const ROUTES = {
+  tenants: "/tenants",
+} as const;
+
+export type RouteKey = keyof typeof ROUTES;
+
+const routeNames: Record<Locale, Record<RouteKey, string>> = {
+  en: { tenants: "Tenants" },
+  de: { tenants: "Mandanten" },
+  fr: { tenants: "Locataires" },
+};
+
 const dictionaries: Record<Locale, Dict> = {
   en: {
-    "awipCore.tooltip": "Tenants · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — go to Tenants (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — go to {name} ({path})",
   },
   de: {
-    "awipCore.tooltip": "Mandanten · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — zu Mandanten wechseln (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — zu {name} wechseln ({path})",
   },
   fr: {
-    "awipCore.tooltip": "Locataires · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — aller aux Locataires (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — aller aux {name} ({path})",
   },
 };
 
@@ -71,11 +89,22 @@ function subscribe(cb: () => void) {
   return () => listeners.delete(cb);
 }
 
-export function t(key: string, locale: Locale = currentLocale): string {
-  return dictionaries[locale]?.[key] ?? dictionaries.en[key] ?? key;
+export function t(key: string, locale: Locale = currentLocale, vars?: Record<string, string>): string {
+  const raw = dictionaries[locale]?.[key] ?? dictionaries.en[key] ?? key;
+  if (!vars) return raw;
+  return raw.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
 }
 
-export function useT(): (key: string) => string {
+export function routeName(key: RouteKey, locale: Locale = currentLocale): string {
+  return routeNames[locale]?.[key] ?? routeNames.en[key];
+}
+
+export function useT(): (key: string, vars?: Record<string, string>) => string {
   const locale = useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
-  return (key: string) => t(key, locale);
+  return (key, vars) => t(key, locale, vars);
+}
+
+export function useRouteName(): (key: RouteKey) => string {
+  const locale = useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
+  return (key) => routeName(key, locale);
 }
