@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
 } from "lucide-react";
 
 const groups = [
@@ -31,6 +31,7 @@ const groups = [
       { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
       { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
       { url: "/jobs", title: "Jobs board", icon: ListChecks },
+      { url: "/night-shifts", title: "Night shifts", icon: Moon },
       { url: "/notebook", title: "Notebook", icon: NotebookIcon },
       { url: "/runbook", title: "Runbook", icon: BookOpen },
       { url: "/memory", title: "Memory", icon: Brain },
