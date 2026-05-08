@@ -455,7 +455,7 @@ const OperatorLayout = () => {
                               B {sizes.bottomHeight}%
                             </span>
                           )}
-                          <BottomPaneEventTicker />
+                          <PaneSlot slot="bottom" viewport={viewport} />
                         </div>
                       </ResizablePanel>
                     </>
@@ -498,7 +498,7 @@ const OperatorLayout = () => {
                           R {sizes.rightWidth}%
                         </span>
                       )}
-                      <RightPaneNightAgent />
+                      <PaneSlot slot="right" viewport={viewport} />
                     </div>
                   </ResizablePanel>
                 </>
