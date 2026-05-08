@@ -20,11 +20,13 @@ const MODES: Array<{
 interface Props {
   mode: PaneMode;
   onChange: (mode: PaneMode) => void;
+  disabled?: boolean;
 }
 
-export function PaneToggleGroup({ mode, onChange }: Props) {
+export function PaneToggleGroup({ mode, onChange, disabled = false }: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (disabled) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
@@ -35,11 +37,16 @@ export function PaneToggleGroup({ mode, onChange }: Props) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onChange]);
+  }, [onChange, disabled]);
 
   return (
     <TooltipProvider delayDuration={200}>
-      <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5">
+      <div
+        className={cn(
+          "inline-flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5 transition-opacity",
+          disabled && "opacity-50 pointer-events-none",
+        )}
+      >
         {MODES.map(({ mode: m, Icon, label, shortcut }) => {
           const active = m === mode;
           return (
@@ -47,6 +54,7 @@ export function PaneToggleGroup({ mode, onChange }: Props) {
               <TooltipTrigger asChild>
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => onChange(m)}
                   aria-label={label}
                   aria-pressed={active}
