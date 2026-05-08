@@ -390,6 +390,13 @@ export default function ApprovalPack() {
             @bottom-left { content: var(--pp-generated, ""); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
             @bottom-right { content: "Page " counter(page) " / " counter(pages); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
           }
+          @page :first {
+            @top-left { content: ""; }
+            @top-right { content: ""; }
+            @bottom-left { content: ""; }
+            @bottom-right { content: ""; }
+          }
+          .pp-cover-page { break-after: page; page-break-after: always; min-height: 24cm; padding: 0 !important; border: 0 !important; }
           html, body { background: white !important; color: #111 !important; }
           body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           aside, nav, [data-sidebar], .print\\:hidden, [data-sonner-toaster] { display: none !important; }
