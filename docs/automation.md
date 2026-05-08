@@ -16,13 +16,13 @@ All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same toke
 
 ## Daily plan
 
-`daily-plan` runs nightly and summarises the operator's day-ahead via `openai/gpt-5` through the Lovable AI Gateway. Inputs: open roadmap tasks, last 7 days of `roadmap_work_log`, unacknowledged `roadmap_review_findings`, non-passing `qa_checks`, recent `test_runs`, pinned `notebook_entries`. Output: a single `daily_plans` row per date with `focus`, markdown `plan_md`, structured `risks[]`, and `recommendations[]`.
+`daily-plan` runs nightly and summarises the operator's day-ahead via `google/gemini-2.5-flash-lite` through the Lovable AI Gateway. Inputs: open roadmap tasks, last 7 days of `roadmap_work_log`, unacknowledged `roadmap_review_findings`, non-passing `qa_checks`, recent `test_runs`, pinned `notebook_entries`. Output: a single `daily_plans` row per date with `focus`, markdown `plan_md`, structured `risks[]`, and `recommendations[]`.
 
 **UI:** **Daily plan** card at the top of `/roadmap`. Operators can re-run on demand via **Generate now**.
 
 ## AI code review
 
-`scheduled-code-review` pulls the last 7 days of git diff via the GitHub API and sends it to `google/gemini-2.5-pro` through the Lovable AI Gateway (no API key required). Findings are stored with severity (`high | medium | low | info`), file/line context, and the full AI message.
+`scheduled-code-review` pulls the last 7 days of git diff via the GitHub API and sends it to `google/gemini-2.5-flash` through the Lovable AI Gateway (no API key required). Findings are stored with severity (`high | medium | low | info`), file/line context, and the full AI message.
 
 **UI:** click any finding row to expand the full message and related context. Filters: severity, acknowledged state, sort by newest/oldest/severity. Operators acknowledge findings to clear them from the open queue.
 
