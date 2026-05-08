@@ -1121,17 +1121,151 @@ export type Database = {
         Row: {
           auto_purge_enabled: boolean
           id: boolean
+          night_agent_enabled: boolean
           updated_at: string
         }
         Insert: {
           auto_purge_enabled?: boolean
           id?: boolean
+          night_agent_enabled?: boolean
           updated_at?: string
         }
         Update: {
           auto_purge_enabled?: boolean
           id?: boolean
+          night_agent_enabled?: boolean
           updated_at?: string
+        }
+        Relationships: []
+      }
+      night_observations: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          payload: Json
+          severity: string
+          shift_id: string
+          subject_ref: Json
+          summary: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+          severity?: string
+          shift_id: string
+          subject_ref?: Json
+          summary: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          severity?: string
+          shift_id?: string
+          subject_ref?: Json
+          summary?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "night_observations_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "night_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      night_proposals: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          kind: string
+          rationale: string | null
+          shift_id: string
+          source_observation_id: string | null
+          status: string
+          target_ref: Json
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          kind: string
+          rationale?: string | null
+          shift_id: string
+          source_observation_id?: string | null
+          status?: string
+          target_ref?: Json
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          kind?: string
+          rationale?: string | null
+          shift_id?: string
+          source_observation_id?: string | null
+          status?: string
+          target_ref?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "night_proposals_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "night_shifts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "night_proposals_source_observation_id_fkey"
+            columns: ["source_observation_id"]
+            isOneToOne: false
+            referencedRelation: "night_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      night_shifts: {
+        Row: {
+          commit_sha: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          started_at: string
+          status: string
+          summary: Json
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          commit_sha?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          commit_sha?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          summary?: Json
+          window_end?: string
+          window_start?: string
         }
         Relationships: []
       }
