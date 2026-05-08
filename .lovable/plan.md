@@ -1,89 +1,79 @@
-## Goal
+## Answering your questions
 
-On each Code review finding card (`/roadmap/risks`), add two **Discuss** buttons stacked above the existing **Acknowledge** button (extra spacing so Acknowledge can't be misclicked):
+1. **Did actions come out of the most recent discussion?** No. The only things the discussion currently writes are: chat messages in the transcript, and a single `decision_outcome` label on the finding. Even picking **convert_to_task** today is just a label — no roadmap task or action item is created anywhere.
+2. **Unique ID per discussion?** Yes — each discussion already has a UUID, but it isn't shown. We'll surface a short, mentionable handle so you can say "look at FND-12-D3".
+3. **Jobs board?** Yes — lightweight, generic (works for any subject, like the discussion history is now), with a one-click "promote to roadmap task" escape hatch.
 
-- **Discuss with Copilot** — opens an in-app voice + text chat with Copilot (Gemini 2.5 Pro), records the full transcript, and lets you record a final decision back on the finding.
-- **Discuss (no Copilot)** — sends the finding's context to *this* Lovable chat window so you and I can work it out together. No in-app thread.
+## What we'll build
 
-## "Discuss (no Copilot)" — route to this chat window
+### 1. Discussion handles — `FND-12-D3`
 
-No in-app thread, no new tables for this path. Button behavior:
+- Add a per-subject ordinal (`subject_ordinal`) to each discussion: 1st, 2nd, 3rd discussion on this subject.
+- Add a short subject prefix derived from `subject_type` (e.g. `roadmap_finding` → `FND`) plus a per-subject sequence on the subject itself (so findings get `FND-1`, `FND-2`…). Findings get a `short_id` column populated by trigger.
+- Final handle format: `FND-12-D3` = the 3rd discussion on finding #12.
+- Shown next to the discussion title in the sheet header, in the history list, and copyable with a click. Same handle appears on every action item that came out of that discussion, so you can reference them back to me as "the action items from FND-12-D3".
 
-- Builds a structured markdown payload from the finding (title, severity, category/area, body, timestamp, model, and a stable link `/roadmap/risks#finding-<id>`).
-- Copies that payload to the clipboard *and* opens a small modal that:
-  - Shows the payload preview.
-  - Has a "Copy & open Lovable chat" primary button (copies + flips a hint badge "Paste in Lovable chat to continue").
-  - Has a secondary "Mark as 'discussing in Lovable chat'" toggle that flips `discussion_status='in_lovable_chat'` on the finding so the card visibly shows it's under discussion (badge in the header).
-- Once you paste it into this chat window, we discuss freely. When we land a decision you can use the same finding card to **Record decision** (see "Final decision" below) — that captures the outcome we agreed on.
+### 2. Jobs board (action items)
 
-## "Discuss with Copilot" — in-app voice + text
+A new lightweight, generic table — works exactly like discussions did once we generalized them.
 
-### UI
-- Clicking the button expands an inline **Discussion** panel under the finding (or opens a Sheet for more room — Sheet preferred since transcripts get long).
-- Panel contents:
-  - Header: finding title + severity + a "Recording" indicator when voice is active.
-  - **Voice controls**: Start / Stop microphone (Deepgram realtime STT — `DEEPGRAM_API_KEY` is already configured). Live partial transcript shown above the input.
-  - **Text input** + Send.
-  - **Transcript view**: chronological list mixing voice turns (badged `voice`) and typed turns (badged `text`), plus Copilot replies.
-  - **Record decision** action (see below).
-  - **End discussion** action (closes the panel, marks `discussion_status='resolved'` if a decision was recorded, otherwise `paused`).
+**Data**
 
-### Backend
-- New table `roadmap_finding_discussions`:
-  - `id`, `finding_id` (FK cascade), `created_at`, `ended_at` (nullable)
-  - `mode` (`'copilot'` | `'lovable_chat'`)
-  - `started_by_user_id` (uuid)
-- New table `roadmap_finding_discussion_messages`:
-  - `id`, `discussion_id` (FK cascade), `created_at`
-  - `role` (`'user'` | `'copilot'` | `'system'`)
-  - `source` (`'voice'` | `'text'` | `'system'`)
-  - `body` (text — final transcript text for voice turns; raw text for typed turns)
-  - `model` (text, nullable — `'google/gemini-2.5-pro'` for copilot turns)
-  - Indexed on `(discussion_id, created_at)`.
-- RLS: operator-only on both tables. Realtime publication enabled so the transcript view updates live.
+- `discussion_actions` table:
+  - `id`, `short_id` (e.g. `JOB-42` — sequential, easy to say)
+  - `subject_type`, `subject_id` (so jobs can also be created outside discussions later)
+  - `discussion_id` (nullable — set when the job came from a discussion)
+  - `title`, `details`, `status` (`open` | `in_progress` | `done` | `cancelled`)
+  - `priority` (`low` | `med` | `high`), `owner` (text), `due_at` (nullable)
+  - `source` (`manual` | `extracted`), `extracted_confidence` (nullable)
+  - `promoted_task_id` (nullable — set when promoted to a `roadmap_tasks` row)
+  - timestamps + `created_by`
+- Operator-only RLS, realtime enabled.
 
-### Edge functions
-- `finding-discuss-copilot` (streaming SSE): operator-JWT auth. Receives `{ discussion_id, user_message }`, loads finding context + last N messages, calls Lovable AI Gateway with `google/gemini-2.5-pro` (medium reasoning). Streams the assistant reply tokens back to the client *and* writes the final assistant message into `roadmap_finding_discussion_messages` once complete. System prompt frames Copilot as a senior engineer triaging the finding and pushing toward a recordable decision.
-- `deepgram-realtime-token`: operator-JWT auth. Mints a short-lived Deepgram token for the browser to open a WS directly to Deepgram for STT (so we don't proxy audio through our edge function). User audio is transcribed client-side; finalized transcript turns are POSTed to a tiny `finding-discussion-message` insert endpoint (or written via the `supabase-js` client under RLS — the simpler path).
+**How items get created**
 
-### Final decision
-- New columns on `roadmap_review_findings`:
-  - `decision_outcome` (text: `accept_risk` | `mitigate` | `convert_to_task` | `dismiss` | null)
-  - `decision_summary` (text, nullable — short rationale)
-  - `decision_recorded_at` (timestamptz, nullable)
-  - `decision_recorded_by` (uuid, nullable)
-  - `discussion_status` (text: `none` | `in_lovable_chat` | `copilot_open` | `paused` | `resolved`, default `none`)
-- "Record decision" button in both the Copilot panel and the no-Copilot modal. Opens a small form: outcome (radio), summary (textarea, optional). Saves to the finding and (if a Copilot discussion exists) appends a `system` message into the transcript marking the decision.
-- The finding card surfaces:
-  - Discussion-status badge (e.g. "discussing in Lovable chat", "Copilot session open", "decision: mitigate").
-  - When `decision_outcome` is set, the Acknowledge button label flips to **Acknowledge & close** for clarity.
+- **Manual** — "Add action item" button always visible in the Copilot discussion sheet. Type or dictate, sets `source='manual'`.
+- **Auto-extract** — "Extract action items" button (also runs automatically when you press **Record decision**). Calls a new edge function `discussion-extract-actions` that:
+  - Loads the transcript + finding context.
+  - Asks `google/gemini-2.5-flash` for a JSON array of `{title, details, priority, owner_hint, due_hint}`.
+  - Returns the proposals; the UI shows them as **pending** chips with **Accept** / **Edit** / **Reject**. Accepted ones insert with `source='extracted'`.
+  - Nothing is created without your confirmation — keeps it auditable.
 
-## Layout (the original ask)
+**Where you see them**
 
-Right-side action stack on each finding card:
+- **In the discussion sheet** — a new "Action items" panel under the transcript, listing this discussion's jobs with status pills and quick status changes.
+- **On the finding card** — a small badge "3 jobs · 1 open" linking to the board filtered to that subject.
+- **New `/jobs` page** — kanban-style board (Open / In progress / Done) with filters by `subject_type`, `status`, `owner`, and a search. Each card shows `JOB-42`, title, the originating discussion handle (`FND-12-D3`), and a "Promote to roadmap task" action.
+- **Reusable `<JobsList subjectType subjectId />`** drop-in for any future subject.
 
-```text
-┌───────────────────────────┐
-│ Discuss with Copilot      │  outline, primary
-│ Discuss (no Copilot)      │  outline
-│                           │  ← mt-6 gap, no divider
-│ Acknowledge               │  ghost, smaller
-└───────────────────────────┘
-```
+**Promote to roadmap task**
 
-`flex flex-col gap-2 min-w-[200px]`. Buttons disable while their request is in flight.
+- One click on a job → creates a `roadmap_tasks` row in a dedicated "Discussion follow-ups" sprint (auto-created if missing), copies title/details, sets `discussion_actions.promoted_task_id`, and the job stays linked but flips to `status='done'` with a "promoted" tag.
 
-## Out of scope (this iteration)
+### 3. Surfacing in the existing UI
 
-- Resolving / reopening past discussions from a history view — for now you reopen by clicking Discuss again on the finding.
-- Notifications, GitHub-issue creation, or external posting.
-- Editing or deleting individual transcript messages (system-appended only).
-- Multi-user concurrent voice sessions on the same finding (single active session enforced client-side, not server-side).
+- Risk dashboard finding card: small "FND-12 · 3 jobs (1 open)" pill.
+- Discussion sheet header: shows `FND-12-D3` next to the title.
+- Sidebar: new **Jobs** entry with a count badge for `open` jobs.
 
-## Files touched
+## Out of scope this iteration
 
-- `supabase/migrations/<new>.sql` — new tables, new columns on `roadmap_review_findings`, RLS, realtime, indexes.
-- `supabase/functions/finding-discuss-copilot/index.ts` — SSE streaming Copilot chat.
-- `supabase/functions/deepgram-realtime-token/index.ts` — short-lived STT token minter.
-- `src/pages/RiskDashboard.tsx` — button stack, "no-Copilot" modal, Sheet-based Copilot panel, transcript + voice UI, decision form, realtime subscription.
-- Small helper `src/lib/findingContext.ts` — builds the markdown payload used by the no-Copilot flow.
+- Notifications/Slack/email when jobs change.
+- Subtasks or dependencies between jobs.
+- Auto-extraction running on historical discussions (only newly recorded decisions trigger it).
+- Editing/deleting individual transcript messages.
+
+## Technical details
+
+- **Migration**: new `discussion_actions` table with RLS + realtime; sequence + trigger to fill `short_id` (`JOB-<n>`); add `subject_ordinal` (per-subject) to `roadmap_finding_discussions` via trigger; add `short_id` to `roadmap_review_findings` via trigger (`FND-<n>`). Backfill for existing rows.
+- **Edge function**: `discussion-extract-actions` (operator JWT, no streaming). Returns `{proposals: [...]}`; client persists on accept.
+- **Files**:
+  - `supabase/migrations/<new>.sql`
+  - `supabase/functions/discussion-extract-actions/index.ts`
+  - `src/components/discussions/DiscussionActionsPanel.tsx` (in-sheet)
+  - `src/components/discussions/JobsList.tsx` (reusable, drop-in)
+  - `src/pages/Jobs.tsx` (kanban)
+  - `src/components/AppSidebar.tsx` (add Jobs entry)
+  - `src/pages/RiskDashboard.tsx` (jobs pill on finding cards, handle display)
+  - `src/components/risk/CopilotDiscussionSheet.tsx` (handle in header, actions panel under transcript)
+  - `src/App.tsx` (route `/jobs`)

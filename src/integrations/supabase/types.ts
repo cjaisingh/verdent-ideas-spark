@@ -938,6 +938,81 @@ export type Database = {
         }
         Relationships: []
       }
+      discussion_actions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          details: string | null
+          discussion_id: string | null
+          due_at: string | null
+          extracted_confidence: number | null
+          id: string
+          owner: string | null
+          priority: string
+          promoted_task_id: string | null
+          short_num: number
+          source: string
+          status: string
+          subject_id: string
+          subject_type: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          discussion_id?: string | null
+          due_at?: string | null
+          extracted_confidence?: number | null
+          id?: string
+          owner?: string | null
+          priority?: string
+          promoted_task_id?: string | null
+          short_num?: number
+          source?: string
+          status?: string
+          subject_id: string
+          subject_type: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          details?: string | null
+          discussion_id?: string | null
+          due_at?: string | null
+          extracted_confidence?: number | null
+          id?: string
+          owner?: string | null
+          priority?: string
+          promoted_task_id?: string | null
+          short_num?: number
+          source?: string
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_actions_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_finding_discussions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_actions_promoted_task_id_fkey"
+            columns: ["promoted_task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       idempotency_keys: {
         Row: {
           created_at: string
@@ -1521,6 +1596,7 @@ export type Database = {
           mode: string
           started_by_user_id: string | null
           subject_id: string
+          subject_ordinal: number | null
           subject_type: string
           title: string | null
         }
@@ -1532,6 +1608,7 @@ export type Database = {
           mode: string
           started_by_user_id?: string | null
           subject_id: string
+          subject_ordinal?: number | null
           subject_type?: string
           title?: string | null
         }
@@ -1543,6 +1620,7 @@ export type Database = {
           mode?: string
           started_by_user_id?: string | null
           subject_id?: string
+          subject_ordinal?: number | null
           subject_type?: string
           title?: string | null
         }
@@ -1607,6 +1685,7 @@ export type Database = {
           reviewed_at: string
           reviewer_model: string
           severity: string
+          short_num: number | null
           title: string
         }
         Insert: {
@@ -1626,6 +1705,7 @@ export type Database = {
           reviewed_at?: string
           reviewer_model: string
           severity?: string
+          short_num?: number | null
           title: string
         }
         Update: {
@@ -1645,6 +1725,7 @@ export type Database = {
           reviewed_at?: string
           reviewer_model?: string
           severity?: string
+          short_num?: number | null
           title?: string
         }
         Relationships: []
