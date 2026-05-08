@@ -22,11 +22,31 @@ const DEFAULT_STATE: PaneState = {
   sizesByMode: {},
 };
 
-export function getModeSizes(state: PaneState, mode: PaneMode): Required<ModeSizes> {
+/** Per-viewport bounds so a saved size from a wide screen doesn't crush a narrow one. */
+export const SIZE_BOUNDS = {
+  wide: { right: { min: 15, max: 40 }, bottom: { min: 15, max: 60 } },
+  narrow: { right: { min: 18, max: 30 }, bottom: { min: 20, max: 45 } },
+  mobile: { right: { min: 0, max: 0 }, bottom: { min: 0, max: 0 } },
+} as const;
+
+export type ViewportClass = keyof typeof SIZE_BOUNDS;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+export function getModeSizes(
+  state: PaneState,
+  mode: PaneMode,
+  viewport: ViewportClass = "wide",
+): Required<ModeSizes> {
   const overrides = state.sizesByMode[mode] ?? {};
+  const b = SIZE_BOUNDS[viewport];
+  const rightDefault = clamp(DEFAULT_SIZES.rightWidth, b.right.min || 1, b.right.max || 100);
+  const bottomDefault = clamp(DEFAULT_SIZES.bottomHeight, b.bottom.min || 1, b.bottom.max || 100);
   return {
-    rightWidth: overrides.rightWidth ?? DEFAULT_SIZES.rightWidth,
-    bottomHeight: overrides.bottomHeight ?? DEFAULT_SIZES.bottomHeight,
+    rightWidth: clamp(overrides.rightWidth ?? rightDefault, b.right.min || 1, b.right.max || 100),
+    bottomHeight: clamp(overrides.bottomHeight ?? bottomDefault, b.bottom.min || 1, b.bottom.max || 100),
   };
 }
 
