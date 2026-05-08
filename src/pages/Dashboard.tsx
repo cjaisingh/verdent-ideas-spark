@@ -11,6 +11,7 @@ export default function Dashboard() {
   const dash = useDashboardConfig();
   const [editing, setEditing] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<{ tabId: string; template: TemplateId } | null>(null);
+  const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
 
   if (!dash.loaded) {
     return <div className="p-6 text-sm text-muted-foreground">Loading dashboard…</div>;
