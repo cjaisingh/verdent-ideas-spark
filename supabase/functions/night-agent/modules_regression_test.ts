@@ -73,10 +73,10 @@ Deno.test("modules: every sibling export is loadable and typed", () => {
   assertExists(SEV_RANK.high);
 
   // handlers (router targets)
-  assertEquals(typeof evaluateOpenGates, "function");
-  assertEquals(typeof openShift, "function");
-  assertEquals(typeof closeShift, "function");
-  assertEquals(typeof smokeTest, "function");
+  assertEquals(typeof HANDLERS.gates.evaluateOpenGates, "function");
+  assertEquals(typeof HANDLERS.open.openShift,          "function");
+  assertEquals(typeof HANDLERS.close.closeShift,        "function");
+  assertEquals(typeof HANDLERS.smoke.smokeTest,         "function");
 
   // shared config surface used by index.ts router
   assertEquals(typeof json, "function");
