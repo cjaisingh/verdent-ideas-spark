@@ -82,8 +82,65 @@ function inferPhaseAndSuite(title: string) {
 
 // ─── /open ────────────────────────────────────────────────────────────────
 
-async function openShift(sb: ReturnType<typeof createClient>) {
+type NightSettings = {
+  night_timezone?: string | null;
+  night_window_start?: string | null;
+  night_window_end?: string | null;
+  night_blackout_dates?: unknown;
+  night_allowed_kinds?: unknown;
+} | null;
+
+// Returns HH:MM and YYYY-MM-DD in the configured zone, falling back to UTC.
+function localParts(now: Date, tz: string) {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit",
+    }).formatToParts(now);
+    const get = (k: string) => fmt.find((p) => p.type === k)?.value ?? "";
+    return {
+      date: `${get("year")}-${get("month")}-${get("day")}`,
+      hhmm: `${get("hour")}:${get("minute")}`,
+    };
+  } catch {
+    return {
+      date: now.toISOString().slice(0, 10),
+      hhmm: now.toISOString().slice(11, 16),
+    };
+  }
+}
+
+function inWindow(hhmm: string, start: string, end: string) {
+  if (start === end) return false;
+  return start < end ? (hhmm >= start && hhmm < end) : (hhmm >= start || hhmm < end);
+}
+
+async function openShift(sb: ReturnType<typeof createClient>, settings: NightSettings) {
+  const tz = (settings?.night_timezone as string) || "UTC";
+  const winStart = (settings?.night_window_start as string) || "22:00";
+  const winEnd = (settings?.night_window_end as string) || "06:00";
+  const blackouts = Array.isArray(settings?.night_blackout_dates)
+    ? (settings!.night_blackout_dates as unknown[]).map(String)
+    : [];
+  const allowedKinds = Array.isArray(settings?.night_allowed_kinds)
+    ? (settings!.night_allowed_kinds as unknown[]).map(String)
+    : ["general", "auth", "roadmap", "copilot", "jobs"];
+
   const now = new Date();
+  const local = localParts(now, tz);
+
+  if (blackouts.includes(local.date)) {
+    return json({ skipped: true, reason: "blackout_date", tz, date: local.date });
+  }
+  if (!inWindow(local.hhmm, winStart, winEnd)) {
+    return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}` });
+  }
+  if (allowedKinds.length === 0) {
+    return json({ skipped: true, reason: "no_allowed_kinds" });
+  }
+
+  // Window timestamps recorded against the wall clock; tz remembered in summary.
   const windowStart = new Date(now);
   windowStart.setUTCHours(22, 0, 0, 0);
   if (now.getUTCHours() < 22) windowStart.setUTCDate(windowStart.getUTCDate() - 1);
@@ -94,6 +151,7 @@ async function openShift(sb: ReturnType<typeof createClient>) {
     window_start: windowStart.toISOString(),
     window_end: windowEnd.toISOString(),
     status: "running",
+    summary: { tz, window: `${winStart}-${winEnd}`, allowed_kinds: allowedKinds },
   }).select("id").single();
   if (shiftErr || !shift) return json({ error: "shift_create_failed", detail: shiftErr?.message }, 500);
   const shiftId = shift.id as string;
