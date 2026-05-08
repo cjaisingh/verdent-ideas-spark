@@ -365,14 +365,31 @@ export function CopilotDiscussionSheet({
   };
 
   const transcript = useMemo(() => messages, [messages]);
+  const handle = discussionId
+    ? discussionHandle("roadmap_finding", findingShortNum, subjectOrdinal)
+    : null;
+  const copyHandle = () => {
+    if (!handle) return;
+    navigator.clipboard.writeText(handle);
+    toast({ title: "Copied", description: handle });
+  };
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) stopVoice(); onOpenChange(o); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+          <SheetTitle className="flex items-center gap-2 flex-wrap">
             <Sparkles className="h-4 w-4" /> Discuss with Copilot
             <Badge variant="outline" className="text-[10px] uppercase">{severity}</Badge>
+            {handle && (
+              <button
+                onClick={copyHandle}
+                className="font-mono text-[10px] inline-flex items-center gap-1 rounded border px-1.5 py-0.5 hover:bg-muted"
+                title="Copy discussion handle"
+              >
+                {handle} <Copy className="h-3 w-3" />
+              </button>
+            )}
             {recording && <Badge variant="destructive" className="text-[10px] animate-pulse">REC</Badge>}
           </SheetTitle>
           <SheetDescription className="text-xs line-clamp-2">{findingTitle}</SheetDescription>
