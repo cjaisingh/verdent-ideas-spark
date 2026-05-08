@@ -1717,22 +1717,49 @@ const DailyAiSpendCard = () => {
             </div>
           </div>
           {hasAnyLimit && showThresholds && (
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
-              {globalLimits.day != null && (
-                <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-destructive/70" /> daily limit {fmtUsd6(globalLimits.day)}</span>
-              )}
-              {hasAnyJobLimit && groupBy === "job" && <span>⚠ = job-day breach</span>}
-              {hasAnyJobLimit && groupBy === "model" && (
-                <span>Switch to "by job" to see per-job threshold breaches.</span>
-              )}
-              {(globalLimits.run != null || Object.values(jobLimits).some(l => l.run != null)) && (
-                <span>per-run breaches shown in drill-down</span>
-              )}
+            <div className="rounded border border-border bg-muted/20 px-2 py-1.5 text-[10px] text-muted-foreground space-y-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-medium text-foreground/80">Legend</span>
+                {globalLimits.day != null && (
+                  <span className="flex items-center gap-1" title="Dashed horizontal line: daily total cost cap. Bars crossing it are over the limit.">
+                    <span className="inline-block w-3 border-t border-dashed border-destructive/70" />
+                    daily cap {fmtUsd6(globalLimits.day)}
+                  </span>
+                )}
+                <span
+                  className="flex items-center gap-1"
+                  title="A whole-day bar tinted red — the day's total spend exceeded the daily cap."
+                >
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-destructive/10 ring-1 ring-destructive/40" />
+                  day breach
+                </span>
+                {hasAnyJobLimit && groupBy === "job" && (
+                  <span className="flex items-center gap-1" title="A single job stack within a day exceeded that job's per-day cap.">
+                    <span aria-hidden>⚠</span> job-day breach
+                  </span>
+                )}
+                {(globalLimits.run != null || Object.values(jobLimits).some(l => l.run != null)) && (
+                  <span className="flex items-center gap-1" title="An individual run cost more than the per-run cap. See drill-down for details.">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm bg-destructive/5 ring-1 ring-destructive/30" />
+                    run breach (drill-down)
+                  </span>
+                )}
+                <span className="flex items-center gap-1" title="Run executed during the 22:00–06:00 UTC night window — forced to gemini-2.5-flash-lite.">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm border border-border" />
+                  night-mode run
+                </span>
+              </div>
+              <div className="text-[9px] leading-snug opacity-80">
+                Highlights only appear while viewing <span className="font-mono">$ Spend</span>. Click any bar (or the breaches chip in the header) to inspect the underlying runs.
+                {hasAnyJobLimit && groupBy === "model" && (
+                  <> Switch to <span className="font-mono">by job</span> to see per-job threshold breaches.</>
+                )}
+              </div>
             </div>
           )}
           {hasAnyLimit && !showThresholds && (
             <div className="text-[10px] text-muted-foreground">
-              Cost thresholds hidden while viewing {metricLabel}.
+              Cost thresholds and breach highlights only apply to <span className="font-mono">$ Spend</span> — currently viewing {metricLabel}.
             </div>
           )}
 
