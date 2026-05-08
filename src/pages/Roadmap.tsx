@@ -372,7 +372,12 @@ const Roadmap = () => {
                   </button>
                   <TriCheckbox state={phaseTriState(phase.id)} />
                   <span className="text-sm font-medium flex-1 truncate">{phase.title}</span>
-                  <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
+                  <PhaseGateBadge
+                    phaseStatus={phase.status}
+                    gate={gates.get(phase.id)}
+                    override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
+                  />
+                  <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
