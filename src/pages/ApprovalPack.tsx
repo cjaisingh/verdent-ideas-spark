@@ -223,7 +223,7 @@ export default function ApprovalPack() {
       {loading || !phase ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <article id="approval-pack-print" className="space-y-6 print:space-y-4 pp-doc">
+        <article id="approval-pack-print" className={`space-y-6 print:space-y-4 pp-doc pp-density-${density} pp-paper-${paperSize.toLowerCase()}`}>
           {(() => {
             const idx = phases.findIndex((p) => p.id === phase.id);
             const position = idx >= 0 ? `${idx + 1} of ${phases.length}` : "—";
