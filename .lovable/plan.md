@@ -1,101 +1,112 @@
 ## Goal
 
-Give admins one screen that answers "for each capability, can it be promoted to Phase-3 maturity (`status='available'`), and if not, exactly what is blocking it and which operator action unblocks it?" — plus a one-click promote/ack flow that records the decision.
+For every operator-confirmed Night Agent run (each accepted `night_proposal`), produce a structured **promotion audit report** that shows the exact gate snapshot at open time, the skip-reason list, and the selected candidates — and pairs it with the after-state (what the operator actually accepted/rejected and the per-job audit_complete result).
 
-Phase 3 in `docs/master-plan.md` = "Module Scaffold & Capability Maturation". A capability is **Phase-3 ready** when its registry entry is complete, its connectors are wired, its dependencies resolve, demand exists, and no open blocking signals remain.
+This makes "why did this thing get promoted last night?" a one-click answer, and creates an immutable trail for post-hoc review.
 
-## What blocks promotion (gate definitions)
+## Scope
 
-Each gate evaluates to `pass | warn | fail` per capability. Promotion requires zero `fail` gates; `warn` requires admin ack.
+In:
+- Persist the full gate snapshot when `/night-agent/open` runs.
+- Read endpoint that returns a before/after report per proposal or per shift.
+- Admin UI page that lists confirmed promotions with drill-down to the diff.
 
-| Gate | Source | Fail when | Operator action |
-|------|--------|-----------|-----------------|
-| `manifest_complete` | `capabilities` row | `name`, `description`, `owning_module`, or `version` empty; `version='0.1.0'` (still scaffold) | Edit manifest in source module's `capabilities.json` and re-register |
-| `inputs_outputs_declared` | `capabilities.inputs_required`, `outputs_provided` | either array empty | Update scaffold; redeploy register fn |
-| `connectors_wired` | `capability_connectors` count | 0 rows AND `inputs_required` references an external `kind` | Add row in `capability_connectors` |
-| `dependencies_resolved` | latest `capability_events` where `event_type='resolution_warning'` for this `capability_id` | any unresolved warning newer than last `registered` event | Investigate event payload; re-register or fix dep |
-| `demand_present` | `okr_measurements.required_capabilities` containing this id | no row references it | Either tie an OKR measurement to it or mark capability `deprecated` |
-| `qa_phase_3_passing` | `qa_checks` where `phase_key='phase-3'` | any row with `status` in (`fail`,`unknown`) | Run probe / set judgement on `/master-plan` qa panel |
-| `no_open_approvals` | `approval_queue` filtered by `capability_id` | any row `status='pending'` | Decide pending approval |
-| `not_already_available` | `capabilities.status` | already `available` or `deprecated` | n/a (gate hides promote button) |
+Out (non-goals):
+- No changes to Capability Promotion (`/capabilities/:id/promote`) — different flow.
+- No changes to gate logic, eligibility rules, or the 5-step audit.
+- No new tables — reuse `night_shifts.summary` (jsonb) + `night_proposals.payload`.
 
-The set lives in one pure module so it can be reused by an edge endpoint and unit-tested.
+## Approach
 
-## Surfaces
+### 1. Capture the "before" snapshot at open time
 
-### 1. New page `src/pages/CapabilityPromotion.tsx` — route `/admin/capability-promotion`
+`supabase/functions/night-agent/open.ts` already computes everything we need but only stores `{ tz, window, allowed_kinds }` in `night_shifts.summary`. Extend it to also persist:
 
-Admin-only (mirror `NightAgentTestModeCard` pattern: check `has_role(_role: 'admin')`, render a polite "admin required" stub otherwise). Sidebar entry under Admin section.
+```text
+summary.gates              = { timezone, window, local_date, local_time,
+                               enabled, in_window, blackout_hit,
+                               allowed_kinds, blackout_dates }
+summary.skip_reasons       = string[]   // shift-level (always [] if shift opened)
+summary.candidates_total   = number
+summary.candidates_skipped = [{ short_num, title, reason }]
+summary.candidates_selected = [{ short_num, title, risk, phase, suite }]
+```
 
-Layout:
-- **Summary header** — counts: `ready` / `blocked-fixable` / `blocked-needs-fail` / `already-available`.
-- **Filter row** — status (planned/experimental), owning module, "show only blocked", search.
-- **Capability table** — one row per capability with columns: id+name, status badge, gate-summary chips (pass/warn/fail counts), most-severe blocking reason (one line), and an actions cell.
-- **Row expand** — full gate list with per-gate verdict, the failure reason text, and the "operator action" hint (from the gate definition table above). Inline links: gate `connectors_wired` deep-links to `/capabilities/:id`; `qa_phase_3_passing` to `/master-plan#phase-3`; `no_open_approvals` to `/approvals/:id` for each pending row.
-- **Actions cell** —
-  - `Promote to available` (enabled only when zero fails + zero un-acked warns)
-  - `Acknowledge warnings` (admin-only, opens a small modal capturing a free-text rationale)
-  - `Refresh` (re-runs the evaluation)
+Mirror the exact field names already used by `gates.ts` (test mode) so the report shape is consistent between dry-run and real runs.
 
-### 2. Backend endpoint `awip-api`: `GET /capabilities/promotion-status`
+### 2. Stamp each proposal with its lineage
 
-New handler in the existing `awip-api` edge function (keep with the rest of the contract surface — Core memory rule says single edge function for the contract):
+When inserting into `night_proposals`, add to `payload`:
+- `selected_at` (open timestamp)
+- `gates_snapshot_ref` = shift_id (cheap join key — the snapshot lives on the shift row)
 
-- Returns `{ capability, gates: [{ key, verdict, reason, action_hint }], summary }[]`.
-- Admin-only (operator JWT + `has_role admin`); accepts no body.
-- Single capability variant: `GET /capabilities/:id/promotion-status` for the row-expand call.
-- Pure gate logic lives in a sibling module `supabase/functions/awip-api/promotion_gates.ts` so it can be reused by a Deno test.
+No schema migration required — both columns are jsonb.
 
-Sister endpoint:
+### 3. Read endpoint
 
-- `POST /capabilities/:id/promote` — admin-only; re-evaluates gates server-side (never trust client), refuses if any fail or un-acked warn, then updates `capabilities.status='available'` and inserts a `capability_events` row `event_type='promoted_to_available'` with `payload={gates, ack_rationale, actor}`. Idempotent via `Idempotency-Key`.
-- `POST /capabilities/:id/ack-warnings` — admin-only; inserts `capability_events` `event_type='warnings_acknowledged'` with `payload={gate_keys, rationale}`. Subsequent gate evaluations treat those warns as acked when an `ack` event newer than the warning exists.
+New route on `awip-api` (admin-only, mirrors `promotion-status` auth pattern):
 
-### 3. Capability detail page — small banner
+- `GET /night-agent/promotion-audit?proposal_id=...` → returns:
+  ```text
+  {
+    proposal: { id, status, decided_by, decided_at, rationale, target_ref },
+    before: {
+      shift_id, opened_at, gates, skip_reasons,
+      candidates_total, candidates_selected, candidates_skipped
+    },
+    after: {
+      audit_complete: { worst_severity, qa_passed, steps },
+      observations: [...],   // 5-step trail for this job
+      decision: "accepted" | "rejected"
+    }
+  }
+  ```
+- `GET /night-agent/promotion-audit?shift_id=...` → bulk variant (one entry per accepted/rejected proposal in that shift).
 
-On `/capabilities/:id`, add a compact "Promotion status" strip (visible to all operators, not just admins) showing the top blocking reason and a link to the admin page. No new fetch — reuse the single-capability endpoint.
+Pure assembly logic in a new `supabase/functions/awip-api/promotion_audit.ts` (unit-testable, no I/O — takes the rows and shapes them).
 
-## Data model — no schema changes needed
+### 4. UI
 
-All gate state derives from existing tables. `capability_events` already accepts arbitrary `event_type` values, so `promoted_to_available` and `warnings_acknowledged` slot in without migrations. RLS already restricts `capabilities` writes (admin-only via the `awip-api` service role path).
+New page `src/pages/PromotionAudits.tsx` at `/admin/promotion-audits`:
+- Header: filter by date / shift / decision (accepted | rejected | pending).
+- Table: one row per proposal — `#short_num`, title, decision, decided_by, worst_severity chip, shift date.
+- Row click → drawer showing the report with two columns ("Before" / "After") and a candidates list with each candidate marked `selected`, `skipped (reason)`, or `promoted (the one this report is about)`.
+- Reuse `VerdictPill` for severity, existing `SectionCard` styling.
+
+Surface the same drawer from the existing `NightShifts` and `NightAgentCard` "Accept" buttons via a small "View audit" link on each accepted proposal — no duplicate UI.
+
+### 5. Tests
+
+`promotion_audit_test.ts` — feed a synthetic shift row + proposals + observations and assert the assembled report shape, including:
+- Accepted proposal yields `after.decision = "accepted"` and includes the matching `audit_complete` observation.
+- A skipped candidate appears in `before.candidates_skipped` with its reason verbatim.
+- Missing `audit_complete` (legacy shift before this change) returns `after.audit_complete = null` instead of throwing.
 
 ## Files
 
 New:
-- `src/pages/CapabilityPromotion.tsx` — page shell + admin gate
-- `src/components/promotion/PromotionTable.tsx` — table + row expand
-- `src/components/promotion/PromotionGateRow.tsx` — single-gate display + action hint
-- `src/components/promotion/PromoteDialog.tsx` — confirm + rationale capture
-- `src/components/promotion/PromotionBadge.tsx` — used on `/capabilities/:id` banner
-- `src/lib/promotion-gates-types.ts` — shared TS types (mirror of edge return)
-- `supabase/functions/awip-api/promotion_gates.ts` — pure gate evaluator
-- `supabase/functions/awip-api/promotion_gates_test.ts` — Deno tests
-- `docs/capability-promotion.md` — gate definitions + operator runbook
+- `supabase/functions/awip-api/promotion_audit.ts`
+- `supabase/functions/awip-api/promotion_audit_test.ts`
+- `src/pages/PromotionAudits.tsx`
+- `src/components/promotion/PromotionAuditDrawer.tsx`
+- `src/lib/promotion-audit-types.ts`
+- `docs/promotion-audit.md`
 
 Edited:
-- `supabase/functions/awip-api/index.ts` — three new routes
-- `src/App.tsx` — add `/admin/capability-promotion` route
-- `src/components/OperatorLayout.tsx` (or wherever the sidebar lives) — admin-only nav entry
-- `src/pages/CapabilityDetail.tsx` — embed `<PromotionBadge>`
-- `README.md` + `CHANGELOG.md` — short entry
+- `supabase/functions/night-agent/open.ts` — enrich `night_shifts.summary` and `night_proposals.payload`.
+- `supabase/functions/awip-api/index.ts` — register the new route.
+- `src/App.tsx`, `src/components/AppSidebar.tsx` — link the new page.
+- `src/pages/NightShifts.tsx`, `src/components/NightAgentCard.tsx` — "View audit" link on accepted proposals.
+- `README.md`, `CHANGELOG.md`.
 
 ## Verification
 
-1. `supabase--test_edge_functions awip-api` — gate evaluator unit tests cover each gate's pass/warn/fail.
-2. Seed one capability that fails each gate; confirm UI shows correct chip + action hint.
-3. Promote a fully-passing capability; confirm `capabilities.status` flips and a `capability_events` row appears.
-4. Try promoting a failing capability via curl with an admin JWT — must 409.
-5. Try same call with an operator-but-not-admin JWT — must 403.
-
-## Non-goals
-
-- No automated promotion (admin click only).
-- No new tables; gate state is derived.
-- No changes to `night-agent`, roadmap, or copilot.
-- No Phase-3 *project-wide* declaration — purely per-capability.
+1. Trigger `/night-agent/open` (test mode off) once; confirm `night_shifts.summary` contains `gates` + `candidates_selected`.
+2. Accept one proposal in the UI; open the audit drawer; confirm Before shows the gate snapshot and Skipped list, After shows `audit_complete` + `decision=accepted`.
+3. Reject another; confirm `decision=rejected` and the same Before snapshot is shared.
+4. Hit the endpoint with an unknown `proposal_id` → 404; without admin role → 403.
 
 ## Risks
 
-- **Resolution warning noise** — `capability_events` already has 159 `resolution_warning` rows. The gate uses "newer than last `registered`" as the cutoff so historical warnings don't block forever.
-- **`demand_present` is harsh for utility capabilities.** Mitigation: this gate emits `warn`, not `fail`; admin can ack with rationale.
-- **Idempotency.** Promote/ack endpoints reuse the existing `Idempotency-Key` pattern from other awip-api writes.
+- Legacy shifts opened before this change will have `summary.gates = null`; the report endpoint returns `before.gates = null` with a `legacy: true` flag rather than failing.
+- `night_shifts.summary` is jsonb so size is unbounded — cap `candidates_selected` / `candidates_skipped` at `MAX_JOBS_PER_SHIFT` (already enforced upstream).
