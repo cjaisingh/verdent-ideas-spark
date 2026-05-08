@@ -691,6 +691,10 @@ const AlertsCard = () => {
             className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
         </label>
         <span className="text-[10px] opacity-70">leave blank to disable</span>
+        <button onClick={sendCostTest} disabled={costTesting}
+          className="ml-auto text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
+          {costTesting ? "Sending…" : "Test cost alert"}
+        </button>
       </div>
 
       {logs.length > 0 && (
