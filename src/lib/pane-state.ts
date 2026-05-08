@@ -136,6 +136,35 @@ export function hasModeSizeOverrides(
   return !!o && (o.rightWidth != null || o.bottomHeight != null);
 }
 
+/** Clear every mode's size override for one viewport class. Also strips the
+ *  legacy `sizesByMode` map when clearing the "wide" viewport so an old
+ *  pre-viewport-aware payload doesn't keep re-applying. */
+export function clearViewportSizes(state: PaneState, viewport: ViewportClass): PaneState {
+  const byVp = state.sizesByViewportMode ?? {};
+  let nextByVp = byVp;
+  if (byVp[viewport]) {
+    nextByVp = { ...byVp };
+    delete nextByVp[viewport];
+  }
+  const nextLegacy = viewport === "wide" ? undefined : state.sizesByMode;
+  return { ...state, sizesByViewportMode: nextByVp, sizesByMode: nextLegacy };
+}
+
+/** True if any mode has a saved override for the given viewport class. */
+export function hasViewportSizeOverrides(state: PaneState, viewport: ViewportClass): boolean {
+  const forVp = state.sizesByViewportMode?.[viewport];
+  if (forVp && Object.values(forVp).some((m) => m && (m.rightWidth != null || m.bottomHeight != null))) {
+    return true;
+  }
+  if (viewport === "wide") {
+    const legacy = state.sizesByMode;
+    if (legacy && Object.values(legacy).some((m) => m && (m.rightWidth != null || m.bottomHeight != null))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function paneFlags(mode: PaneMode): { left: boolean; right: boolean; bottom: boolean } {
   switch (mode) {
     case "left":
