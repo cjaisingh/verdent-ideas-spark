@@ -8,22 +8,9 @@ import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare } from "luc
 import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
+import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
 
-type Job = {
-  id: string;
-  short_num: number;
-  subject_type: string;
-  subject_id: string;
-  discussion_id: string | null;
-  title: string;
-  details: string | null;
-  status: string;
-  priority: string;
-  owner: string | null;
-  source: string;
-  promoted_task_id: string | null;
-  created_at: string;
-};
+type Job = JobDetailsRecord;
 
 type DiscMeta = { id: string; subject_ordinal: number | null };
 type SubjMeta = { id: string; short_num: number | null };
@@ -44,6 +31,7 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -155,7 +143,11 @@ export default function Jobs() {
     const disc = j.discussion_id ? discs[j.discussion_id] : null;
     const dHandle = disc ? discussionHandle(j.subject_type, finding?.short_num, disc.subject_ordinal) : null;
     return (
-      <Card key={j.id} className="hover:shadow-sm transition">
+      <Card
+        key={j.id}
+        className="hover:shadow-sm transition cursor-pointer"
+        onClick={() => setActiveJobId(j.id)}
+      >
         <CardContent className="pt-3 pb-3 space-y-1.5">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
@@ -174,6 +166,7 @@ export default function Jobs() {
               {j.subject_type === "roadmap_finding" && (
                 <Link
                   to={`/roadmap/risks#finding-${j.subject_id}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-0.5 hover:underline"
                   title="Open subject"
                 >
@@ -182,7 +175,7 @@ export default function Jobs() {
               )}
               {!j.promoted_task_id && (
                 <button
-                  onClick={() => promote(j)}
+                  onClick={(e) => { e.stopPropagation(); promote(j); }}
                   className="inline-flex items-center gap-0.5 hover:underline"
                   title="Promote to roadmap task"
                 >
@@ -195,7 +188,7 @@ export default function Jobs() {
             {COLUMNS.map((c) => (
               <button
                 key={c.key}
-                onClick={() => cycleStatus(j, c.key)}
+                onClick={(e) => { e.stopPropagation(); cycleStatus(j, c.key); }}
                 disabled={j.status === c.key}
                 className={`text-[10px] px-1.5 py-0.5 rounded border ${
                   j.status === c.key ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
@@ -264,6 +257,26 @@ export default function Jobs() {
           ))}
         </div>
       )}
+
+      <JobDetailsDrawer
+        job={jobs.find((j) => j.id === activeJobId) ?? null}
+        subjectShortNum={
+          activeJobId
+            ? findings[jobs.find((j) => j.id === activeJobId)?.subject_id ?? ""]?.short_num ?? null
+            : null
+        }
+        discussionOrdinal={
+          activeJobId
+            ? (() => {
+                const j = jobs.find((x) => x.id === activeJobId);
+                return j?.discussion_id ? discs[j.discussion_id]?.subject_ordinal ?? null : null;
+              })()
+            : null
+        }
+        open={!!activeJobId}
+        onOpenChange={(o) => { if (!o) setActiveJobId(null); }}
+        onPromote={(j) => promote(j as Job)}
+      />
     </div>
   );
 }
