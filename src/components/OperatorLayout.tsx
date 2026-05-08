@@ -283,6 +283,13 @@ const OperatorLayout = () => {
               </TooltipProvider>
             )}
             {!isMobile && (
+              <ResizeHistoryPanel
+                entries={history}
+                onUndo={undoHistory}
+                onClear={() => setHistory([])}
+              />
+            )}
+            {!isMobile && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
