@@ -299,8 +299,8 @@ export function CopilotDiscussionSheet({
       console.error("[mic] startVoice failed", e);
       try { stream?.getTracks().forEach((t) => t.stop()); } catch {/**/}
       const detail = e?.status
-        ? `HTTP ${e.status}${e.body ? ` — ${e.body}` : ""}`
-        : e?.code
+        ? `[${e.code ?? "HTTP_" + e.status}] ${e.hint ?? e.dgBody ?? e.body ?? e.message}${e.reqId ? ` (req ${e.reqId})` : ""}`
+        : typeof e?.code === "number"
         ? `WS ${e.code}${e.reason ? `: ${e.reason}` : ""}`
         : e instanceof Error ? e.message : String(e);
       toast({ title: "Mic unavailable", description: detail, variant: "destructive" });
