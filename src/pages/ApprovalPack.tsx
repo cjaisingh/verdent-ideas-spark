@@ -27,6 +27,11 @@ export default function ApprovalPack() {
   const [checklist, setChecklist] = useState<Checklist[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(false);
+  const [orgName, setOrgName] = useState<string>(() => localStorage.getItem("awip.approvalPack.orgName") ?? "AWIP");
+
+  useEffect(() => {
+    localStorage.setItem("awip.approvalPack.orgName", orgName);
+  }, [orgName]);
 
   useEffect(() => {
     supabase.from("roadmap_phases").select("*").order("order").then(({ data }) => {
@@ -165,7 +170,14 @@ export default function ApprovalPack() {
           <h1 className="text-2xl font-bold tracking-tight">Approval pack</h1>
           <p className="text-sm text-muted-foreground">Per-phase export of tasks, checklist status, and evidence links.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            className="h-9 rounded-md border bg-background px-2 text-sm w-44"
+            value={orgName}
+            onChange={(e) => setOrgName(e.target.value)}
+            placeholder="Client / org name"
+            aria-label="Client or org name"
+          />
           <select
             className="h-9 rounded-md border bg-background px-2 text-sm"
             value={phaseId} onChange={(e) => setPhaseId(e.target.value)}
@@ -187,7 +199,56 @@ export default function ApprovalPack() {
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
         <article id="approval-pack-print" className="space-y-6 print:space-y-4 pp-doc">
-          <Card className="pp-cover">
+          {(() => {
+            const idx = phases.findIndex((p) => p.id === phase.id);
+            const position = idx >= 0 ? `${idx + 1} of ${phases.length}` : "—";
+            const rangeLabel = phases.length > 1
+              ? `${phases[0].key} → ${phases[phases.length - 1].key}`
+              : phase.key;
+            return (
+              <section className="pp-cover-page rounded-lg border p-10 print:border-0 print:p-0">
+                <div className="flex flex-col items-start justify-between min-h-[60vh] print:min-h-[24cm] gap-10">
+                  <div className="space-y-2">
+                    <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Prepared for</div>
+                    <div className="text-4xl font-bold tracking-tight">{orgName || "—"}</div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Approval Pack</div>
+                    <h2 className="text-3xl font-semibold leading-tight">{phase.key} — {phase.title}</h2>
+                    {phase.summary && <p className="text-sm text-muted-foreground max-w-2xl">{phase.summary}</p>}
+                  </div>
+                  <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-10 gap-y-3 text-sm w-full max-w-2xl">
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Generated</dt>
+                      <dd className="font-medium">{generatedAt}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Selected phase</dt>
+                      <dd className="font-medium">{phase.key} ({position})</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Phase range</dt>
+                      <dd className="font-medium">{rangeLabel}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Tasks</dt>
+                      <dd className="font-medium">{summary.tasks}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Checks</dt>
+                      <dd className="font-medium">{summary.checked}/{summary.totalChecks}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">Evidence</dt>
+                      <dd className="font-medium">{summary.evidence}</dd>
+                    </div>
+                  </dl>
+                </div>
+              </section>
+            );
+          })()}
+
+          <Card className="pp-summary pp-page-break">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-xl">{phase.key} — {phase.title}</CardTitle>
@@ -329,6 +390,13 @@ export default function ApprovalPack() {
             @bottom-left { content: var(--pp-generated, ""); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
             @bottom-right { content: "Page " counter(page) " / " counter(pages); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
           }
+          @page :first {
+            @top-left { content: ""; }
+            @top-right { content: ""; }
+            @bottom-left { content: ""; }
+            @bottom-right { content: ""; }
+          }
+          .pp-cover-page { break-after: page; page-break-after: always; min-height: 24cm; padding: 0 !important; border: 0 !important; }
           html, body { background: white !important; color: #111 !important; }
           body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           aside, nav, [data-sidebar], .print\\:hidden, [data-sonner-toaster] { display: none !important; }
