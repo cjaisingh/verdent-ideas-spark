@@ -461,3 +461,81 @@ async function smokeTest(
 
   return json({ shift_id: shift.id, ...summary });
 }
+
+// ─── /open/test (admin dry-run) ───────────────────────────────────────────
+// Read-only gate evaluation that mirrors what /open would decide RIGHT NOW.
+// Returns: schedule gates (window/blackout/allowed_kinds/enabled), candidate
+// jobs the real open would consider, and a per-job preview of which would
+// be skipped (risk=high or kind not allowed) vs proceed. Writes nothing.
+async function evaluateOpenGates(
+  sb: ReturnType<typeof createClient>,
+  settings: NightSettings,
+  url: URL,
+  actorId: string,
+) {
+  const tz = (settings?.night_timezone as string) || "UTC";
+  const winStart = (settings?.night_window_start as string) || "22:00";
+  const winEnd = (settings?.night_window_end as string) || "06:00";
+  const blackouts = Array.isArray(settings?.night_blackout_dates)
+    ? (settings!.night_blackout_dates as unknown[]).map(String) : [];
+  const allowedKinds = Array.isArray(settings?.night_allowed_kinds)
+    ? (settings!.night_allowed_kinds as unknown[]).map(String)
+    : ["general", "auth", "roadmap", "copilot", "jobs"];
+
+  const atParam = url.searchParams.get("at");
+  const at = atParam ? new Date(atParam) : new Date();
+  if (isNaN(at.getTime())) return json({ error: "invalid 'at' timestamp" }, 400);
+
+  const local = localParts(at, tz);
+  const enabled = settings?.night_agent_enabled !== false;
+  const inWin = inWindow(local.hhmm, winStart, winEnd);
+  const blackoutHit = blackouts.includes(local.date);
+
+  const skipReasons: string[] = [];
+  if (!enabled) skipReasons.push("night_agent_disabled");
+  if (blackoutHit) skipReasons.push("blackout_date");
+  if (!inWin) skipReasons.push("outside_window");
+  if (allowedKinds.length === 0) skipReasons.push("no_allowed_kinds");
+  const wouldOpenShift = skipReasons.length === 0;
+
+  const { data: candidates } = await sb
+    .from("discussion_actions")
+    .select("id, short_num, title, details, priority")
+    .eq("status", "open")
+    .eq("night_eligible", true)
+    .is("promoted_task_id", null)
+    .limit(MAX_JOBS_PER_SHIFT);
+
+  const jobPreview = (candidates ?? []).map((j: any) => {
+    const cls = classifyJob(j);
+    const { phase, suite } = inferPhaseAndSuite(j.title);
+    const reasons: string[] = [];
+    if (cls.risk === "high") reasons.push(`risk=high (${cls.reason})`);
+    if (!allowedKinds.includes(phase)) reasons.push(`kind '${phase}' not allowed`);
+    return {
+      id: j.id, short_num: j.short_num, title: j.title,
+      risk: cls.risk, phase, suite,
+      would_audit: reasons.length === 0,
+      skip_reasons: reasons,
+    };
+  });
+
+  return json({
+    test_mode: true,
+    actor_id: actorId,
+    triggered_at: at.toISOString(),
+    gates: {
+      timezone: tz, window: `${winStart}-${winEnd}`,
+      local_date: local.date, local_time: local.hhmm,
+      enabled, in_window: inWin, blackout_hit: blackoutHit,
+      allowed_kinds: allowedKinds, blackout_dates: blackouts,
+    },
+    would_open_shift: wouldOpenShift,
+    skip_reasons: skipReasons,
+    candidates_total: jobPreview.length,
+    would_audit: jobPreview.filter((j) => j.would_audit).length,
+    would_skip: jobPreview.filter((j) => !j.would_audit).length,
+    jobs: jobPreview,
+    note: "read-only · no shift, observation, or proposal was written",
+  });
+}
