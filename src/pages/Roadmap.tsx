@@ -812,6 +812,8 @@ const Roadmap = () => {
               );
             })}
           </div>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="plan" className="mt-0">
