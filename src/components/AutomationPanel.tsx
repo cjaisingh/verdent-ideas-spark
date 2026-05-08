@@ -613,6 +613,7 @@ const AlertsCard = () => {
         <Toggle k="alert_on_high_finding" label="new high-severity findings" />
         <Toggle k="alert_on_test_fail" label="test failures" />
         <Toggle k="alert_on_qa_fail" label="QA probe failures" />
+        <Toggle k="alert_on_cost" label="cost overruns" />
         <label className="inline-flex items-center gap-1 text-[11px] ml-auto">
           dedupe
           <input type="number" min={0} max={1440} value={s.dedupe_minutes}
@@ -620,6 +621,31 @@ const AlertsCard = () => {
             className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
           min
         </label>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="font-medium text-foreground">Cost thresholds (USD)</span>
+        <label className="inline-flex items-center gap-1">
+          per run &gt;
+          <input type="number" min={0} step={0.01} value={s.cost_per_run_usd ?? ""}
+            placeholder="off"
+            onChange={(e) => {
+              const v = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value));
+              patch({ cost_per_run_usd: v });
+            }}
+            className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
+        </label>
+        <label className="inline-flex items-center gap-1">
+          per day &gt;
+          <input type="number" min={0} step={0.01} value={s.cost_per_day_usd ?? ""}
+            placeholder="off"
+            onChange={(e) => {
+              const v = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value));
+              patch({ cost_per_day_usd: v });
+            }}
+            className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
+        </label>
+        <span className="text-[10px] opacity-70">leave blank to disable</span>
       </div>
 
       {logs.length > 0 && (
