@@ -156,6 +156,32 @@ export function useDashboardConfig() {
     });
   }, [update]);
 
+  }, [update]);
+
+  const duplicateTab = useCallback((tabId: string) => {
+    update((prev) => {
+      if (prev.tabs.length >= MAX_TABS) return prev;
+      const src = prev.tabs.find((t) => t.id === tabId);
+      if (!src) return prev;
+      const baseName = src.name.replace(/\s*\(copy(?: \d+)?\)$/i, "");
+      let name = `${baseName} (copy)`;
+      let n = 2;
+      while (prev.tabs.some((t) => t.name === name)) {
+        name = `${baseName} (copy ${n++})`;
+      }
+      const copy: Tab = {
+        id: shortId(),
+        name: name.slice(0, 24),
+        template: src.template,
+        widgets: src.widgets.map((w) => (w ? { ...w, id: shortId() } : null)),
+      };
+      const idx = prev.tabs.findIndex((t) => t.id === tabId);
+      const tabs = prev.tabs.slice();
+      tabs.splice(idx + 1, 0, copy);
+      return { tabs, activeTabId: copy.id };
+    });
+  }, [update]);
+
   const reorderTab = useCallback((fromId: string, toId: string) => {
     update((prev) => {
       const from = prev.tabs.findIndex((t) => t.id === fromId);
