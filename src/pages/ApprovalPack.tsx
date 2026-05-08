@@ -459,39 +459,64 @@ export default function ApprovalPack() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {cls.map((c) => {
-                                  const itemEv = evByItem(t.id, c.item_key);
-                                  const cat = catTotals[c.category || "—"];
-                                  const catPct = cat.total ? Math.round((cat.done / cat.total) * 100) : 0;
-                                  return (
-                                    <tr key={c.id} className="align-top border-t">
-                                      <td className="py-1 pr-2 font-mono text-center">{c.checked ? "[x]" : "[ ]"}</td>
-                                      <td className="py-1 pr-2 uppercase tracking-wide text-[10px] text-muted-foreground truncate">{c.category}</td>
-                                      <td className="py-1 pr-2">
-                                        <div className="break-words">{c.label}</div>
-                                        {c.note && <div className="text-muted-foreground italic break-words">{c.note}</div>}
-                                      </td>
-                                      <td className="py-1 pr-2 text-right tabular-nums">
-                                        <span className="text-muted-foreground">{cat.done}/{cat.total}</span>
-                                        <span className="ml-1 font-medium">{catPct}%</span>
-                                      </td>
-                                      <td className="py-1 pr-2 align-top">
-                                        {itemEv.length === 0 ? (
-                                          <span className="text-muted-foreground">—</span>
-                                        ) : itemEv.map((e) => (
-                                          <div key={e.id} className="break-words">
-                                            {e.url ? (
-                                              <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
-                                            ) : e.title}
-                                            {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
-                                            {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
-                                          </div>
-                                        ))}
-                                      </td>
-                                      <td className="py-1 text-muted-foreground truncate">{c.checked_by ?? "—"}</td>
-                                    </tr>
-                                  );
-                                })}
+                                {(() => {
+                                  const seenOrder: string[] = [];
+                                  const grouped = new Map<string, typeof cls>();
+                                  for (const c of cls) {
+                                    const k = c.category || "—";
+                                    if (!grouped.has(k)) { grouped.set(k, []); seenOrder.push(k); }
+                                    grouped.get(k)!.push(c);
+                                  }
+                                  const nodes: React.ReactNode[] = [];
+                                  for (const k of seenOrder) {
+                                    const items = grouped.get(k)!;
+                                    const cat = catTotals[k];
+                                    const catPct = cat.total ? Math.round((cat.done / cat.total) * 100) : 0;
+                                    for (const c of items) {
+                                      const itemEv = evByItem(t.id, c.item_key);
+                                      nodes.push(
+                                        <tr key={c.id} className="align-top border-t">
+                                          <td className="py-1 pr-2 font-mono text-center">{c.checked ? "[x]" : "[ ]"}</td>
+                                          <td className="py-1 pr-2 uppercase tracking-wide text-[10px] text-muted-foreground truncate">{c.category}</td>
+                                          <td className="py-1 pr-2">
+                                            <div className="break-words">{c.label}</div>
+                                            {c.note && <div className="text-muted-foreground italic break-words">{c.note}</div>}
+                                          </td>
+                                          <td className="py-1 pr-2 text-right tabular-nums text-muted-foreground">
+                                            {c.checked ? "✓" : ""}
+                                          </td>
+                                          <td className="py-1 pr-2 align-top">
+                                            {itemEv.length === 0 ? (
+                                              <span className="text-muted-foreground">—</span>
+                                            ) : itemEv.map((e) => (
+                                              <div key={e.id} className="break-words">
+                                                {e.url ? (
+                                                  <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
+                                                ) : e.title}
+                                                {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
+                                                {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
+                                              </div>
+                                            ))}
+                                          </td>
+                                          <td className="py-1 text-muted-foreground truncate">{c.checked_by ?? "—"}</td>
+                                        </tr>,
+                                      );
+                                    }
+                                    nodes.push(
+                                      <tr key={`sub-${k}`} className="pp-subtotal border-t bg-muted/40 text-[11px]">
+                                        <td className="py-1 pr-2" />
+                                        <td className="py-1 pr-2 uppercase tracking-wide text-[10px] font-semibold">{k} subtotal</td>
+                                        <td className="py-1 pr-2 text-muted-foreground">{cat.done} of {cat.total} complete</td>
+                                        <td className="py-1 pr-2 text-right tabular-nums font-semibold">
+                                          <span className="text-muted-foreground">{cat.done}/{cat.total}</span>
+                                          <span className="ml-1">{catPct}%</span>
+                                        </td>
+                                        <td className="py-1 pr-2" colSpan={2} />
+                                      </tr>,
+                                    );
+                                  }
+                                  return nodes;
+                                })()}
                               </tbody>
                               <tfoot>
                                 <tr className="border-t font-medium">
