@@ -1425,7 +1425,7 @@ const DailyAiSpendCard = () => {
                       <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(key) }} />
                     </td>
                     <td className="py-1 pr-2 font-mono truncate max-w-[280px]">{key}</td>
-                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd6(cost)}</td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtMetric(cost)}</td>
                     <td className="py-1 pr-2 text-right text-muted-foreground">
                       {total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : "–"}
                     </td>
