@@ -1160,7 +1160,10 @@ const DailyAiSpendCard = () => {
     Object.values(matrix[d]).reduce((a, b) => a + b, 0));
   const dailyCostTotals = dayKeys.map((d) =>
     Object.values(costMatrix[d]).reduce((a, b) => a + b, 0));
-  const maxDay = Math.max(0.0001, ...dailyTotals);
+  const dataMax = Math.max(0, ...dailyTotals);
+  const maxDay = dataMax > 0
+    ? dataMax
+    : (metric === "spend" && globalLimits.day != null ? globalLimits.day : 1);
 
   // top breakdown for whichever grouping is active (in selected metric)
   const breakdown: Array<{ key: string; cost: number }> = groups
@@ -1326,10 +1329,6 @@ const DailyAiSpendCard = () => {
 
       {loading ? (
         <div className="text-xs text-muted-foreground">Loading…</div>
-      ) : rows.length === 0 ? (
-        <div className="text-xs text-muted-foreground">
-          No ai_usage_log entries between {format(range.from, "MMM dd")} and {format(range.to, "MMM dd")}.
-        </div>
       ) : (
         <>
           {capped && (
@@ -1412,28 +1411,36 @@ const DailyAiSpendCard = () => {
             </div>
           )}
 
-          {/* Legend / breakdown table */}
-          <div className="space-y-1">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Breakdown by {groupBy} · {metricLabel}
+          {rows.length === 0 && (
+            <div className="text-xs text-muted-foreground">
+              No ai_usage_log entries between {format(range.from, "MMM dd")} and {format(range.to, "MMM dd")}.
             </div>
-            <table className="w-full text-xs">
-              <tbody>
-                {breakdown.map(({ key, cost }) => (
-                  <tr key={key} className="border-t border-border/50">
-                    <td className="py-1 pr-2 w-3">
-                      <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(key) }} />
-                    </td>
-                    <td className="py-1 pr-2 font-mono truncate max-w-[280px]">{key}</td>
-                    <td className="py-1 pr-2 font-mono text-right">{fmtMetric(cost)}</td>
-                    <td className="py-1 pr-2 text-right text-muted-foreground">
-                      {total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : "–"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          )}
+
+          {/* Legend / breakdown table */}
+          {breakdown.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Breakdown by {groupBy} · {metricLabel}
+              </div>
+              <table className="w-full text-xs">
+                <tbody>
+                  {breakdown.map(({ key, cost }) => (
+                    <tr key={key} className="border-t border-border/50">
+                      <td className="py-1 pr-2 w-3">
+                        <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(key) }} />
+                      </td>
+                      <td className="py-1 pr-2 font-mono truncate max-w-[280px]">{key}</td>
+                      <td className="py-1 pr-2 font-mono text-right">{fmtMetric(cost)}</td>
+                      <td className="py-1 pr-2 text-right text-muted-foreground">
+                        {total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : "–"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
       <SpendDrillDialog
