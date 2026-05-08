@@ -7,6 +7,7 @@ import { ListChecks, Plus, Sparkles, Check, X, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle } from "@/lib/discussionHandles";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
+import { ProposalReviewSheet, type Proposal as ReviewProposal } from "./ProposalReviewSheet";
 
 type Action = {
   id: string;
