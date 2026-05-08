@@ -268,12 +268,36 @@ export default function Jobs() {
       ) : (
         <div className="grid gap-3 md:grid-cols-3">
           {COLUMNS.map((c) => (
-            <div key={c.key} className="space-y-2">
+            <div
+              key={c.key}
+              className={`space-y-2 rounded-md transition-colors ${
+                dragOverCol === c.key ? "bg-primary/5 ring-2 ring-primary/40" : ""
+              }`}
+              onDragOver={(e) => {
+                if (!draggingId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragOverCol !== c.key) setDragOverCol(c.key);
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverCol === c.key) setDragOverCol(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/plain") || draggingId;
+                setDragOverCol(null);
+                setDraggingId(null);
+                if (!id) return;
+                const job = jobs.find((x) => x.id === id);
+                if (job && job.status !== c.key) cycleStatus(job, c.key);
+              }}
+            >
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground px-1">
                 <span>{c.label}</span>
                 <Badge variant="outline" className="text-[10px]">{grouped[c.key]?.length ?? 0}</Badge>
               </div>
-              <div className="space-y-2 min-h-[60px]">
+              <div className="space-y-2 min-h-[120px] p-1">
                 {(grouped[c.key] ?? []).map(renderCard)}
               </div>
             </div>
