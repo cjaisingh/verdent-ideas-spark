@@ -1,54 +1,62 @@
 ## Goal
-Replace the fixed 7/14/30-day toggle on the Daily AI spend card with a flexible date range picker, so any start/end date pair can be queried.
+Surface threshold breaches directly on the Daily AI spend chart so operators can see at a glance which days/jobs exceeded the configured cost limits.
 
 ## Scope
-Frontend only — `src/components/AutomationPanel.tsx`, `DailyAiSpendCard`. No schema, RLS, or edge function changes. The drill-down dialog continues to use the in-memory `rows` and works unchanged.
+Frontend only — `src/components/AutomationPanel.tsx`, inside `DailyAiSpendCard` and its drill-down. No schema changes; the thresholds already exist:
+- `alert_settings.cost_per_day_usd` — global daily ceiling.
+- `alert_cost_thresholds.cost_per_day_usd` / `cost_per_run_usd` per `job` (with `alert_on_cost` flag).
 
-## UX
-- Replace the `[7d | 14d | 30d]` segmented control with:
-  - A **range Popover trigger** button: `Aug 01 → Aug 14 (14d)`. Icon: `CalendarIcon` from lucide.
-  - Inside the popover: shadcn `Calendar` with `mode="range"` (`pointer-events-auto`), constrained `disabled={d => d > today || d < oneYearAgo}`.
-  - Quick presets row above the calendar: **7d · 14d · 30d · 90d · This month · Last month**. Clicking a preset sets the range and closes the popover.
-  - Footer: **Apply** + **Cancel**. Apply only enabled when both `from` and `to` are set.
-- Selected range is shown as button label and persists per-session in `localStorage` key `awip.spend.range` (`{ from, to }` ISO strings).
-- The "by job / by model" toggle stays as-is, to its right.
-- The four summary chips keep working; "Avg / day" divides by `(to - from + 1)` days instead of the old fixed `days`.
+## Data
+- On mount, fetch in parallel with the existing usage query:
+  - `alert_settings` (single row) → `globalDailyLimit`, `globalPerRunLimit` (uses `cost_per_run_usd`).
+  - `alert_cost_thresholds` (all rows where `alert_on_cost = true`) → map `{ job → { day, run } }`.
+- Subscribe via realtime to both tables so edits in the existing Cost thresholds UI live-update the chart.
 
-## Data flow
-- Replace `days` state with `range: { from: Date; to: Date }` (default = last 14d, ending today UTC).
-- The query becomes:
-  ```ts
-  .gte("created_at", startOfUtcDay(range.from).toISOString())
-  .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
-  ```
-  i.e. inclusive of both day buckets.
-- `dayKeys` is built by walking `range.from → range.to` UTC inclusive.
-- Row cap stays at 5,000. If the response hits 5,000 we surface a small inline warning: `"Showing first 5,000 rows for this range — narrow the dates for full totals."` (detected when `data.length === 5000`).
-- Realtime subscription on `ai_usage_log` INSERT remains and triggers `load()` (which respects the current range).
+## Visual treatment
+
+### 1. Daily total breach (global `cost_per_day_usd`)
+- Draw a dashed horizontal **threshold line** across the chart at the value (positioned by `value / maxDay` height). Color: `hsl(var(--destructive))`. Right-edge label: `daily limit $X.XX`.
+- For any day whose total > limit, tint that bar's background container with `bg-destructive/10` and add a `ring-1 ring-destructive/40`. Tooltip appends: `⚠ over daily limit by $Y`.
+
+### 2. Per-job breach (per-job `cost_per_day_usd`)
+- When `groupBy === "job"`: for each (day, job) cell whose cost > job threshold, overlay a thin `outline-1 outline-destructive` ring on the segment and prepend `⚠` to the segment tooltip line.
+- When `groupBy === "model"`: per-job thresholds aren't directly applicable; show a small note under the chart: `Switch to "by job" to see per-job threshold breaches.` (Only when any job threshold exists.)
+
+### 3. Per-run breach (per-run cost)
+- Surfaced inside the **drill-down dialog** only (not the bar chart): rows whose `cost_usd > effectivePerRunLimit(job)` get a `bg-destructive/5` row tint and a `⚠ over per-run limit ($Z)` chip in the Cost cell. `effectivePerRunLimit` = job-specific override if set, else global.
+
+### 4. Breach summary chip (header)
+- Add a 5th compact chip in the summary grid (adjusts to `sm:grid-cols-5`): **Breaches** showing `Nday · Mjob · Krun` counts within the current range. Clicking it opens the drill-down dialog filtered to all breaching rows for the range (new drill state shape `{ day: string | "*"; groupKey: string | null; breachOnly?: boolean }`).
+
+### 5. Legend / threshold badge
+- Below the chart, add a tiny inline legend: `— daily limit $X.XX  ·  ⚠ = job breach`. Hidden when no thresholds are configured.
 
 ## Implementation outline
-1. Add imports: `Calendar`, `Popover/PopoverTrigger/PopoverContent`, `Button`, `CalendarIcon`, `format` from `date-fns` (already a dependency).
-2. New helpers (top of file or local): `startOfUtcDay(d)`, `endExclusiveUtcDay(d)`, `utcDayKey(d) → "YYYY-MM-DD"`, `daysBetweenInclusive(a,b)`, `enumerateUtcDays(from,to)`.
-3. Refactor `DailyAiSpendCard`:
-   - State: `range`, draft `pendingRange` while popover open, `popoverOpen`.
-   - `dayKeys = enumerateUtcDays(range.from, range.to)`.
-   - Replace fixed `days` math with `daysSpan = dayKeys.length`.
-   - Persist/restore `range` from `localStorage` on mount.
-4. New small subcomponent `<SpendRangePicker value pendingValue onApply onCancel presets />` rendered inside the popover. Presets implemented as plain buttons calling `onApply(preset)` directly.
-5. Empty/loading text uses the formatted range, not "last N days".
-6. Bar widths: when range is large (e.g. 90d), bar gap shrinks (`gap-0.5`) and day labels switch to every-7th tick to avoid clutter. Threshold: `daysSpan > 31 → sparse labels`.
+1. New state in `DailyAiSpendCard`:
+   ```ts
+   const [globalLimits, setGlobalLimits] = useState<{ day: number | null; run: number | null }>({ day: null, run: null });
+   const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
+   ```
+2. New `useEffect` (no deps) loads both tables and subscribes to `postgres_changes` on `alert_settings` and `alert_cost_thresholds`.
+3. Compute derived sets once per render:
+   - `dayBreaches: Set<string>` of dayKeys where `dailyTotals[i] > globalLimits.day`.
+   - `cellBreaches: Set<"day|job">` for per-job daily breaches.
+   - `runBreachOf(row)` helper for the drill-down.
+4. Render threshold line as an absolutely-positioned `<div>` inside a `relative` wrapper around the bar row. Height: `100% - 12px` (account for label row); `bottom: <pct>%`.
+5. Apply tints/rings using semantic destructive tokens — no hex colors.
+6. Extend `SpendDrillDialog` to accept `globalLimits`, `jobLimits`, and an optional `breachOnly` filter; filter rows accordingly when set; render the per-row chip + tint.
+7. Header chip click sets `drill = { day: "*", groupKey: null, breachOnly: true }`. Update the dialog's filtering logic to treat `day === "*"` as "any day in current range" and `breachOnly` to keep only rows that hit per-run / per-day breaches.
 
 ## Out of scope
-- No comparison range / overlay (current vs previous period).
-- No timezone selector — stays UTC to match the rest of the panel.
-- No URL query-string sync (localStorage only).
-- No CSV export.
+- Editing thresholds inline (already lives elsewhere in the app).
+- Email/webhook alerts (already handled server-side).
+- Forecasting future breaches.
+- Hourly granularity.
 
 ## Validation
-- Pick a 3-day range with known activity → totals match a `SELECT sum(cost_usd)` over the same window.
-- Pick "This month" on the 1st of the month → renders a single-day bar with no NaN.
-- Pick a 90-day range → labels render sparsely, chart doesn't overflow.
-- Pick a future-end / inverted range → Apply disabled (calendar prevents future, range mode prevents inverted).
-- Click a bar segment → drill-down dialog still shows the right rows for that day×group.
-- Reload page → the previously selected range is restored from localStorage.
-- Hit a 5,000-row range (e.g. last 90d on a heavy account) → warning chip appears.
+- Set `alert_settings.cost_per_day_usd = 0.05` and confirm a dashed line appears, breaching bars get red tint, and header shows correct day count.
+- Set a `alert_cost_thresholds` row for `scheduled-code-review` with a tiny `cost_per_day_usd`; switch to `by job` and confirm the matching segment gets a destructive outline.
+- Switch to `by model` → see the helper note, no segment outlines.
+- Click the Breaches chip → dialog opens with only breaching rows; verify per-run chip + row tint.
+- Edit a threshold elsewhere in the UI → chart updates without reload (realtime).
+- Clear all thresholds → line, tints, legend, and chip disappear cleanly.
