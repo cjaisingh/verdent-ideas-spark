@@ -5,6 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Settings } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { InlineEdit } from "@/components/InlineEdit";
 import { TurnTracker } from "@/components/TurnTracker";
@@ -297,10 +301,10 @@ const Roadmap = () => {
   }, [phases, sprintsByPhase, tasksBySprint]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="mx-auto w-full max-w-7xl px-4 py-4 space-y-4">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Roadmap</h1>
+          <h1 className="text-xl font-semibold">Roadmap</h1>
           <p className="text-sm text-muted-foreground">
             Phases, sprints, tasks. Click a checkbox to cycle status. Click any text to edit.
           </p>
@@ -312,26 +316,31 @@ const Roadmap = () => {
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <AutoLogSettings />
           <WorkLogPulse />
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           {nextUp && (
             <button
               onClick={() => setSelectedTaskId(nextUp.task.id)}
-              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-3 py-2 transition"
+              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-2.5 py-1.5 transition max-w-[220px]"
+              title={`${nextUp.task.title} · ${nextUp.phase.key} · ${nextUp.sprint.key}`}
             >
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Next up</div>
-              <div className="text-sm font-medium">{nextUp.task.title}</div>
-              <div className="text-xs text-muted-foreground font-mono">{nextUp.phase.key} · {nextUp.sprint.key}</div>
+              <div className="text-xs font-medium truncate">{nextUp.task.title}</div>
             </button>
           )}
         </div>
       </div>
 
-      <DailyPlanCard />
-      <AutomationPanel />
+      <Tabs defaultValue="roadmap" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+          <TabsTrigger value="plan">Daily plan</TabsTrigger>
+          <TabsTrigger value="automation">Automation</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-12 gap-4">
+        <TabsContent value="roadmap" className="mt-0">
+          <div className="grid grid-cols-12 gap-4">
         {/* TREE */}
         <div className="col-span-5 border border-border rounded-md p-2 max-h-[75vh] overflow-auto">
           {phases.map((phase) => {
@@ -606,26 +615,42 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
-                                    {/* Approval */}
-                                    <div className="border-t border-border pt-2">
-                                      <TaskApprovalPanel
-                                        taskId={task.id}
-                                        reviewStatus={(task.review_status ?? "pending") as "pending" | "approved" | "rejected" | "changes_requested"}
-                                        reviewedBy={task.reviewed_by ?? null}
-                                        reviewedAt={task.reviewed_at ?? null}
-                                        reviewNotes={task.review_notes ?? null}
-                                      />
-                                    </div>
-
-                                    {/* Review checklist */}
-                                    <div className="border-t border-border pt-2">
-                                      <ReviewChecklistEditor taskId={task.id} />
-                                    </div>
-
-                                    {/* Research evidence */}
-                                    <div className="border-t border-border pt-2">
-                                      <EvidencePanel taskId={task.id} />
-                                    </div>
+                                    <Accordion
+                                      type="multiple"
+                                      defaultValue={["approval"]}
+                                      className="border-t border-border"
+                                    >
+                                      <AccordionItem value="approval" className="border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Approval
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <TaskApprovalPanel
+                                            taskId={task.id}
+                                            reviewStatus={(task.review_status ?? "pending") as "pending" | "approved" | "rejected" | "changes_requested"}
+                                            reviewedBy={task.reviewed_by ?? null}
+                                            reviewedAt={task.reviewed_at ?? null}
+                                            reviewNotes={task.review_notes ?? null}
+                                          />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                      <AccordionItem value="checklist" className="border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Review checklist
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <ReviewChecklistEditor taskId={task.id} />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                      <AccordionItem value="evidence" className="border-b-0 border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Research evidence
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <EvidencePanel taskId={task.id} />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                    </Accordion>
                                     {(() => {
                                       const acts = activityByTask.get(task.id) ?? [];
                                       if (acts.length === 0) return null;
@@ -787,8 +812,41 @@ const Roadmap = () => {
               );
             })}
           </div>
-        </div>
-      </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="plan" className="mt-0">
+          <DailyPlanCard />
+        </TabsContent>
+
+        <TabsContent value="automation" className="mt-0 space-y-4">
+          <div className="flex justify-end">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  <Settings className="h-3.5 w-3.5 mr-1.5" />
+                  Auto-log settings
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[480px] sm:max-w-[480px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Auto-log settings</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4">
+                  <AutoLogSettings />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+          <AutomationPanel />
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-0 space-y-4">
+          <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
+          <WorkLogPulse />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
