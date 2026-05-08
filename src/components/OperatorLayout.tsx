@@ -15,8 +15,7 @@ import { PaneToggleGroup } from "@/components/PaneToggleGroup";
 import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { Monitor, RefreshCw, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
-import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
+import { PaneSlot } from "@/components/panes/PaneSlot";
 import { useViewport } from "@/hooks/use-viewport";
 import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
 import { PaneKeyboardHelp } from "@/components/PaneKeyboardHelp";
@@ -351,6 +350,7 @@ const OperatorLayout = () => {
                           lastNonCentre: "left",
                           sizesByMode: undefined,
                           sizesByViewportMode: {},
+                          sourcesByViewportSlot: {},
                         });
                         toast.success("Layout reset", {
                           description: "Pane mode and all saved sizes restored to defaults for this route.",
@@ -456,7 +456,7 @@ const OperatorLayout = () => {
                               B {sizes.bottomHeight}%
                             </span>
                           )}
-                          <BottomPaneEventTicker />
+                          <PaneSlot slot="bottom" viewport={viewport} />
                         </div>
                       </ResizablePanel>
                     </>
@@ -499,7 +499,7 @@ const OperatorLayout = () => {
                           R {sizes.rightWidth}%
                         </span>
                       )}
-                      <RightPaneNightAgent />
+                      <PaneSlot slot="right" viewport={viewport} />
                     </div>
                   </ResizablePanel>
                 </>

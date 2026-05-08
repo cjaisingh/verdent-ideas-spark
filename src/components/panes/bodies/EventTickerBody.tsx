@@ -25,9 +25,9 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 const SOURCE_COLOR: Record<Source, string> = {
-  okr: "bg-blue-500/15 text-blue-500",
-  capability: "bg-violet-500/15 text-violet-500",
-  discussion: "bg-amber-500/15 text-amber-600",
+  okr: "bg-tint-okr/15 text-tint-okr",
+  capability: "bg-tint-capability/15 text-tint-capability",
+  discussion: "bg-tint-discussion/15 text-tint-discussion",
 };
 
 function fmtTime(iso: string): string {
@@ -50,7 +50,7 @@ function hrefFor(source: Source, row: Record<string, unknown>): string {
   return "/events";
 }
 
-export function BottomPaneEventTicker() {
+export function EventTickerBody() {
   const [tab, setTab] = useState<TabKey>("all");
   const [rows, setRows] = useState<TickerRow[]>([]);
   const [paused, setPaused] = useState(false);
@@ -114,7 +114,7 @@ export function BottomPaneEventTicker() {
 
     const sub = (table: string, source: Source) =>
       supabase
-        .channel(`ticker-${table}`)
+        .channel(`pane-ticker-${table}`)
         .on("postgres_changes", { event: "INSERT", schema: "public", table }, (payload) => {
           const r = payload.new as Record<string, unknown>;
           append({
@@ -143,8 +143,8 @@ export function BottomPaneEventTicker() {
   const filtered = tab === "all" ? rows : rows.filter((r) => r.source === tab);
 
   return (
-    <section className="h-full flex flex-col bg-background border-t border-border">
-      <header className="h-9 px-3 flex items-center gap-2 border-b border-border shrink-0">
+    <div className="h-full flex flex-col">
+      <div className="h-8 px-3 flex items-center gap-2 border-b border-border shrink-0">
         <div className="inline-flex items-center gap-0.5 rounded-md bg-muted/40 p-0.5">
           {TABS.map((t) => (
             <button
@@ -169,7 +169,7 @@ export function BottomPaneEventTicker() {
           {paused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
           {paused ? "Resume" : "Pause"}
         </button>
-      </header>
+      </div>
       <div className="flex-1 overflow-y-auto font-mono text-[11px]">
         {filtered.length === 0 ? (
           <div className="p-3 text-muted-foreground">No events yet.</div>
@@ -199,6 +199,6 @@ export function BottomPaneEventTicker() {
           </ul>
         )}
       </div>
-    </section>
+    </div>
   );
 }

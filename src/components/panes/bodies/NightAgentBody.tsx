@@ -23,28 +23,17 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-function isInNightWindow(now = new Date()): boolean {
-  const h = now.getUTCHours();
-  return h >= 22 || h < 6;
-}
-
 const SEV_COLOR: Record<string, string> = {
   info: "bg-muted text-muted-foreground",
-  low: "bg-blue-500/15 text-blue-500",
-  med: "bg-amber-500/15 text-amber-600",
-  high: "bg-red-500/15 text-red-500",
-  critical: "bg-red-600/20 text-red-600",
+  low: "bg-tint-discussion/15 text-tint-discussion",
+  med: "bg-tint-approval/15 text-tint-approval",
+  high: "bg-tint-risk/15 text-tint-risk",
+  critical: "bg-tint-risk/25 text-tint-risk",
 };
 
-export function RightPaneNightAgent() {
+export function NightAgentBody() {
   const [rows, setRows] = useState<Observation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [windowOpen, setWindowOpen] = useState(isInNightWindow());
-
-  useEffect(() => {
-    const t = setInterval(() => setWindowOpen(isInNightWindow()), 60_000);
-    return () => clearInterval(t);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -60,7 +49,7 @@ export function RightPaneNightAgent() {
     })();
 
     const channel = supabase
-      .channel("right-pane-night-observations")
+      .channel("pane-night-observations")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "night_observations" },
@@ -80,15 +69,12 @@ export function RightPaneNightAgent() {
   const content = useMemo(() => {
     if (loading) return <div className="p-3 text-xs text-muted-foreground">Loading…</div>;
     if (rows.length === 0)
-      return <div className="p-3 text-xs text-muted-foreground">No observations yet tonight.</div>;
+      return <div className="p-3 text-xs text-muted-foreground">No observations yet.</div>;
     return (
       <ul className="divide-y divide-border">
         {rows.map((r) => (
           <li key={r.id}>
-            <Link
-              to="/night"
-              className="block px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
-            >
+            <Link to="/night" className="block px-3 py-2 text-xs hover:bg-muted/50 transition-colors">
               <div className="flex items-center gap-2 mb-1">
                 <span
                   className={cn(
@@ -109,22 +95,5 @@ export function RightPaneNightAgent() {
     );
   }, [rows, loading]);
 
-  return (
-    <aside className="h-full flex flex-col bg-background border-l border-border">
-      <header className="h-9 px-3 flex items-center gap-2 border-b border-border shrink-0">
-        <span
-          className={cn(
-            "h-2 w-2 rounded-full",
-            windowOpen ? "bg-emerald-500" : "bg-muted-foreground/40",
-          )}
-          title={windowOpen ? "Night window open (22:00–06:00 UTC)" : "Outside night window"}
-        />
-        <h2 className="text-xs font-semibold">Night Agent</h2>
-        <Link to="/night" className="ml-auto text-[10px] text-muted-foreground hover:text-foreground">
-          Open →
-        </Link>
-      </header>
-      <div className="flex-1 overflow-y-auto">{content}</div>
-    </aside>
-  );
+  return <div className="h-full overflow-y-auto">{content}</div>;
 }
