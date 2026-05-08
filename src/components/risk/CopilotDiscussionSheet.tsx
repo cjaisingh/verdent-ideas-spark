@@ -368,6 +368,11 @@ export function CopilotDiscussionSheet({
         </SheetHeader>
 
         <div ref={scrollerRef} className="flex-1 overflow-y-auto space-y-3 py-3 pr-1">
+          <DiscussionHistory
+            subjectType="roadmap_finding"
+            subjectId={findingId}
+            excludeDiscussionId={discussionId}
+          />
           {transcript.length === 0 && !streaming && (
             <p className="text-xs text-muted-foreground">No messages yet. Type or hit the mic to start.</p>
           )}
