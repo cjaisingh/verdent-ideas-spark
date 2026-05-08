@@ -32,6 +32,8 @@ export default function Jobs() {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
