@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { NightAgentCard } from "@/components/NightAgentCard";
+import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 
 type Finding = {
   id: string; created_at: string; severity: string; category: string | null;
@@ -242,6 +243,7 @@ export const AutomationPanel = () => {
   return (
     <div className="space-y-3">
     <AlertsCard />
+    <NightAgentScheduleCard />
     <NightAgentCard />
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
       {/* Code review */}

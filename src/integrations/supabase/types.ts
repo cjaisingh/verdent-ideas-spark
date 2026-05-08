@@ -1125,18 +1125,33 @@ export type Database = {
           auto_purge_enabled: boolean
           id: boolean
           night_agent_enabled: boolean
+          night_allowed_kinds: Json
+          night_blackout_dates: Json
+          night_timezone: string
+          night_window_end: string
+          night_window_start: string
           updated_at: string
         }
         Insert: {
           auto_purge_enabled?: boolean
           id?: boolean
           night_agent_enabled?: boolean
+          night_allowed_kinds?: Json
+          night_blackout_dates?: Json
+          night_timezone?: string
+          night_window_end?: string
+          night_window_start?: string
           updated_at?: string
         }
         Update: {
           auto_purge_enabled?: boolean
           id?: boolean
           night_agent_enabled?: boolean
+          night_allowed_kinds?: Json
+          night_blackout_dates?: Json
+          night_timezone?: string
+          night_window_end?: string
+          night_window_start?: string
           updated_at?: string
         }
         Relationships: []
