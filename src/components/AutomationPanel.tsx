@@ -515,6 +515,7 @@ const AlertsCard = () => {
   const [draftUrl, setDraftUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [costTesting, setCostTesting] = useState(false);
 
   const load = async () => {
     const [{ data: settings }, { data: log }] = await Promise.all([
