@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
     const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
     if (claimsErr || !claims?.claims?.sub) return json({ error: "unauthorized" }, 401);
     const userId = claims.claims.sub as string;
+    const userEmail = (claims.claims as any).email as string | undefined;
     const { data: isAdmin } = await sb.rpc("has_role", { _user_id: userId, _role: "admin" });
     if (!isAdmin) return json({ error: "forbidden: admin role required" }, 403);
 
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
       .from("memory_settings")
       .select("night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds")
       .eq("id", true).maybeSingle();
-    return await evaluateOpenGates(sb, settings ?? null, url, userId);
+    return await evaluateOpenGates(sb, settings ?? null, url, userId, userEmail, req);
   }
 
   const { data: settings } = await sb
@@ -472,6 +473,8 @@ async function evaluateOpenGates(
   settings: NightSettings,
   url: URL,
   actorId: string,
+  actorEmail?: string,
+  req?: Request,
 ) {
   const tz = (settings?.night_timezone as string) || "UTC";
   const winStart = (settings?.night_window_start as string) || "22:00";
@@ -520,7 +523,7 @@ async function evaluateOpenGates(
     };
   });
 
-  return json({
+  const result = {
     test_mode: true,
     actor_id: actorId,
     triggered_at: at.toISOString(),
@@ -537,5 +540,32 @@ async function evaluateOpenGates(
     would_skip: jobPreview.filter((j) => !j.would_audit).length,
     jobs: jobPreview,
     note: "read-only · no shift, observation, or proposal was written",
+  };
+
+  // Audit trail: record every admin gate-verification call (service-role
+  // insert bypasses the operator-only RLS policy on memory_audit_log).
+  const userAgent = req?.headers.get("user-agent") ?? null;
+  const { error: auditErr } = await sb.from("memory_audit_log").insert({
+    scope: "night_agent_test",
+    entry_key: at.toISOString(),
+    action: wouldOpenShift ? "verified_would_run" : "verified_would_skip",
+    actor: actorEmail ?? actorId,
+    new_value: {
+      actor_id: actorId,
+      actor_email: actorEmail ?? null,
+      at_override: url.searchParams.get("at"),
+      gates: result.gates,
+      would_open_shift: wouldOpenShift,
+      skip_reasons: skipReasons,
+      candidates_total: result.candidates_total,
+      would_audit: result.would_audit,
+      would_skip: result.would_skip,
+      user_agent: userAgent,
+    },
+    note: `admin gate verification via /night-agent/open?test=1`,
   });
+  if (auditErr) console.error("night-agent test audit insert failed", auditErr);
+
+  return json(result);
+}
 }
