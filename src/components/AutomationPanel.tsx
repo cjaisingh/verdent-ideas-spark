@@ -1500,6 +1500,7 @@ const SpendDrillDialog = ({
         <DialogHeader>
           <DialogTitle className="text-sm font-mono">
             {drill?.day === "*" ? "All days" : drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            <span className="ml-2 text-muted-foreground">· viewing {metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens"}</span>
             {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
