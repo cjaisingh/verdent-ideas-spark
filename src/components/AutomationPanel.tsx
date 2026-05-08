@@ -1021,6 +1021,7 @@ const DailyAiSpendCard = () => {
   const [days, setDays] = useState<7 | 14 | 30>(14);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
+  const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1029,7 +1030,7 @@ const DailyAiSpendCard = () => {
       const since = new Date(Date.now() - days * 86_400_000).toISOString();
       const { data, error } = await supabase
         .from("ai_usage_log")
-        .select("created_at, job, model, cost_usd, prompt_tokens, completion_tokens")
+        .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(5000);
