@@ -102,6 +102,22 @@ export default function ApprovalPack() {
 
   const phase = phases.find((p) => p.id === phaseId);
 
+  const phaseRange = useMemo(() => {
+    const from = phases.find((p) => p.id === rangeFromId);
+    const to = phases.find((p) => p.id === rangeToId);
+    if (!from || !to) return { lo: 0, hi: Number.MAX_SAFE_INTEGER, fromKey: "", toKey: "" };
+    const lo = Math.min(from.order, to.order);
+    const hi = Math.max(from.order, to.order);
+    const fromKey = from.order <= to.order ? from.key : to.key;
+    const toKey = from.order <= to.order ? to.key : from.key;
+    return { lo, hi, fromKey, toKey };
+  }, [phases, rangeFromId, rangeToId]);
+
+  const phasesInRange = useMemo(
+    () => phases.filter((p) => p.order >= phaseRange.lo && p.order <= phaseRange.hi),
+    [phases, phaseRange],
+  );
+
   const summary = useMemo(() => {
     const byStatus = tasks.reduce<Record<string, number>>((acc, t) => {
       acc[t.review_status] = (acc[t.review_status] ?? 0) + 1; return acc;
