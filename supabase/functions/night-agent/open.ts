@@ -61,7 +61,13 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     window_start: windowStart.toISOString(),
     window_end: windowEnd.toISOString(),
     status: "running",
-    summary: { tz, window: `${winStart}-${winEnd}`, allowed_kinds: allowedKinds },
+    summary: {
+      tz,
+      window: `${winStart}-${winEnd}`,
+      allowed_kinds: allowedKinds,
+      gates: gatesSnapshot,
+      skip_reasons: [],
+    },
   }).select("id").single();
   if (shiftErr || !shift) return json({ error: "shift_create_failed", detail: shiftErr?.message }, 500);
   const shiftId = shift.id as string;
