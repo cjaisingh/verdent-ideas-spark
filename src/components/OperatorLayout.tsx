@@ -125,7 +125,7 @@ const OperatorLayout = () => {
                 Resizing panels… switching locked
               </span>
             )}
-            {!isMobile && (flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode) && (
+            {!isMobile && (flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode, viewport) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -133,7 +133,7 @@ const OperatorLayout = () => {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => setPaneState(clearModeSizes(paneState, effectiveMode))}
+                      onClick={() => setPaneState(clearModeSizes(paneState, effectiveMode, viewport))}
                       aria-label="Reset pane sizes"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
@@ -156,13 +156,13 @@ const OperatorLayout = () => {
                       <span className="text-foreground">{effectiveMode}</span>
                       {flags.right && <span>R {sizes.rightWidth}%</span>}
                       {flags.bottom && <span>B {sizes.bottomHeight}%</span>}
-                      {hasModeSizeOverrides(paneState, effectiveMode) && (
+                      {hasModeSizeOverrides(paneState, effectiveMode, viewport) && (
                         <span className="text-amber-500" title="Custom sizes saved">●</span>
                       )}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
-                    Layout stored for this route ({hasModeSizeOverrides(paneState, effectiveMode) ? "custom sizes" : "default sizes"})
+                    Layout stored for this route ({hasModeSizeOverrides(paneState, effectiveMode, viewport) ? "custom sizes" : "default sizes"})
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -175,13 +175,13 @@ const OperatorLayout = () => {
           </header>
           <div className="flex-1 min-h-0">
             <ResizablePanelGroup
-              key={`h-${effectiveMode}`}
+              key={`h-${viewport}-${effectiveMode}`}
               direction="horizontal"
               className="h-full"
             >
               <ResizablePanel defaultSize={flags.right ? 100 - sizes.rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
-                  key={`v-${effectiveMode}`}
+                  key={`v-${viewport}-${effectiveMode}`}
                   direction="vertical"
                   className="h-full"
                 >
@@ -204,7 +204,7 @@ const OperatorLayout = () => {
                         minSize={bounds.bottom.min}
                         maxSize={bounds.bottom.max}
                         onResize={(size) =>
-                          setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }))
+                          setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }, viewport))
                         }
                       >
                         <BottomPaneEventTicker />
@@ -225,7 +225,7 @@ const OperatorLayout = () => {
                     minSize={bounds.right.min}
                     maxSize={bounds.right.max}
                     onResize={(size) =>
-                      setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }))
+                      setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }, viewport))
                     }
                   >
                     <RightPaneNightAgent />

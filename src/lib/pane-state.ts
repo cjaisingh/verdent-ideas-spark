@@ -8,8 +8,14 @@ export type ModeSizes = { rightWidth?: number; bottomHeight?: number };
 export type PaneState = {
   mode: PaneMode;
   lastNonCentre: Exclude<PaneMode, "centre">;
-  /** Per-mode size overrides (panel-group percentages). */
-  sizesByMode: Partial<Record<PaneMode, ModeSizes>>;
+  /**
+   * Legacy per-mode size overrides (pre-viewport-aware persistence).
+   * Kept for backward compatibility — treated as the "wide" viewport bucket
+   * when present and `sizesByViewportMode.wide` is absent.
+   */
+  sizesByMode?: Partial<Record<PaneMode, ModeSizes>>;
+  /** Per-viewport, per-mode size overrides (panel-group percentages). */
+  sizesByViewportMode: Partial<Record<ViewportClass, Partial<Record<PaneMode, ModeSizes>>>>;
 };
 
 const STORAGE_KEY = "awip.panes.v1";
@@ -19,7 +25,7 @@ const DEFAULT_SIZES: Required<ModeSizes> = { rightWidth: 22, bottomHeight: 30 };
 const DEFAULT_STATE: PaneState = {
   mode: "left",
   lastNonCentre: "left",
-  sizesByMode: {},
+  sizesByViewportMode: {},
 };
 
 /** Per-viewport bounds so a saved size from a wide screen doesn't crush a narrow one. */
@@ -35,12 +41,20 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** Resolve the override for a viewport+mode, falling back to legacy sizesByMode for "wide". */
+function readOverride(state: PaneState, viewport: ViewportClass, mode: PaneMode): ModeSizes | undefined {
+  const v = state.sizesByViewportMode?.[viewport]?.[mode];
+  if (v) return v;
+  if (viewport === "wide") return state.sizesByMode?.[mode];
+  return undefined;
+}
+
 export function getModeSizes(
   state: PaneState,
   mode: PaneMode,
   viewport: ViewportClass = "wide",
 ): Required<ModeSizes> {
-  const overrides = state.sizesByMode[mode] ?? {};
+  const overrides = readOverride(state, viewport, mode) ?? {};
   const b = SIZE_BOUNDS[viewport];
   const rightDefault = clamp(DEFAULT_SIZES.rightWidth, b.right.min || 1, b.right.max || 100);
   const bottomDefault = clamp(DEFAULT_SIZES.bottomHeight, b.bottom.min || 1, b.bottom.max || 100);
@@ -54,25 +68,50 @@ export function withModeSize(
   state: PaneState,
   mode: PaneMode,
   patch: ModeSizes,
+  viewport: ViewportClass = "wide",
 ): PaneState {
+  const byVp = state.sizesByViewportMode ?? {};
+  const forVp = byVp[viewport] ?? {};
   return {
     ...state,
-    sizesByMode: {
-      ...state.sizesByMode,
-      [mode]: { ...(state.sizesByMode[mode] ?? {}), ...patch },
+    sizesByViewportMode: {
+      ...byVp,
+      [viewport]: {
+        ...forVp,
+        [mode]: { ...(forVp[mode] ?? {}), ...patch },
+      },
     },
   };
 }
 
-export function clearModeSizes(state: PaneState, mode: PaneMode): PaneState {
-  if (!state.sizesByMode[mode]) return state;
-  const next = { ...state.sizesByMode };
-  delete next[mode];
-  return { ...state, sizesByMode: next };
+export function clearModeSizes(
+  state: PaneState,
+  mode: PaneMode,
+  viewport: ViewportClass = "wide",
+): PaneState {
+  const byVp = state.sizesByViewportMode ?? {};
+  const forVp = byVp[viewport];
+  let nextByVp = byVp;
+  if (forVp && forVp[mode]) {
+    const nextForVp = { ...forVp };
+    delete nextForVp[mode];
+    nextByVp = { ...byVp, [viewport]: nextForVp };
+  }
+  // Also strip legacy wide entry if we're clearing wide.
+  let nextLegacy = state.sizesByMode;
+  if (viewport === "wide" && nextLegacy?.[mode]) {
+    nextLegacy = { ...nextLegacy };
+    delete nextLegacy[mode];
+  }
+  return { ...state, sizesByViewportMode: nextByVp, sizesByMode: nextLegacy };
 }
 
-export function hasModeSizeOverrides(state: PaneState, mode: PaneMode): boolean {
-  const o = state.sizesByMode[mode];
+export function hasModeSizeOverrides(
+  state: PaneState,
+  mode: PaneMode,
+  viewport: ViewportClass = "wide",
+): boolean {
+  const o = readOverride(state, viewport, mode);
   return !!o && (o.rightWidth != null || o.bottomHeight != null);
 }
 
