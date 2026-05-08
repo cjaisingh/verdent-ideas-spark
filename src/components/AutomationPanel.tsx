@@ -1020,27 +1020,64 @@ const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
+// Date helpers (UTC-based to match the rest of the panel)
+const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+const endExclusiveUtcDay = (d: Date) => new Date(startOfUtcDay(d).getTime() + 86_400_000);
+const utcDayKey = (d: Date) => startOfUtcDay(d).toISOString().slice(0, 10);
+const enumerateUtcDays = (from: Date, to: Date) => {
+  const out: string[] = [];
+  let cur = startOfUtcDay(from).getTime();
+  const end = startOfUtcDay(to).getTime();
+  while (cur <= end) { out.push(new Date(cur).toISOString().slice(0, 10)); cur += 86_400_000; }
+  return out;
+};
+const RANGE_STORAGE_KEY = "awip.spend.range";
+const defaultRange = () => {
+  const to = startOfUtcDay(new Date());
+  const from = new Date(to.getTime() - 13 * 86_400_000);
+  return { from, to };
+};
+const loadStoredRange = (): { from: Date; to: Date } => {
+  try {
+    const raw = localStorage.getItem(RANGE_STORAGE_KEY);
+    if (!raw) return defaultRange();
+    const p = JSON.parse(raw);
+    const from = new Date(p.from); const to = new Date(p.to);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return defaultRange();
+    return { from: startOfUtcDay(from), to: startOfUtcDay(to) };
+  } catch { return defaultRange(); }
+};
+
 const DailyAiSpendCard = () => {
   const [rows, setRows] = useState<SpendRow[]>([]);
-  const [days, setDays] = useState<7 | 14 | 30>(14);
+  const [range, setRange] = useState<{ from: Date; to: Date }>(loadStoredRange);
+  const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date }>(range);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
+  const [capped, setCapped] = useState(false);
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
+  }, [range]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const since = new Date(Date.now() - days * 86_400_000).toISOString();
       const { data, error } = await supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
-        .gte("created_at", since)
+        .gte("created_at", startOfUtcDay(range.from).toISOString())
+        .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
         .order("created_at", { ascending: false })
         .limit(5000);
       if (!cancelled) {
         if (error) toast({ title: "Failed to load AI spend", description: error.message, variant: "destructive" });
-        setRows((data as SpendRow[]) || []);
+        const list = (data as SpendRow[]) || [];
+        setRows(list);
+        setCapped(list.length === 5000);
         setLoading(false);
       }
     };
@@ -1049,14 +1086,11 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [days]);
+  }, [range.from.getTime(), range.to.getTime()]);
 
-  // bucket per day (UTC) per group key
-  const dayKeys: string[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86_400_000);
-    dayKeys.push(d.toISOString().slice(0, 10));
-  }
+  const dayKeys = enumerateUtcDays(range.from, range.to);
+  const daysSpan = Math.max(1, dayKeys.length);
+  const sparseLabels = daysSpan > 31;
   const groupKeyOf = (r: SpendRow) =>
     (groupBy === "job" ? r.job : r.model) || "unknown";
 
