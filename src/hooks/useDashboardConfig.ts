@@ -14,18 +14,29 @@ export function emptyWidgetsFor(template: TemplateId): (Widget | null)[] {
   return TEMPLATES[template].slots.map(() => null);
 }
 
+export const DEFAULT_TAB_TEMPLATE: TemplateId = "one-plus-three";
+const DEFAULT_TAB_KINDS: WidgetKind[] = [
+  "pending-approvals",
+  "open-risks",
+  "night-observations-24h",
+  "recent-capability-events",
+];
+
+function defaultTabWidgets(): (Widget | null)[] {
+  const slotCount = TEMPLATES[DEFAULT_TAB_TEMPLATE].slots.length;
+  return Array.from({ length: slotCount }).map((_, i) => {
+    const kind = DEFAULT_TAB_KINDS[i];
+    return kind ? { id: shortId(), kind } : null;
+  });
+}
+
 function seedConfig(): DashboardConfig {
   const tabId = shortId();
   const tab: Tab = {
     id: tabId,
     name: "Today",
-    template: "one-plus-three",
-    widgets: [
-      { id: shortId(), kind: "pending-approvals" },
-      { id: shortId(), kind: "open-risks" },
-      { id: shortId(), kind: "night-observations-24h" },
-      { id: shortId(), kind: "recent-capability-events" },
-    ],
+    template: DEFAULT_TAB_TEMPLATE,
+    widgets: defaultTabWidgets(),
   };
   return { tabs: [tab], activeTabId: tabId };
 }
@@ -233,9 +244,22 @@ export function useDashboardConfig() {
     }));
   }, [update]);
 
+
+  /** Reset a tab back to the default template + seeded widgets. Keeps tab id and name. */
+  const resetTab = useCallback((tabId: string) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, template: DEFAULT_TAB_TEMPLATE, widgets: defaultTabWidgets() }
+          : t,
+      ),
+    }));
+  }, [update]);
+
   return {
     config, loaded, userId, MAX_TABS,
-    setActiveTab, addTab, renameTab, deleteTab, duplicateTab, reorderTab, setTemplate, setSlotWidget, swapSlots,
+    setActiveTab, addTab, renameTab, deleteTab, duplicateTab, reorderTab, setTemplate, setSlotWidget, swapSlots, resetTab,
     newWidgetId: shortId,
   };
 }

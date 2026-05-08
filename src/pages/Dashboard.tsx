@@ -11,6 +11,7 @@ export default function Dashboard() {
   const dash = useDashboardConfig();
   const [editing, setEditing] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<{ tabId: string; template: TemplateId } | null>(null);
+  const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
 
   if (!dash.loaded) {
     return <div className="p-6 text-sm text-muted-foreground">Loading dashboard…</div>;
@@ -88,6 +89,7 @@ export default function Dashboard() {
           dash.duplicateTab(id);
         }}
         onTemplateChange={handleTemplateChange}
+        onReset={(id) => setConfirmResetId(id)}
       />
 
       <main className="flex-1 overflow-auto p-4">
@@ -132,6 +134,44 @@ export default function Dashboard() {
                 className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground hover:opacity-90"
               >
                 Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmResetId && (
+        <div
+          role="dialog"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 p-4"
+          onClick={() => setConfirmResetId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-lg border border-border bg-card p-4 shadow-xl"
+          >
+            <h2 className="text-sm font-semibold">Reset this tab?</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The tab's layout and widgets will be replaced with the default set
+              (Pending approvals, Open risks, Night observations, Recent capability events).
+              The tab name is kept.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmResetId(null)}
+                className="rounded border border-border px-3 py-1 text-sm hover:bg-accent"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  dash.resetTab(confirmResetId);
+                  setConfirmResetId(null);
+                  toast.success("Tab reset to defaults");
+                }}
+                className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground hover:opacity-90"
+              >
+                Reset
               </button>
             </div>
           </div>
