@@ -821,6 +821,45 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_plans: {
+        Row: {
+          created_at: string
+          focus: string | null
+          for_date: string
+          generated_at: string
+          id: string
+          inputs_summary: Json
+          model: string
+          plan_md: string
+          recommendations: Json
+          risks: Json
+        }
+        Insert: {
+          created_at?: string
+          focus?: string | null
+          for_date: string
+          generated_at?: string
+          id?: string
+          inputs_summary?: Json
+          model: string
+          plan_md: string
+          recommendations?: Json
+          risks?: Json
+        }
+        Update: {
+          created_at?: string
+          focus?: string | null
+          for_date?: string
+          generated_at?: string
+          id?: string
+          inputs_summary?: Json
+          model?: string
+          plan_md?: string
+          recommendations?: Json
+          risks?: Json
+        }
+        Relationships: []
+      }
       db_explorer_audit: {
         Row: {
           action: string | null
