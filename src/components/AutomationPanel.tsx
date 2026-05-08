@@ -1164,17 +1164,21 @@ const DailyAiSpendCard = () => {
               return (
                 <div key={d} className="flex-1 flex flex-col items-center gap-1 group">
                   <div
-                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40"
+                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
                     style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}`}
+                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}\n(click for runs)`}
+                    onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
                   >
                     {segments.map((s) => (
                       <div
                         key={s.g}
+                        className="cursor-pointer hover:opacity-80"
                         style={{
                           height: `${(s.c / dayTotal) * 100}%`,
                           background: colorFor(s.g),
                         }}
+                        onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
+                        title={`${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
                       />
                     ))}
                   </div>
