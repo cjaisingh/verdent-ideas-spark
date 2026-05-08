@@ -588,7 +588,10 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
-                                    {/* Activity timeline */}
+                                    {/* Research evidence */}
+                                    <div className="border-t border-border pt-2">
+                                      <EvidencePanel taskId={task.id} />
+                                    </div>
                                     {(() => {
                                       const acts = activityByTask.get(task.id) ?? [];
                                       if (acts.length === 0) return null;
