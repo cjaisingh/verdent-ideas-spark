@@ -3,6 +3,8 @@ import { useLocation } from "react-router-dom";
 
 export type PaneMode = "left" | "dual" | "centre" | "bottom";
 
+export type PaneSlotKey = "right" | "bottom";
+
 export type ModeSizes = { rightWidth?: number; bottomHeight?: number };
 
 export type PaneState = {
@@ -16,6 +18,8 @@ export type PaneState = {
   sizesByMode?: Partial<Record<PaneMode, ModeSizes>>;
   /** Per-viewport, per-mode size overrides (panel-group percentages). */
   sizesByViewportMode: Partial<Record<ViewportClass, Partial<Record<PaneMode, ModeSizes>>>>;
+  /** Per-viewport, per-slot pane source overrides (string PaneSourceId). */
+  sourcesByViewportSlot?: Partial<Record<ViewportClass, Partial<Record<PaneSlotKey, string>>>>;
 };
 
 const STORAGE_KEY = "awip.panes.v1";
