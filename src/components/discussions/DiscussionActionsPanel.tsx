@@ -104,9 +104,12 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         toast({ title: "Extract failed", description: j?.error ?? `HTTP ${resp.status}`, variant: "destructive" });
         return;
       }
-      setProposals((j?.proposals ?? []) as Proposal[]);
-      if ((j?.proposals ?? []).length === 0) {
+      const fetched = (j?.proposals ?? []) as Proposal[];
+      setProposals(fetched);
+      if (fetched.length === 0) {
         toast({ title: "No actions found", description: "Transcript didn't surface anything actionable." });
+      } else {
+        setReviewOpen(true);
       }
     } finally {
       setExtracting(false);
