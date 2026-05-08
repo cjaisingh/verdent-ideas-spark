@@ -105,19 +105,19 @@ async function invokeRoadmapPhaseSignoff(approvalId: string) {
 
   await supabase.from("roadmap_phase_signoffs").insert({
     phase_id: phaseId,
-    phase_key: (phaseRow as Record<string, unknown>).key,
+    phase_key: ((phaseRow as Record<string, unknown>) ?? {}).key as string,
     approval_id: approvalId,
     approver: "ops@example.com",
     decided_at: new Date().toISOString(),
-    gate_snapshot: gateSnapshot,
-  });
+    gate_snapshot: gateSnapshot as never,
+  } as never);
 
   await supabase.from("capability_events").insert({
     capability_id: "operator_channel.roadmap",
     event_type: "phase.signed_off",
     actor: "ops@example.com",
-    payload: { phase_id: phaseId, approval_id: approvalId },
-  });
+    payload: { phase_id: phaseId, approval_id: approvalId } as never,
+  } as never);
 }
 
 // ---------- Test ----------
