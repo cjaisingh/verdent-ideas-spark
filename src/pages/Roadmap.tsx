@@ -326,6 +326,17 @@ const Roadmap = () => {
               <div className="text-xs font-medium truncate">{nextUp.task.title}</div>
             </button>
           )}
+          <ProceedAction
+            nextUp={nextUp}
+            activePhaseGate={nextUp ? gates.get(nextUp.phase.id) : undefined}
+            activeSprintAllDone={
+              !!nextUp &&
+              (tasksBySprint.get(nextUp.sprint.id) ?? []).every(
+                (t) => t.status === "done" || t.status === "wont_do",
+              )
+            }
+            onSelectTask={setSelectedTaskId}
+          />
         </div>
       </div>
 
