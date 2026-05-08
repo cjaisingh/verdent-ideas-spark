@@ -276,6 +276,10 @@ export default function NightShifts() {
           })}
         </ul>
       )}
+      <PromotionAuditDrawer
+        proposalId={auditProposalId}
+        onOpenChange={(o) => !o && setAuditProposalId(null)}
+      />
     </div>
   );
 }
