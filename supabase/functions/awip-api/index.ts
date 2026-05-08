@@ -1700,6 +1700,9 @@ Deno.serve(async (req) => {
       const spawnMatch = path.match(/^\/okr\/([0-9a-f-]+)\/spawn$/i);
       const supMatch = path.match(/^\/okr\/([0-9a-f-]+)\/supersede$/i);
       const capDetailMatch = path.match(/^\/capabilities\/([^\/]+)\/demand-detail$/i);
+      const capPromoteStatusMatch = path.match(/^\/capabilities\/([^\/]+)\/promotion-status$/i);
+      const capPromoteMatch = path.match(/^\/capabilities\/([^\/]+)\/promote$/i);
+      const capAckMatch = path.match(/^\/capabilities\/([^\/]+)\/ack-warnings$/i);
       const approvalDecideMatch = path.match(/^\/approvals\/([0-9a-f-]+)\/decide$/i);
       const approvalGetMatch = path.match(/^\/approvals\/([0-9a-f-]+)$/i);
       const onboardingConfirmMatch = path.match(/^\/onboarding\/([0-9a-f-]+)\/confirm$/i);
@@ -1717,6 +1720,10 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
       else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
       else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand(auth.actor);
+      else if (req.method === "GET" && path === "/capabilities/promotion-status") response = await getPromotionStatus(auth.user_id);
+      else if (req.method === "GET" && capPromoteStatusMatch) response = await getPromotionStatusOne(decodeURIComponent(capPromoteStatusMatch[1]), auth.user_id);
+      else if (req.method === "POST" && capPromoteMatch) response = await promoteCapability(req, decodeURIComponent(capPromoteMatch[1]), auth.actor, auth.user_id);
+      else if (req.method === "POST" && capAckMatch) response = await ackCapabilityWarnings(req, decodeURIComponent(capAckMatch[1]), auth.actor, auth.user_id);
       else if (req.method === "GET" && capDetailMatch) response = await getCapabilityDetail(decodeURIComponent(capDetailMatch[1]));
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
