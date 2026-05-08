@@ -258,12 +258,12 @@ const OperatorLayout = () => {
                             <ResizableHandle
                               withHandle
                               onDragging={handleDragging}
-                              aria-label="Drag to resize bottom pane. Pane switching is locked while dragging."
+                              aria-label="Drag or use arrow keys to resize bottom pane. Pane switching is locked while resizing."
                               className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                             />
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs">
-                            Drag to resize · pane switching locked while dragging
+                            Drag or arrow keys to resize · switching locked while resizing
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -300,12 +300,12 @@ const OperatorLayout = () => {
                         <ResizableHandle
                           withHandle
                           onDragging={handleDragging}
-                          aria-label="Drag to resize right pane. Pane switching is locked while dragging."
+                          aria-label="Drag or use arrow keys to resize right pane. Pane switching is locked while resizing."
                           className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                         />
                       </TooltipTrigger>
                       <TooltipContent side="left" className="text-xs">
-                        Drag to resize · pane switching locked while dragging
+                        Drag or arrow keys to resize · switching locked while resizing
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
