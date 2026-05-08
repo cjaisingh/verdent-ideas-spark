@@ -28,7 +28,12 @@ import {
   MessageSquare, ExternalLink, Timer, Coins,
 } from "lucide-react";
 
-type Phase = { id: string; key: string; title: string; summary: string | null; order: number; status: string };
+type Phase = {
+  id: string; key: string; title: string; summary: string | null; order: number; status: string;
+  manual_override_rationale?: string | null;
+  manual_override_by?: string | null;
+  manual_override_at?: string | null;
+};
 type Sprint = { id: string; phase_id: string; key: string; title: string; goal: string | null; order: number; status: string };
 type Task = {
   id: string; sprint_id: string; key: string; title: string; description: string | null;
