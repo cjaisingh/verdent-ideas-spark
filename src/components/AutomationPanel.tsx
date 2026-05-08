@@ -1409,6 +1409,20 @@ const DailyAiSpendCard = () => {
               </div>
             </PopoverContent>
           </Popover>
+          <label
+            className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px]"
+            title="Timezone used for daily buckets and times in the drill-down"
+          >
+            <span className="text-muted-foreground">tz</span>
+            <select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="bg-transparent font-mono text-[11px] outline-none"
+            >
+              <option value="UTC">UTC</option>
+              <option value={localTz}>Local ({localTz})</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setCompare((v) => !v)}
