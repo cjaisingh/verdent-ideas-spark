@@ -1709,6 +1709,45 @@ export type Database = {
         }
         Relationships: []
       }
+      roadmap_task_reviews: {
+        Row: {
+          checklist_done: number
+          checklist_snapshot: Json
+          checklist_total: number
+          created_at: string
+          decision: string
+          id: string
+          notes: string | null
+          reviewer: string | null
+          reviewer_id: string | null
+          task_id: string
+        }
+        Insert: {
+          checklist_done?: number
+          checklist_snapshot?: Json
+          checklist_total?: number
+          created_at?: string
+          decision: string
+          id?: string
+          notes?: string | null
+          reviewer?: string | null
+          reviewer_id?: string | null
+          task_id: string
+        }
+        Update: {
+          checklist_done?: number
+          checklist_snapshot?: Json
+          checklist_total?: number
+          created_at?: string
+          decision?: string
+          id?: string
+          notes?: string | null
+          reviewer?: string | null
+          reviewer_id?: string | null
+          task_id?: string
+        }
+        Relationships: []
+      }
       roadmap_tasks: {
         Row: {
           acceptance: string | null
@@ -1721,6 +1760,10 @@ export type Database = {
           module: string | null
           order: number
           owner: string | null
+          review_notes: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           sprint_id: string
           status: Database["public"]["Enums"]["roadmap_task_status"]
           title: string
@@ -1737,6 +1780,10 @@ export type Database = {
           module?: string | null
           order?: number
           owner?: string | null
+          review_notes?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           sprint_id: string
           status?: Database["public"]["Enums"]["roadmap_task_status"]
           title: string
@@ -1753,6 +1800,10 @@ export type Database = {
           module?: string | null
           order?: number
           owner?: string | null
+          review_notes?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           sprint_id?: string
           status?: Database["public"]["Enums"]["roadmap_task_status"]
           title?: string
