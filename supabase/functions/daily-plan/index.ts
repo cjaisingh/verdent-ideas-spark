@@ -12,7 +12,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-service-token",
 };
 
-const PLANNER_MODEL = "openai/gpt-5";
+const PLANNER_MODEL = "google/gemini-2.5-flash-lite";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
