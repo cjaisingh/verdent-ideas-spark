@@ -1404,6 +1404,8 @@ const DailyAiSpendCard = () => {
         groupBy={groupBy}
         drill={drill}
         onClose={() => setDrill(null)}
+        globalLimits={globalLimits}
+        jobLimits={jobLimits}
       />
     </section>
   );
