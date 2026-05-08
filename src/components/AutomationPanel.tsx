@@ -1684,16 +1684,46 @@ const DailyAiSpendCard = () => {
                   .filter((s) => s.c > 0);
                 const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
                 const dayBreached = showThresholds && dayBreaches.has(d);
+                const dayOver = dayBreached ? dailyCostTotals[idx] - globalLimits.day! : 0;
+                const dayRunBreaches = showThresholds
+                  ? rows.filter(r => {
+                      const ts = r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
+                      if (ts !== d) return false;
+                      const lim = effectiveRunLimit(r.job);
+                      return lim != null && Number(r.cost_usd || 0) > lim;
+                    }).length
+                  : 0;
+                const segOver = (g: string) => {
+                  const lim = jobLimits[g]?.day;
+                  if (lim == null) return 0;
+                  const c = costMatrix[d][g] || 0;
+                  return c > lim ? c - lim : 0;
+                };
+                const tooltip = [
+                  `${d} · ${fmtMetric(dayTotal)}`,
+                  ...segments.map(s => {
+                    const breached = showThresholds && cellBreaches.has(`${d}|${s.g}`);
+                    const over = breached ? segOver(s.g) : 0;
+                    return `${breached ? "⚠ " : ""}${s.g}: ${fmtMetric(s.c)}${
+                      breached && over > 0 ? ` (over ${jobLimits[s.g]!.day != null ? fmtUsd6(jobLimits[s.g]!.day!) : "limit"} by ${fmtUsd6(over)})` : ""
+                    }`;
+                  }),
+                  ...(dayBreached ? [`⚠ day total over ${fmtUsd6(globalLimits.day!)} by ${fmtUsd6(dayOver)} (${((dayOver / globalLimits.day!) * 100).toFixed(1)}%)`] : []),
+                  ...(dayRunBreaches > 0 ? [`⚠ ${dayRunBreaches} run${dayRunBreaches === 1 ? "" : "s"} over per-run cap`] : []),
+                  "(click for runs)",
+                ].join("\n");
                 return (
                   <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
                     <div
                       className={`w-full flex flex-col-reverse rounded-sm overflow-hidden cursor-pointer ${dayBreached ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40 hover:ring-1 hover:ring-border"}`}
                       style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                      title={`${d} · ${fmtMetric(dayTotal)}\n${segments.map(s => `${(showThresholds && cellBreaches.has(`${d}|${s.g}`)) ? "⚠ " : ""}${s.g}: ${fmtMetric(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dailyCostTotals[idx] - globalLimits.day!)}` : ""}\n(click for runs)`}
+                      title={tooltip}
                       onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
                     >
                       {segments.map((s) => {
                         const segBreached = showThresholds && cellBreaches.has(`${d}|${s.g}`);
+                        const over = segBreached ? segOver(s.g) : 0;
+                        const segLim = jobLimits[s.g]?.day;
                         return (
                           <div
                             key={s.g}
@@ -1703,7 +1733,11 @@ const DailyAiSpendCard = () => {
                               background: colorFor(s.g),
                             }}
                             onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
-                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtMetric(s.c)} (click for runs)`}
+                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtMetric(s.c)}${
+                              segBreached && segLim != null && over > 0
+                                ? `\nover job/day cap ${fmtUsd6(segLim)} by ${fmtUsd6(over)} (${((over / segLim) * 100).toFixed(1)}%)`
+                                : ""
+                            }\n(click for runs)`}
                           />
                         );
                       })}
