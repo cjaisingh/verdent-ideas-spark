@@ -1662,6 +1662,7 @@ const DailyAiSpendCard = () => {
         onClose={() => setDrill(null)}
         globalLimits={globalLimits}
         jobLimits={jobLimits}
+        tz={tz}
       />
     </section>
   );
