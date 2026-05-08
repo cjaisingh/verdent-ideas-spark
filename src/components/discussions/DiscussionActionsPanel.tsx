@@ -3,10 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Plus, Sparkles, Check, X, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle } from "@/lib/discussionHandles";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
+import { ProposalReviewSheet, type Proposal as ReviewProposal } from "./ProposalReviewSheet";
 
 type Action = {
   id: string;
@@ -49,6 +50,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
   const [draft, setDraft] = useState("");
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [extracting, setExtracting] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
@@ -102,48 +104,16 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         toast({ title: "Extract failed", description: j?.error ?? `HTTP ${resp.status}`, variant: "destructive" });
         return;
       }
-      setProposals((j?.proposals ?? []) as Proposal[]);
-      if ((j?.proposals ?? []).length === 0) {
+      const fetched = (j?.proposals ?? []) as Proposal[];
+      setProposals(fetched);
+      if (fetched.length === 0) {
         toast({ title: "No actions found", description: "Transcript didn't surface anything actionable." });
+      } else {
+        setReviewOpen(true);
       }
     } finally {
       setExtracting(false);
     }
-  };
-
-  const acceptProposal = async (p: Proposal, idx: number) => {
-    const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("discussion_actions").insert({
-      discussion_id: discussionId,
-      subject_type: subjectType,
-      subject_id: subjectId,
-      title: p.title,
-      details: p.details,
-      priority: p.priority,
-      owner: p.owner_hint,
-      source: "extracted",
-      extracted_confidence: p.confidence,
-      created_by: u.user?.id ?? null,
-    });
-    if (error) { toast({ title: "Could not save", description: error.message, variant: "destructive" }); return; }
-    setProposals((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const rejectProposal = async (p: Proposal, idx: number) => {
-    // Log the rejection (no row created in discussion_actions)
-    await supabase.from("discussion_action_events").insert({
-      action_id: null,
-      discussion_id: discussionId,
-      event_type: "rejected",
-      payload: {
-        title: p.title,
-        details: p.details,
-        priority: p.priority,
-        owner_hint: p.owner_hint,
-        confidence: p.confidence,
-      },
-    });
-    setProposals((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const cycleStatus = async (a: Action) => {
@@ -164,6 +134,11 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
           {items.length > 0 && <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>}
         </div>
         <div className="flex items-center gap-1">
+          {proposals.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setReviewOpen(true)}>
+              Review {proposals.length}
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={extract} disabled={extracting}>
             <Sparkles className="h-3.5 w-3.5 mr-1" /> {extracting ? "Extracting…" : "Extract"}
           </Button>
@@ -183,35 +158,6 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
             onKeyDown={(e) => { if (e.key === "Enter") addManual(); }}
           />
           <Button size="sm" onClick={addManual}>Save</Button>
-        </div>
-      )}
-
-      {proposals.length > 0 && (
-        <div className="space-y-1.5 rounded border border-dashed p-2 bg-muted/20">
-          <div className="text-[11px] uppercase text-muted-foreground">Proposed by Copilot — accept to save</div>
-          {proposals.map((p, i) => (
-            <div key={i} className="flex items-start gap-2 rounded border bg-background p-2 text-xs">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <Badge variant="outline" className="text-[9px] uppercase">{p.priority}</Badge>
-                  {p.confidence != null && (
-                    <span className="text-[10px] text-muted-foreground">conf {Math.round(p.confidence * 100)}%</span>
-                  )}
-                  {p.owner_hint && <Badge variant="outline" className="text-[9px]">@{p.owner_hint}</Badge>}
-                </div>
-                <div className="font-medium">{p.title}</div>
-                {p.details && <div className="text-muted-foreground mt-0.5">{p.details}</div>}
-              </div>
-              <div className="flex flex-col gap-1">
-                <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => acceptProposal(p, i)} title="Accept">
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(p, i)} title="Reject">
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
         </div>
       )}
 
@@ -255,6 +201,16 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
           ))}
         </div>
       )}
+
+      <ProposalReviewSheet
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        discussionId={discussionId}
+        subjectType={subjectType}
+        subjectId={subjectId}
+        proposals={proposals as ReviewProposal[]}
+        onDone={() => setProposals([])}
+      />
     </div>
   );
 }
