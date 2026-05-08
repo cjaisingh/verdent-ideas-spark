@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { AiUsageWidget } from "./AiUsageWidget";
 import { NightObservationsWidget } from "./NightObservationsWidget";
 import { OpenRisksWidget } from "./OpenRisksWidget";
 import { PendingApprovalsWidget } from "./PendingApprovalsWidget";
