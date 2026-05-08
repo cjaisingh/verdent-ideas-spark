@@ -222,7 +222,7 @@ export default function ApprovalPack() {
                           <div className="space-y-1">
                             <div className="text-xs font-semibold">Checklist</div>
                             {cls.map((c) => {
-                              const itemEv = evidence.filter((e) => e.task_id === t.id && e.checklist_item === (c as any).item_key);
+                              const itemEv = evidence.filter((e) => e.task_id === t.id && e.checklist_item === c.item_key);
                               return (
                                 <div key={c.id} className="text-xs pl-1">
                                   <div className="flex items-start gap-2">
