@@ -238,3 +238,43 @@ export function usePaneState(): [PaneState, (patch: PaneStateUpdater) => void, s
 
   return [state, update, key];
 }
+
+/* ---------- Pane source persistence ---------- */
+
+export function getSlotSource(
+  state: PaneState,
+  slot: PaneSlotKey,
+  viewport: ViewportClass = "wide",
+): string | undefined {
+  return state.sourcesByViewportSlot?.[viewport]?.[slot];
+}
+
+export function withSlotSource(
+  state: PaneState,
+  slot: PaneSlotKey,
+  sourceId: string,
+  viewport: ViewportClass = "wide",
+): PaneState {
+  const byVp = state.sourcesByViewportSlot ?? {};
+  const forVp = byVp[viewport] ?? {};
+  return {
+    ...state,
+    sourcesByViewportSlot: {
+      ...byVp,
+      [viewport]: { ...forVp, [slot]: sourceId },
+    },
+  };
+}
+
+export function clearSlotSources(state: PaneState): PaneState {
+  return { ...state, sourcesByViewportSlot: {} };
+}
+
+export function hasSlotSourceOverrides(state: PaneState): boolean {
+  const all = state.sourcesByViewportSlot;
+  if (!all) return false;
+  return Object.values(all).some(
+    (forVp) => forVp && Object.values(forVp).some((v) => typeof v === "string"),
+  );
+}
+
