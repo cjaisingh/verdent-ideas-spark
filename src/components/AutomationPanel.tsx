@@ -1210,8 +1210,20 @@ const DailyAiSpendCard = () => {
       }
     };
     load();
+    const fromIso = startOfTzDay(range.from, tz).toISOString();
+    const toIso = endExclusiveTzDay(range.to, tz).toISOString();
     const ch = supabase.channel("ai_spend_panel")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, (payload: any) => {
+        const newRow = payload?.new as SpendRow | undefined;
+        const ts = newRow?.created_at;
+        const inRange = !!ts && ts >= fromIso && ts < toIso;
+        const matchesFilter = !groupFilter || (newRow && (groupBy === "job" ? newRow.job : newRow.model) === groupFilter);
+        if (inRange && matchesFilter) {
+          setLiveCount((c) => c + 1);
+          setLastInsertAt(Date.now());
+        }
+        load();
+      })
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
