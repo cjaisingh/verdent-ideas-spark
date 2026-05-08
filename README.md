@@ -42,6 +42,7 @@ All endpoints accept either an operator JWT (`Authorization: Bearer …`) or the
 | `GET` | `/capabilities/demand` | Capabilities ranked by `active_kr_count`, then `tenant_count`. Surfaces `unknown` capabilities referenced by KRs but never registered |
 | `GET` | `/capabilities/:id/demand-detail` | Capability + driving KRs + tenants |
 | `GET` | `/capabilities/promotion-status` | Admin-only. Phase-3 maturity gates per capability. See `docs/capability-promotion.md` |
+| `GET` | `/night-agent/promotion-audit?proposal_id=…` | Admin-only. Before/after report (gates, skip reasons, candidates) for an operator-confirmed Night Agent promotion. See `docs/promotion-audit.md` |
 | `GET` | `/capabilities/:id/promotion-status` | Admin-only. Single-capability variant |
 | `POST` | `/capabilities/:id/promote` | Admin-only. Promote to `available` if no gates fail. Idempotent |
 | `POST` | `/capabilities/:id/ack-warnings` | Admin-only. Ack warning-level gates with a rationale |

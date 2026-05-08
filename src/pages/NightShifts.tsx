@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Moon, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react";
+import { Moon, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Clock, FileSearch } from "lucide-react";
+import PromotionAuditDrawer from "@/components/promotion/PromotionAuditDrawer";
 
 type Shift = {
   id: string;
@@ -51,6 +52,7 @@ export default function NightShifts() {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [auditProposalId, setAuditProposalId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "completed" | "running" | "with_failures">("all");
 
   const load = async () => {
@@ -250,6 +252,15 @@ export default function NightShifts() {
                               <span className={`text-[10px] font-mono uppercase w-16 shrink-0 ${propTone(p.status)}`}>{p.status}</span>
                               <span className="font-mono text-muted-foreground shrink-0">#{p.target_ref?.short_num ?? "?"}</span>
                               <span className="flex-1 text-foreground/90 leading-snug">{p.rationale ?? p.kind}</span>
+                              {(p.status === "accepted" || p.status === "rejected") && (
+                                <button
+                                  onClick={() => setAuditProposalId(p.id)}
+                                  className="text-[10px] font-mono text-muted-foreground hover:text-foreground inline-flex items-center gap-1 shrink-0"
+                                  title="View promotion audit report"
+                                >
+                                  <FileSearch className="h-3 w-3" /> audit
+                                </button>
+                              )}
                               {p.decided_at && (
                                 <span className="text-[10px] text-muted-foreground font-mono shrink-0">{fmt(p.decided_at)}</span>
                               )}
@@ -265,6 +276,10 @@ export default function NightShifts() {
           })}
         </ul>
       )}
+      <PromotionAuditDrawer
+        proposalId={auditProposalId}
+        onOpenChange={(o) => !o && setAuditProposalId(null)}
+      />
     </div>
   );
 }

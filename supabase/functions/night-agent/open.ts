@@ -19,15 +19,35 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
 
   const now = new Date();
   const local = localParts(now, tz);
+  const enabled = settings?.night_agent_enabled !== false;
+  const inWin = inWindow(local.hhmm, winStart, winEnd);
+  const blackoutHit = blackouts.includes(local.date);
 
-  if (blackouts.includes(local.date)) {
-    return json({ skipped: true, reason: "blackout_date", tz, date: local.date });
+  // Gate snapshot — persisted on the shift row so the promotion audit
+  // report can show the exact pre-conditions of every promotion.
+  const gatesSnapshot = {
+    timezone: tz,
+    window: `${winStart}-${winEnd}`,
+    local_date: local.date,
+    local_time: local.hhmm,
+    enabled,
+    in_window: inWin,
+    blackout_hit: blackoutHit,
+    allowed_kinds: allowedKinds,
+    blackout_dates: blackouts,
+  };
+
+  if (!enabled) {
+    return json({ skipped: true, reason: "night_agent_disabled", gates: gatesSnapshot });
   }
-  if (!inWindow(local.hhmm, winStart, winEnd)) {
-    return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}` });
+  if (blackoutHit) {
+    return json({ skipped: true, reason: "blackout_date", tz, date: local.date, gates: gatesSnapshot });
+  }
+  if (!inWin) {
+    return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}`, gates: gatesSnapshot });
   }
   if (allowedKinds.length === 0) {
-    return json({ skipped: true, reason: "no_allowed_kinds" });
+    return json({ skipped: true, reason: "no_allowed_kinds", gates: gatesSnapshot });
   }
 
   // Window timestamps recorded against the wall clock; tz remembered in summary.
@@ -41,7 +61,13 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     window_start: windowStart.toISOString(),
     window_end: windowEnd.toISOString(),
     status: "running",
-    summary: { tz, window: `${winStart}-${winEnd}`, allowed_kinds: allowedKinds },
+    summary: {
+      tz,
+      window: `${winStart}-${winEnd}`,
+      allowed_kinds: allowedKinds,
+      gates: gatesSnapshot,
+      skip_reasons: [],
+    },
   }).select("id").single();
   if (shiftErr || !shift) return json({ error: "shift_create_failed", detail: shiftErr?.message }, 500);
   const shiftId = shift.id as string;
@@ -75,20 +101,28 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
   let auditedCount = 0;
   let proposalsQueued = 0;
   const skipped: Array<{ id: string; reason: string }> = [];
+  const candidatesSelected: Array<{ short_num: number | null; title: string; risk: string; phase: string; suite: string }> = [];
+  const candidatesSkipped: Array<{ short_num: number | null; title: string; reason: string; risk?: string; phase?: string }> = [];
+  const openedAt = new Date().toISOString();
 
   for (const job of candidates ?? []) {
     const { risk, reason } = classifyJob(job as any);
     if (risk === "high") {
-      skipped.push({ id: job.id, reason: `risk=high (${reason})` });
+      const reasonStr = `risk=high (${reason})`;
+      skipped.push({ id: job.id, reason: reasonStr });
+      candidatesSkipped.push({ short_num: job.short_num, title: job.title, reason: reasonStr, risk });
       continue;
     }
 
     const subjectRef = { discussion_action_id: job.id, short_num: job.short_num };
     const { phase, suite } = inferPhaseAndSuite(job.title);
     if (!allowedKinds.includes(phase)) {
-      skipped.push({ id: job.id, reason: `kind '${phase}' not allowed` });
+      const reasonStr = `kind '${phase}' not allowed`;
+      skipped.push({ id: job.id, reason: reasonStr });
+      candidatesSkipped.push({ short_num: job.short_num, title: job.title, reason: reasonStr, risk, phase });
       continue;
     }
+    candidatesSelected.push({ short_num: job.short_num, title: job.title, risk, phase, suite });
     let worst = "info";
 
     // 1. pulled
@@ -188,10 +222,34 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
       kind: "promote_job",
       target_ref: subjectRef,
       rationale,
-      payload: { worst_severity: worst, qa_passed: qaPassed, phase, suite },
+      payload: {
+        worst_severity: worst,
+        qa_passed: qaPassed,
+        phase,
+        suite,
+        // Audit-report lineage: cheap join key back to the shift snapshot.
+        gates_snapshot_ref: shiftId,
+        selected_at: openedAt,
+      },
     });
     proposalsQueued++;
   }
+
+  // Persist the final candidate breakdown on the shift summary so the
+  // promotion audit report can reconstruct the exact "before" picture
+  // even after rows in discussion_actions move on.
+  await sb.from("night_shifts").update({
+    summary: {
+      tz,
+      window: `${winStart}-${winEnd}`,
+      allowed_kinds: allowedKinds,
+      gates: gatesSnapshot,
+      skip_reasons: [],
+      candidates_total: candidates?.length ?? 0,
+      candidates_selected: candidatesSelected,
+      candidates_skipped: candidatesSkipped,
+    },
+  }).eq("id", shiftId);
 
   return json({
     shift_id: shiftId,

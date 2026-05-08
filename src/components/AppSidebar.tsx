@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon, FileSearch,
 } from "lucide-react";
 
 const groups = [
@@ -46,6 +46,7 @@ const groups = [
       { url: "/runbooks", title: "Runbooks", icon: Library },
       { url: "/admin", title: "Admin", icon: Shield },
       { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
+      { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
       { url: "/status", title: "Status", icon: Heart },
     ],
   },

@@ -14,6 +14,12 @@ import {
   type CapabilityRow,
   type CapabilityPromotionStatus,
 } from "./promotion_gates.ts";
+import {
+  buildReport as buildPromotionAuditReport,
+  type ObservationRow as PaObservationRow,
+  type ProposalRow as PaProposalRow,
+  type ShiftRow as PaShiftRow,
+} from "./promotion_audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -467,6 +473,77 @@ async function getPromotionStatusOne(capId: string, userId?: string) {
     (connRes.data ?? []).length,
   );
   return json(status);
+}
+
+// ---------- Night Agent promotion audit report ----------
+// Admin-only. Returns the before/after snapshot for a single proposal,
+// or for every decided/pending proposal in a shift.
+async function getPromotionAudit(url: URL, userId?: string) {
+  if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
+  const proposalId = url.searchParams.get("proposal_id");
+  const shiftId = url.searchParams.get("shift_id");
+  if (!proposalId && !shiftId) {
+    return json({ error: "proposal_id or shift_id required" }, 400);
+  }
+
+  let proposals: PaProposalRow[] = [];
+  if (proposalId) {
+    const { data, error } = await supabase
+      .from("night_proposals")
+      .select("id, shift_id, status, kind, rationale, target_ref, payload, created_at, decided_at, decided_by")
+      .eq("id", proposalId)
+      .maybeSingle();
+    if (error) return json({ error: error.message }, 500);
+    if (!data) return json({ error: "proposal not found" }, 404);
+    proposals = [data as unknown as PaProposalRow];
+  } else if (shiftId) {
+    const { data, error } = await supabase
+      .from("night_proposals")
+      .select("id, shift_id, status, kind, rationale, target_ref, payload, created_at, decided_at, decided_by")
+      .eq("shift_id", shiftId)
+      .order("created_at", { ascending: true });
+    if (error) return json({ error: error.message }, 500);
+    proposals = (data ?? []) as unknown as PaProposalRow[];
+    if (proposals.length === 0) return json({ reports: [] });
+  }
+
+  const shiftIds = Array.from(new Set(proposals.map((p) => p.shift_id)));
+  const [{ data: shifts, error: shErr }, { data: obs, error: obErr }] = await Promise.all([
+    supabase
+      .from("night_shifts")
+      .select("id, started_at, ended_at, status, window_start, window_end, summary")
+      .in("id", shiftIds),
+    supabase
+      .from("night_observations")
+      .select("id, shift_id, kind, severity, summary, subject_ref, payload, created_at")
+      .in("shift_id", shiftIds)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (shErr) return json({ error: shErr.message }, 500);
+  if (obErr) return json({ error: obErr.message }, 500);
+
+  const shiftById = new Map<string, PaShiftRow>();
+  for (const s of (shifts ?? []) as unknown as PaShiftRow[]) shiftById.set(s.id, s);
+  const obsByShift = new Map<string, PaObservationRow[]>();
+  for (const o of (obs ?? []) as unknown as PaObservationRow[]) {
+    const arr = obsByShift.get(o.shift_id) ?? [];
+    arr.push(o);
+    obsByShift.set(o.shift_id, arr);
+  }
+
+  const reports = proposals
+    .map((p) => {
+      const shift = shiftById.get(p.shift_id);
+      if (!shift) return null;
+      return buildPromotionAuditReport(p, shift, obsByShift.get(p.shift_id) ?? []);
+    })
+    .filter((r): r is NonNullable<typeof r> => r !== null);
+
+  if (proposalId) {
+    if (reports.length === 0) return json({ error: "shift not found for proposal" }, 404);
+    return json(reports[0]);
+  }
+  return json({ reports });
 }
 
 async function promoteCapability(req: Request, capId: string, actor: string, userId?: string) {
@@ -1746,6 +1823,7 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && transcriptIdMatch) response = await getTranscript(transcriptIdMatch[1]);
       else if (req.method === "DELETE" && transcriptIdMatch) response = await deleteTranscript(transcriptIdMatch[1]);
       else if (req.method === "POST" && transcriptAnalyzeMatch) response = await analyzeTranscript(transcriptAnalyzeMatch[1]);
+      else if (req.method === "GET" && path === "/night-agent/promotion-audit") response = await getPromotionAudit(url, auth.user_id);
       else response = json({ error: "not found", path }, 404);
     }
     }
