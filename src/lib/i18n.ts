@@ -37,16 +37,19 @@ const dictionaries: Record<Locale, Dict> = {
     "awipCore.brand": "AWIP Core",
     "nav.tooltip": "{name} · {path}",
     "nav.ariaLabel": "{brand} — go to {name} ({path})",
+    "nav.currentPage": "You are here",
   },
   de: {
     "awipCore.brand": "AWIP Core",
     "nav.tooltip": "{name} · {path}",
     "nav.ariaLabel": "{brand} — zu {name} wechseln ({path})",
+    "nav.currentPage": "Sie sind hier",
   },
   fr: {
     "awipCore.brand": "AWIP Core",
     "nav.tooltip": "{name} · {path}",
     "nav.ariaLabel": "{brand} — aller aux {name} ({path})",
+    "nav.currentPage": "Vous êtes ici",
   },
 };
 
