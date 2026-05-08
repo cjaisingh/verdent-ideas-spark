@@ -12,6 +12,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
 - [Automation](docs/automation.md) — scheduled code review, nightly tests, QA probes, failure alerts
 - [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys
+- [Design system](docs/design-system.md) — page layout, spacing, semantic tints, pane source colours
 - [Deepgram voice](docs/deepgram-voice.md) — required key role, token grant flow, mic failure recovery
 - [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)

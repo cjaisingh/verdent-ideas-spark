@@ -53,6 +53,24 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Semantic tints — signal colors only. Use as text/border, or as a low-alpha
+       background (e.g. bg-tint-night / 15). Never as a primary surface fill.
+       See docs/design-system.md. */
+    --tint-night: 262 60% 50%;
+    --tint-night-foreground: 0 0% 100%;
+    --tint-event: 215 16% 47%;
+    --tint-event-foreground: 0 0% 100%;
+    --tint-approval: 38 92% 45%;
+    --tint-approval-foreground: 0 0% 100%;
+    --tint-discussion: 217 91% 55%;
+    --tint-discussion-foreground: 0 0% 100%;
+    --tint-capability: 158 64% 40%;
+    --tint-capability-foreground: 0 0% 100%;
+    --tint-risk: 0 75% 50%;
+    --tint-risk-foreground: 0 0% 100%;
+    --tint-okr: 199 89% 48%;
+    --tint-okr-foreground: 0 0% 100%;
   }
 
   .dark {
@@ -91,6 +109,22 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Tints — brighter/lighter for legibility on dark surfaces. */
+    --tint-night: 262 80% 72%;
+    --tint-night-foreground: 262 30% 12%;
+    --tint-event: 215 20% 70%;
+    --tint-event-foreground: 215 30% 12%;
+    --tint-approval: 38 92% 62%;
+    --tint-approval-foreground: 38 60% 12%;
+    --tint-discussion: 217 91% 68%;
+    --tint-discussion-foreground: 217 50% 12%;
+    --tint-capability: 158 64% 58%;
+    --tint-capability-foreground: 158 40% 10%;
+    --tint-risk: 0 75% 65%;
+    --tint-risk-foreground: 0 50% 12%;
+    --tint-okr: 199 89% 65%;
+    --tint-okr-foreground: 199 50% 10%;
   }
 }
 
