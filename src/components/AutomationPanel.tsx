@@ -1703,7 +1703,7 @@ const SpendDrillDialog = ({
   };
   const filtered = drill
     ? rows
-        .filter(r => (drill.day === "*" || (r.created_at || "").slice(0, 10) === drill.day) &&
+        .filter(r => (drill.day === "*" || (r.created_at ? tzDayKey(new Date(r.created_at), tz) : "") === drill.day) &&
           (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
           (!drill.breachOnly || isRunBreach(r)))
         .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
