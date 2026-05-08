@@ -23,6 +23,7 @@ import { ProceedAction } from "@/components/roadmap/ProceedAction";
 import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
 import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
 import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
+import { OvernightRunBadge } from "@/components/roadmap/OvernightRunBadge";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
