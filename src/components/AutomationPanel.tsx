@@ -1464,10 +1464,11 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, drill, onClose, globalLimits, jobLimits,
+  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
+  metric: "spend" | "prompt" | "completion";
   drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
   globalLimits: { day: number | null; run: number | null };
