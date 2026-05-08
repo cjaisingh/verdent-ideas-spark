@@ -246,6 +246,7 @@ export const AutomationPanel = () => {
     <AlertsCard />
     <PerJobCostThresholdsCard />
     <DailyAiSpendCard />
+    <OvernightQueueCard />
     <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
