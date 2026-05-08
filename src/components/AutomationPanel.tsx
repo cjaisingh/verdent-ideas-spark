@@ -244,6 +244,7 @@ export const AutomationPanel = () => {
   return (
     <div className="space-y-3">
     <AlertsCard />
+    <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
     <NightAgentTestModeCard />
@@ -717,3 +718,114 @@ const AlertsCard = () => {
     </section>
   );
 };
+
+type CostAlertRow = {
+  id: string; created_at: string; job: string; message: string | null;
+  delivered: boolean; status_code: number | null;
+  payload: {
+    scope?: string; job?: string;
+    run_cost_usd?: number | null; day_cost_usd?: number | null;
+    threshold_usd?: number | null;
+    threshold_per_run_usd?: number | null; threshold_per_day_usd?: number | null;
+    test?: boolean;
+  } | null;
+};
+
+const fmtUsd = (n: number | null | undefined) =>
+  n == null || Number.isNaN(Number(n)) ? "—" : `$${Number(n).toFixed(4)}`;
+
+const CostAlertsCard = () => {
+  const [rows, setRows] = useState<CostAlertRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("alert_log" as any)
+      .select("id, created_at, job, message, delivered, status_code, payload")
+      .eq("reason", "cost_threshold")
+      .order("created_at", { ascending: false })
+      .limit(25);
+    setRows(((data ?? []) as unknown) as CostAlertRow[]);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("cost_alerts_panel")
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "alert_log", filter: "reason=eq.cost_threshold" },
+        load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  return (
+    <section className="rounded-md border border-border bg-card p-3 space-y-2">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <AlertTriangle className="h-4 w-4" /> Cost alert history
+        </div>
+        <span className="text-[10px] text-muted-foreground">
+          last {rows.length} cost_threshold alert{rows.length === 1 ? "" : "s"}
+        </span>
+      </header>
+
+      {loading ? (
+        <div className="text-[11px] text-muted-foreground">Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground">
+          No cost alerts yet. Configure thresholds above and they'll appear here when crossed.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="text-left">
+                <th className="py-1 pr-2 font-medium">When</th>
+                <th className="py-1 pr-2 font-medium">Job</th>
+                <th className="py-1 pr-2 font-medium">Scope</th>
+                <th className="py-1 pr-2 font-medium text-right">Run cost</th>
+                <th className="py-1 pr-2 font-medium text-right">Day total</th>
+                <th className="py-1 pr-2 font-medium text-right">Threshold</th>
+                <th className="py-1 pr-2 font-medium">Delivered</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((r) => {
+                const p = r.payload ?? {};
+                const scope = p.scope ?? "—";
+                const isPerRun = scope === "per_run";
+                const isPerDay = scope === "per_day";
+                const threshold =
+                  p.threshold_usd ??
+                  (isPerRun ? p.threshold_per_run_usd : isPerDay ? p.threshold_per_day_usd : null);
+                return (
+                  <tr key={r.id} className="align-top">
+                    <td className="py-1 pr-2 text-muted-foreground whitespace-nowrap">{ago(r.created_at)}</td>
+                    <td className="py-1 pr-2 font-mono">{p.job ?? r.job}{p.test ? " (test)" : ""}</td>
+                    <td className="py-1 pr-2">
+                      <span className="px-1.5 py-0.5 rounded border border-border text-[10px]">{scope}</span>
+                    </td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd(p.run_cost_usd)}</td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd(p.day_cost_usd)}</td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd(threshold)}</td>
+                    <td className="py-1 pr-2">
+                      {r.delivered
+                        ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />{r.status_code ?? "ok"}
+                          </span>
+                        : <span className="inline-flex items-center gap-1 text-destructive">
+                            <AlertTriangle className="h-3 w-3" />{r.status_code ?? "fail"}
+                          </span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+};
+
