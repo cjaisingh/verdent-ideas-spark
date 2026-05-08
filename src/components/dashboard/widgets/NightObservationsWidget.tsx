@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { WidgetEmpty, WidgetError, WidgetShell } from "./WidgetShell";
 import type { DashboardWidgetProps } from "./types";
 
-type Row = { id: string; created_at: string; severity: string | null; verdict: string | null; summary: string | null };
+type Row = { id: string; created_at: string; severity: string | null; kind: string | null; summary: string | null };
 
 export function NightObservationsWidget({ size, onOpen }: DashboardWidgetProps) {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export function NightObservationsWidget({ size, onOpen }: DashboardWidgetProps) 
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error, count } = await supabase
         .from("night_observations")
-        .select("id,created_at,severity,verdict,summary", { count: "exact" })
+        .select("id,created_at,severity,kind,summary", { count: "exact" })
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -69,7 +69,7 @@ export function NightObservationsWidget({ size, onOpen }: DashboardWidgetProps) 
                         : "bg-emerald-500"
                   }`}
                 />
-                <span className="truncate flex-1">{r.summary ?? r.verdict ?? "observation"}</span>
+                <span className="truncate flex-1">{r.summary ?? r.kind ?? "observation"}</span>
               </li>
             ))}
           </ul>
