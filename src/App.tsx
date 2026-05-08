@@ -20,6 +20,7 @@ import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import RiskDashboard from "./pages/RiskDashboard";
+import ApprovalPack from "./pages/ApprovalPack";
 import Runbook from "./pages/Runbook";
 import Runbooks from "./pages/Runbooks";
 import Memory from "./pages/Memory";
