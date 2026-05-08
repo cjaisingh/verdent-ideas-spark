@@ -1494,6 +1494,33 @@ export type Database = {
           },
         ]
       }
+      operator_dashboards: {
+        Row: {
+          active_tab_id: string | null
+          created_at: string
+          id: string
+          tabs: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_tab_id?: string | null
+          created_at?: string
+          id?: string
+          tabs?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_tab_id?: string | null
+          created_at?: string
+          id?: string
+          tabs?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       operator_messages: {
         Row: {
           chat_id: number

@@ -10,7 +10,7 @@ import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map as MapIcon, BookOpen, Brain,
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
-  FileSearch, Users, ChevronRight, Star,
+  FileSearch, Users, ChevronRight, Star, LayoutDashboard,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
@@ -24,6 +24,7 @@ type NavItem = {
 };
 
 const operateTopItems: NavItem[] = [
+  { url: "/dashboard", title: "Dashboard", icon: LayoutDashboard },
   { url: "/tenants", title: "Tenants", icon: Building2 },
   { url: "/capabilities", title: "Capabilities", icon: Boxes },
   { url: "/events", title: "Events", icon: Activity },

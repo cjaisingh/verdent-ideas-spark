@@ -1,113 +1,160 @@
-## Sidebar redesign: #1 base + Favorites (#2) + status dots (#6), with a collapsible Copilot subgroup
+## Operator Dashboard (`/dashboard`)
 
-Goal: keep the current light-mode structure (#1) as the foundation, add a per-user **Favorites** pin section at the top (from #2), add **status dots** as the only secondary signal on rows (from #6), and collapse the five flat Copilot rows into one expandable subgroup under **Operate** (Option A). Single restrained palette — no glow, no decorative lines, no multi-color icons.
+A per-operator landing page with 1–4 named tabs. Each tab uses one of four fixed bento templates and renders widgets from a small contract. Persisted server-side so it follows the operator across machines. Reuses existing hooks/queries — no new domain data.
 
-Pure UI work in `src/components/AppSidebar.tsx` and a small localStorage helper. No routes, no DB, no backend.
+### 1. Route + nav
 
-### 1. Visual rules (apply to every row)
+- New page: `src/pages/Dashboard.tsx` at `/dashboard`, behind `RequireAuth` + `OperatorLayout`.
+- Sidebar entry **Dashboard** (icon `LayoutDashboard`) at the very top of the **Operate** group, above Tenants. Pinnable like any other row.
+- After first sign-in, `/dashboard` is the recommended default but we do **not** change `/` redirects in this iteration.
 
-- One unmistakable treatment for the active route: `bg-sidebar-accent text-sidebar-accent-foreground` + 2px left border in `--sidebar-primary`. Nothing else gets a fill.
-- Icons: monochrome, `text-sidebar-foreground/70` default, `text-sidebar-primary` when active. No pastels, no gradients, no per-row colors.
-- Status dot (right-aligned, 6px): `bg-destructive` (red), `bg-amber-500` (yellow), `bg-sky-500` (blue), `bg-emerald-500` (green). Source described in section 4. Dot is the only non-grey element on inactive rows.
-- Group labels: small uppercase tracked, muted. No squiggles, no rules between groups beyond the existing `SidebarGroup` spacing.
-- Tooltips show full label + status reason when collapsed/icon mode.
+### 2. Data model (one new table)
 
-### 2. New top section: Favorites
+```sql
+create table public.operator_dashboards (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique,           -- one row per operator
+  tabs jsonb not null default '[]'::jsonb,
+  active_tab_id text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
-Pinned by the operator, max 6 items, drag-to-reorder later (out of scope now — manual pin/unpin only).
+alter table public.operator_dashboards enable row level security;
 
-```text
-FAVORITES
-  ☆ Tenants                ●
-  ☆ Risk dashboard         ●
-  ☆ Copilot transcripts
-OPERATE
-  ...
+-- Operator-only: a row is owned by exactly one user; only that user reads/writes it.
+create policy "own row select" on public.operator_dashboards
+  for select using (auth.uid() = user_id);
+create policy "own row insert" on public.operator_dashboards
+  for insert with check (auth.uid() = user_id);
+create policy "own row update" on public.operator_dashboards
+  for update using (auth.uid() = user_id);
+
+create trigger trg_operator_dashboards_updated_at
+  before update on public.operator_dashboards
+  for each row execute function public.update_updated_at_column();
 ```
 
-- Pin/unpin via a star button revealed on hover at the right of any nav row in the lower groups.
-- Pinned rows in Favorites show the same icon + label + status dot as the source row. They do **not** get hidden from their original group — instead the original row shows a small filled star to indicate "pinned" (addresses the #2 "Copilot appearing twice is confusing" critique by keeping the duplicate intentional and visually marked).
-- Empty state: section hidden entirely when no favorites.
-- Persistence: `localStorage` key `awip.sidebar.favorites.v1` → `{ urls: string[] }`. Per-browser, per-user is fine for v1; server sync is a follow-up if asked.
-
-### 3. Copilot subgroup (Option A)
-
-Inside **Operate**, replace the five flat Copilot rows with one collapsible row:
-
-```text
-OPERATE
-  Tenants
-  Capabilities
-  Events
-  API logs
-  Control plane
-  ▸ Copilot                          ← chevron toggles, click label routes
-      Agents
-      Profile
-      Lessons
-      Transcripts
+`tabs` shape (validated client-side, max 4):
+```ts
+type Widget = { id: string; kind: WidgetKind; props?: Record<string, unknown> };
+type Tab = {
+  id: string;            // ulid
+  name: string;          // 1–24 chars
+  template: TemplateId;  // see section 4
+  widgets: (Widget | null)[]; // length matches template slot count
+};
 ```
 
-- Top-level **Copilot** row: clicking the label navigates to `/copilot` (or to last-visited child if any, stored at `awip.sidebar.copilot.lastChild`). Clicking the chevron toggles open/closed without navigating.
-- Open-by-default if the current route starts with `/copilot`.
-- Open/closed state persisted at `awip.sidebar.copilot.open`.
-- Active state on a child also lights up the parent row with a thin left border (no fill) so the user can see "you're inside Copilot" at a glance.
-- In icon-collapsed sidebar mode: parent shows the Copilot icon only; hovering surfaces a flyout with the four children.
+No realtime subscription on this table — saves are explicit and infrequent.
 
-### 4. Status dots — fixed mapping for v1
+### 3. Widget contract
 
-Driven by lightweight signals already available in the app (no new tables). Each dot has one and only one source:
+`src/components/dashboard/widgets/types.ts`:
+```ts
+export type WidgetKind =
+  | "pending-approvals"
+  | "night-observations-24h"
+  | "open-risks"
+  | "recent-capability-events";
 
-| Row              | Dot       | Source signal                                                          |
-|------------------|-----------|------------------------------------------------------------------------|
-| Tenants          | red       | any tenant with `status = 'error'` (existing query, reuse hook)        |
-| API logs         | red       | unread error-level logs in last 1h (existing realtime channel)         |
-| Risk dashboard   | yellow    | open risks with severity ≥ high (reuse existing count)                 |
-| Jobs board       | blue      | jobs in `pending` state assigned to current operator                   |
-| Night shifts     | green     | currently inside the 22:00–06:00 UTC window AND any `night_observations` row in last 30min |
-| Approval-related | reuse `PendingApprovalsIndicator` count, but render as a dot not a number |
+export interface DashboardWidgetProps {
+  size: "sm" | "md" | "lg";   // determined by the template slot
+  onOpen?: () => void;        // navigates to the source page
+}
+```
 
-If the source query isn't trivially available from existing hooks, **omit the dot** for that row in v1 rather than build new queries. Better to ship 3 truthful dots than 6 speculative ones.
+Each widget is a small component in `src/components/dashboard/widgets/<Kind>Widget.tsx`. Rules:
+- Self-contained: own data fetch via existing hooks/queries (no new tables).
+- Header with title + a `→` icon that calls `onOpen`.
+- Compact body sized for the slot. No internal scroll except for `lg`.
+- Empty state is a single muted line.
+- Errors degrade silently to a tiny "unavailable" line — never block the dashboard.
 
-### 5. Icon de-duplication (Copilot group)
+A `WidgetRegistry` maps `WidgetKind` → component + display label + default size + source route. The Add-Widget picker reads from this registry, so new widgets are one-line additions.
 
-Current state: Copilot, Copilot agents, Copilot profile, lessons, transcripts share or recycle icons. New mapping:
+### 4. Bento templates (fixed, 4 presets)
 
-| Item            | Icon (lucide)      |
-|-----------------|--------------------|
-| Copilot (parent)| `Mic`              |
-| Agents          | `Users`            |
-| Profile         | `UserCircle2`      |
-| Lessons         | `GraduationCap`    |
-| Transcripts     | `MessageSquareText`|
+```text
+A. 2x2          B. 1+3              C. hero+strip       D. dense-6
+┌────┬────┐     ┌─────────┬───┐     ┌──────────────┐    ┌──┬──┬──┐
+│ md │ md │     │         │ sm│     │     lg       │    │sm│sm│sm│
+├────┼────┤     │   lg    ├───┤     ├──┬──┬──┬─────┤    ├──┼──┼──┤
+│ md │ md │     │         │ sm│     │sm│sm│sm│ sm  │    │sm│sm│sm│
+└────┴────┘     │         ├───┤     └──┴──┴──┴─────┘    └──┴──┴──┘
+                └─────────┴───┘
+slots: 4 md     slots: 1 lg + 3 sm  slots: 1 lg + 4 sm  slots: 6 sm
+```
 
-(Mic stays only on the parent.)
+Templates are CSS-grid layouts. Slots are positional — picking a template gives you that exact shape; you fill slots one by one.
 
-### 6. Files
+### 5. Seeded widgets (v1)
 
-**Edited**
-- `src/components/AppSidebar.tsx` — add Favorites section, collapsible Copilot subgroup, star pin/unpin button, status dot rendering, icon swap.
+| Kind                       | Source signal                                                           | Default size |
+|----------------------------|-------------------------------------------------------------------------|--------------|
+| `pending-approvals`        | `approval_queue` where `status = 'pending'` (reuse existing query)      | md           |
+| `night-observations-24h`   | `night_observations` last 24h, count + most recent 3                    | md           |
+| `open-risks`               | open high-severity risks (reuse `/roadmap/risks` query)                 | md           |
+| `recent-capability-events` | latest 5 `capability_events`                                            | md           |
+
+If a query isn't trivially available we **omit the widget** rather than build new infra — same rule as sidebar status dots.
+
+### 6. Tab management
+
+Header strip on `/dashboard`:
+```text
+[ Today ▾ ] [ Risk ] [ Delivery ] [ + ]    ⚙ edit
+```
+
+- Add tab (disabled at 4): prompts for name, defaults to template **A (2x2)**.
+- Rename: inline edit on double-click or via edit menu.
+- Delete: confirm dialog; cannot delete the last tab.
+- Reorder: drag tab labels (simple HTML5 drag).
+- Edit mode: toggles slot overlays so empty slots show **+ Add widget**, filled slots show **Replace** / **Remove**. Outside edit mode the dashboard is read-only and clean.
+- Default seed (created on first visit when `operator_dashboards` row is missing): one tab named **Today**, template B (1+3), pre-filled with `pending-approvals` (lg) + `open-risks`, `night-observations-24h`, `recent-capability-events`.
+
+### 7. Persistence
+
+- `useDashboardConfig()` hook: loads/creates the user's row, exposes `{ tabs, activeTabId, save }`.
+- All edits update local state immediately and debounce a single `update` to the row at 800ms idle. Tab switches are saved immediately (cheap field).
+- No optimistic locking; one operator per row, last-write-wins is fine.
+
+### 8. Files
 
 **New**
-- `src/lib/sidebar-state.ts` — `useFavorites()` (localStorage), `useCopilotOpen()`, `useStatusDots()` (returns a `Record<url, "red"|"amber"|"blue"|"green">`, wires existing hooks/queries; rows without a known signal return `undefined`).
-- `docs/operator-sidebar.md` — short doc: section order, pin behavior, dot mapping, how to add a new dot source.
+- `supabase/migrations/<ts>_operator_dashboards.sql` (via migration tool)
+- `src/pages/Dashboard.tsx`
+- `src/hooks/useDashboardConfig.ts`
+- `src/components/dashboard/DashboardTabs.tsx`
+- `src/components/dashboard/BentoGrid.tsx` (renders a template + slot children)
+- `src/components/dashboard/AddWidgetMenu.tsx`
+- `src/components/dashboard/widgets/types.ts`
+- `src/components/dashboard/widgets/registry.ts`
+- `src/components/dashboard/widgets/PendingApprovalsWidget.tsx`
+- `src/components/dashboard/widgets/NightObservationsWidget.tsx`
+- `src/components/dashboard/widgets/OpenRisksWidget.tsx`
+- `src/components/dashboard/widgets/RecentCapabilityEventsWidget.tsx`
+- `docs/operator-dashboard.md`
 
-**Updated docs**
-- `README.md` — one bullet under "Operator console" mentioning Favorites + Copilot grouping.
-- `CHANGELOG.md` — entry under Unreleased.
+**Edited**
+- `src/App.tsx` — register `/dashboard` route.
+- `src/components/AppSidebar.tsx` — add Dashboard at top of Operate.
+- `README.md`, `CHANGELOG.md` — short entries.
 
-### 7. Out of scope
+### 9. Out of scope
 
-- No server-side persistence for favorites or Copilot open state (localStorage only).
-- No drag-to-reorder favorites.
-- No new status-dot data sources beyond what existing hooks already expose.
-- No changes to the right/bottom panes, header, or any route.
-- No dark-mode-only treatment — both themes use the same restrained palette.
+- No drag-and-drop widget reordering inside a slot (slots are fixed positions for v1).
+- No custom user-defined templates; just the four presets.
+- No widget settings/props UI; widgets render with defaults only.
+- No realtime sync of dashboard config across tabs/sessions.
+- No widgets sourced from new queries — strictly reuse existing ones.
+- No change to `/` or initial-route redirects.
 
-### 8. Validation
+### 10. Validation
 
-- Pin Tenants → appears at top under FAVORITES with a status dot mirroring the original row; original Tenants row shows a filled star.
-- Click chevron on Copilot → expands; click label → navigates to `/copilot`; visit `/copilot/lessons` → group auto-opens, parent row shows left-border-only active hint, Lessons row shows full active treatment.
-- Reload → favorites and Copilot open state restored.
-- Trigger an error log → red dot appears on API logs row within the realtime tick.
-- Collapse sidebar to icon mode → Copilot parent flyout shows the four children with distinct icons; no row has more than one visual treatment at a time.
+- First visit creates the seed Today tab; reload restores it.
+- Add a tab → at-cap state correctly disables the `+` button at 4.
+- Switch templates on a tab → existing widgets remap to lower slot indexes; widgets that no longer fit are dropped with a confirm.
+- Open a different browser → same operator sees identical tabs (server persistence).
+- Insert a row into `approval_queue` → Pending approvals widget reflects it after its own subscription tick (widget owns its data).
+- Delete the only tab → blocked with toast.

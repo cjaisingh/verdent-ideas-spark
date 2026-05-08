@@ -58,6 +58,8 @@ Every call is logged to `api_call_logs` (route, status, duration, actor, idempot
 
 ## Operator console
 
+`/dashboard` is the per-operator landing page: 1–4 server-persisted tabs, fixed bento templates, and a small widget registry pulling from existing hooks (pending approvals, night observations, open risks, recent capability events). See [docs/operator-dashboard.md](docs/operator-dashboard.md).
+
 Header has a 4-mode pane toggle (left only / dual / centre / bottom): switch with the icon row or `⌘1`–`⌘4`. Right pane streams live Night Agent observations; bottom pane is a live event ticker for OKR / capability / discussion events. Mode is persisted per top-level route in `localStorage`. See [docs/operator-panes.md](docs/operator-panes.md).
 
 The left sidebar has a per-operator **Favorites** section (hover any row → click the star to pin, max 6) and a collapsible **Copilot** subgroup under Operate (Agents / Profile / Lessons / Transcripts). Status dots flag rows with real signal (pending approvals, recent night observations). See [docs/operator-sidebar.md](docs/operator-sidebar.md).

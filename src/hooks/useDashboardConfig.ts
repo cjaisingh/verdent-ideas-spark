@@ -1,0 +1,200 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { TEMPLATES } from "@/components/dashboard/templates";
+import type { DashboardConfig, Tab, TemplateId, Widget, WidgetKind } from "@/components/dashboard/widgets/types";
+
+const SAVE_DEBOUNCE_MS = 800;
+const MAX_TABS = 4;
+
+function shortId() {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+export function emptyWidgetsFor(template: TemplateId): (Widget | null)[] {
+  return TEMPLATES[template].slots.map(() => null);
+}
+
+function seedConfig(): DashboardConfig {
+  const tabId = shortId();
+  const tab: Tab = {
+    id: tabId,
+    name: "Today",
+    template: "one-plus-three",
+    widgets: [
+      { id: shortId(), kind: "pending-approvals" },
+      { id: shortId(), kind: "open-risks" },
+      { id: shortId(), kind: "night-observations-24h" },
+      { id: shortId(), kind: "recent-capability-events" },
+    ],
+  };
+  return { tabs: [tab], activeTabId: tabId };
+}
+
+function sanitize(raw: unknown): DashboardConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as { tabs?: unknown; activeTabId?: unknown };
+  if (!Array.isArray(obj.tabs)) return null;
+  const tabs: Tab[] = [];
+  for (const t of obj.tabs.slice(0, MAX_TABS)) {
+    if (!t || typeof t !== "object") continue;
+    const tab = t as Partial<Tab>;
+    if (typeof tab.id !== "string" || typeof tab.name !== "string") continue;
+    const tpl = (tab.template ?? "grid-2x2") as TemplateId;
+    if (!(tpl in TEMPLATES)) continue;
+    const slotCount = TEMPLATES[tpl].slots.length;
+    const widgets: (Widget | null)[] = Array.from({ length: slotCount }).map((_, i) => {
+      const w = Array.isArray(tab.widgets) ? tab.widgets[i] : null;
+      if (!w || typeof w !== "object") return null;
+      const ww = w as Partial<Widget>;
+      if (typeof ww.id !== "string" || typeof ww.kind !== "string") return null;
+      return { id: ww.id, kind: ww.kind as WidgetKind, props: ww.props };
+    });
+    tabs.push({ id: tab.id, name: tab.name.slice(0, 24), template: tpl, widgets });
+  }
+  if (tabs.length === 0) return null;
+  const activeTabId = typeof obj.activeTabId === "string" && tabs.some((t) => t.id === obj.activeTabId)
+    ? obj.activeTabId
+    : tabs[0].id;
+  return { tabs, activeTabId };
+}
+
+export function useDashboardConfig() {
+  const [config, setConfig] = useState<DashboardConfig | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const saveTimer = useRef<number | null>(null);
+
+  // Load (and seed if missing) on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (cancelled) return;
+      const uid = user?.id ?? null;
+      setUserId(uid);
+      if (!uid) {
+        setLoaded(true);
+        return;
+      }
+      const { data } = await supabase
+        .from("operator_dashboards")
+        .select("tabs,active_tab_id")
+        .eq("user_id", uid)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) {
+        const cfg = sanitize({ tabs: data.tabs, activeTabId: data.active_tab_id }) ?? seedConfig();
+        setConfig(cfg);
+      } else {
+        const seeded = seedConfig();
+        setConfig(seeded);
+        await supabase.from("operator_dashboards").insert({
+          user_id: uid,
+          tabs: seeded.tabs as never,
+          active_tab_id: seeded.activeTabId,
+        });
+      }
+      setLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const persist = useCallback(async (cfg: DashboardConfig) => {
+    if (!userId) return;
+    await supabase
+      .from("operator_dashboards")
+      .update({ tabs: cfg.tabs as never, active_tab_id: cfg.activeTabId })
+      .eq("user_id", userId);
+  }, [userId]);
+
+  const scheduleSave = useCallback((cfg: DashboardConfig) => {
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => { void persist(cfg); }, SAVE_DEBOUNCE_MS);
+  }, [persist]);
+
+  /** Mutate config locally + debounce a save. */
+  const update = useCallback((mutator: (prev: DashboardConfig) => DashboardConfig) => {
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const next = mutator(prev);
+      scheduleSave(next);
+      return next;
+    });
+  }, [scheduleSave]);
+
+  /** Tab switch — saved immediately (cheap). */
+  const setActiveTab = useCallback((tabId: string) => {
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, activeTabId: tabId };
+      void persist(next);
+      return next;
+    });
+  }, [persist]);
+
+  const addTab = useCallback((name: string, template: TemplateId = "grid-2x2") => {
+    update((prev) => {
+      if (prev.tabs.length >= MAX_TABS) return prev;
+      const tab: Tab = { id: shortId(), name: name.slice(0, 24) || "Tab", template, widgets: emptyWidgetsFor(template) };
+      return { tabs: [...prev.tabs, tab], activeTabId: tab.id };
+    });
+  }, [update]);
+
+  const renameTab = useCallback((tabId: string, name: string) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => (t.id === tabId ? { ...t, name: name.slice(0, 24) || t.name } : t)),
+    }));
+  }, [update]);
+
+  const deleteTab = useCallback((tabId: string) => {
+    update((prev) => {
+      if (prev.tabs.length <= 1) return prev;
+      const tabs = prev.tabs.filter((t) => t.id !== tabId);
+      const activeTabId = prev.activeTabId === tabId ? tabs[0].id : prev.activeTabId;
+      return { tabs, activeTabId };
+    });
+  }, [update]);
+
+  const reorderTab = useCallback((fromId: string, toId: string) => {
+    update((prev) => {
+      const from = prev.tabs.findIndex((t) => t.id === fromId);
+      const to = prev.tabs.findIndex((t) => t.id === toId);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const tabs = prev.tabs.slice();
+      const [moved] = tabs.splice(from, 1);
+      tabs.splice(to, 0, moved);
+      return { ...prev, tabs };
+    });
+  }, [update]);
+
+  const setTemplate = useCallback((tabId: string, template: TemplateId) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const slotCount = TEMPLATES[template].slots.length;
+        const widgets = Array.from({ length: slotCount }).map((_, i) => t.widgets[i] ?? null);
+        return { ...t, template, widgets };
+      }),
+    }));
+  }, [update]);
+
+  const setSlotWidget = useCallback((tabId: string, slotIndex: number, widget: Widget | null) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const widgets = t.widgets.slice();
+        widgets[slotIndex] = widget;
+        return { ...t, widgets };
+      }),
+    }));
+  }, [update]);
+
+  return {
+    config, loaded, userId, MAX_TABS,
+    setActiveTab, addTab, renameTab, deleteTab, reorderTab, setTemplate, setSlotWidget,
+    newWidgetId: shortId,
+  };
+}
