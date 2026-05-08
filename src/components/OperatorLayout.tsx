@@ -207,7 +207,18 @@ const OperatorLayout = () => {
                           setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }, viewport))
                         }
                       >
-                        <BottomPaneEventTicker />
+                        <div className="relative h-full">
+                          {dragging && (
+                            <span
+                              role="status"
+                              aria-live="polite"
+                              className="pointer-events-none absolute left-1/2 top-1 z-20 -translate-x-1/2 rounded border border-amber-500/40 bg-background/95 px-1.5 py-0.5 font-mono text-[10px] text-amber-600 shadow-sm dark:text-amber-400"
+                            >
+                              B {sizes.bottomHeight}%
+                            </span>
+                          )}
+                          <BottomPaneEventTicker />
+                        </div>
                       </ResizablePanel>
                     </>
                   )}
@@ -228,7 +239,18 @@ const OperatorLayout = () => {
                       setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }, viewport))
                     }
                   >
-                    <RightPaneNightAgent />
+                    <div className="relative h-full">
+                      {dragging && (
+                        <span
+                          role="status"
+                          aria-live="polite"
+                          className="pointer-events-none absolute left-1 top-2 z-20 rounded border border-amber-500/40 bg-background/95 px-1.5 py-0.5 font-mono text-[10px] text-amber-600 shadow-sm dark:text-amber-400"
+                        >
+                          R {sizes.rightWidth}%
+                        </span>
+                      )}
+                      <RightPaneNightAgent />
+                    </div>
                   </ResizablePanel>
                 </>
               )}
