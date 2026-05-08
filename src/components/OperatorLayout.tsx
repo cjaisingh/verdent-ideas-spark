@@ -12,7 +12,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { paneFlags, usePaneState } from "@/lib/pane-state";
+import { getModeSizes, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -96,13 +96,13 @@ const OperatorLayout = () => {
               direction="horizontal"
               className="h-full"
             >
-              <ResizablePanel defaultSize={flags.right ? 100 - paneState.rightWidth : 100} minSize={40}>
+              <ResizablePanel defaultSize={flags.right ? 100 - getModeSizes(paneState, effectiveMode).rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
                   key={`v-${effectiveMode}`}
                   direction="vertical"
                   className="h-full"
                 >
-                  <ResizablePanel defaultSize={flags.bottom ? 100 - paneState.bottomHeight : 100} minSize={30}>
+                  <ResizablePanel defaultSize={flags.bottom ? 100 - getModeSizes(paneState, effectiveMode).bottomHeight : 100} minSize={30}>
                     <main className="h-full overflow-y-auto px-6 py-6">
                       <div className="max-w-[1600px] w-full mx-auto">
                         <Outlet />
@@ -113,10 +113,12 @@ const OperatorLayout = () => {
                     <>
                       <ResizableHandle withHandle onDragging={setDragging} />
                       <ResizablePanel
-                        defaultSize={paneState.bottomHeight}
+                        defaultSize={getModeSizes(paneState, effectiveMode).bottomHeight}
                         minSize={15}
                         maxSize={60}
-                        onResize={(size) => setPaneState({ bottomHeight: Math.round(size) })}
+                        onResize={(size) =>
+                          setPaneState(withModeSize(paneState, effectiveMode, { bottomHeight: Math.round(size) }))
+                        }
                       >
                         <BottomPaneEventTicker />
                       </ResizablePanel>
@@ -128,10 +130,12 @@ const OperatorLayout = () => {
                 <>
                   <ResizableHandle withHandle onDragging={setDragging} />
                   <ResizablePanel
-                    defaultSize={paneState.rightWidth}
+                    defaultSize={getModeSizes(paneState, effectiveMode).rightWidth}
                     minSize={15}
                     maxSize={40}
-                    onResize={(size) => setPaneState({ rightWidth: Math.round(size) })}
+                    onResize={(size) =>
+                      setPaneState(withModeSize(paneState, effectiveMode, { rightWidth: Math.round(size) }))
+                    }
                   >
                     <RightPaneNightAgent />
                   </ResizablePanel>
