@@ -81,6 +81,10 @@ Deno.serve(async (req) => {
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+    // Night-cheap policy: between 22:00 and 06:00 UTC every AI job uses gemini-2.5-flash-lite.
+    const REVIEWER_MODEL = pickModel(REVIEWER_DAYTIME_MODEL);
+    const NIGHT_MODE = isNightUTC();
+
     const [logs, skips, taskActivity] = await Promise.all([
       sb.from("roadmap_work_log").select("created_at, source, model, summary, issues, fixes, duration_ms, tokens_total")
         .gte("created_at", sinceISO).order("created_at", { ascending: false }).limit(80),
