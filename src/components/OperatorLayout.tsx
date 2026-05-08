@@ -37,6 +37,9 @@ const OperatorLayout = () => {
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
+  // Keyboard-driven resizing flag — debounced off after the last arrow keystroke.
+  const [kbResizing, setKbResizing] = useState(false);
+  const kbTimerRef = useRef<number | null>(null);
   // Snapshot the focus mode at drag start so it can be restored if anything
   // (a stray click, keyboard shortcut, etc.) tried to change it mid-drag.
   const modeAtDragStartRef = useRef<typeof paneState.mode | null>(null);
@@ -60,6 +63,28 @@ const OperatorLayout = () => {
     }
     setDragging(d);
   };
+
+  // PanelResizeHandle natively handles ArrowLeft/Right/Up/Down (and Home/End)
+  // when focused. We piggy-back on the keydown to flip the same "interaction
+  // locked" indicator that drag uses.
+  const handleResizeKeyDown: React.KeyboardEventHandler<keyof HTMLElementTagNameMap> = (e) => {
+    if (
+      e.key === "ArrowLeft" ||
+      e.key === "ArrowRight" ||
+      e.key === "ArrowUp" ||
+      e.key === "ArrowDown" ||
+      e.key === "Home" ||
+      e.key === "End"
+    ) {
+      setKbResizing(true);
+      if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
+      kbTimerRef.current = window.setTimeout(() => setKbResizing(false), 400);
+    }
+  };
+  useEffect(() => () => {
+    if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
+  }, []);
+  const interacting = dragging || kbResizing;
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -102,19 +127,19 @@ const OperatorLayout = () => {
         <AppSidebar collapsible={effectiveMode === "centre" ? "offcanvas" : "icon"} />
         <div className="flex-1 flex flex-col min-w-0">
           <header
-            aria-busy={dragging}
+            aria-busy={interacting}
             className={`h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10 transition-opacity ${
-              dragging ? "pointer-events-none select-none opacity-90" : ""
+              interacting ? "pointer-events-none select-none opacity-90" : ""
             }`}
           >
             {!isMobile && (
               <PaneToggleGroup
-                disabled={dragging}
+                disabled={interacting}
                 mode={effectiveMode}
                 onChange={(m) => {
                   // Toggles are disabled while dragging; ignore any change that
                   // still slips through and skip no-op selections.
-                  if (dragging) return;
+                  if (interacting) return;
                   if (m === effectiveMode) return;
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
@@ -128,7 +153,7 @@ const OperatorLayout = () => {
                 }}
               />
             )}
-            {dragging && (
+            {interacting && (
               <span
                 role="status"
                 aria-live="polite"
@@ -233,12 +258,13 @@ const OperatorLayout = () => {
                             <ResizableHandle
                               withHandle
                               onDragging={handleDragging}
-                              aria-label="Drag to resize bottom pane. Pane switching is locked while dragging."
-                              className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                              onKeyDown={handleResizeKeyDown}
+                              aria-label="Drag or use arrow keys to resize bottom pane. Pane switching is locked while resizing."
+                              className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                             />
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs">
-                            Drag to resize · pane switching locked while dragging
+                            Drag or arrow keys to resize · switching locked while resizing
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
@@ -251,7 +277,7 @@ const OperatorLayout = () => {
                         }
                       >
                         <div className="relative h-full">
-                          {dragging && (
+                          {interacting && (
                             <span
                               role="status"
                               aria-live="polite"
@@ -275,12 +301,13 @@ const OperatorLayout = () => {
                         <ResizableHandle
                           withHandle
                           onDragging={handleDragging}
-                          aria-label="Drag to resize right pane. Pane switching is locked while dragging."
-                          className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                          onKeyDown={handleResizeKeyDown}
+                          aria-label="Drag or use arrow keys to resize right pane. Pane switching is locked while resizing."
+                          className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                         />
                       </TooltipTrigger>
                       <TooltipContent side="left" className="text-xs">
-                        Drag to resize · pane switching locked while dragging
+                        Drag or arrow keys to resize · switching locked while resizing
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -293,7 +320,7 @@ const OperatorLayout = () => {
                     }
                   >
                     <div className="relative h-full">
-                      {dragging && (
+                      {interacting && (
                         <span
                           role="status"
                           aria-live="polite"
