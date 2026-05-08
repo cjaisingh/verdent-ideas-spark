@@ -19,11 +19,19 @@ type Row = {
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
+  cost_usd: number | null;
   latency_ms: number | null;
   error: string | null;
   request_ref: Record<string, unknown> | null;
   created_at: string;
 };
+
+// Use the value persisted by the edge function when available; otherwise fall back
+// to the client-side pricing table (handles rows logged before cost_usd was added).
+function rowCost(r: Row): number {
+  if (typeof r.cost_usd === "number") return r.cost_usd;
+  return costFor(r.model, r.prompt_tokens ?? 0, r.completion_tokens ?? 0);
+}
 
 const WINDOWS = [
   { id: "1d", label: "24h", days: 1 },
