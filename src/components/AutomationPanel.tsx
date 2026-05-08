@@ -1054,6 +1054,7 @@ const DailyAiSpendCard = () => {
   const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date }>(range);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
+  const [metric, setMetric] = useState<"spend" | "prompt" | "completion">("spend");
   const [loading, setLoading] = useState(true);
   const [capped, setCapped] = useState(false);
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
@@ -1127,25 +1128,41 @@ const DailyAiSpendCard = () => {
   const groupKeyOf = (r: SpendRow) =>
     (groupBy === "job" ? r.job : r.model) || "unknown";
 
+  const valueOf = (r: SpendRow) =>
+    metric === "spend" ? Number(r.cost_usd || 0)
+    : metric === "prompt" ? Number(r.prompt_tokens || 0)
+    : Number(r.completion_tokens || 0);
+  const fmtMetric = (n: number) =>
+    metric === "spend" ? fmtUsd6(n) : `${Math.round(n).toLocaleString()} tok`;
+  const metricLabel =
+    metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens";
+
   const groups = Array.from(new Set(rows.map(groupKeyOf))).sort();
   const matrix: Record<string, Record<string, number>> = {};
-  for (const d of dayKeys) matrix[d] = {};
+  const costMatrix: Record<string, Record<string, number>> = {};
+  for (const d of dayKeys) { matrix[d] = {}; costMatrix[d] = {}; }
   let total = 0;
+  let totalCostAll = 0;
   let totalTokens = 0;
   for (const r of rows) {
     const day = (r.created_at || "").slice(0, 10);
     if (!matrix[day]) continue;
     const key = groupKeyOf(r);
+    const v = valueOf(r);
     const cost = Number(r.cost_usd || 0);
-    matrix[day][key] = (matrix[day][key] || 0) + cost;
-    total += cost;
+    matrix[day][key] = (matrix[day][key] || 0) + v;
+    costMatrix[day][key] = (costMatrix[day][key] || 0) + cost;
+    total += v;
+    totalCostAll += cost;
     totalTokens += Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0);
   }
   const dailyTotals = dayKeys.map((d) =>
     Object.values(matrix[d]).reduce((a, b) => a + b, 0));
+  const dailyCostTotals = dayKeys.map((d) =>
+    Object.values(costMatrix[d]).reduce((a, b) => a + b, 0));
   const maxDay = Math.max(0.0001, ...dailyTotals);
 
-  // top breakdown for whichever grouping is active
+  // top breakdown for whichever grouping is active (in selected metric)
   const breakdown: Array<{ key: string; cost: number }> = groups
     .map((g) => ({
       key: g,
@@ -1166,19 +1183,19 @@ const DailyAiSpendCard = () => {
   const colorFor = (key: string) =>
     palette[groups.indexOf(key) % palette.length];
 
-  // Threshold breach derivations
+  // Threshold breach derivations (always computed against cost, regardless of metric)
   const effectiveRunLimit = (job: string | null | undefined) =>
     (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
   const dayBreaches = new Set<string>();
   if (globalLimits.day != null) {
-    dayKeys.forEach((d, i) => { if (dailyTotals[i] > globalLimits.day!) dayBreaches.add(d); });
+    dayKeys.forEach((d, i) => { if (dailyCostTotals[i] > globalLimits.day!) dayBreaches.add(d); });
   }
   const cellBreaches = new Set<string>(); // "day|job"
   if (groupBy === "job") {
     for (const d of dayKeys) {
-      for (const job of Object.keys(matrix[d])) {
+      for (const job of Object.keys(costMatrix[d])) {
         const lim = jobLimits[job]?.day;
-        if (lim != null && matrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
+        if (lim != null && costMatrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
       }
     }
   }
@@ -1188,7 +1205,9 @@ const DailyAiSpendCard = () => {
   }).length;
   const hasAnyJobLimit = Object.keys(jobLimits).length > 0;
   const hasAnyLimit = globalLimits.day != null || globalLimits.run != null || hasAnyJobLimit;
-  const dailyLimitPct = globalLimits.day != null ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
+  const showThresholds = metric === "spend";
+  const dailyLimitPct = (showThresholds && globalLimits.day != null)
+    ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
 
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
@@ -1249,6 +1268,19 @@ const DailyAiSpendCard = () => {
             </PopoverContent>
           </Popover>
           <div className="inline-flex rounded border border-border overflow-hidden">
+            {([
+              { k: "spend", label: "$ Spend" },
+              { k: "prompt", label: "Prompt tok" },
+              { k: "completion", label: "Completion tok" },
+            ] as const).map((m) => (
+              <button
+                key={m.k}
+                onClick={() => setMetric(m.k)}
+                className={`px-2 py-0.5 ${metric === m.k ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >{m.label}</button>
+            ))}
+          </div>
+          <div className="inline-flex rounded border border-border overflow-hidden">
             {(["job", "model"] as const).map((g) => (
               <button
                 key={g}
@@ -1262,12 +1294,12 @@ const DailyAiSpendCard = () => {
 
       <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
-          <div className="font-mono">{fmtUsd6(total)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total ({metricLabel})</div>
+          <div className="font-mono">{fmtMetric(total)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtUsd6(total / daysSpan)}</div>
+          <div className="font-mono">{fmtMetric(total / daysSpan)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
@@ -1327,17 +1359,17 @@ const DailyAiSpendCard = () => {
                   .map((g) => ({ g, c: matrix[d][g] || 0 }))
                   .filter((s) => s.c > 0);
                 const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
-                const dayBreached = dayBreaches.has(d);
+                const dayBreached = showThresholds && dayBreaches.has(d);
                 return (
                   <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
                     <div
                       className={`w-full flex flex-col-reverse rounded-sm overflow-hidden cursor-pointer ${dayBreached ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40 hover:ring-1 hover:ring-border"}`}
                       style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                      title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${cellBreaches.has(`${d}|${s.g}`) ? "⚠ " : ""}${s.g}: ${fmtUsd6(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dayTotal - globalLimits.day!)}` : ""}\n(click for runs)`}
+                      title={`${d} · ${fmtMetric(dayTotal)}\n${segments.map(s => `${(showThresholds && cellBreaches.has(`${d}|${s.g}`)) ? "⚠ " : ""}${s.g}: ${fmtMetric(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dailyCostTotals[idx] - globalLimits.day!)}` : ""}\n(click for runs)`}
                       onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
                     >
                       {segments.map((s) => {
-                        const segBreached = cellBreaches.has(`${d}|${s.g}`);
+                        const segBreached = showThresholds && cellBreaches.has(`${d}|${s.g}`);
                         return (
                           <div
                             key={s.g}
@@ -1347,7 +1379,7 @@ const DailyAiSpendCard = () => {
                               background: colorFor(s.g),
                             }}
                             onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
-                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
+                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtMetric(s.c)} (click for runs)`}
                           />
                         );
                       })}
@@ -1360,7 +1392,7 @@ const DailyAiSpendCard = () => {
               })}
             </div>
           </div>
-          {hasAnyLimit && (
+          {hasAnyLimit && showThresholds && (
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
               {globalLimits.day != null && (
                 <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-destructive/70" /> daily limit {fmtUsd6(globalLimits.day)}</span>
@@ -1374,11 +1406,16 @@ const DailyAiSpendCard = () => {
               )}
             </div>
           )}
+          {hasAnyLimit && !showThresholds && (
+            <div className="text-[10px] text-muted-foreground">
+              Cost thresholds hidden while viewing {metricLabel}.
+            </div>
+          )}
 
           {/* Legend / breakdown table */}
           <div className="space-y-1">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Breakdown by {groupBy}
+              Breakdown by {groupBy} · {metricLabel}
             </div>
             <table className="w-full text-xs">
               <tbody>
@@ -1388,7 +1425,7 @@ const DailyAiSpendCard = () => {
                       <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(key) }} />
                     </td>
                     <td className="py-1 pr-2 font-mono truncate max-w-[280px]">{key}</td>
-                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd6(cost)}</td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtMetric(cost)}</td>
                     <td className="py-1 pr-2 text-right text-muted-foreground">
                       {total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : "–"}
                     </td>
@@ -1402,6 +1439,7 @@ const DailyAiSpendCard = () => {
       <SpendDrillDialog
         rows={rows}
         groupBy={groupBy}
+        metric={metric}
         drill={drill}
         onClose={() => setDrill(null)}
         globalLimits={globalLimits}
@@ -1426,10 +1464,11 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, drill, onClose, globalLimits, jobLimits,
+  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
+  metric: "spend" | "prompt" | "completion";
   drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
   globalLimits: { day: number | null; run: number | null };
@@ -1461,6 +1500,7 @@ const SpendDrillDialog = ({
         <DialogHeader>
           <DialogTitle className="text-sm font-mono">
             {drill?.day === "*" ? "All days" : drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            <span className="ml-2 text-muted-foreground">· viewing {metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens"}</span>
             {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
