@@ -18,6 +18,7 @@ type Action = {
   owner: string | null;
   source: string;
   promoted_task_id: string | null;
+  due_at: string | null;
   created_at: string;
 };
 
