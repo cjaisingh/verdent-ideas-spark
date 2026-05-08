@@ -222,10 +222,34 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
       kind: "promote_job",
       target_ref: subjectRef,
       rationale,
-      payload: { worst_severity: worst, qa_passed: qaPassed, phase, suite },
+      payload: {
+        worst_severity: worst,
+        qa_passed: qaPassed,
+        phase,
+        suite,
+        // Audit-report lineage: cheap join key back to the shift snapshot.
+        gates_snapshot_ref: shiftId,
+        selected_at: openedAt,
+      },
     });
     proposalsQueued++;
   }
+
+  // Persist the final candidate breakdown on the shift summary so the
+  // promotion audit report can reconstruct the exact "before" picture
+  // even after rows in discussion_actions move on.
+  await sb.from("night_shifts").update({
+    summary: {
+      tz,
+      window: `${winStart}-${winEnd}`,
+      allowed_kinds: allowedKinds,
+      gates: gatesSnapshot,
+      skip_reasons: [],
+      candidates_total: candidates?.length ?? 0,
+      candidates_selected: candidatesSelected,
+      candidates_skipped: candidatesSkipped,
+    },
+  }).eq("id", shiftId);
 
   return json({
     shift_id: shiftId,
