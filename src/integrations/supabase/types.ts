@@ -161,6 +161,33 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_cost_thresholds: {
+        Row: {
+          alert_on_cost: boolean
+          cost_per_day_usd: number | null
+          cost_per_run_usd: number | null
+          created_at: string
+          job: string
+          updated_at: string
+        }
+        Insert: {
+          alert_on_cost?: boolean
+          cost_per_day_usd?: number | null
+          cost_per_run_usd?: number | null
+          created_at?: string
+          job: string
+          updated_at?: string
+        }
+        Update: {
+          alert_on_cost?: boolean
+          cost_per_day_usd?: number | null
+          cost_per_run_usd?: number | null
+          created_at?: string
+          job?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       alert_log: {
         Row: {
           created_at: string

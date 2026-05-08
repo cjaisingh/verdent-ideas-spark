@@ -244,6 +244,7 @@ export const AutomationPanel = () => {
   return (
     <div className="space-y-3">
     <AlertsCard />
+    <PerJobCostThresholdsCard />
     <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
@@ -829,3 +830,161 @@ const CostAlertsCard = () => {
   );
 };
 
+type JobThreshold = {
+  job: string;
+  cost_per_run_usd: number | null;
+  cost_per_day_usd: number | null;
+  alert_on_cost: boolean;
+  updated_at?: string;
+};
+
+const KNOWN_JOBS = ["daily-plan", "scheduled-code-review"];
+
+const PerJobCostThresholdsCard = () => {
+  const [rows, setRows] = useState<JobThreshold[]>([]);
+  const [draftJob, setDraftJob] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("alert_cost_thresholds" as any)
+      .select("job, cost_per_run_usd, cost_per_day_usd, alert_on_cost, updated_at")
+      .order("job", { ascending: true });
+    setRows(((data ?? []) as unknown) as JobThreshold[]);
+  };
+
+  useEffect(() => {
+    load();
+    const ch = supabase.channel("per_job_thresholds")
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_cost_thresholds" }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
+  const upsert = async (job: string, changes: Partial<JobThreshold>) => {
+    const existing = rows.find(r => r.job === job);
+    const next: JobThreshold = {
+      job,
+      cost_per_run_usd: existing?.cost_per_run_usd ?? null,
+      cost_per_day_usd: existing?.cost_per_day_usd ?? null,
+      alert_on_cost: existing?.alert_on_cost ?? true,
+      ...changes,
+    };
+    setRows(prev => {
+      const others = prev.filter(r => r.job !== job);
+      return [...others, next].sort((a, b) => a.job.localeCompare(b.job));
+    });
+    const { error } = await supabase.from("alert_cost_thresholds" as any)
+      .upsert({ ...next, updated_at: new Date().toISOString() }, { onConflict: "job" });
+    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
+  };
+
+  const remove = async (job: string) => {
+    setRows(prev => prev.filter(r => r.job !== job));
+    const { error } = await supabase.from("alert_cost_thresholds" as any).delete().eq("job", job);
+    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+  };
+
+  const addJob = async () => {
+    const j = draftJob.trim();
+    if (!j) return;
+    if (rows.some(r => r.job === j)) { toast({ title: "Job already configured" }); return; }
+    setBusy(true);
+    await upsert(j, {});
+    setDraftJob("");
+    setBusy(false);
+  };
+
+  const presetSuggestions = KNOWN_JOBS.filter(j => !rows.some(r => r.job === j));
+
+  return (
+    <section className="rounded-md border border-border bg-card p-3 space-y-2">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <AlertTriangle className="h-4 w-4" /> Per-job cost thresholds
+        </div>
+        <span className="text-[10px] text-muted-foreground">overrides global thresholds when set</span>
+      </header>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text" placeholder="job name (e.g. daily-plan)"
+          value={draftJob} onChange={(e) => setDraftJob(e.target.value)}
+          className="text-xs bg-background border border-border rounded px-2 py-1 font-mono w-56"
+        />
+        <button onClick={addJob} disabled={busy || !draftJob.trim()}
+          className="text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
+          Add override
+        </button>
+        {presetSuggestions.map(j => (
+          <button key={j} onClick={() => setDraftJob(j)}
+            className="text-[10px] px-1.5 py-0.5 rounded border border-dashed border-border text-muted-foreground hover:bg-muted">
+            + {j}
+          </button>
+        ))}
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground">
+          No per-job overrides — every job uses the global thresholds set above.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px]">
+            <thead className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="text-left">
+                <th className="py-1 pr-2 font-medium">Job</th>
+                <th className="py-1 pr-2 font-medium text-right">Per-run $ &gt;</th>
+                <th className="py-1 pr-2 font-medium text-right">Per-day $ &gt;</th>
+                <th className="py-1 pr-2 font-medium">Alert</th>
+                <th className="py-1 pr-2 font-medium text-right"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map(r => (
+                <tr key={r.job}>
+                  <td className="py-1 pr-2 font-mono">{r.job}</td>
+                  <td className="py-1 pr-2 text-right">
+                    <input type="number" min={0} step={0.01}
+                      value={r.cost_per_run_usd ?? ""} placeholder="off"
+                      onChange={(e) => {
+                        const v = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value));
+                        upsert(r.job, { cost_per_run_usd: v });
+                      }}
+                      className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
+                  </td>
+                  <td className="py-1 pr-2 text-right">
+                    <input type="number" min={0} step={0.01}
+                      value={r.cost_per_day_usd ?? ""} placeholder="off"
+                      onChange={(e) => {
+                        const v = e.target.value === "" ? null : Math.max(0, parseFloat(e.target.value));
+                        upsert(r.job, { cost_per_day_usd: v });
+                      }}
+                      className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <label className="inline-flex items-center gap-1 cursor-pointer">
+                      <input type="checkbox" className="accent-foreground"
+                        checked={r.alert_on_cost}
+                        onChange={(e) => upsert(r.job, { alert_on_cost: e.target.checked })} />
+                      enabled
+                    </label>
+                  </td>
+                  <td className="py-1 pr-2 text-right">
+                    <button onClick={() => remove(r.job)}
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-border hover:bg-destructive hover:text-destructive-foreground">
+                      remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            Leave a field blank to fall back to the global threshold for that scope. Disable "alert" to silence cost alerts for a single job.
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
