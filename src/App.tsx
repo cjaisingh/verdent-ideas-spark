@@ -34,6 +34,7 @@ import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
 import NightShifts from "./pages/NightShifts";
+import PromotionAudits from "./pages/PromotionAudits";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -77,6 +78,7 @@ const App = () => (
             <Route path="/runbooks" element={<Runbooks />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/capability-promotion" element={<CapabilityPromotion />} />
+            <Route path="/admin/promotion-audits" element={<PromotionAudits />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
