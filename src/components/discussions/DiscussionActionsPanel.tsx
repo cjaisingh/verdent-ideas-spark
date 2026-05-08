@@ -196,35 +196,6 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         </div>
       )}
 
-      {proposals.length > 0 && (
-        <div className="space-y-1.5 rounded border border-dashed p-2 bg-muted/20">
-          <div className="text-[11px] uppercase text-muted-foreground">Proposed by Copilot — accept to save</div>
-          {proposals.map((p, i) => (
-            <div key={i} className="flex items-start gap-2 rounded border bg-background p-2 text-xs">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <Badge variant="outline" className="text-[9px] uppercase">{p.priority}</Badge>
-                  {p.confidence != null && (
-                    <span className="text-[10px] text-muted-foreground">conf {Math.round(p.confidence * 100)}%</span>
-                  )}
-                  {p.owner_hint && <Badge variant="outline" className="text-[9px]">@{p.owner_hint}</Badge>}
-                </div>
-                <div className="font-medium">{p.title}</div>
-                {p.details && <div className="text-muted-foreground mt-0.5">{p.details}</div>}
-              </div>
-              <div className="flex flex-col gap-1">
-                <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => acceptProposal(p, i)} title="Accept">
-                  <Check className="h-3 w-3" />
-                </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(p, i)} title="Reject">
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {items.length === 0 && proposals.length === 0 ? (
         <p className="text-xs text-muted-foreground">No action items yet. Add one or extract from the transcript.</p>
       ) : (
