@@ -13,6 +13,7 @@ import { AutomationPanel } from "@/components/AutomationPanel";
 import { DailyPlanCard } from "@/components/DailyPlanCard";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
 import { EvidencePanel } from "@/components/EvidencePanel";
+import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -586,6 +587,11 @@ const Roadmap = () => {
                                           </Button>
                                         </div>
                                       </div>
+                                    </div>
+
+                                    {/* Review checklist */}
+                                    <div className="border-t border-border pt-2">
+                                      <ReviewChecklistEditor taskId={task.id} />
                                     </div>
 
                                     {/* Research evidence */}
