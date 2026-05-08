@@ -196,7 +196,7 @@ const OperatorLayout = () => {
                     <>
                       <ResizableHandle
                         withHandle
-                        onDragging={setDragging}
+                        onDragging={handleDragging}
                         className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
                       />
                       <ResizablePanel
@@ -204,7 +204,7 @@ const OperatorLayout = () => {
                         minSize={bounds.bottom.min}
                         maxSize={bounds.bottom.max}
                         onResize={(size) =>
-                          setPaneState(withModeSize(paneState, effectiveMode, { bottomHeight: Math.round(size) }))
+                          setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }))
                         }
                       >
                         <BottomPaneEventTicker />
@@ -217,7 +217,7 @@ const OperatorLayout = () => {
                 <>
                   <ResizableHandle
                     withHandle
-                    onDragging={setDragging}
+                    onDragging={handleDragging}
                     className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
                   />
                   <ResizablePanel
@@ -225,7 +225,7 @@ const OperatorLayout = () => {
                     minSize={bounds.right.min}
                     maxSize={bounds.right.max}
                     onResize={(size) =>
-                      setPaneState(withModeSize(paneState, effectiveMode, { rightWidth: Math.round(size) }))
+                      setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }))
                     }
                   >
                     <RightPaneNightAgent />

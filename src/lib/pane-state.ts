@@ -114,7 +114,9 @@ export function routeKeyFromPath(pathname: string): string {
   return seg ? `/${seg}` : "/";
 }
 
-export function usePaneState(): [PaneState, (patch: Partial<PaneState>) => void, string] {
+type PaneStateUpdater = Partial<PaneState> | ((prev: PaneState) => Partial<PaneState> | PaneState);
+
+export function usePaneState(): [PaneState, (patch: PaneStateUpdater) => void, string] {
   const { pathname } = useLocation();
   const key = routeKeyFromPath(pathname);
   const [state, setState] = useState<PaneState>(() => {
@@ -128,9 +130,10 @@ export function usePaneState(): [PaneState, (patch: Partial<PaneState>) => void,
   }, [key]);
 
   const update = useCallback(
-    (patch: Partial<PaneState>) => {
+    (patch: PaneStateUpdater) => {
       setState((prev) => {
-        const next = { ...prev, ...patch };
+        const resolved = typeof patch === "function" ? patch(prev) : patch;
+        const next = { ...prev, ...resolved };
         const all = readAll();
         all[key] = next;
         writeAll(all);
