@@ -350,6 +350,7 @@ const OperatorLayout = () => {
                           lastNonCentre: "left",
                           sizesByMode: undefined,
                           sizesByViewportMode: {},
+                          sourcesByViewportSlot: {},
                         });
                         toast.success("Layout reset", {
                           description: "Pane mode and all saved sizes restored to defaults for this route.",
