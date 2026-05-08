@@ -1359,17 +1359,17 @@ const DailyAiSpendCard = () => {
                   .map((g) => ({ g, c: matrix[d][g] || 0 }))
                   .filter((s) => s.c > 0);
                 const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
-                const dayBreached = dayBreaches.has(d);
+                const dayBreached = showThresholds && dayBreaches.has(d);
                 return (
                   <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
                     <div
                       className={`w-full flex flex-col-reverse rounded-sm overflow-hidden cursor-pointer ${dayBreached ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40 hover:ring-1 hover:ring-border"}`}
                       style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                      title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${cellBreaches.has(`${d}|${s.g}`) ? "⚠ " : ""}${s.g}: ${fmtUsd6(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dayTotal - globalLimits.day!)}` : ""}\n(click for runs)`}
+                      title={`${d} · ${fmtMetric(dayTotal)}\n${segments.map(s => `${(showThresholds && cellBreaches.has(`${d}|${s.g}`)) ? "⚠ " : ""}${s.g}: ${fmtMetric(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dailyCostTotals[idx] - globalLimits.day!)}` : ""}\n(click for runs)`}
                       onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
                     >
                       {segments.map((s) => {
-                        const segBreached = cellBreaches.has(`${d}|${s.g}`);
+                        const segBreached = showThresholds && cellBreaches.has(`${d}|${s.g}`);
                         return (
                           <div
                             key={s.g}
@@ -1379,7 +1379,7 @@ const DailyAiSpendCard = () => {
                               background: colorFor(s.g),
                             }}
                             onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
-                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
+                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtMetric(s.c)} (click for runs)`}
                           />
                         );
                       })}
