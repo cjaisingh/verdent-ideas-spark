@@ -32,6 +32,7 @@ import MasterPlan from "./pages/MasterPlan";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
+import NightShifts from "./pages/NightShifts";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -59,6 +60,7 @@ const App = () => (
             <Route path="/roadmap/risks" element={<RiskDashboard />} />
             <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/jobs" element={<Jobs />} />
+            <Route path="/night-shifts" element={<NightShifts />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
             <Route path="/notebook" element={<Notebook />} />
