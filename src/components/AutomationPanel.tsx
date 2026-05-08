@@ -1102,22 +1102,36 @@ const DailyAiSpendCard = () => {
     return () => { active = false; supabase.removeChannel(ch); };
   }, []);
 
+  // Reset group filter if user switches the group dimension
+  useEffect(() => { setGroupFilter(null); }, [groupBy]);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
         .gte("created_at", startOfUtcDay(range.from).toISOString())
-        .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
+        .lt("created_at", endExclusiveUtcDay(range.to).toISOString());
+      if (groupFilter) q = q.eq(groupBy, groupFilter);
+      const { data, error } = await q
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(rowLimit);
       if (!cancelled) {
         if (error) toast({ title: "Failed to load AI spend", description: error.message, variant: "destructive" });
         const list = (data as SpendRow[]) || [];
         setRows(list);
-        setCapped(list.length === 5000);
+        setCapped(list.length === rowLimit);
+        setKnownGroups((prev) => {
+          const jobs = new Set(prev.job);
+          const models = new Set(prev.model);
+          for (const r of list) {
+            if (r.job) jobs.add(r.job);
+            if (r.model) models.add(r.model);
+          }
+          return { job: Array.from(jobs).sort(), model: Array.from(models).sort() };
+        });
         setLoading(false);
       }
     };
@@ -1126,7 +1140,7 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [range.from.getTime(), range.to.getTime()]);
+  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
 
   // Previous-period fetch (same length, immediately before range.from)
   useEffect(() => {
