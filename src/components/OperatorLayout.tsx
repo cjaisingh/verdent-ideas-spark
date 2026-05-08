@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import PendingApprovalsIndicator from "@/components/PendingApprovalsIndicator";
+import UtcClock from "@/components/UtcClock";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import {
@@ -397,6 +398,7 @@ const OperatorLayout = () => {
               </TooltipProvider>
             )}
             <div className="ml-auto flex items-center gap-2">
+              <UtcClock />
               <PendingApprovalsIndicator />
               <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
             </div>
