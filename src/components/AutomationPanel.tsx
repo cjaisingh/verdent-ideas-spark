@@ -1061,6 +1061,8 @@ const DailyAiSpendCard = () => {
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
   const [globalLimits, setGlobalLimits] = useState<{ day: number | null; run: number | null }>({ day: null, run: null });
   const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
+  const [compare, setCompare] = useState(false);
+  const [prevRows, setPrevRows] = useState<SpendRow[]>([]);
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
@@ -1122,6 +1124,31 @@ const DailyAiSpendCard = () => {
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [range.from.getTime(), range.to.getTime()]);
+
+  // Previous-period fetch (same length, immediately before range.from)
+  useEffect(() => {
+    if (!compare) { setPrevRows([]); return; }
+    let cancelled = false;
+    const fromMs = startOfUtcDay(range.from).getTime();
+    const toMs = endExclusiveUtcDay(range.to).getTime();
+    const span = toMs - fromMs;
+    const prevFrom = new Date(fromMs - span);
+    const prevTo = new Date(fromMs);
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("ai_usage_log")
+        .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, status, request_ref")
+        .gte("created_at", prevFrom.toISOString())
+        .lt("created_at", prevTo.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (cancelled) return;
+      if (error) toast({ title: "Failed to load comparison period", description: error.message, variant: "destructive" });
+      setPrevRows((data as SpendRow[]) || []);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [compare, range.from.getTime(), range.to.getTime()]);
 
   const dayKeys = enumerateUtcDays(range.from, range.to);
   const daysSpan = Math.max(1, dayKeys.length);
@@ -1213,6 +1240,24 @@ const DailyAiSpendCard = () => {
   const dailyLimitPct = (showThresholds && globalLimits.day != null)
     ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
 
+  // Comparison vs. previous period
+  const prevTotal = compare ? prevRows.reduce((s, r) => s + valueOf(r), 0) : 0;
+  const prevTokens = compare ? prevRows.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0) : 0;
+  const prevCalls = compare ? prevRows.length : 0;
+  const pctChange = (curr: number, prev: number): number | null => {
+    if (!compare) return null;
+    if (prev === 0) return curr === 0 ? 0 : null; // null = N/A (no baseline)
+    return ((curr - prev) / prev) * 100;
+  };
+  const DeltaChip = ({ pct }: { pct: number | null }) => {
+    if (pct == null) return <span className="text-[9px] text-muted-foreground ml-1">vs prev: n/a</span>;
+    const up = pct > 0;
+    const flat = Math.abs(pct) < 0.05;
+    const tone = flat ? "text-muted-foreground" : up ? "text-destructive" : "text-emerald-600 dark:text-emerald-400";
+    const sign = flat ? "" : up ? "▲" : "▼";
+    return <span className={`text-[9px] ml-1 ${tone}`}>{sign} {Math.abs(pct).toFixed(1)}%</span>;
+  };
+
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
       <header className="flex items-center justify-between gap-2 flex-wrap">
@@ -1271,6 +1316,12 @@ const DailyAiSpendCard = () => {
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            type="button"
+            onClick={() => setCompare((v) => !v)}
+            className={`px-2 py-0.5 rounded border text-[11px] ${compare ? "bg-muted text-foreground border-border" : "text-muted-foreground border-border hover:text-foreground"}`}
+            title="Compare against the immediately preceding period of the same length"
+          >vs prev</button>
           <div className="inline-flex rounded border border-border overflow-hidden">
             {([
               { k: "spend", label: "$ Spend" },
@@ -1299,19 +1350,35 @@ const DailyAiSpendCard = () => {
       <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total ({metricLabel})</div>
-          <div className="font-mono">{fmtMetric(total)}</div>
+          <div className="font-mono">
+            {fmtMetric(total)}
+            {compare && <DeltaChip pct={pctChange(total, prevTotal)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {fmtMetric(prevTotal)}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtMetric(total / daysSpan)}</div>
+          <div className="font-mono">
+            {fmtMetric(total / daysSpan)}
+            {compare && <DeltaChip pct={pctChange(total / daysSpan, prevTotal / daysSpan)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {fmtMetric(prevTotal / daysSpan)}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
-          <div className="font-mono">{rows.length}</div>
+          <div className="font-mono">
+            {rows.length}
+            {compare && <DeltaChip pct={pctChange(rows.length, prevCalls)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {prevCalls.toLocaleString()}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
-          <div className="font-mono">{totalTokens.toLocaleString()}</div>
+          <div className="font-mono">
+            {totalTokens.toLocaleString()}
+            {compare && <DeltaChip pct={pctChange(totalTokens, prevTokens)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {prevTokens.toLocaleString()}</div>}
         </div>
         {hasAnyLimit && (
           <button
