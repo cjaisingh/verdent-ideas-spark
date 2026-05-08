@@ -17,18 +17,36 @@ export type Locale = (typeof SUPPORTED_LOCALES)[number];
 
 type Dict = Record<string, string>;
 
+// Single source of truth for route paths + their localized display names.
+// Tooltip / aria-label copy for header links is derived from these so it can
+// never drift from the actual <Link to=...> target.
+export const ROUTES = {
+  tenants: "/tenants",
+} as const;
+
+export type RouteKey = keyof typeof ROUTES;
+
+const routeNames: Record<Locale, Record<RouteKey, string>> = {
+  en: { tenants: "Tenants" },
+  de: { tenants: "Mandanten" },
+  fr: { tenants: "Locataires" },
+};
+
 const dictionaries: Record<Locale, Dict> = {
   en: {
-    "awipCore.tooltip": "Tenants · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — go to Tenants (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — go to {name} ({path})",
   },
   de: {
-    "awipCore.tooltip": "Mandanten · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — zu Mandanten wechseln (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — zu {name} wechseln ({path})",
   },
   fr: {
-    "awipCore.tooltip": "Locataires · /tenants",
-    "awipCore.ariaLabel": "AWIP Core — aller aux Locataires (/tenants)",
+    "awipCore.brand": "AWIP Core",
+    "nav.tooltip": "{name} · {path}",
+    "nav.ariaLabel": "{brand} — aller aux {name} ({path})",
   },
 };
 
