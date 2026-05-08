@@ -19,6 +19,9 @@ import { AutoLogSettings } from "@/components/AutoLogSettings";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
+import { ProceedAction } from "@/components/roadmap/ProceedAction";
+import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
+import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -61,12 +64,7 @@ const taskMarker = (status: string) => {
   }
 };
 
-const phaseStatusBadge = (s: string) => {
-  const map: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-    done: "default", active: "secondary", planned: "outline", paused: "destructive",
-  };
-  return <Badge variant={map[s] ?? "outline"} className="text-[10px] uppercase">{s}</Badge>;
-};
+// Replaced by <PhaseGateBadge /> which understands gate status.
 
 const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; onClick?: (e: React.MouseEvent) => void }) => {
   const base = "h-4 w-4 rounded-[4px] border flex items-center justify-center shrink-0 transition";
