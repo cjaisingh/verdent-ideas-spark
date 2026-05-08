@@ -34,6 +34,8 @@ export default function ApprovalPack() {
   const [paperSize, setPaperSize] = useState<"A4" | "Letter">(
     () => (localStorage.getItem("awip.approvalPack.paper") as any) ?? "A4",
   );
+  const [rangeFromId, setRangeFromId] = useState<string>("");
+  const [rangeToId, setRangeToId] = useState<string>("");
 
   useEffect(() => { localStorage.setItem("awip.approvalPack.orgName", orgName); }, [orgName]);
   useEffect(() => { localStorage.setItem("awip.approvalPack.density", density); }, [density]);
@@ -41,8 +43,11 @@ export default function ApprovalPack() {
 
   useEffect(() => {
     supabase.from("roadmap_phases").select("*").order("order").then(({ data }) => {
-      setPhases((data ?? []) as Phase[]);
-      if (data?.length && !phaseId) setPhaseId(data[0].id);
+      const list = (data ?? []) as Phase[];
+      setPhases(list);
+      if (list.length && !phaseId) setPhaseId(list[0].id);
+      if (list.length && !rangeFromId) setRangeFromId(list[0].id);
+      if (list.length && !rangeToId) setRangeToId(list[list.length - 1].id);
     });
   }, []);
 
@@ -96,6 +101,22 @@ export default function ApprovalPack() {
   }, [phaseId]);
 
   const phase = phases.find((p) => p.id === phaseId);
+
+  const phaseRange = useMemo(() => {
+    const from = phases.find((p) => p.id === rangeFromId);
+    const to = phases.find((p) => p.id === rangeToId);
+    if (!from || !to) return { lo: 0, hi: Number.MAX_SAFE_INTEGER, fromKey: "", toKey: "" };
+    const lo = Math.min(from.order, to.order);
+    const hi = Math.max(from.order, to.order);
+    const fromKey = from.order <= to.order ? from.key : to.key;
+    const toKey = from.order <= to.order ? to.key : from.key;
+    return { lo, hi, fromKey, toKey };
+  }, [phases, rangeFromId, rangeToId]);
+
+  const phasesInRange = useMemo(
+    () => phases.filter((p) => p.order >= phaseRange.lo && p.order <= phaseRange.hi),
+    [phases, phaseRange],
+  );
 
   const summary = useMemo(() => {
     const byStatus = tasks.reduce<Record<string, number>>((acc, t) => {
@@ -219,6 +240,24 @@ export default function ApprovalPack() {
               <option key={p.id} value={p.id}>{p.key} · {p.title}</option>
             ))}
           </select>
+          <div className="flex items-center gap-1 text-sm" title="Phase range for the summary page">
+            <span className="text-xs text-muted-foreground">Range</span>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={rangeFromId} onChange={(e) => setRangeFromId(e.target.value)}
+              aria-label="Phase range from"
+            >
+              {phases.map((p) => (<option key={p.id} value={p.id}>{p.key}</option>))}
+            </select>
+            <span className="text-muted-foreground">→</span>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={rangeToId} onChange={(e) => setRangeToId(e.target.value)}
+              aria-label="Phase range to"
+            >
+              {phases.map((p) => (<option key={p.id} value={p.id}>{p.key}</option>))}
+            </select>
+          </div>
           <select
             className="h-9 rounded-md border bg-background px-2 text-sm"
             value={density} onChange={(e) => setDensity(e.target.value as any)}
@@ -254,9 +293,9 @@ export default function ApprovalPack() {
           {(() => {
             const idx = phases.findIndex((p) => p.id === phase.id);
             const position = idx >= 0 ? `${idx + 1} of ${phases.length}` : "—";
-            const rangeLabel = phases.length > 1
-              ? `${phases[0].key} → ${phases[phases.length - 1].key}`
-              : phase.key;
+            const rangeLabel = phasesInRange.length > 1
+              ? `${phaseRange.fromKey} → ${phaseRange.toKey} (${phasesInRange.length} phases)`
+              : (phasesInRange[0]?.key ?? phase.key);
             return (
               <section className="pp-cover-page rounded-lg border p-10 print:border-0 print:p-0">
                 <div className="flex flex-col items-start justify-between min-h-[60vh] print:min-h-[24cm] gap-10">
@@ -314,9 +353,11 @@ export default function ApprovalPack() {
           </section>
 
           {(() => {
+            const inRangeIds = new Set(phasesInRange.map((p) => p.id));
+            const filteredStats = allPhaseStats.filter((r) => inRangeIds.has(r.phase_id));
             const statuses = ["approved", "changes_requested", "rejected", "pending"] as const;
             const totals = statuses.reduce<Record<string, number>>((a, s) => { a[s] = 0; return a; }, {});
-            for (const r of allPhaseStats) for (const s of statuses) totals[s] += r.counts[s] ?? 0;
+            for (const r of filteredStats) for (const s of statuses) totals[s] += r.counts[s] ?? 0;
             const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
             const pct = (n: number) => grandTotal ? Math.round((n / grandTotal) * 100) : 0;
             return (
@@ -324,7 +365,8 @@ export default function ApprovalPack() {
                 <header className="flex items-baseline justify-between gap-3 flex-wrap">
                   <h2 className="text-xl font-semibold">Approval status by phase</h2>
                   <div className="text-xs text-muted-foreground">
-                    {grandTotal} task{grandTotal === 1 ? "" : "s"} across {allPhaseStats.length} phase{allPhaseStats.length === 1 ? "" : "s"}
+                    {grandTotal} task{grandTotal === 1 ? "" : "s"} across {filteredStats.length} phase{filteredStats.length === 1 ? "" : "s"}
+                    {phasesInRange.length > 1 && ` · range ${phaseRange.fromKey} → ${phaseRange.toKey}`}
                   </div>
                 </header>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -355,7 +397,7 @@ export default function ApprovalPack() {
                     </tr>
                   </thead>
                   <tbody>
-                    {allPhaseStats
+                    {filteredStats
                       .slice()
                       .sort((a, b) => a.phase_order - b.phase_order)
                       .map((r) => {
