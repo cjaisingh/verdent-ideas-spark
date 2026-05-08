@@ -221,17 +221,27 @@ const OperatorLayout = () => {
                 ? " Pane mode switching is currently locked while you resize panels."
                 : ""}
             </p>
-            <Link
-              to="/tenants"
-              aria-current={isOnTenants ? "page" : undefined}
-              className={`inline-flex h-8 shrink-0 items-center rounded px-2 font-semibold text-sm leading-none transition-colors ${
-                isOnTenants
-                  ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
-                  : "text-foreground hover:text-primary"
-              }`}
-            >
-              AWIP Core
-            </Link>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link
+                    to="/tenants"
+                    aria-current={isOnTenants ? "page" : undefined}
+                    aria-label="AWIP Core — go to Tenants overview"
+                    className={`inline-flex h-8 shrink-0 items-center rounded px-2 font-semibold text-sm leading-none transition-colors ${
+                      isOnTenants
+                        ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
+                        : "text-foreground hover:text-primary"
+                    }`}
+                  >
+                    AWIP Core
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Go to Tenants overview (operator home)
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             {!isMobile && <PaneKeyboardHelp />}
             {!isMobile && (
               <PaneToggleGroup
