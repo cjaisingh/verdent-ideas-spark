@@ -54,6 +54,7 @@ const App = () => (
             <Route path="/api-logs" element={<ApiLogs />} />
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/roadmap" element={<Roadmap />} />
+            <Route path="/roadmap/risks" element={<RiskDashboard />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
             <Route path="/notebook" element={<Notebook />} />
