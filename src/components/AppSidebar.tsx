@@ -1,84 +1,290 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { useMemo } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
-  SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar,
+  SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem,
+  SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, useSidebar,
 } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
-  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert, Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon, FileSearch,
+  Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
+  Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
+  FileSearch, Users, ChevronRight, Star,
 } from "lucide-react";
+import {
+  DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
+  useCopilotOpen, useFavorites, useStatusDots,
+} from "@/lib/sidebar-state";
 
-const groups = [
-  {
-    label: "Operate",
-    items: [
-      { url: "/tenants", title: "Tenants", icon: Building2 },
-      { url: "/capabilities", title: "Capabilities", icon: Boxes },
-      { url: "/events", title: "Events", icon: Activity },
-      { url: "/api-logs", title: "API logs", icon: ScrollText },
-      { url: "/control-plane", title: "Control plane", icon: Settings2 },
-      { url: "/copilot", title: "Copilot", icon: Mic },
-      { url: "/copilot/agents", title: "Copilot agents", icon: Mic },
-      { url: "/copilot/profile", title: "Copilot profile", icon: UserCircle2 },
-      { url: "/copilot/lessons", title: "Copilot lessons", icon: GraduationCap },
-      { url: "/copilot/transcripts", title: "Copilot transcripts", icon: MessageSquareText },
-    ],
-  },
-  {
-    label: "Plan",
-    items: [
-      { url: "/roadmap", title: "Roadmap", icon: Map },
-      { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
-      { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
-      { url: "/jobs", title: "Jobs board", icon: ListChecks },
-      { url: "/night-shifts", title: "Night shifts", icon: Moon },
-      { url: "/notebook", title: "Notebook", icon: NotebookIcon },
-      { url: "/runbook", title: "Runbook", icon: BookOpen },
-      { url: "/memory", title: "Memory", icon: Brain },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { url: "/api-explorer", title: "API explorer", icon: Code2 },
-      { url: "/db-explorer", title: "DB explorer", icon: Database },
-      { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
-      { url: "/runbooks", title: "Runbooks", icon: Library },
-      { url: "/admin", title: "Admin", icon: Shield },
-      { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
-      { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
-      { url: "/status", title: "Status", icon: Heart },
-    ],
-  },
+type NavItem = {
+  url: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+const operateTopItems: NavItem[] = [
+  { url: "/tenants", title: "Tenants", icon: Building2 },
+  { url: "/capabilities", title: "Capabilities", icon: Boxes },
+  { url: "/events", title: "Events", icon: Activity },
+  { url: "/api-logs", title: "API logs", icon: ScrollText },
+  { url: "/control-plane", title: "Control plane", icon: Settings2 },
 ];
+
+const copilotParent = { url: "/copilot", title: "Copilot", icon: Mic };
+const copilotChildren: NavItem[] = [
+  { url: "/copilot/agents", title: "Agents", icon: Users },
+  { url: "/copilot/profile", title: "Profile", icon: UserCircle2 },
+  { url: "/copilot/lessons", title: "Lessons", icon: GraduationCap },
+  { url: "/copilot/transcripts", title: "Transcripts", icon: MessageSquareText },
+];
+
+const planItems: NavItem[] = [
+  { url: "/roadmap", title: "Roadmap", icon: Map },
+  { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
+  { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
+  { url: "/jobs", title: "Jobs board", icon: ListChecks },
+  { url: "/night-shifts", title: "Night shifts", icon: Moon },
+  { url: "/notebook", title: "Notebook", icon: NotebookIcon },
+  { url: "/runbook", title: "Runbook", icon: BookOpen },
+  { url: "/memory", title: "Memory", icon: Brain },
+];
+
+const systemItems: NavItem[] = [
+  { url: "/api-explorer", title: "API explorer", icon: Code2 },
+  { url: "/db-explorer", title: "DB explorer", icon: Database },
+  { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
+  { url: "/runbooks", title: "Runbooks", icon: Library },
+  { url: "/admin", title: "Admin", icon: Shield },
+  { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
+  { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
+  { url: "/status", title: "Status", icon: Heart },
+];
+
+const allItems: NavItem[] = [
+  ...operateTopItems,
+  copilotParent,
+  ...copilotChildren,
+  ...planItems,
+  ...systemItems,
+];
+
+function StatusDot({ color, label }: { color?: string; label?: string }) {
+  if (!color) return null;
+  return (
+    <span
+      className={`inline-block h-1.5 w-1.5 rounded-full ${color}`}
+      aria-label={label}
+      title={label}
+    />
+  );
+}
 
 export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "offcanvas" | "none" }) => {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
+  const dots = useStatusDots();
+
   const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
+  const isInCopilot = pathname.startsWith("/copilot");
+  const [copilotOpen, setCopilotOpen] = useCopilotOpen(isInCopilot);
+
+  const itemsByUrl = useMemo(() => {
+    const m = new Map<string, NavItem>();
+    for (const it of allItems) m.set(it.url, it);
+    return m;
+  }, []);
+
+  const favoriteItems = favorites
+    .map((u) => itemsByUrl.get(u))
+    .filter((x): x is NavItem => Boolean(x));
+
+  const renderRow = (it: NavItem, opts?: { showPin?: boolean; inFavorites?: boolean }) => {
+    const active = isActive(it.url);
+    const dot = dots[it.url];
+    const pinned = isFavorite(it.url);
+    return (
+      <SidebarMenuItem key={(opts?.inFavorites ? "fav-" : "") + it.url} className="group/row">
+        <SidebarMenuButton
+          asChild
+          isActive={active}
+          className={active ? "border-l-2 border-sidebar-primary" : ""}
+        >
+          <NavLink to={it.url} className="flex items-center gap-2">
+            <it.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+            {!collapsed && <span className="flex-1 truncate">{it.title}</span>}
+            {!collapsed && dot && <StatusDot color={DOT_CLASSES[dot]} label={`${it.title}: ${DOT_LABELS[dot]}`} />}
+            {!collapsed && pinned && !opts?.inFavorites && (
+              <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
+            )}
+          </NavLink>
+        </SidebarMenuButton>
+        {!collapsed && opts?.showPin && (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <SidebarMenuAction
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFavorite(it.url);
+                  }}
+                  className={pinned ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 focus:opacity-100"}
+                  aria-label={pinned ? `Unpin ${it.title} from Favorites` : `Pin ${it.title} to Favorites`}
+                >
+                  <Star className={`h-3.5 w-3.5 ${pinned ? "fill-sidebar-primary text-sidebar-primary" : ""}`} />
+                </SidebarMenuAction>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                {pinned ? "Unpin from Favorites" : "Pin to Favorites"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+      </SidebarMenuItem>
+    );
+  };
+
+  const renderCopilotGroup = () => {
+    const childActive = copilotChildren.some((c) => isActive(c.url));
+    const parentActive = isActive(copilotParent.url) && !childActive;
+    const showAsActiveAncestor = childActive && !collapsed;
+
+    return (
+      <SidebarMenuItem className="group/row">
+        <SidebarMenuButton
+          isActive={parentActive}
+          className={`${parentActive ? "border-l-2 border-sidebar-primary" : ""} ${
+            showAsActiveAncestor ? "border-l-2 border-sidebar-primary/40" : ""
+          }`}
+          onClick={() => {
+            const target = childActive
+              ? copilotParent.url
+              : (getCopilotLastChild() ?? copilotParent.url);
+            navigate(target);
+          }}
+        >
+          <copilotParent.icon className={`h-4 w-4 ${parentActive || childActive ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+          {!collapsed && <span className="flex-1 truncate">{copilotParent.title}</span>}
+          {!collapsed && isFavorite(copilotParent.url) && (
+            <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
+          )}
+        </SidebarMenuButton>
+        {!collapsed && (
+          <SidebarMenuAction
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCopilotOpen(!copilotOpen);
+            }}
+            aria-label={copilotOpen ? "Collapse Copilot" : "Expand Copilot"}
+            aria-expanded={copilotOpen}
+          >
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${copilotOpen ? "rotate-90" : ""}`} />
+          </SidebarMenuAction>
+        )}
+        {!collapsed && copilotOpen && (
+          <SidebarMenuSub>
+            {copilotChildren.map((c) => {
+              const active = isActive(c.url);
+              const dot = dots[c.url];
+              const pinned = isFavorite(c.url);
+              return (
+                <SidebarMenuSubItem key={c.url} className="group/subrow">
+                  <SidebarMenuSubButton
+                    asChild
+                    isActive={active}
+                    className={active ? "border-l-2 border-sidebar-primary" : ""}
+                  >
+                    <NavLink
+                      to={c.url}
+                      onClick={() => rememberCopilotChild(c.url)}
+                      className="flex items-center gap-2"
+                    >
+                      <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+                      <span className="flex-1 truncate">{c.title}</span>
+                      {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
+                      {pinned && (
+                        <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
+                      )}
+                    </NavLink>
+                  </SidebarMenuSubButton>
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorite(c.url);
+                          }}
+                          className={`absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
+                            pinned ? "opacity-100" : "opacity-0 group-hover/subrow:opacity-100 focus:opacity-100"
+                          }`}
+                          aria-label={pinned ? `Unpin ${c.title} from Favorites` : `Pin ${c.title} to Favorites`}
+                        >
+                          <Star className={`h-3 w-3 ${pinned ? "fill-sidebar-primary text-sidebar-primary" : ""}`} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs">
+                        {pinned ? "Unpin from Favorites" : "Pin to Favorites"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </SidebarMenuSubItem>
+              );
+            })}
+          </SidebarMenuSub>
+        )}
+      </SidebarMenuItem>
+    );
+  };
+
   return (
     <Sidebar collapsible={collapsible}>
       <SidebarContent>
-        {groups.map((g) => (
-          <SidebarGroup key={g.label}>
-            {!collapsed && <SidebarGroupLabel>{g.label}</SidebarGroupLabel>}
+        {favoriteItems.length > 0 && (
+          <SidebarGroup>
+            {!collapsed && <SidebarGroupLabel>Favorites</SidebarGroupLabel>}
             <SidebarGroupContent>
               <SidebarMenu>
-                {g.items.map((it) => (
-                  <SidebarMenuItem key={it.url}>
-                    <SidebarMenuButton asChild isActive={isActive(it.url)}>
-                      <NavLink to={it.url} className="flex items-center gap-2">
-                        <it.icon className="h-4 w-4" />
-                        {!collapsed && <span>{it.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {favoriteItems.map((it) => renderRow(it, { showPin: true, inFavorites: true }))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ))}
+        )}
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Operate</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {operateTopItems.map((it) => renderRow(it, { showPin: true }))}
+              {renderCopilotGroup()}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Plan</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {planItems.map((it) => renderRow(it, { showPin: true }))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>System</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {systemItems.map((it) => renderRow(it, { showPin: true }))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );
