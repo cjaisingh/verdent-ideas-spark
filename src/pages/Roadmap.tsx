@@ -615,26 +615,42 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
-                                    {/* Approval */}
-                                    <div className="border-t border-border pt-2">
-                                      <TaskApprovalPanel
-                                        taskId={task.id}
-                                        reviewStatus={(task.review_status ?? "pending") as "pending" | "approved" | "rejected" | "changes_requested"}
-                                        reviewedBy={task.reviewed_by ?? null}
-                                        reviewedAt={task.reviewed_at ?? null}
-                                        reviewNotes={task.review_notes ?? null}
-                                      />
-                                    </div>
-
-                                    {/* Review checklist */}
-                                    <div className="border-t border-border pt-2">
-                                      <ReviewChecklistEditor taskId={task.id} />
-                                    </div>
-
-                                    {/* Research evidence */}
-                                    <div className="border-t border-border pt-2">
-                                      <EvidencePanel taskId={task.id} />
-                                    </div>
+                                    <Accordion
+                                      type="multiple"
+                                      defaultValue={["approval"]}
+                                      className="border-t border-border"
+                                    >
+                                      <AccordionItem value="approval" className="border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Approval
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <TaskApprovalPanel
+                                            taskId={task.id}
+                                            reviewStatus={(task.review_status ?? "pending") as "pending" | "approved" | "rejected" | "changes_requested"}
+                                            reviewedBy={task.reviewed_by ?? null}
+                                            reviewedAt={task.reviewed_at ?? null}
+                                            reviewNotes={task.review_notes ?? null}
+                                          />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                      <AccordionItem value="checklist" className="border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Review checklist
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <ReviewChecklistEditor taskId={task.id} />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                      <AccordionItem value="evidence" className="border-b-0 border-border">
+                                        <AccordionTrigger className="text-[11px] uppercase tracking-wide text-muted-foreground hover:no-underline py-2">
+                                          Research evidence
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pb-3">
+                                          <EvidencePanel taskId={task.id} />
+                                        </AccordionContent>
+                                      </AccordionItem>
+                                    </Accordion>
                                     {(() => {
                                       const acts = activityByTask.get(task.id) ?? [];
                                       if (acts.length === 0) return null;
