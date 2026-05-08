@@ -10,21 +10,7 @@ import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHand
 import { Link } from "react-router-dom";
 import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
 
-type Job = JobDetailsRecord & {
-  id: string;
-  short_num: number;
-  subject_type: string;
-  subject_id: string;
-  discussion_id: string | null;
-  title: string;
-  details: string | null;
-  status: string;
-  priority: string;
-  owner: string | null;
-  source: string;
-  promoted_task_id: string | null;
-  created_at: string;
-};
+type Job = JobDetailsRecord;
 
 type DiscMeta = { id: string; subject_ordinal: number | null };
 type SubjMeta = { id: string; short_num: number | null };
