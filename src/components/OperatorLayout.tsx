@@ -37,6 +37,9 @@ const OperatorLayout = () => {
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
+  // Keyboard-driven resizing flag — debounced off after the last arrow keystroke.
+  const [kbResizing, setKbResizing] = useState(false);
+  const kbTimerRef = useRef<number | null>(null);
   // Snapshot the focus mode at drag start so it can be restored if anything
   // (a stray click, keyboard shortcut, etc.) tried to change it mid-drag.
   const modeAtDragStartRef = useRef<typeof paneState.mode | null>(null);
@@ -60,6 +63,28 @@ const OperatorLayout = () => {
     }
     setDragging(d);
   };
+
+  // PanelResizeHandle natively handles ArrowLeft/Right/Up/Down (and Home/End)
+  // when focused. We piggy-back on the keydown to flip the same "interaction
+  // locked" indicator that drag uses.
+  const handleResizeKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.key === "ArrowLeft" ||
+      e.key === "ArrowRight" ||
+      e.key === "ArrowUp" ||
+      e.key === "ArrowDown" ||
+      e.key === "Home" ||
+      e.key === "End"
+    ) {
+      setKbResizing(true);
+      if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
+      kbTimerRef.current = window.setTimeout(() => setKbResizing(false), 400);
+    }
+  };
+  useEffect(() => () => {
+    if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
+  }, []);
+  const interacting = dragging || kbResizing;
 
   const signOut = async () => {
     await supabase.auth.signOut();
