@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
     const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
     if (claimsErr || !claims?.claims?.sub) return json({ error: "unauthorized" }, 401);
     const userId = claims.claims.sub as string;
+    const userEmail = (claims.claims as any).email as string | undefined;
     const { data: isAdmin } = await sb.rpc("has_role", { _user_id: userId, _role: "admin" });
     if (!isAdmin) return json({ error: "forbidden: admin role required" }, 403);
 
@@ -61,7 +62,7 @@ Deno.serve(async (req) => {
       .from("memory_settings")
       .select("night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds")
       .eq("id", true).maybeSingle();
-    return await evaluateOpenGates(sb, settings ?? null, url, userId);
+    return await evaluateOpenGates(sb, settings ?? null, url, userId, userEmail, req);
   }
 
   const { data: settings } = await sb
