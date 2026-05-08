@@ -116,6 +116,28 @@ const OperatorLayout = () => {
                 </Tooltip>
               </TooltipProvider>
             )}
+            {!isMobile && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      className="inline-flex items-center gap-1.5 rounded border border-border bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                      aria-label={`Active pane layout: ${effectiveMode}`}
+                    >
+                      <span className="text-foreground">{effectiveMode}</span>
+                      {flags.right && <span>R {sizes.rightWidth}%</span>}
+                      {flags.bottom && <span>B {sizes.bottomHeight}%</span>}
+                      {hasModeSizeOverrides(paneState, effectiveMode) && (
+                        <span className="text-amber-500" title="Custom sizes saved">●</span>
+                      )}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Layout stored for this route ({hasModeSizeOverrides(paneState, effectiveMode) ? "custom sizes" : "default sizes"})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
             <div className="ml-auto flex items-center gap-2">
               <PendingApprovalsIndicator />
