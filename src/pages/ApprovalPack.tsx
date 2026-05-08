@@ -240,6 +240,24 @@ export default function ApprovalPack() {
               <option key={p.id} value={p.id}>{p.key} · {p.title}</option>
             ))}
           </select>
+          <div className="flex items-center gap-1 text-sm" title="Phase range for the summary page">
+            <span className="text-xs text-muted-foreground">Range</span>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={rangeFromId} onChange={(e) => setRangeFromId(e.target.value)}
+              aria-label="Phase range from"
+            >
+              {phases.map((p) => (<option key={p.id} value={p.id}>{p.key}</option>))}
+            </select>
+            <span className="text-muted-foreground">→</span>
+            <select
+              className="h-9 rounded-md border bg-background px-2 text-sm"
+              value={rangeToId} onChange={(e) => setRangeToId(e.target.value)}
+              aria-label="Phase range to"
+            >
+              {phases.map((p) => (<option key={p.id} value={p.id}>{p.key}</option>))}
+            </select>
+          </div>
           <select
             className="h-9 rounded-md border bg-background px-2 text-sm"
             value={density} onChange={(e) => setDensity(e.target.value as any)}
