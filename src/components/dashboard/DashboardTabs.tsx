@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Copy } from "lucide-react";
 import { TEMPLATE_LIST } from "./templates";
 import type { Tab, TemplateId } from "./widgets/types";
 import {
@@ -15,6 +15,7 @@ export function DashboardTabs({
   onAdd,
   onRename,
   onDelete,
+  onDuplicate,
   onReorder,
   onTemplateChange,
 }: {
@@ -26,6 +27,7 @@ export function DashboardTabs({
   onAdd: () => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onReorder: (fromId: string, toId: string) => void;
   onTemplateChange: (id: string, template: TemplateId) => void;
 }) {
@@ -103,6 +105,16 @@ export function DashboardTabs({
                       aria-label={`Rename ${t.name}`}
                     >
                       <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDuplicate(t.id)}
+                      disabled={tabs.length >= maxTabs}
+                      className="opacity-50 hover:opacity-100 disabled:opacity-20 disabled:cursor-not-allowed"
+                      aria-label={`Duplicate ${t.name}`}
+                      title={tabs.length >= maxTabs ? `Max ${maxTabs} tabs` : "Duplicate tab"}
+                    >
+                      <Copy className="h-3 w-3" />
                     </button>
                     {tabs.length > 1 && (
                       <button
