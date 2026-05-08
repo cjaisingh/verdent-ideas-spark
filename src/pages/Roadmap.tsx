@@ -20,6 +20,7 @@ import { EvidencePanel } from "@/components/EvidencePanel";
 import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
 import { ProceedAction } from "@/components/roadmap/ProceedAction";
+import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
 import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
@@ -347,6 +348,7 @@ const Roadmap = () => {
           <TabsTrigger value="plan">Daily plan</TabsTrigger>
           <TabsTrigger value="automation">Automation</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="signoffs">Sign-offs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roadmap" className="mt-0">
@@ -856,6 +858,10 @@ const Roadmap = () => {
         <TabsContent value="activity" className="mt-0 space-y-4">
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           <WorkLogPulse />
+        </TabsContent>
+
+        <TabsContent value="signoffs" className="mt-0 space-y-4">
+          <PhaseSignoffAudit limit={50} />
         </TabsContent>
       </Tabs>
     </div>

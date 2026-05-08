@@ -1857,6 +1857,60 @@ export type Database = {
           },
         ]
       }
+      roadmap_phase_signoffs: {
+        Row: {
+          approval_id: string | null
+          approver: string | null
+          approver_user_id: string | null
+          created_at: string
+          decided_at: string
+          gate_snapshot: Json
+          id: string
+          notes: string | null
+          phase_id: string
+          phase_key: string
+        }
+        Insert: {
+          approval_id?: string | null
+          approver?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          decided_at?: string
+          gate_snapshot?: Json
+          id?: string
+          notes?: string | null
+          phase_id: string
+          phase_key: string
+        }
+        Update: {
+          approval_id?: string | null
+          approver?: string | null
+          approver_user_id?: string | null
+          created_at?: string
+          decided_at?: string
+          gate_snapshot?: Json
+          id?: string
+          notes?: string | null
+          phase_id?: string
+          phase_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_phase_signoffs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_signoffs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmap_phases: {
         Row: {
           created_at: string

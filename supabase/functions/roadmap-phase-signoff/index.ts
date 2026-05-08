@@ -38,7 +38,9 @@ Deno.serve(async (req) => {
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const { data: ap, error: apErr } = await sb
-    .from("approval_queue").select("id, activity, status, intent_payload").eq("id", approvalId).maybeSingle();
+    .from("approval_queue")
+    .select("id, activity, status, intent_payload, decided_at, decided_by")
+    .eq("id", approvalId).maybeSingle();
   if (apErr || !ap) return json({ error: "approval_not_found" }, 404);
   if (ap.activity !== "roadmap.phase_signoff") return json({ error: "wrong_activity" }, 400);
   if (ap.status !== "approved") return json({ error: "approval_not_approved", status: ap.status }, 409);
@@ -46,15 +48,48 @@ Deno.serve(async (req) => {
   const phaseId = (ap.intent_payload as Record<string, unknown> | null)?.["phase_id"] as string | undefined;
   if (!phaseId) return json({ error: "phase_id missing in intent_payload" }, 400);
 
-  const { error: upErr } = await sb.from("roadmap_phases").update({ status: "done" }).eq("id", phaseId);
-  if (upErr) return json({ error: upErr.message }, 500);
+  // Snapshot current gate status BEFORE flipping the phase
+  const { data: gateSnap } = await sb
+    .from("roadmap_phase_gate_status")
+    .select("*").eq("phase_id", phaseId).maybeSingle();
+
+  const { data: phaseRow, error: upErr } = await sb
+    .from("roadmap_phases").update({ status: "done" }).eq("id", phaseId)
+    .select("id, key").maybeSingle();
+  if (upErr || !phaseRow) return json({ error: upErr?.message ?? "phase_not_found" }, 500);
+
+  // Resolve approver caller (operator JWT) → email label
+  let approverLabel: string | null = ap.decided_by ?? null;
+  let approverUserId: string | null = null;
+  if (!triggeredBySvc && auth.startsWith("Bearer ")) {
+    const token = auth.slice(7);
+    const { data: userRes } = await sb.auth.getUser(token);
+    if (userRes?.user) {
+      approverUserId = userRes.user.id;
+      approverLabel = userRes.user.email ?? approverLabel ?? userRes.user.id;
+    }
+  }
+
+  // Idempotent on (phase_id, approval_id)
+  const { error: auditErr } = await sb.from("roadmap_phase_signoffs").insert({
+    phase_id: phaseId,
+    phase_key: phaseRow.key,
+    approval_id: approvalId,
+    approver: approverLabel,
+    approver_user_id: approverUserId,
+    decided_at: ap.decided_at ?? new Date().toISOString(),
+    gate_snapshot: gateSnap ?? {},
+  });
+  if (auditErr && !/duplicate|unique/i.test(auditErr.message)) {
+    console.error("audit insert failed", auditErr);
+  }
 
   await sb.from("capability_events").insert({
     capability_id: "operator_channel.roadmap",
     event_type: "phase.signed_off",
-    actor: "operator",
-    payload: { phase_id: phaseId, approval_id: approvalId },
+    actor: approverLabel ?? "operator",
+    payload: { phase_id: phaseId, phase_key: phaseRow.key, approval_id: approvalId },
   });
 
-  return json({ ok: true, phase_id: phaseId });
+  return json({ ok: true, phase_id: phaseId, phase_key: phaseRow.key });
 });
