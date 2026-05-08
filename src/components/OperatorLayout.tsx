@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
 import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
-import { Monitor, RotateCcw } from "lucide-react";
+import { Monitor, RefreshCw, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
@@ -199,6 +199,33 @@ const OperatorLayout = () => {
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
                     Reset sizes for this screen ({viewport})
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {!isMobile && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() =>
+                        setPaneState({
+                          mode: "left",
+                          lastNonCentre: "left",
+                          sizesByMode: undefined,
+                          sizesByViewportMode: {},
+                        })
+                      }
+                      aria-label="Reset layout to default for this route"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Reset pane mode and sizes to default for this route
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
