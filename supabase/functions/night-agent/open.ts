@@ -101,20 +101,28 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
   let auditedCount = 0;
   let proposalsQueued = 0;
   const skipped: Array<{ id: string; reason: string }> = [];
+  const candidatesSelected: Array<{ short_num: number | null; title: string; risk: string; phase: string; suite: string }> = [];
+  const candidatesSkipped: Array<{ short_num: number | null; title: string; reason: string; risk?: string; phase?: string }> = [];
+  const openedAt = new Date().toISOString();
 
   for (const job of candidates ?? []) {
     const { risk, reason } = classifyJob(job as any);
     if (risk === "high") {
-      skipped.push({ id: job.id, reason: `risk=high (${reason})` });
+      const reasonStr = `risk=high (${reason})`;
+      skipped.push({ id: job.id, reason: reasonStr });
+      candidatesSkipped.push({ short_num: job.short_num, title: job.title, reason: reasonStr, risk });
       continue;
     }
 
     const subjectRef = { discussion_action_id: job.id, short_num: job.short_num };
     const { phase, suite } = inferPhaseAndSuite(job.title);
     if (!allowedKinds.includes(phase)) {
-      skipped.push({ id: job.id, reason: `kind '${phase}' not allowed` });
+      const reasonStr = `kind '${phase}' not allowed`;
+      skipped.push({ id: job.id, reason: reasonStr });
+      candidatesSkipped.push({ short_num: job.short_num, title: job.title, reason: reasonStr, risk, phase });
       continue;
     }
+    candidatesSelected.push({ short_num: job.short_num, title: job.title, risk, phase, suite });
     let worst = "info";
 
     // 1. pulled
