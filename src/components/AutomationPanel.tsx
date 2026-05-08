@@ -1772,7 +1772,7 @@ const SpendDrillDialog = ({
                 className="grid bg-muted/50 text-[11px] font-medium border-b border-border"
                 style={{ gridTemplateColumns: gridCols }}
               >
-                <div className="px-2 py-1">Time UTC</div>
+                <div className="px-2 py-1">Time {tz === "UTC" ? "UTC" : tz}</div>
                 <div className="px-2 py-1">Job</div>
                 <div className="px-2 py-1">Model</div>
                 <div className="px-2 py-1">Status</div>
