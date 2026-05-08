@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { WidgetEmpty, WidgetError, WidgetShell } from "./WidgetShell";
+import { WidgetEmpty, WidgetError, WidgetShell, WidgetSkeleton } from "./WidgetShell";
 import type { DashboardWidgetProps } from "./types";
 
 type Row = { id: string; title: string; severity: string | null; reviewed_at: string };
@@ -10,25 +10,25 @@ export function OpenRisksWidget({ size, onOpen }: DashboardWidgetProps) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(false);
+    const { data, error } = await supabase
+      .from("roadmap_review_findings")
+      .select("id,title,severity,reviewed_at")
+      .eq("acknowledged", false)
+      .order("reviewed_at", { ascending: false })
+      .limit(20);
+    if (error) setError(true);
+    else setRows((data ?? []) as Row[]);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const { data, error } = await supabase
-        .from("roadmap_review_findings")
-        .select("id,title,severity,reviewed_at")
-        .eq("acknowledged", false)
-        .order("reviewed_at", { ascending: false })
-        .limit(20);
-      if (cancelled) return;
-      if (error) setError(true);
-      else setRows((data ?? []) as Row[]);
-    };
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [load]);
 
   const max = size === "lg" ? 8 : size === "md" ? 4 : 2;
   const total = rows?.length ?? 0;
@@ -37,9 +37,9 @@ export function OpenRisksWidget({ size, onOpen }: DashboardWidgetProps) {
   return (
     <WidgetShell title="Open risks" onOpen={onOpen ?? (() => navigate("/roadmap/risks"))} scrollable={size === "lg"}>
       {error ? (
-        <WidgetError />
-      ) : !rows ? (
-        <WidgetEmpty>Loading…</WidgetEmpty>
+        <WidgetError onRetry={load} />
+      ) : loading && !rows ? (
+        <WidgetSkeleton rows={max} />
       ) : total === 0 ? (
         <WidgetEmpty>No open findings.</WidgetEmpty>
       ) : (
@@ -52,7 +52,7 @@ export function OpenRisksWidget({ size, onOpen }: DashboardWidgetProps) {
             )}
           </div>
           <ul className="space-y-1 text-xs">
-            {rows.slice(0, max).map((r) => (
+            {rows!.slice(0, max).map((r) => (
               <li key={r.id} className="flex items-center gap-2">
                 <span
                   className={`h-1.5 w-1.5 shrink-0 rounded-full ${
