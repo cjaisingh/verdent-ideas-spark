@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,15 @@ const OperatorLayout = () => {
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
+  // Suppress toggle changes briefly after a drag ends to swallow the trailing
+  // click/pointerup that resizable handles can dispatch on nearby elements.
+  const dragEndAtRef = useRef(0);
+  const handleDragging = (d: boolean) => {
+    setDragging(d);
+    if (!d) dragEndAtRef.current = Date.now();
+  };
+  const isResizeInteractionLocked = () =>
+    dragging || Date.now() - dragEndAtRef.current < 250;
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -84,6 +93,10 @@ const OperatorLayout = () => {
                 disabled={dragging}
                 mode={effectiveMode}
                 onChange={(m) => {
+                  // Ignore toggle changes mid-drag (or right after) so the
+                  // selected pane mode stays put until the resize completes.
+                  if (isResizeInteractionLocked()) return;
+                  if (m === effectiveMode) return;
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
                       setPaneState({ mode: paneState.lastNonCentre });
