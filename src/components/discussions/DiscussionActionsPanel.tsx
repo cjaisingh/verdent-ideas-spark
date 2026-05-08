@@ -169,6 +169,11 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
           {items.length > 0 && <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>}
         </div>
         <div className="flex items-center gap-1">
+          {proposals.length > 0 && (
+            <Button size="sm" variant="secondary" onClick={() => setReviewOpen(true)}>
+              Review {proposals.length}
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={extract} disabled={extracting}>
             <Sparkles className="h-3.5 w-3.5 mr-1" /> {extracting ? "Extracting…" : "Extract"}
           </Button>
