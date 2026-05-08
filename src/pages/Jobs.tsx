@@ -153,7 +153,14 @@ export default function Jobs() {
     return (
       <Card
         key={j.id}
-        className="hover:shadow-sm transition cursor-pointer"
+        draggable
+        onDragStart={(e) => {
+          setDraggingId(j.id);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", j.id);
+        }}
+        onDragEnd={() => { setDraggingId(null); setDragOverCol(null); }}
+        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""}`}
         onClick={() => setActiveJobId(j.id)}
       >
         <CardContent className="pt-3 pb-3 space-y-1.5">
