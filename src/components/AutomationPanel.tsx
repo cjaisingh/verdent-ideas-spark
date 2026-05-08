@@ -1214,14 +1214,14 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
+  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
 
   // Previous-period fetch (same length, immediately before range.from)
   useEffect(() => {
     if (!compare) { setPrevRows([]); return; }
     let cancelled = false;
-    const fromMs = startOfUtcDay(range.from).getTime();
-    const toMs = endExclusiveUtcDay(range.to).getTime();
+    const fromMs = startOfTzDay(range.from, tz).getTime();
+    const toMs = endExclusiveTzDay(range.to, tz).getTime();
     const span = toMs - fromMs;
     const prevFrom = new Date(fromMs - span);
     const prevTo = new Date(fromMs);
