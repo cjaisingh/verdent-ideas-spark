@@ -1021,7 +1021,7 @@ const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
-// Date helpers (UTC-based to match the rest of the panel)
+// Date helpers — UTC primitives plus tz-aware variants for daily bucketing
 const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 const endExclusiveUtcDay = (d: Date) => new Date(startOfUtcDay(d).getTime() + 86_400_000);
 const utcDayKey = (d: Date) => startOfUtcDay(d).toISOString().slice(0, 10);
@@ -1031,6 +1031,75 @@ const enumerateUtcDays = (from: Date, to: Date) => {
   const end = startOfUtcDay(to).getTime();
   while (cur <= end) { out.push(new Date(cur).toISOString().slice(0, 10)); cur += 86_400_000; }
   return out;
+};
+
+// Timezone-aware helpers (tz === "UTC" falls back to UTC primitives for perf/safety)
+const tzDayKey = (d: Date, tz: string): string => {
+  if (tz === "UTC") return utcDayKey(d);
+  // en-CA gives YYYY-MM-DD ordering
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+};
+const tzOffsetMinutes = (d: Date, tz: string): number => {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const parts = dtf.formatToParts(d).reduce<Record<string, string>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = p.value; return acc;
+  }, {});
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+    +parts.hour % 24, +parts.minute, +parts.second);
+  return (asUtc - d.getTime()) / 60_000;
+};
+const startOfTzDay = (d: Date, tz: string): Date => {
+  if (tz === "UTC") return startOfUtcDay(d);
+  const key = tzDayKey(d, tz);
+  const [y, m, day] = key.split("-").map(Number);
+  const guess = Date.UTC(y, m - 1, day);
+  // Two-pass to handle DST edges correctly
+  let off = tzOffsetMinutes(new Date(guess), tz);
+  let inst = guess - off * 60_000;
+  off = tzOffsetMinutes(new Date(inst), tz);
+  return new Date(guess - off * 60_000);
+};
+const endExclusiveTzDay = (d: Date, tz: string): Date => {
+  if (tz === "UTC") return endExclusiveUtcDay(d);
+  const start = startOfTzDay(d, tz);
+  // Add 26h then snap back to handle DST (23h or 25h days)
+  return startOfTzDay(new Date(start.getTime() + 26 * 3_600_000), tz);
+};
+const enumerateTzDays = (from: Date, to: Date, tz: string): string[] => {
+  if (tz === "UTC") return enumerateUtcDays(from, to);
+  const out: string[] = [];
+  let cur = startOfTzDay(from, tz);
+  const endKey = tzDayKey(to, tz);
+  let safety = 0;
+  while (safety++ < 4000) {
+    const k = tzDayKey(cur, tz);
+    out.push(k);
+    if (k >= endKey) break;
+    cur = endExclusiveTzDay(cur, tz);
+  }
+  return out;
+};
+const tzTimeOfDay = (d: Date, tz: string): string => {
+  if (tz === "UTC") return d.toISOString().slice(11, 19);
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz, hour12: false,
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).format(d);
+};
+const TZ_STORAGE_KEY = "awip.spend.tz";
+const localTz = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; }
+  catch { return "UTC"; }
+})();
+const loadStoredTz = (): string => {
+  try { return localStorage.getItem(TZ_STORAGE_KEY) || "UTC"; }
+  catch { return "UTC"; }
 };
 const RANGE_STORAGE_KEY = "awip.spend.range";
 const defaultRange = () => {
