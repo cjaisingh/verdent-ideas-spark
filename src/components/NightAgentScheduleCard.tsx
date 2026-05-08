@@ -42,6 +42,28 @@ export const NightAgentScheduleCard = () => {
   const [s, setS] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [draftDate, setDraftDate] = useState("");
+  const [smoking, setSmoking] = useState(false);
+  const [smokeResult, setSmokeResult] = useState<any>(null);
+
+  const runSmoke = async () => {
+    setSmoking(true);
+    setSmokeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("night-agent/smoke", { method: "POST" });
+      if (error) throw error;
+      setSmokeResult(data);
+      toast({
+        title: data?.would_run ? "Smoke test: would run" : "Smoke test: would skip",
+        description: data?.would_run
+          ? `${data.candidate_jobs ?? 0} candidate job(s) · test shift recorded`
+          : `Skip reasons: ${(data?.skip_reasons ?? []).join(", ") || "unknown"}`,
+      });
+    } catch (e: any) {
+      toast({ title: "Smoke test failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setSmoking(false);
+    }
+  };
 
   const load = async () => {
     const { data } = await supabase
