@@ -34,6 +34,8 @@ export default function ApprovalPack() {
   const [paperSize, setPaperSize] = useState<"A4" | "Letter">(
     () => (localStorage.getItem("awip.approvalPack.paper") as any) ?? "A4",
   );
+  const [rangeFromId, setRangeFromId] = useState<string>("");
+  const [rangeToId, setRangeToId] = useState<string>("");
 
   useEffect(() => { localStorage.setItem("awip.approvalPack.orgName", orgName); }, [orgName]);
   useEffect(() => { localStorage.setItem("awip.approvalPack.density", density); }, [density]);
