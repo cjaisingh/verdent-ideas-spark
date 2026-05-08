@@ -274,11 +274,42 @@ async function dispatchAlert(
   } catch (e) { console.error("dispatchAlert failed", e); }
 }
 
+type RunUsage = {
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  price_in_per_mtok: number;
+  price_out_per_mtok: number;
+  cost_usd: number;
+};
+
+function buildRunBreakdown(u: RunUsage) {
+  const inCost = (u.prompt_tokens / 1_000_000) * u.price_in_per_mtok;
+  const outCost = (u.completion_tokens / 1_000_000) * u.price_out_per_mtok;
+  return {
+    model: u.model,
+    prompt_tokens: u.prompt_tokens,
+    completion_tokens: u.completion_tokens,
+    total_tokens: u.total_tokens,
+    price_in_per_mtok: u.price_in_per_mtok,
+    price_out_per_mtok: u.price_out_per_mtok,
+    input_cost_usd: Number(inCost.toFixed(6)),
+    output_cost_usd: Number(outCost.toFixed(6)),
+    cost_usd: u.cost_usd,
+    cost_formula:
+      `(${u.prompt_tokens} prompt / 1e6) * $${u.price_in_per_mtok}/Mtok ` +
+      `+ (${u.completion_tokens} completion / 1e6) * $${u.price_out_per_mtok}/Mtok ` +
+      `= $${inCost.toFixed(6)} + $${outCost.toFixed(6)} = $${(inCost + outCost).toFixed(6)}`,
+  };
+}
+
 async function checkCostThresholds(
   sb: ReturnType<typeof createClient>,
   job: string,
   runCost: number,
   alert: (reason: string, message: string, payload?: Record<string, unknown>) => Promise<void>,
+  usage?: RunUsage,
 ) {
   try {
     const { data: globalSettings } = await sb.from("alert_settings")
@@ -295,11 +326,13 @@ async function checkCostThresholds(
     const perDay = perDayRaw != null ? Number(perDayRaw) : null;
     const source = (k: "run" | "day") =>
       (k === "run" ? override?.cost_per_run_usd : override?.cost_per_day_usd) != null ? "per_job" : "global";
+    const breakdown = usage ? buildRunBreakdown(usage) : undefined;
 
     if (perRun !== null && perRun > 0 && runCost > perRun) {
       await alert("cost_threshold",
         `Run cost $${runCost.toFixed(4)} exceeded per-run threshold $${perRun.toFixed(4)} for ${job}.`,
-        { scope: "per_run", job, run_cost_usd: runCost, threshold_usd: perRun, threshold_source: source("run") });
+        { scope: "per_run", job, run_cost_usd: runCost, threshold_usd: perRun,
+          threshold_source: source("run"), run: breakdown });
     }
     if (perDay !== null && perDay > 0) {
       const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
@@ -326,7 +359,8 @@ async function checkCostThresholds(
             }).`,
             { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay,
               threshold_source: source("day"),
-              previous_alert_day_cost_usd: isFirstToday ? null : lastAlerted });
+              previous_alert_day_cost_usd: isFirstToday ? null : lastAlerted,
+              triggering_run: breakdown });
         }
       }
     }
