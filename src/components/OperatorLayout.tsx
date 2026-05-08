@@ -28,6 +28,7 @@ const OperatorLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isOnTenants = location.pathname === "/tenants" || location.pathname.startsWith("/tenants/");
+  const t = useT();
   const [paneState, setPaneState] = usePaneState();
   const viewport = useViewport();
   const isMobile = viewport === "mobile";
