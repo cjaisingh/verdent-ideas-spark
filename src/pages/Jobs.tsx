@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare, Trash2, X } from "lucide-react";
+import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare, Trash2, X, Moon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
@@ -32,11 +32,24 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(false);
+  const [nightOnly, setNightOnly] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOwner, setBulkOwner] = useState("");
+
+  const toggleNightEligible = async (j: Job, on: boolean) => {
+    setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, night_eligible: on } as any : x)));
+    const { error } = await supabase
+      .from("discussion_actions")
+      .update({ night_eligible: on } as never)
+      .eq("id", j.id);
+    if (error) {
+      setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, night_eligible: !on } as any : x)));
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    }
+  };
 
   const toggleSelect = (id: string, on: boolean) => {
     setSelected((prev) => {
@@ -166,10 +179,11 @@ export default function Jobs() {
     return jobs.filter((j) => {
       if (subjectFilter !== "all" && j.subject_type !== subjectFilter) return false;
       if (!showDone && (j.status === "done" || j.status === "cancelled")) return false;
+      if (nightOnly && !(j as any).night_eligible) return false;
       if (q && !`${j.title} ${jobHandle(j.short_num)} ${j.owner ?? ""}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [jobs, search, subjectFilter, showDone]);
+  }, [jobs, search, subjectFilter, showDone, nightOnly]);
 
   const grouped = useMemo(() => {
     const out: Record<string, Job[]> = { open: [], in_progress: [], done: [] };
