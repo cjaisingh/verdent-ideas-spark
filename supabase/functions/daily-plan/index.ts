@@ -173,6 +173,8 @@ Deno.serve(async (req) => {
         job: "daily-plan", model: PLANNER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500), request_ref: { for_date: today },
+        price_in_per_mtok: priceFor(PLANNER_MODEL).in,
+        price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       });
       await maybeAlert("planner_error", msg, { status: aiResp.status });
       return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
@@ -180,12 +182,18 @@ Deno.serve(async (req) => {
 
     const aiJson = await aiResp.json();
     const usage = aiJson?.usage ?? {};
+    const promptTok = usage.prompt_tokens ?? 0;
+    const completionTok = usage.completion_tokens ?? 0;
+    const cost = costUsd(PLANNER_MODEL, promptTok, completionTok);
     await sb.from("ai_usage_log").insert({
       job: "daily-plan", model: PLANNER_MODEL, trigger,
       status: "ok", status_code: 200, latency_ms: aiLatency,
       prompt_tokens: usage.prompt_tokens ?? null,
       completion_tokens: usage.completion_tokens ?? null,
       total_tokens: usage.total_tokens ?? null,
+      cost_usd: Number(cost.toFixed(6)),
+      price_in_per_mtok: priceFor(PLANNER_MODEL).in,
+      price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       request_ref: { for_date: today },
     });
     const call = aiJson.choices?.[0]?.message?.tool_calls?.[0];
