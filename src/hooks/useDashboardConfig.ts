@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { TEMPLATES } from "@/components/dashboard/templates";
 import type { DashboardConfig, Tab, TemplateId, Widget, WidgetKind } from "@/components/dashboard/widgets/types";
@@ -110,18 +111,26 @@ export function useDashboardConfig() {
     return () => { cancelled = true; };
   }, []);
 
-  const persist = useCallback(async (cfg: DashboardConfig) => {
-    if (!userId) return;
-    await supabase
+  const persist = useCallback(async (cfg: DashboardConfig): Promise<{ ok: boolean }> => {
+    if (!userId) return { ok: true };
+    const { error } = await supabase
       .from("operator_dashboards")
       .update({ tabs: cfg.tabs as never, active_tab_id: cfg.activeTabId })
       .eq("user_id", userId);
+    return { ok: !error };
   }, [userId]);
 
+  const flushPendingSave = useCallback(() => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+  }, []);
+
   const scheduleSave = useCallback((cfg: DashboardConfig) => {
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    flushPendingSave();
     saveTimer.current = window.setTimeout(() => { void persist(cfg); }, SAVE_DEBOUNCE_MS);
-  }, [persist]);
+  }, [persist, flushPendingSave]);
 
   /** Mutate config locally + debounce a save. */
   const update = useCallback((mutator: (prev: DashboardConfig) => DashboardConfig) => {
