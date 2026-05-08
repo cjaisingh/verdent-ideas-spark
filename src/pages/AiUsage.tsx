@@ -61,7 +61,7 @@ export default function AiUsage() {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("ai_usage_log")
-      .select("id,job,model,trigger,status,status_code,prompt_tokens,completion_tokens,total_tokens,latency_ms,error,request_ref,created_at")
+      .select("id,job,model,trigger,status,status_code,prompt_tokens,completion_tokens,total_tokens,cost_usd,latency_ms,error,request_ref,created_at")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1000);
