@@ -98,7 +98,7 @@ const Roadmap = () => {
   });
   const [newComment, setNewComment] = useState("");
   const [commentKind, setCommentKind] = useState<"comment" | "question" | "decision">("comment");
-  const gates = useRoadmapGates();
+  const { gates } = useRoadmapGates();
 
   // Work-log form state
   const [logForm, setLogForm] = useState({

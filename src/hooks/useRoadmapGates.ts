@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PhaseGate {
@@ -21,30 +21,55 @@ export interface PhaseGate {
 
 export function useRoadmapGates() {
   const [gates, setGates] = useState<Map<string, PhaseGate>>(new Map());
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRef = useRef(true);
 
   useEffect(() => {
-    let active = true;
+    activeRef.current = true;
+
     const load = async () => {
       const { data, error } = await supabase
         .from("roadmap_phase_gate_status" as never)
         .select("*");
-      if (!active || error || !data) return;
+      if (!activeRef.current || error || !data) return;
       const m = new Map<string, PhaseGate>();
       for (const row of data as PhaseGate[]) m.set(row.phase_id, row);
       setGates(m);
+      setRefreshedAt(new Date());
     };
+
+    const scheduleLoad = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(load, 250);
+    };
+
     load();
+
     const ch = supabase
       .channel("roadmap-gates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_tasks" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "qa_checks" }, load)
-      .on("postgres_changes", { event: "*", schema: "public", table: "approval_queue" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_tasks" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_phases" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "qa_checks" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "approval_queue" }, scheduleLoad)
+      .on("postgres_changes", { event: "*", schema: "public", table: "night_observations" }, scheduleLoad)
       .subscribe();
+
+    // Refetch when tab regains focus / visibility (catches missed events)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduleLoad();
+    };
+    window.addEventListener("focus", scheduleLoad);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
-      active = false;
+      activeRef.current = false;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(ch);
+      window.removeEventListener("focus", scheduleLoad);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
-  return gates;
+  return { gates, refreshedAt };
 }
