@@ -224,9 +224,9 @@ const OperatorLayout = () => {
             <Link
               to="/tenants"
               aria-current={isOnTenants ? "page" : undefined}
-              className={`font-semibold text-sm rounded px-1.5 py-0.5 transition-colors ${
+              className={`inline-flex h-8 shrink-0 items-center rounded px-2 font-semibold text-sm leading-none transition-colors ${
                 isOnTenants
-                  ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                  ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
                   : "text-foreground hover:text-primary"
               }`}
             >
