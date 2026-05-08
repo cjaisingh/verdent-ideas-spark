@@ -60,6 +60,14 @@ type PromotedTaskMeta = {
   created_at: string;
 };
 
+type AuditEvent = {
+  id: string;
+  event_type: string;
+  payload: any;
+  actor_label: string | null;
+  created_at: string;
+};
+
 export function JobDetailsDrawer({
   job,
   subjectShortNum,
@@ -70,6 +78,7 @@ export function JobDetailsDrawer({
 }: Props) {
   const [discMeta, setDiscMeta] = useState<DiscussionMeta | null>(null);
   const [taskMeta, setTaskMeta] = useState<PromotedTaskMeta | null>(null);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
