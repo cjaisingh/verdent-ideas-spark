@@ -1998,6 +1998,13 @@ export type Database = {
             foreignKeyName: "roadmap_sprints_phase_id_fkey"
             columns: ["phase_id"]
             isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_sprints_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
             referencedRelation: "roadmap_phases"
             referencedColumns: ["id"]
           },
@@ -2536,6 +2543,26 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      roadmap_phase_gate_status: {
+        Row: {
+          all_ok: boolean | null
+          approvals_ok: boolean | null
+          blockers: Json | null
+          night_high_open: number | null
+          night_ok: boolean | null
+          open_tasks: number | null
+          pending_signoffs: number | null
+          phase_id: string | null
+          phase_key: string | null
+          phase_status: string | null
+          qa_ok: boolean | null
+          qa_pass: number | null
+          qa_total: number | null
+          structural_ok: boolean | null
+          total_tasks: number | null
+        }
+        Relationships: []
       }
     }
     Functions: {
