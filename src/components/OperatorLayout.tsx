@@ -12,7 +12,9 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { getModeSizes, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { RotateCcw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -84,6 +86,26 @@ const OperatorLayout = () => {
                 }
               }}
             />
+            {(flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode) && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setPaneState(clearModeSizes(paneState, effectiveMode))}
+                      aria-label="Reset pane sizes"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Reset pane sizes for {effectiveMode}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
             <div className="ml-auto flex items-center gap-2">
               <PendingApprovalsIndicator />
