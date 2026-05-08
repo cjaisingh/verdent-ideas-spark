@@ -177,7 +177,7 @@ const OperatorLayout = () => {
             <ResizablePanelGroup
               key={`h-${viewport}-${effectiveMode}`}
               direction="horizontal"
-              className="h-full"
+              className="h-full animate-fade-in"
             >
               <ResizablePanel defaultSize={flags.right ? 100 - sizes.rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
