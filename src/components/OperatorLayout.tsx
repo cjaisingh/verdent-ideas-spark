@@ -49,6 +49,14 @@ const OperatorLayout = () => {
       if (snapshot && snapshot !== paneState.mode) {
         setPaneState({ mode: snapshot });
       }
+      // Final safety pass: re-run the clamp on whatever sizes ended up saved
+      // for this viewport+mode so a value can't sit outside the current bounds
+      // (e.g. if SIZE_BOUNDS shrank since the last drag). Only re-write if
+      // there was already a custom override — don't materialise defaults.
+      if (hasModeSizeOverrides(paneState, effectiveMode, viewport)) {
+        const current = getModeSizes(paneState, effectiveMode, viewport);
+        setPaneState((prev) => withModeSize(prev, effectiveMode, current, viewport));
+      }
     }
     setDragging(d);
   };
