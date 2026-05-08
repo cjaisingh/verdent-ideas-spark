@@ -1426,18 +1426,27 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, drill, onClose,
+  rows, groupBy, drill, onClose, globalLimits, jobLimits,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
-  drill: { day: string; groupKey: string | null } | null;
+  drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
+  globalLimits: { day: number | null; run: number | null };
+  jobLimits: Record<string, { day: number | null; run: number | null }>;
 }) => {
   const open = !!drill;
+  const effectiveRunLimit = (job: string | null | undefined) =>
+    (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
+  const isRunBreach = (r: SpendRow) => {
+    const lim = effectiveRunLimit(r.job);
+    return lim != null && Number(r.cost_usd || 0) > lim;
+  };
   const filtered = drill
     ? rows
-        .filter(r => (r.created_at || "").slice(0, 10) === drill.day &&
-          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey))
+        .filter(r => (drill.day === "*" || (r.created_at || "").slice(0, 10) === drill.day) &&
+          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
+          (!drill.breachOnly || isRunBreach(r)))
         .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
     : [];
   const cap = 200;
