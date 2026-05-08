@@ -8,6 +8,7 @@
 // writes findings to roadmap_review_findings.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-service-token",
 };
 
-const REVIEWER_MODEL = "google/gemini-2.5-flash";
+const REVIEWER_DAYTIME_MODEL = "google/gemini-2.5-flash";
 
 // USD per 1M tokens — Lovable AI Gateway list prices. Keep in sync with src/lib/aiPricing.ts.
 const PRICING: Record<string, { in: number; out: number }> = {
