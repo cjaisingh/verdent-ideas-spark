@@ -17,6 +17,23 @@ const corsHeaders = {
 
 const REVIEWER_MODEL = "google/gemini-2.5-flash";
 
+// USD per 1M tokens — Lovable AI Gateway list prices. Keep in sync with src/lib/aiPricing.ts.
+const PRICING: Record<string, { in: number; out: number }> = {
+  "google/gemini-2.5-flash-lite": { in: 0.10, out: 0.40 },
+  "google/gemini-2.5-flash": { in: 0.30, out: 2.50 },
+  "google/gemini-2.5-pro": { in: 1.25, out: 10.00 },
+  "openai/gpt-5-nano": { in: 0.05, out: 0.40 },
+  "openai/gpt-5-mini": { in: 0.25, out: 2.00 },
+  "openai/gpt-5": { in: 1.25, out: 10.00 },
+};
+function priceFor(model: string) {
+  return PRICING[model] ?? { in: 0, out: 0 };
+}
+function costUsd(model: string, promptTok: number, completionTok: number) {
+  const p = priceFor(model);
+  return (promptTok / 1_000_000) * p.in + (completionTok / 1_000_000) * p.out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
