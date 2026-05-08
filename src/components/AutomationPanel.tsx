@@ -1306,42 +1306,74 @@ const DailyAiSpendCard = () => {
             </div>
           )}
           {/* Stacked bar chart */}
-          <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
-            {dayKeys.map((d, idx) => {
-              const dayTotal = dailyTotals[idx];
-              const heightPct = (dayTotal / maxDay) * 100;
-              const segments = groups
-                .map((g) => ({ g, c: matrix[d][g] || 0 }))
-                .filter((s) => s.c > 0);
-              const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
-              return (
-                <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
-                  <div
-                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
-                    style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}\n(click for runs)`}
-                    onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
-                  >
-                    {segments.map((s) => (
-                      <div
-                        key={s.g}
-                        className="cursor-pointer hover:opacity-80"
-                        style={{
-                          height: `${(s.c / dayTotal) * 100}%`,
-                          background: colorFor(s.g),
-                        }}
-                        onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
-                        title={`${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
-                      />
-                    ))}
+          <div className="relative">
+            {dailyLimitPct != null && (
+              <>
+                <div
+                  className="absolute left-0 right-0 border-t border-dashed border-destructive/70 pointer-events-none z-10"
+                  style={{ bottom: `calc(12px + (100% - 12px) * ${dailyLimitPct / 100})` }}
+                />
+                <div
+                  className="absolute right-0 text-[9px] font-mono text-destructive bg-card px-1 pointer-events-none z-10"
+                  style={{ bottom: `calc(12px + (100% - 12px) * ${dailyLimitPct / 100} - 6px)` }}
+                >daily limit {fmtUsd6(globalLimits.day!)}</div>
+              </>
+            )}
+            <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
+              {dayKeys.map((d, idx) => {
+                const dayTotal = dailyTotals[idx];
+                const heightPct = (dayTotal / maxDay) * 100;
+                const segments = groups
+                  .map((g) => ({ g, c: matrix[d][g] || 0 }))
+                  .filter((s) => s.c > 0);
+                const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
+                const dayBreached = dayBreaches.has(d);
+                return (
+                  <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
+                    <div
+                      className={`w-full flex flex-col-reverse rounded-sm overflow-hidden cursor-pointer ${dayBreached ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40 hover:ring-1 hover:ring-border"}`}
+                      style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
+                      title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${cellBreaches.has(`${d}|${s.g}`) ? "⚠ " : ""}${s.g}: ${fmtUsd6(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dayTotal - globalLimits.day!)}` : ""}\n(click for runs)`}
+                      onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
+                    >
+                      {segments.map((s) => {
+                        const segBreached = cellBreaches.has(`${d}|${s.g}`);
+                        return (
+                          <div
+                            key={s.g}
+                            className={`cursor-pointer hover:opacity-80 ${segBreached ? "outline outline-1 outline-destructive" : ""}`}
+                            style={{
+                              height: `${(s.c / dayTotal) * 100}%`,
+                              background: colorFor(s.g),
+                            }}
+                            onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
+                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground font-mono h-3">
+                      {showLabel ? d.slice(5) : ""}
+                    </div>
                   </div>
-                  <div className="text-[9px] text-muted-foreground font-mono h-3">
-                    {showLabel ? d.slice(5) : ""}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
+          {hasAnyLimit && (
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+              {globalLimits.day != null && (
+                <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-destructive/70" /> daily limit {fmtUsd6(globalLimits.day)}</span>
+              )}
+              {hasAnyJobLimit && groupBy === "job" && <span>⚠ = job-day breach</span>}
+              {hasAnyJobLimit && groupBy === "model" && (
+                <span>Switch to "by job" to see per-job threshold breaches.</span>
+              )}
+              {(globalLimits.run != null || Object.values(jobLimits).some(l => l.run != null)) && (
+                <span>per-run breaches shown in drill-down</span>
+              )}
+            </div>
+          )}
 
           {/* Legend / breakdown table */}
           <div className="space-y-1">
