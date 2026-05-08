@@ -22,13 +22,19 @@ import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
 import { ProceedAction } from "@/components/roadmap/ProceedAction";
 import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
 import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
+import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
 } from "lucide-react";
 
-type Phase = { id: string; key: string; title: string; summary: string | null; order: number; status: string };
+type Phase = {
+  id: string; key: string; title: string; summary: string | null; order: number; status: string;
+  manual_override_rationale?: string | null;
+  manual_override_by?: string | null;
+  manual_override_at?: string | null;
+};
 type Sprint = { id: string; phase_id: string; key: string; title: string; goal: string | null; order: number; status: string };
 type Task = {
   id: string; sprint_id: string; key: string; title: string; description: string | null;
@@ -366,7 +372,12 @@ const Roadmap = () => {
                   </button>
                   <TriCheckbox state={phaseTriState(phase.id)} />
                   <span className="text-sm font-medium flex-1 truncate">{phase.title}</span>
-                  <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
+                  <PhaseGateBadge
+                    phaseStatus={phase.status}
+                    gate={gates.get(phase.id)}
+                    override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
+                  />
+                  <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
@@ -428,7 +439,12 @@ const Roadmap = () => {
                 <div key={phase.id} className="mb-6">
                   <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
-                    <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
+                    <PhaseGateBadge
+                      phaseStatus={phase.status}
+                      gate={gates.get(phase.id)}
+                      override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
+                    />
+                    <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
                     <Link
                       to={`/master-plan#${phase.key}`}
                       className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
