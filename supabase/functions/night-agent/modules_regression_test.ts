@@ -172,8 +172,14 @@ Deno.test("classify.worse / SEV_RANK: ordering", () => {
 
 // ─── pure regression: filter parsing & application ───────────────────────
 
+function mustParse(u: string) {
+  const r = parseOpenTestFilters(new URL(u));
+  if (!r.ok) throw new Error(`expected ok parse for ${u}, got: ${r.errors.join("; ")}`);
+  return r.filters;
+}
+
 Deno.test("filters.parseOpenTestFilters: defaults", () => {
-  const f = parseOpenTestFilters(new URL("https://x/?"));
+  const f = mustParse("https://x/?");
   assertEquals(f.phaseFilter.size, 0);
   assertEquals(f.riskFilter.size, 0);
   assertEquals(f.verdictFilter, "");
@@ -184,18 +190,16 @@ Deno.test("filters.parseOpenTestFilters: defaults", () => {
   assertEquals(f.filtersApplied.q, null);
 });
 
-Deno.test("filters.parseOpenTestFilters: csv + repeated params + limit clamp", () => {
-  const u = new URL(
-    "https://x/?phase=auth,jobs&phase=copilot&risk=high&verdict=AUDIT&q=  Login  &short_num=12,foo,34&limit=999999",
+Deno.test("filters.parseOpenTestFilters: csv + repeated params + valid limit", () => {
+  const f = mustParse(
+    "https://x/?phase=auth,jobs&phase=copilot&risk=high&verdict=AUDIT&q=  Login  &short_num=12,34&limit=25",
   );
-  const f = parseOpenTestFilters(u);
   assertEquals([...f.phaseFilter].sort(), ["auth", "copilot", "jobs"]);
   assertEquals([...f.riskFilter], ["high"]);
   assertEquals(f.verdictFilter, "audit");
   assertEquals(f.titleQuery, "login");
   assertEquals([...f.shortNums].sort((a, b) => a - b), [12, 34]);
-  assertEquals(f.limit, MAX_JOBS_PER_SHIFT, "limit clamps to MAX_JOBS_PER_SHIFT");
-  assertEquals(f.filtersApplied.limit, MAX_JOBS_PER_SHIFT);
+  assertEquals(f.limit, 25);
 });
 
 Deno.test("filters.applyDerivedFilters: phase/risk/verdict gating", () => {
@@ -205,17 +209,10 @@ Deno.test("filters.applyDerivedFilters: phase/risk/verdict gating", () => {
     { id: "c", short_num: 3, title: "z", risk: "med",  phase: "general", suite: "general", would_audit: true, skip_reasons: [] },
   ];
 
-  const onlyAuth = applyDerivedFilters(jobs, parseOpenTestFilters(new URL("https://x/?phase=auth")));
-  assertEquals(onlyAuth.map((j) => j.id), ["a"]);
-
-  const onlyAudit = applyDerivedFilters(jobs, parseOpenTestFilters(new URL("https://x/?verdict=audit")));
-  assertEquals(onlyAudit.map((j) => j.id), ["b", "c"]);
-
-  const onlySkip = applyDerivedFilters(jobs, parseOpenTestFilters(new URL("https://x/?verdict=skip")));
-  assertEquals(onlySkip.map((j) => j.id), ["a"]);
-
-  const highRisk = applyDerivedFilters(jobs, parseOpenTestFilters(new URL("https://x/?risk=high")));
-  assertEquals(highRisk.map((j) => j.id), ["a"]);
+  assertEquals(applyDerivedFilters(jobs, mustParse("https://x/?phase=auth")).map((j) => j.id), ["a"]);
+  assertEquals(applyDerivedFilters(jobs, mustParse("https://x/?verdict=audit")).map((j) => j.id), ["b", "c"]);
+  assertEquals(applyDerivedFilters(jobs, mustParse("https://x/?verdict=skip")).map((j) => j.id), ["a"]);
+  assertEquals(applyDerivedFilters(jobs, mustParse("https://x/?risk=high")).map((j) => j.id), ["a"]);
 });
 
 // ─── pure regression: skip_reasons mirrors what gates.ts emits ───────────
