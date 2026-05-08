@@ -1516,26 +1516,35 @@ export type Database = {
         Row: {
           created_at: string
           ended_at: string | null
-          finding_id: string
+          finding_id: string | null
           id: string
           mode: string
           started_by_user_id: string | null
+          subject_id: string
+          subject_type: string
+          title: string | null
         }
         Insert: {
           created_at?: string
           ended_at?: string | null
-          finding_id: string
+          finding_id?: string | null
           id?: string
           mode: string
           started_by_user_id?: string | null
+          subject_id: string
+          subject_type?: string
+          title?: string | null
         }
         Update: {
           created_at?: string
           ended_at?: string | null
-          finding_id?: string
+          finding_id?: string | null
           id?: string
           mode?: string
           started_by_user_id?: string | null
+          subject_id?: string
+          subject_type?: string
+          title?: string | null
         }
         Relationships: [
           {
