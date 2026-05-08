@@ -473,6 +473,8 @@ async function evaluateOpenGates(
   settings: NightSettings,
   url: URL,
   actorId: string,
+  actorEmail?: string,
+  req?: Request,
 ) {
   const tz = (settings?.night_timezone as string) || "UTC";
   const winStart = (settings?.night_window_start as string) || "22:00";
