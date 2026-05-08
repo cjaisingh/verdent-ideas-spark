@@ -16,6 +16,7 @@ import ApiExplorer from "./pages/ApiExplorer";
 import DbExplorer from "./pages/DbExplorer";
 import DbAuditLogs from "./pages/DbAuditLogs";
 import Admin from "./pages/Admin";
+import CapabilityPromotion from "./pages/CapabilityPromotion";
 import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/db-audit" element={<DbAuditLogs />} />
             <Route path="/runbooks" element={<Runbooks />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/admin/capability-promotion" element={<CapabilityPromotion />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>

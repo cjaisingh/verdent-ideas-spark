@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PromotionBadge } from "@/components/promotion/PromotionBadge";
 
 type Tenant = { id: string; slug: string; name: string };
 
@@ -93,6 +94,8 @@ const CapabilityDetail = () => {
           </div>
         </div>
       </div>
+
+      <PromotionBadge capabilityId={capability.id} />
 
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Tenants" value={tenants.length} />
