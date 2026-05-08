@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
 import { useViewport } from "@/hooks/use-viewport";
+import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
 
 const toastedDecisions = new Set<string>();
 
@@ -43,9 +44,41 @@ const OperatorLayout = () => {
   // Snapshot the focus mode at drag start so it can be restored if anything
   // (a stray click, keyboard shortcut, etc.) tried to change it mid-drag.
   const modeAtDragStartRef = useRef<typeof paneState.mode | null>(null);
+  // Session-only resize history (not persisted across reloads).
+  const [history, setHistory] = useState<ResizeHistoryEntry[]>([]);
+  // Snapshot of sizes at the start of an interaction (drag or keyboard burst).
+  const sizesAtInteractionStartRef = useRef<{ rightWidth: number; bottomHeight: number } | null>(null);
+  const commitHistory = (before: { rightWidth: number; bottomHeight: number }) => {
+    const after = getModeSizes(paneState, effectiveMode, viewport);
+    const entries: ResizeHistoryEntry[] = [];
+    if (flags.right && before.rightWidth !== after.rightWidth) {
+      entries.push({
+        id: `${Date.now()}-r`,
+        ts: Date.now(),
+        viewport,
+        mode: effectiveMode,
+        axis: "right",
+        before: before.rightWidth,
+        after: after.rightWidth,
+      });
+    }
+    if (flags.bottom && before.bottomHeight !== after.bottomHeight) {
+      entries.push({
+        id: `${Date.now()}-b`,
+        ts: Date.now(),
+        viewport,
+        mode: effectiveMode,
+        axis: "bottom",
+        before: before.bottomHeight,
+        after: after.bottomHeight,
+      });
+    }
+    if (entries.length) setHistory((h) => [...entries, ...h].slice(0, 20));
+  };
   const handleDragging = (d: boolean) => {
     if (d) {
       modeAtDragStartRef.current = paneState.mode;
+      sizesAtInteractionStartRef.current = getModeSizes(paneState, effectiveMode, viewport);
     } else {
       const snapshot = modeAtDragStartRef.current;
       modeAtDragStartRef.current = null;
@@ -60,6 +93,9 @@ const OperatorLayout = () => {
         const current = getModeSizes(paneState, effectiveMode, viewport);
         setPaneState((prev) => withModeSize(prev, effectiveMode, current, viewport));
       }
+      const before = sizesAtInteractionStartRef.current;
+      sizesAtInteractionStartRef.current = null;
+      if (before) commitHistory(before);
     }
     setDragging(d);
   };
@@ -76,15 +112,31 @@ const OperatorLayout = () => {
       e.key === "Home" ||
       e.key === "End"
     ) {
+      if (!sizesAtInteractionStartRef.current) {
+        sizesAtInteractionStartRef.current = getModeSizes(paneState, effectiveMode, viewport);
+      }
       setKbResizing(true);
       if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
-      kbTimerRef.current = window.setTimeout(() => setKbResizing(false), 400);
+      kbTimerRef.current = window.setTimeout(() => {
+        setKbResizing(false);
+        const before = sizesAtInteractionStartRef.current;
+        sizesAtInteractionStartRef.current = null;
+        if (before) commitHistory(before);
+      }, 400);
     }
   };
   useEffect(() => () => {
     if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
   }, []);
   const interacting = dragging || kbResizing;
+
+  const undoHistory = (entry: ResizeHistoryEntry) => {
+    const patch = entry.axis === "right"
+      ? { rightWidth: entry.before }
+      : { bottomHeight: entry.before };
+    setPaneState((prev) => withModeSize(prev, entry.mode, patch, entry.viewport));
+    setHistory((h) => h.filter((x) => x.id !== entry.id));
+  };
 
   const signOut = async () => {
     await supabase.auth.signOut();
