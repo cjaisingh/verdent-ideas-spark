@@ -12,6 +12,7 @@ import { WorkLogPulse } from "@/components/WorkLogPulse";
 import { AutomationPanel } from "@/components/AutomationPanel";
 import { DailyPlanCard } from "@/components/DailyPlanCard";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
+import { EvidencePanel } from "@/components/EvidencePanel";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -587,7 +588,10 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
-                                    {/* Activity timeline */}
+                                    {/* Research evidence */}
+                                    <div className="border-t border-border pt-2">
+                                      <EvidencePanel taskId={task.id} />
+                                    </div>
                                     {(() => {
                                       const acts = activityByTask.get(task.id) ?? [];
                                       if (acts.length === 0) return null;

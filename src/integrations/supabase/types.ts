@@ -1619,6 +1619,51 @@ export type Database = {
           },
         ]
       }
+      roadmap_task_evidence: {
+        Row: {
+          added_by: string | null
+          checklist_item: string | null
+          created_at: string
+          id: string
+          kind: string
+          note: string | null
+          source: string | null
+          storage_path: string | null
+          task_id: string
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          added_by?: string | null
+          checklist_item?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          source?: string | null
+          storage_path?: string | null
+          task_id: string
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          added_by?: string | null
+          checklist_item?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          source?: string | null
+          storage_path?: string | null
+          task_id?: string
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       roadmap_tasks: {
         Row: {
           acceptance: string | null
