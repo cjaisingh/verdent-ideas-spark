@@ -626,10 +626,14 @@ export default function ApprovalPack() {
           .container { max-width: 100% !important; padding: 0 !important; }
           .pp-doc { display: block; }
           .pp-page-break { break-before: page; page-break-before: always; }
-          .pp-sprint, .pp-task { break-inside: avoid; page-break-inside: avoid; }
-          .pp-task { orphans: 3; widows: 3; }
+          .pp-sprint { break-inside: avoid; page-break-inside: avoid; }
+          .pp-task { break-inside: auto; page-break-inside: auto; orphans: 4; widows: 4; }
+          .pp-task > .flex:first-child { break-after: avoid; page-break-after: avoid; }
+          .pp-checklist { break-inside: auto; page-break-inside: auto; }
           .pp-checklist thead { display: table-header-group; }
+          .pp-checklist tfoot { display: table-row-group; }
           .pp-checklist tr { page-break-inside: avoid; break-inside: avoid; }
+          .pp-checklist tbody tr.pp-subtotal { break-before: avoid; page-break-before: avoid; }
           .pp-checklist tbody tr:nth-child(even):not(.pp-subtotal) td { background: #f5f5f7; }
           .pp-checklist tr.pp-subtotal td { background: #e4e4e7 !important; border-top: 1px solid #a1a1aa; border-bottom: 1px solid #a1a1aa; font-weight: 600; }
           .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; }
