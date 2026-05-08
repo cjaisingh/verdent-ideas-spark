@@ -64,12 +64,33 @@ export function getModeSizes(
   };
 }
 
+/** Clamp a size patch to the viewport's allowed min/max so persisted values
+ *  never drift outside the bounds the resizable panels enforce visually. */
+function clampPatch(patch: ModeSizes, viewport: ViewportClass): ModeSizes {
+  const b = SIZE_BOUNDS[viewport];
+  const out: ModeSizes = {};
+  if (patch.rightWidth != null) {
+    const lo = b.right.min || 1;
+    const hi = b.right.max || 100;
+    if (hi >= lo) out.rightWidth = clamp(Math.round(patch.rightWidth), lo, hi);
+  }
+  if (patch.bottomHeight != null) {
+    const lo = b.bottom.min || 1;
+    const hi = b.bottom.max || 100;
+    if (hi >= lo) out.bottomHeight = clamp(Math.round(patch.bottomHeight), lo, hi);
+  }
+  return out;
+}
+
 export function withModeSize(
   state: PaneState,
   mode: PaneMode,
   patch: ModeSizes,
   viewport: ViewportClass = "wide",
 ): PaneState {
+  const clamped = clampPatch(patch, viewport);
+  // If nothing survived clamping (e.g. mobile has zero-width bounds), no-op.
+  if (clamped.rightWidth == null && clamped.bottomHeight == null) return state;
   const byVp = state.sizesByViewportMode ?? {};
   const forVp = byVp[viewport] ?? {};
   return {
@@ -78,7 +99,7 @@ export function withModeSize(
       ...byVp,
       [viewport]: {
         ...forVp,
-        [mode]: { ...(forVp[mode] ?? {}), ...patch },
+        [mode]: { ...(forVp[mode] ?? {}), ...clamped },
       },
     },
   };
