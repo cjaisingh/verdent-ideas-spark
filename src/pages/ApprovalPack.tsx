@@ -46,6 +46,33 @@ export default function ApprovalPack() {
     });
   }, []);
 
+  const [allPhaseStats, setAllPhaseStats] = useState<
+    Array<{ phase_id: string; phase_key: string; phase_title: string; phase_order: number; counts: Record<string, number>; total: number }>
+  >([]);
+
+  useEffect(() => {
+    if (!phases.length) return;
+    (async () => {
+      const { data: allSprints } = await supabase.from("roadmap_sprints").select("id, phase_id");
+      const sprintToPhase = new Map<string, string>((allSprints ?? []).map((s: any) => [s.id, s.phase_id]));
+      const { data: allTasks } = await supabase.from("roadmap_tasks").select("sprint_id, review_status");
+      const acc: Record<string, Record<string, number>> = {};
+      for (const t of (allTasks ?? []) as Array<{ sprint_id: string; review_status: string }>) {
+        const pid = sprintToPhase.get(t.sprint_id);
+        if (!pid) continue;
+        acc[pid] ??= {};
+        acc[pid][t.review_status] = (acc[pid][t.review_status] ?? 0) + 1;
+      }
+      setAllPhaseStats(
+        phases.map((p) => {
+          const counts = acc[p.id] ?? {};
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          return { phase_id: p.id, phase_key: p.key, phase_title: p.title, phase_order: p.order, counts, total };
+        }),
+      );
+    })();
+  }, [phases]);
+
   useEffect(() => {
     if (!phaseId) return;
     setLoading(true);
@@ -269,6 +296,81 @@ export default function ApprovalPack() {
                     </div>
                   </dl>
                 </div>
+              </section>
+            );
+          })()}
+
+          {(() => {
+            const statuses = ["approved", "changes_requested", "rejected", "pending"] as const;
+            const totals = statuses.reduce<Record<string, number>>((a, s) => { a[s] = 0; return a; }, {});
+            for (const r of allPhaseStats) for (const s of statuses) totals[s] += r.counts[s] ?? 0;
+            const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
+            const pct = (n: number) => grandTotal ? Math.round((n / grandTotal) * 100) : 0;
+            return (
+              <section className="pp-rollup pp-page-break rounded-lg border p-6 print:p-0 print:border-0 space-y-4 break-inside-avoid">
+                <header className="flex items-baseline justify-between gap-3 flex-wrap">
+                  <h2 className="text-xl font-semibold">Approval status by phase</h2>
+                  <div className="text-xs text-muted-foreground">
+                    {grandTotal} task{grandTotal === 1 ? "" : "s"} across {allPhaseStats.length} phase{allPhaseStats.length === 1 ? "" : "s"}
+                  </div>
+                </header>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <Stat label="Approved" value={`${totals.approved} · ${pct(totals.approved)}%`} />
+                  <Stat label="Changes requested" value={`${totals.changes_requested} · ${pct(totals.changes_requested)}%`} />
+                  <Stat label="Rejected" value={`${totals.rejected} · ${pct(totals.rejected)}%`} />
+                  <Stat label="Pending" value={`${totals.pending} · ${pct(totals.pending)}%`} />
+                </div>
+                <table className="pp-checklist w-full text-xs border-collapse table-fixed">
+                  <colgroup>
+                    <col style={{ width: "72px" }} />
+                    <col />
+                    <col style={{ width: "64px" }} />
+                    <col style={{ width: "84px" }} />
+                    <col style={{ width: "120px" }} />
+                    <col style={{ width: "84px" }} />
+                    <col style={{ width: "72px" }} />
+                  </colgroup>
+                  <thead>
+                    <tr className="text-left text-muted-foreground">
+                      <th className="py-1 pr-2 font-medium">Phase</th>
+                      <th className="py-1 pr-2 font-medium">Title</th>
+                      <th className="py-1 pr-2 font-medium text-right">Tasks</th>
+                      <th className="py-1 pr-2 font-medium text-right">Approved</th>
+                      <th className="py-1 pr-2 font-medium text-right">Changes req.</th>
+                      <th className="py-1 pr-2 font-medium text-right">Rejected</th>
+                      <th className="py-1 font-medium text-right">Pending</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allPhaseStats
+                      .slice()
+                      .sort((a, b) => a.phase_order - b.phase_order)
+                      .map((r) => {
+                        const isCurrent = r.phase_id === phaseId;
+                        return (
+                          <tr key={r.phase_id} className={`border-t align-top ${isCurrent ? "font-medium" : ""}`}>
+                            <td className="py-1 pr-2 font-mono">{r.phase_key}{isCurrent ? " ←" : ""}</td>
+                            <td className="py-1 pr-2 truncate">{r.phase_title}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{r.total}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.approved ?? 0}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.changes_requested ?? 0}</td>
+                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.rejected ?? 0}</td>
+                            <td className="py-1 text-right tabular-nums">{r.counts.pending ?? 0}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t font-medium">
+                      <td className="py-1 pr-2" colSpan={2}>Total</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{grandTotal}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{totals.approved}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{totals.changes_requested}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{totals.rejected}</td>
+                      <td className="py-1 text-right tabular-nums">{totals.pending}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </section>
             );
           })()}
