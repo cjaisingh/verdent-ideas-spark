@@ -25,6 +25,8 @@ type Task = {
   id: string; sprint_id: string; key: string; title: string; description: string | null;
   acceptance: string | null; status: string; owner: string | null; module: string | null;
   capability_id: string | null; order: number; updated_at: string; created_at: string;
+  review_status?: "pending" | "approved" | "rejected" | "changes_requested" | null;
+  reviewed_by?: string | null; reviewed_at?: string | null; review_notes?: string | null;
 };
 type Comment = { id: string; task_id: string; author: string; body: string; kind: string; resolved: boolean; created_at: string };
 type WorkLog = {
