@@ -1460,7 +1460,8 @@ const SpendDrillDialog = ({
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-sm font-mono">
-            {drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            {drill?.day === "*" ? "All days" : drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
             Individual ai_usage_log runs in this slice.
