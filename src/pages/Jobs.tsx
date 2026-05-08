@@ -166,6 +166,7 @@ export default function Jobs() {
               {j.subject_type === "roadmap_finding" && (
                 <Link
                   to={`/roadmap/risks#finding-${j.subject_id}`}
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-0.5 hover:underline"
                   title="Open subject"
                 >
@@ -174,7 +175,7 @@ export default function Jobs() {
               )}
               {!j.promoted_task_id && (
                 <button
-                  onClick={() => promote(j)}
+                  onClick={(e) => { e.stopPropagation(); promote(j); }}
                   className="inline-flex items-center gap-0.5 hover:underline"
                   title="Promote to roadmap task"
                 >
