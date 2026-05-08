@@ -245,6 +245,7 @@ export const AutomationPanel = () => {
     <div className="space-y-3">
     <AlertsCard />
     <PerJobCostThresholdsCard />
+    <DailyAiSpendCard />
     <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
@@ -984,6 +985,218 @@ const PerJobCostThresholdsCard = () => {
             Leave a field blank to fall back to the global threshold for that scope. Disable "alert" to silence cost alerts for a single job.
           </div>
         </div>
+      )}
+    </section>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Daily AI spend — chart + breakdowns from ai_usage_log
+// ─────────────────────────────────────────────────────────────────────────
+type SpendRow = {
+  created_at: string;
+  job: string | null;
+  model: string | null;
+  cost_usd: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+};
+
+const fmtUsd6 = (n: number) =>
+  n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+
+const DailyAiSpendCard = () => {
+  const [rows, setRows] = useState<SpendRow[]>([]);
+  const [days, setDays] = useState<7 | 14 | 30>(14);
+  const [groupBy, setGroupBy] = useState<"job" | "model">("job");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const since = new Date(Date.now() - days * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("ai_usage_log")
+        .select("created_at, job, model, cost_usd, prompt_tokens, completion_tokens")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (!cancelled) {
+        if (error) toast({ title: "Failed to load AI spend", description: error.message, variant: "destructive" });
+        setRows((data as SpendRow[]) || []);
+        setLoading(false);
+      }
+    };
+    load();
+    const ch = supabase.channel("ai_spend_panel")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [days]);
+
+  // bucket per day (UTC) per group key
+  const dayKeys: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86_400_000);
+    dayKeys.push(d.toISOString().slice(0, 10));
+  }
+  const groupKeyOf = (r: SpendRow) =>
+    (groupBy === "job" ? r.job : r.model) || "unknown";
+
+  const groups = Array.from(new Set(rows.map(groupKeyOf))).sort();
+  const matrix: Record<string, Record<string, number>> = {};
+  for (const d of dayKeys) matrix[d] = {};
+  let total = 0;
+  let totalTokens = 0;
+  for (const r of rows) {
+    const day = (r.created_at || "").slice(0, 10);
+    if (!matrix[day]) continue;
+    const key = groupKeyOf(r);
+    const cost = Number(r.cost_usd || 0);
+    matrix[day][key] = (matrix[day][key] || 0) + cost;
+    total += cost;
+    totalTokens += Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0);
+  }
+  const dailyTotals = dayKeys.map((d) =>
+    Object.values(matrix[d]).reduce((a, b) => a + b, 0));
+  const maxDay = Math.max(0.0001, ...dailyTotals);
+
+  // top breakdown for whichever grouping is active
+  const breakdown: Array<{ key: string; cost: number }> = groups
+    .map((g) => ({
+      key: g,
+      cost: dayKeys.reduce((sum, d) => sum + (matrix[d][g] || 0), 0),
+    }))
+    .sort((a, b) => b.cost - a.cost);
+
+  const palette = [
+    "hsl(var(--primary))",
+    "hsl(var(--destructive))",
+    "hsl(38 92% 50%)",
+    "hsl(160 70% 40%)",
+    "hsl(220 70% 55%)",
+    "hsl(280 60% 55%)",
+    "hsl(20 80% 55%)",
+    "hsl(190 70% 45%)",
+  ];
+  const colorFor = (key: string) =>
+    palette[groups.indexOf(key) % palette.length];
+
+  return (
+    <section className="rounded-md border border-border bg-card p-3 space-y-3">
+      <header className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <ClipboardCheck className="h-4 w-4" /> Daily AI spend
+          <span className="text-[10px] text-muted-foreground font-normal">
+            from ai_usage_log
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px]">
+          <div className="inline-flex rounded border border-border overflow-hidden">
+            {([7, 14, 30] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDays(d)}
+                className={`px-2 py-0.5 ${days === d ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >{d}d</button>
+            ))}
+          </div>
+          <div className="inline-flex rounded border border-border overflow-hidden">
+            {(["job", "model"] as const).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                className={`px-2 py-0.5 ${groupBy === g ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >by {g}</button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <div className="rounded border border-border p-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
+          <div className="font-mono">{fmtUsd6(total)}</div>
+        </div>
+        <div className="rounded border border-border p-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
+          <div className="font-mono">{fmtUsd6(total / days)}</div>
+        </div>
+        <div className="rounded border border-border p-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
+          <div className="font-mono">{rows.length}</div>
+        </div>
+        <div className="rounded border border-border p-2">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
+          <div className="font-mono">{totalTokens.toLocaleString()}</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-muted-foreground">Loading…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-xs text-muted-foreground">
+          No ai_usage_log entries in the last {days} days.
+        </div>
+      ) : (
+        <>
+          {/* Stacked bar chart */}
+          <div className="flex items-end gap-1 h-32 border-b border-border pb-1">
+            {dayKeys.map((d) => {
+              const dayTotal = dailyTotals[dayKeys.indexOf(d)];
+              const heightPct = (dayTotal / maxDay) * 100;
+              const segments = groups
+                .map((g) => ({ g, c: matrix[d][g] || 0 }))
+                .filter((s) => s.c > 0);
+              return (
+                <div key={d} className="flex-1 flex flex-col items-center gap-1 group">
+                  <div
+                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40"
+                    style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
+                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}`}
+                  >
+                    {segments.map((s) => (
+                      <div
+                        key={s.g}
+                        style={{
+                          height: `${(s.c / dayTotal) * 100}%`,
+                          background: colorFor(s.g),
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="text-[9px] text-muted-foreground font-mono">
+                    {d.slice(5)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend / breakdown table */}
+          <div className="space-y-1">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Breakdown by {groupBy}
+            </div>
+            <table className="w-full text-xs">
+              <tbody>
+                {breakdown.map(({ key, cost }) => (
+                  <tr key={key} className="border-t border-border/50">
+                    <td className="py-1 pr-2 w-3">
+                      <span className="inline-block w-2 h-2 rounded-sm" style={{ background: colorFor(key) }} />
+                    </td>
+                    <td className="py-1 pr-2 font-mono truncate max-w-[280px]">{key}</td>
+                    <td className="py-1 pr-2 font-mono text-right">{fmtUsd6(cost)}</td>
+                    <td className="py-1 pr-2 text-right text-muted-foreground">
+                      {total > 0 ? `${((cost / total) * 100).toFixed(1)}%` : "–"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   );
