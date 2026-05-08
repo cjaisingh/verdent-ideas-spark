@@ -235,6 +235,8 @@ const Admin = () => {
           </Table>
         </div>
       </section>
+
+      <AppSecretsPanel />
     </div>
   );
 };
