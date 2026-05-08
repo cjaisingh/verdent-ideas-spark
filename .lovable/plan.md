@@ -1,28 +1,38 @@
 ## Goal
-On the Daily AI spend card (`/ai-usage`), always render the chart skeleton — day-labeled axis, baseline, and (when in spend mode) the daily-limit threshold line — even when `ai_usage_log` has zero rows in the selected range. Replace the current "No ai_usage_log entries…" text-only empty state.
+Surface the latest overnight-run status for every **approved** roadmap phase as a compact badge (`queued` / `running` / `done` / `failed`) directly on the phase row — both in the tree view and the timeline view of `/roadmap`.
+
+## What "approved" means here
+A phase is treated as approved when its gate has `approvals_ok === true` (no pending sign-offs), matching the same flag used elsewhere in `PhaseGateChip` and `PhaseSignoffAudit`.
 
 ## Scope
-Frontend only — `src/components/AutomationPanel.tsx`, inside `DailyAiSpendCard`. No data, schema, or API changes. Toggles, summary chips, and drill-down behavior unchanged.
+Frontend only. No schema or RLS changes.
+- New component: `src/components/roadmap/OvernightRunBadge.tsx` — read-only, latest-run badge with a hover tooltip showing scheduled date, finish time, and (for failed) the error.
+- Edit: `src/pages/Roadmap.tsx` to render the badge in both the tree (line ~391) and timeline (line ~458) phase headers, gated on `gates.get(phase.id)?.approvals_ok`.
+- Existing `OvernightRunControl` (queue / cancel / result popover) stays only in `PhaseSignoffAudit` — we don't add the queue button here, just status visibility.
 
-## Behavior
-- When `rows.length === 0` (and not loading):
-  - Still render the stacked-bar container at full `h-32`, with one empty column per day in the range.
-  - Each column shows the muted bar background (`bg-muted/40`) at 0 height (just the baseline) and the day label underneath, using the same sparse-label rule as the populated chart.
-  - In spend mode, if a global daily limit exists, render the dashed threshold line (full-height since `maxDay` falls back to the limit) with the existing `daily limit $X` label.
-  - Below the chart, show a single muted line: `No ai_usage_log entries in this range.` (replaces the current standalone empty-state block).
-  - Skip the breakdown table entirely when there's nothing to break down.
-- When `loading`, keep the existing "Loading…" line (no skeleton flash).
-- When `rows.length > 0`, behavior is unchanged.
+## Visual
+- Compact pill, `text-[10px]`, height ~h-5.
+- States and styling (reusing existing tokens, no new colors):
+  - `queued` — outline + Moon icon
+  - `running` — secondary + spinning Loader2
+  - `done` — default + check, with `· $0.00012 · 1,234 tok` in tooltip if `result.cost_usd` present
+  - `failed` — destructive + AlertTriangle, error message in tooltip
+  - `cancelled` — outline muted + X
+  - No row in DB → render nothing (don't clutter approved phases that have never been queued).
 
 ## Implementation notes
-- Drop the `rows.length === 0` branch from the top-level conditional and instead always enter the chart render path once `!loading`.
-- In `maxDay`, fall back to `globalLimits.day ?? 1` when all `dailyTotals` are 0 so the dashed threshold line still renders at a sensible position.
-- Guard the breakdown `<table>` with `breakdown.length > 0`.
-- Show the empty-state caption (`"No ai_usage_log entries in this range."`) just under the chart legend area when `rows.length === 0`.
-- Keep the `capped` warning banner where it is (only relevant when rows exist).
+- `OvernightRunBadge` props: `{ phaseId: string }`. Fetches latest row from `roadmap_phase_overnight_runs` filtered by `phase_id`, ordered by `requested_at desc limit 1`, plus a realtime subscription on the same filter (mirrors `OvernightRunControl`'s loader).
+- Returns `null` if no row exists or while loading (no skeleton flicker — phase row layout shouldn't jump).
+- Tooltip uses the existing shadcn `Tooltip` primitive.
+- In `Roadmap.tsx`, render `{gates.get(phase.id)?.approvals_ok && <OvernightRunBadge phaseId={phase.id} />}` immediately after `<PhaseGateBadge … />` in both phase header rows.
+
+## Out of scope
+- No queue / cancel actions here (keep that consolidated in the Sign-offs tab).
+- No history list — just the latest run.
+- No changes to job tables, edge functions, or the night runner itself.
 
 ## Validation
-1. Visit `/ai-usage` with empty `ai_usage_log` → see day-labeled axis + (if a daily cost limit is set) the dashed limit line + empty-state caption. Toggling metric/groupBy/date range still re-renders the axis without errors.
-2. Insert one row → that day's bar renders at full height; other days remain empty; breakdown table appears.
-3. Switch to "Prompt tok" / "Completion tok" with empty data → axis still renders, threshold line is hidden (consistent with existing token-mode behavior), caption shows.
-4. Loading state still shows "Loading…" only (no skeleton flicker).
+1. Approve a phase (so `approvals_ok` flips true) and queue an overnight run from the Sign-offs tab → both the tree and timeline phase headers show a `queued` badge within the realtime debounce window.
+2. Toggle status manually in DB to `running`/`done`/`failed`/`cancelled` → badge updates live; tooltip reflects times and (for `done`) cost/tokens, (for `failed`) error message.
+3. Phase that has never been queued → no badge appears.
+4. Phase that is not yet approved (`approvals_ok === false`) → no badge appears, even if a stale run row exists.
