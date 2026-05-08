@@ -1396,6 +1396,36 @@ const DailyAiSpendCard = () => {
               live · +{liveCount}
             </span>
           )}
+          {showThresholds && hasAnyLimit && (() => {
+            const total = dayBreaches.size + cellBreaches.size + runBreachCount;
+            const has = total > 0;
+            return (
+              <button
+                type="button"
+                onClick={() => has && setDrill({ day: "*", groupKey: null, breachOnly: true })}
+                disabled={!has}
+                title={has
+                  ? `Open ${runBreachCount} breaching run${runBreachCount === 1 ? "" : "s"} (${dayBreaches.size} day · ${cellBreaches.size} job · ${runBreachCount} run breaches)`
+                  : "No threshold breaches in this range"}
+                className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-mono transition ${
+                  has
+                    ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 cursor-pointer"
+                    : "border-border text-muted-foreground opacity-70 cursor-default"
+                }`}
+              >
+                <span aria-hidden>⚠</span>
+                <span>breaches</span>
+                <span className="font-semibold">{dayBreaches.size}</span>
+                <span className="opacity-70">d</span>
+                <span>·</span>
+                <span className="font-semibold">{cellBreaches.size}</span>
+                <span className="opacity-70">j</span>
+                <span>·</span>
+                <span className="font-semibold">{runBreachCount}</span>
+                <span className="opacity-70">r</span>
+              </button>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2 text-[10px] flex-wrap">
           <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (o) setPendingRange(range); }}>
