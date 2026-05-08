@@ -1823,6 +1823,7 @@ Deno.serve(async (req) => {
       else if (req.method === "GET" && transcriptIdMatch) response = await getTranscript(transcriptIdMatch[1]);
       else if (req.method === "DELETE" && transcriptIdMatch) response = await deleteTranscript(transcriptIdMatch[1]);
       else if (req.method === "POST" && transcriptAnalyzeMatch) response = await analyzeTranscript(transcriptAnalyzeMatch[1]);
+      else if (req.method === "GET" && path === "/night-agent/promotion-audit") response = await getPromotionAudit(url, auth.user_id);
       else response = json({ error: "not found", path }, 404);
     }
     }
