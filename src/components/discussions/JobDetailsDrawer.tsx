@@ -60,6 +60,66 @@ type PromotedTaskMeta = {
   created_at: string;
 };
 
+type AuditEvent = {
+  id: string;
+  event_type: string;
+  payload: any;
+  actor_label: string | null;
+  created_at: string;
+};
+
+const fmtVal = (v: unknown): string => {
+  if (v == null || v === "") return "—";
+  if (typeof v === "string") {
+    // ISO date?
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return new Date(v).toLocaleDateString();
+    return v;
+  }
+  return JSON.stringify(v);
+};
+
+function formatEvent(e: { event_type: string; payload: any }): { label: string; detail?: string } {
+  const p = e.payload ?? {};
+  switch (e.event_type) {
+    case "created":
+      return { label: "Created", detail: p.title };
+    case "accepted":
+      return {
+        label: "Accepted from extraction",
+        detail: p.extracted_confidence != null
+          ? `${p.title ?? ""} · conf ${(p.extracted_confidence * 100).toFixed(0)}%`
+          : p.title,
+      };
+    case "rejected":
+      return { label: "Proposal rejected", detail: p.title };
+    case "extracted":
+      return { label: "Extracted from transcript", detail: p.title };
+    case "status_changed":
+      return { label: `Status: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "owner_changed":
+      return { label: `Owner: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "due_changed":
+      return { label: `Due date: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "priority_changed":
+      return { label: `Priority: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "title_changed":
+      return { label: "Title changed", detail: `${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "promoted":
+      return { label: "Promoted to roadmap task", detail: p.task_id };
+    case "deleted":
+      return { label: "Deleted", detail: p.title };
+    default:
+      return { label: e.event_type };
+  }
+}
+
+function eventColor(type: string): string {
+  if (type === "promoted") return "bg-emerald-500";
+  if (type === "deleted" || type === "rejected") return "bg-destructive";
+  if (type === "accepted" || type === "created" || type === "extracted") return "bg-primary";
+  return "bg-muted-foreground";
+}
+
 export function JobDetailsDrawer({
   job,
   subjectShortNum,
@@ -70,55 +130,86 @@ export function JobDetailsDrawer({
 }: Props) {
   const [discMeta, setDiscMeta] = useState<DiscussionMeta | null>(null);
   const [taskMeta, setTaskMeta] = useState<PromotedTaskMeta | null>(null);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !job) return;
     let cancelled = false;
+    const jobId = job.id;
+
+    const loadEvents = async () => {
+      const { data: ev } = await supabase
+        .from("discussion_action_events")
+        .select("id,event_type,payload,actor_label,created_at")
+        .eq("action_id", jobId)
+        .order("created_at", { ascending: true });
+      if (!cancelled) setEvents((ev ?? []) as AuditEvent[]);
+    };
+
     (async () => {
       setLoading(true);
       setDiscMeta(null);
       setTaskMeta(null);
+      setEvents([]);
+
+      const tasks: Promise<unknown>[] = [loadEvents()];
 
       if (job.discussion_id) {
-        const [{ data: d }, { data: msgs }] = await Promise.all([
-          supabase
-            .from("roadmap_finding_discussions")
-            .select("title, created_at, ended_at")
-            .eq("id", job.discussion_id)
-            .maybeSingle(),
-          supabase
-            .from("roadmap_finding_discussion_messages")
-            .select("created_at")
-            .eq("discussion_id", job.discussion_id)
-            .order("created_at", { ascending: true }),
-        ]);
-        if (!cancelled && d) {
-          const list = (msgs ?? []) as { created_at: string }[];
-          setDiscMeta({
-            title: (d as any).title ?? null,
-            created_at: (d as any).created_at,
-            ended_at: (d as any).ended_at,
-            message_count: list.length,
-            first_message_at: list[0]?.created_at,
-            last_message_at: list[list.length - 1]?.created_at,
-          });
-        }
+        tasks.push((async () => {
+          const [{ data: d }, { data: msgs }] = await Promise.all([
+            supabase
+              .from("roadmap_finding_discussions")
+              .select("title, created_at, ended_at")
+              .eq("id", job.discussion_id!)
+              .maybeSingle(),
+            supabase
+              .from("roadmap_finding_discussion_messages")
+              .select("created_at")
+              .eq("discussion_id", job.discussion_id!)
+              .order("created_at", { ascending: true }),
+          ]);
+          if (!cancelled && d) {
+            const list = (msgs ?? []) as { created_at: string }[];
+            setDiscMeta({
+              title: (d as any).title ?? null,
+              created_at: (d as any).created_at,
+              ended_at: (d as any).ended_at,
+              message_count: list.length,
+              first_message_at: list[0]?.created_at,
+              last_message_at: list[list.length - 1]?.created_at,
+            });
+          }
+        })());
       }
 
       if (job.promoted_task_id) {
-        const { data: t } = await supabase
-          .from("roadmap_tasks")
-          .select("key, title, status, created_at")
-          .eq("id", job.promoted_task_id)
-          .maybeSingle();
-        if (!cancelled && t) setTaskMeta(t as PromotedTaskMeta);
+        tasks.push((async () => {
+          const { data: t } = await supabase
+            .from("roadmap_tasks")
+            .select("key, title, status, created_at")
+            .eq("id", job.promoted_task_id!)
+            .maybeSingle();
+          if (!cancelled && t) setTaskMeta(t as PromotedTaskMeta);
+        })());
       }
 
+      await Promise.all(tasks);
       if (!cancelled) setLoading(false);
     })();
+
+    const ch = supabase
+      .channel(`job-events-${jobId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "discussion_action_events", filter: `action_id=eq.${jobId}` },
+        () => loadEvents(),
+      )
+      .subscribe();
+
     return () => {
       cancelled = true;
+      supabase.removeChannel(ch);
     };
   }, [open, job?.id, job?.discussion_id, job?.promoted_task_id]);
 
@@ -240,7 +331,7 @@ export function JobDetailsDrawer({
 
           <section>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-              Timeline
+              Context
             </h3>
             <ol className="space-y-2">
               {timeline.map((t, i) => (
@@ -259,7 +350,41 @@ export function JobDetailsDrawer({
                 </li>
               ))}
             </ol>
-            {loading && <p className="text-xs text-muted-foreground">Loading timeline…</p>}
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Activity log
+            </h3>
+            {events.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                {loading ? "Loading activity…" : "No activity recorded yet."}
+              </p>
+            ) : (
+              <ol className="space-y-2">
+                {events.map((e, i) => {
+                  const { label, detail } = formatEvent(e);
+                  return (
+                    <li key={e.id} className="flex gap-3 text-sm">
+                      <div className="flex flex-col items-center pt-1">
+                        <div className={`h-2 w-2 rounded-full ${eventColor(e.event_type)}`} />
+                        {i < events.length - 1 && <div className="flex-1 w-px bg-border mt-1 min-h-[16px]" />}
+                      </div>
+                      <div className="flex-1 pb-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{new Date(e.created_at).toLocaleString()}</span>
+                          {e.actor_label && <span>· {e.actor_label}</span>}
+                        </div>
+                        <div className="font-medium">{label}</div>
+                        {detail && <div className="text-xs text-muted-foreground break-words">{detail}</div>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </section>
 
           <Separator />

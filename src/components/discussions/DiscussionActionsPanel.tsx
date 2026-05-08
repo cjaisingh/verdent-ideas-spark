@@ -129,7 +129,22 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
     setProposals((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const rejectProposal = (idx: number) => setProposals((prev) => prev.filter((_, i) => i !== idx));
+  const rejectProposal = async (p: Proposal, idx: number) => {
+    // Log the rejection (no row created in discussion_actions)
+    await supabase.from("discussion_action_events").insert({
+      action_id: null,
+      discussion_id: discussionId,
+      event_type: "rejected",
+      payload: {
+        title: p.title,
+        details: p.details,
+        priority: p.priority,
+        owner_hint: p.owner_hint,
+        confidence: p.confidence,
+      },
+    });
+    setProposals((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const cycleStatus = async (a: Action) => {
     const next = STATUS_NEXT[a.status] ?? "open";
@@ -191,7 +206,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
                 <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => acceptProposal(p, i)} title="Accept">
                   <Check className="h-3 w-3" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(i)} title="Reject">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(p, i)} title="Reject">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
