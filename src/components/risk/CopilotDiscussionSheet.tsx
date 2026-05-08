@@ -174,16 +174,26 @@ export function CopilotDiscussionSheet({
     if (recording) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      console.log("[mic] requesting deepgram token");
       const tokenResp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deepgram-realtime-token`, {
         method: "POST",
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
+      const tokenBody = await tokenResp.text();
+      console.log("[mic] token response", { status: tokenResp.status, body: tokenBody });
       if (!tokenResp.ok) {
-        const e = await tokenResp.json().catch(() => ({}));
-        toast({ title: "Mic unavailable", description: e?.error ?? `HTTP ${tokenResp.status}`, variant: "destructive" });
+        let parsed: any = {};
+        try { parsed = JSON.parse(tokenBody); } catch {/**/}
+        console.error("[mic] token mint failed", parsed);
+        toast({
+          title: "Mic unavailable",
+          description: `HTTP ${tokenResp.status} — ${parsed?.error ?? "unknown"}${parsed?.deepgram_status ? ` (deepgram ${parsed.deepgram_status}: ${parsed.deepgram_body})` : ""}`,
+          variant: "destructive",
+        });
         return;
       }
-      const { key } = await tokenResp.json();
+      const { key } = JSON.parse(tokenBody);
+      console.log("[mic] token ok, opening websocket");
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const ws = new WebSocket(
@@ -194,6 +204,7 @@ export function CopilotDiscussionSheet({
 
       let finalText = "";
       ws.onopen = () => {
+        console.log("[mic] ws open");
         const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
         mediaRef.current = mr;
         mr.ondataavailable = (ev) => {
@@ -205,6 +216,7 @@ export function CopilotDiscussionSheet({
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
+          if (msg.type === "Error" || msg.error) console.error("[mic] ws message error", msg);
           const alt = msg?.channel?.alternatives?.[0];
           const text = alt?.transcript ?? "";
           if (!text) return;
@@ -214,10 +226,21 @@ export function CopilotDiscussionSheet({
           } else {
             setPartial(finalText ? `${finalText} ${text}` : text);
           }
-        } catch { /* ignore */ }
+        } catch (e) { console.warn("[mic] ws message parse failed", e, ev.data); }
       };
-      ws.onerror = () => toast({ title: "Mic stream error", variant: "destructive" });
-      ws.onclose = async () => {
+      ws.onerror = (e) => {
+        console.error("[mic] ws error event", e);
+        toast({ title: "Mic stream error", description: "See console for details", variant: "destructive" });
+      };
+      ws.onclose = async (ev) => {
+        console.log("[mic] ws close", { code: ev.code, reason: ev.reason, wasClean: ev.wasClean });
+        if (!ev.wasClean && ev.code !== 1000) {
+          toast({
+            title: "Mic disconnected",
+            description: `WS close ${ev.code}${ev.reason ? `: ${ev.reason}` : ""}`,
+            variant: "destructive",
+          });
+        }
         setRecording(false);
         const said = finalText.trim();
         setPartial("");
@@ -225,6 +248,7 @@ export function CopilotDiscussionSheet({
         if (said) await sendMessage(said, "voice");
       };
     } catch (e) {
+      console.error("[mic] startVoice exception", e);
       toast({ title: "Mic error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
