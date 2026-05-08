@@ -1835,6 +1835,7 @@ const DailyAiSpendCard = () => {
         metric={metric}
         drill={drill}
         onClose={() => setDrill(null)}
+        onUpdateDrill={(patch) => setDrill((d) => (d ? { ...d, ...patch } : d))}
         globalLimits={globalLimits}
         jobLimits={jobLimits}
         tz={tz}
@@ -1858,13 +1859,14 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits, tz,
+  rows, groupBy, metric, drill, onClose, onUpdateDrill, globalLimits, jobLimits, tz,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
   metric: "spend" | "prompt" | "completion";
   drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
+  onUpdateDrill: (patch: Partial<{ breachOnly: boolean }>) => void;
   globalLimits: { day: number | null; run: number | null };
   jobLimits: Record<string, { day: number | null; run: number | null }>;
   tz: string;
@@ -1876,13 +1878,40 @@ const SpendDrillDialog = ({
     const lim = effectiveRunLimit(r.job);
     return lim != null && Number(r.cost_usd || 0) > lim;
   };
-  const filtered = drill
+  const dayKeyOf = (r: SpendRow) => r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
+
+  // Pre-compute per-day and per-(day,job) totals so we can flag breaches inside the dialog
+  const dayTotals = new Map<string, number>();
+  const cellTotals = new Map<string, number>(); // "day|job"
+  for (const r of rows) {
+    const d = dayKeyOf(r);
+    if (!d) continue;
+    const cost = Number(r.cost_usd || 0);
+    dayTotals.set(d, (dayTotals.get(d) || 0) + cost);
+    if (r.job) {
+      const k = `${d}|${r.job}`;
+      cellTotals.set(k, (cellTotals.get(k) || 0) + cost);
+    }
+  }
+  const isDayBreach = (r: SpendRow) =>
+    globalLimits.day != null && (dayTotals.get(dayKeyOf(r)) || 0) > globalLimits.day;
+  const isJobDayBreach = (r: SpendRow) => {
+    if (!r.job) return false;
+    const lim = jobLimits[r.job]?.day;
+    if (lim == null) return false;
+    return (cellTotals.get(`${dayKeyOf(r)}|${r.job}`) || 0) > lim;
+  };
+  const isAnyBreach = (r: SpendRow) =>
+    isRunBreach(r) || isDayBreach(r) || isJobDayBreach(r);
+
+  const sliceFiltered = drill
     ? rows
-        .filter(r => (drill.day === "*" || (r.created_at ? tzDayKey(new Date(r.created_at), tz) : "") === drill.day) &&
-          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
-          (!drill.breachOnly || isRunBreach(r)))
-        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+        .filter(r => (drill.day === "*" || dayKeyOf(r) === drill.day) &&
+          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey))
     : [];
+  const breachableCount = sliceFiltered.filter(isAnyBreach).length;
+  const filtered = (drill?.breachOnly ? sliceFiltered.filter(isAnyBreach) : sliceFiltered)
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
   const totalCost = filtered.reduce((s, r) => s + Number(r.cost_usd || 0), 0);
   const totalTok = filtered.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0);
   const nightCount = filtered.filter(r => r?.request_ref?.night_mode === true).length;
@@ -1915,8 +1944,45 @@ const SpendDrillDialog = ({
             <span className="ml-2 text-muted-foreground">· viewing {metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens"}</span>
             {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            Individual ai_usage_log runs in this slice.
+          <DialogDescription className="text-xs flex items-center gap-2 flex-wrap">
+            <span>Individual ai_usage_log runs in this slice.</span>
+            {(() => {
+              const dayN = sliceFiltered.filter(isDayBreach).length;
+              const jobN = sliceFiltered.filter(isJobDayBreach).length;
+              const runN = sliceFiltered.filter(isRunBreach).length;
+              const anyConfigured = globalLimits.day != null || globalLimits.run != null
+                || Object.values(jobLimits).some(l => l.day != null || l.run != null);
+              if (!anyConfigured) return null;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateDrill({ breachOnly: !drill?.breachOnly })}
+                    disabled={breachableCount === 0}
+                    className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-mono transition ${
+                      drill?.breachOnly
+                        ? "border-destructive/60 bg-destructive/15 text-destructive"
+                        : breachableCount > 0
+                          ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 cursor-pointer"
+                          : "border-border text-muted-foreground opacity-70 cursor-default"
+                    }`}
+                    title={breachableCount === 0
+                      ? "No threshold breaches in this slice"
+                      : drill?.breachOnly ? "Show all runs" : "Show only rows that exceeded a per-day, per-job, or per-run threshold"}
+                  >
+                    <span aria-hidden>⚠</span>
+                    {drill?.breachOnly ? "showing breaches only" : `breaches only (${breachableCount})`}
+                  </button>
+                  {breachableCount > 0 && (
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      day <span className="text-destructive">{dayN}</span>
+                      {" · "}job-day <span className="text-destructive">{jobN}</span>
+                      {" · "}run <span className="text-destructive">{runN}</span>
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
@@ -1965,12 +2031,15 @@ const SpendDrillDialog = ({
                   const isErr = (r.status || "ok") !== "ok";
                   const runLim = effectiveRunLimit(r.job);
                   const runBreach = runLim != null && Number(r.cost_usd || 0) > runLim;
+                  const dayBreach = isDayBreach(r);
+                  const jobDayBreach = isJobDayBreach(r);
+                  const anyBreach = runBreach || dayBreach || jobDayBreach;
                   return (
                     <div
                       key={r.id ?? vr.key}
                       data-index={vr.index}
                       ref={rowVirtualizer.measureElement}
-                      className={`grid border-t border-border/50 text-[11px] ${runBreach ? "bg-destructive/5" : ""}`}
+                      className={`grid border-t border-border/50 text-[11px] ${anyBreach ? "bg-destructive/5" : ""}`}
                       style={{ gridTemplateColumns: gridCols }}
                     >
                       <div className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
@@ -1993,7 +2062,13 @@ const SpendDrillDialog = ({
                       <div className="px-2 py-1 font-mono text-right">
                         {fmtUsdFull(Number(r.cost_usd || 0))}
                         {runBreach && (
-                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠</span>
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠ run</span>
+                        )}
+                        {dayBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Day total over daily cap (${fmtUsd6(globalLimits.day!)})`}>⚠ day</span>
+                        )}
+                        {jobDayBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Job-day total over per-job cap (${fmtUsd6(jobLimits[r.job!]!.day!)})`}>⚠ job</span>
                         )}
                       </div>
                       <div className="px-2 py-1 font-mono text-muted-foreground truncate" title={formulaFor(r)}>{formulaFor(r)}</div>
