@@ -235,7 +235,7 @@ export function useDashboardConfig() {
 
   return {
     config, loaded, userId, MAX_TABS,
-    setActiveTab, addTab, renameTab, deleteTab, reorderTab, setTemplate, setSlotWidget, swapSlots,
+    setActiveTab, addTab, renameTab, deleteTab, duplicateTab, reorderTab, setTemplate, setSlotWidget, swapSlots,
     newWidgetId: shortId,
   };
 }
