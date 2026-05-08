@@ -1,7 +1,7 @@
-// Night Agent — observation-only nightly shift.
-// Two entrypoints: POST /open (start shift + sweep) and POST /close (digest + CHANGELOG).
-// Authenticates via AWIP_SERVICE_TOKEN (cron) or operator bearer JWT.
-// Writes ONLY to night_shifts / night_observations / night_proposals.
+// Night Agent — eligible-task audit pipeline.
+// /open: pull eligible jobs, run 5-step QA per job, queue proposals with audit summary.
+// /close: roll up shift digest from night_observations / night_task_audit.
+// Read-only: never writes to discussion_actions or roadmap_tasks.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -14,6 +14,10 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
+
+const MAX_JOBS_PER_SHIFT = 50;
+const SEV_RANK: Record<string, number> = { info: 0, low: 1, medium: 2, high: 3 };
+const worse = (a: string, b: string) => (SEV_RANK[a] >= SEV_RANK[b] ? a : b);
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -28,102 +32,55 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*\/night-agent/, "") || "/";
 
-  // Auth: cron token OR authenticated operator
   const provided = req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";
   const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    return json({ error: "unauthorized" }, 401);
-  }
+  if (!triggeredByCron && !auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-  // Kill switch
   const { data: settings } = await sb
-    .from("memory_settings")
-    .select("night_agent_enabled")
-    .eq("id", true)
-    .maybeSingle();
+    .from("memory_settings").select("night_agent_enabled").eq("id", true).maybeSingle();
   if (settings && settings.night_agent_enabled === false) {
     return json({ skipped: true, reason: "night_agent_disabled" });
   }
 
   try {
-    if (path === "/open" || path === "/open/") return await openShift(sb, req);
-    if (path === "/close" || path === "/close/") return await closeShift(sb, req);
+    if (path.startsWith("/open")) return await openShift(sb);
+    if (path.startsWith("/close")) return await closeShift(sb);
     return json({ error: "not_found", path }, 404);
   } catch (e) {
-    console.error("night-agent error", e);
+    console.error("night-agent", e);
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   }
 });
 
-// ─── helpers ──────────────────────────────────────────────────────────────
+// ─── classifier ───────────────────────────────────────────────────────────
 
-async function recordObs(
-  sb: ReturnType<typeof createClient>,
-  shiftId: string,
-  kind: string,
-  severity: string,
-  summary: string,
-  payload: Record<string, unknown> = {},
-  subjectRef: Record<string, unknown> = {},
-) {
-  await sb.from("night_observations").insert({
-    shift_id: shiftId, kind, severity, summary, payload, subject_ref: subjectRef,
-  });
-}
-
-async function invokeJob(
-  sb: ReturnType<typeof createClient>,
-  shiftId: string,
-  fn: string,
-  kind: string,
-) {
-  try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-service-token": SERVICE_TOKEN ?? "",
-      },
-      body: JSON.stringify({}),
-    });
-    const text = await r.text();
-    let parsed: any = null;
-    try { parsed = JSON.parse(text); } catch { /* keep text */ }
-    const ok = r.ok;
-    const sev = ok ? "info" : "high";
-    await recordObs(
-      sb, shiftId, kind, sev,
-      `${fn} → ${r.status}${parsed?.findings_count != null ? ` · ${parsed.findings_count} findings` : ""}`,
-      { status: r.status, response: parsed ?? text.slice(0, 500) },
-      { function: fn },
-    );
-    return { ok, status: r.status, body: parsed };
-  } catch (e) {
-    await recordObs(
-      sb, shiftId, "error", "high",
-      `${fn} threw: ${e instanceof Error ? e.message : String(e)}`,
-      {}, { function: fn },
-    );
-    return { ok: false, status: 0, body: null };
+function classifyJob(j: { title: string; details: string | null; priority: string }) {
+  const text = `${j.title} ${j.details ?? ""}`.toLowerCase();
+  if (/\b(security|auth|payment|delete|drop|migration|prod)\b/.test(text)) {
+    return { risk: "high" as const, reason: "keyword match (security/auth/payment/delete/migration/prod)" };
   }
+  if (j.priority === "high") return { risk: "high" as const, reason: "priority=high" };
+  if (j.priority === "low") return { risk: "low" as const, reason: "priority=low" };
+  return { risk: "med" as const, reason: "default" };
 }
 
-// Risk classifier — deliberately simple. High = security/payments/auth keywords.
-function classifyJob(action: { title: string; details: string | null; priority: string }): "low" | "med" | "high" {
-  const text = `${action.title} ${action.details ?? ""}`.toLowerCase();
-  if (/\b(security|auth|payment|delete|drop|migration|prod)\b/.test(text)) return "high";
-  if (action.priority === "high") return "high";
-  if (action.priority === "low") return "low";
-  return "med";
+// Inferred phase + suite hints. Cheap keyword match; falls back to 'general'.
+function inferPhaseAndSuite(title: string) {
+  const t = title.toLowerCase();
+  let phase = "general";
+  if (/\b(auth|login|jwt|role)\b/.test(t)) phase = "auth";
+  else if (/\b(roadmap|finding|risk)\b/.test(t)) phase = "roadmap";
+  else if (/\b(copilot|voice|telegram)\b/.test(t)) phase = "copilot";
+  else if (/\b(jobs?|discussion|action)\b/.test(t)) phase = "jobs";
+  return { phase, suite: phase };
 }
 
 // ─── /open ────────────────────────────────────────────────────────────────
 
-async function openShift(sb: ReturnType<typeof createClient>, _req: Request) {
-  // Window: previous 22:00 → next 06:00 in UTC (operator can adjust later).
+async function openShift(sb: ReturnType<typeof createClient>) {
   const now = new Date();
   const windowStart = new Date(now);
   windowStart.setUTCHours(22, 0, 0, 0);
@@ -131,107 +88,198 @@ async function openShift(sb: ReturnType<typeof createClient>, _req: Request) {
   const windowEnd = new Date(windowStart);
   windowEnd.setUTCHours(windowEnd.getUTCHours() + 8);
 
-  // Best-effort commit SHA (optional; reads from a recent automation_runs detail if present)
-  let commitSha: string | null = null;
-  const { data: lastRun } = await sb
-    .from("automation_runs")
-    .select("detail")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (lastRun?.detail && typeof lastRun.detail === "object") {
-    const d = lastRun.detail as Record<string, unknown>;
-    if (typeof d.commit === "string") commitSha = d.commit;
-    if (typeof d.sha === "string") commitSha = d.sha;
-  }
-
-  const { data: shift, error: shiftErr } = await sb
-    .from("night_shifts")
-    .insert({
-      window_start: windowStart.toISOString(),
-      window_end: windowEnd.toISOString(),
-      commit_sha: commitSha,
-      status: "running",
-    })
-    .select("id")
-    .single();
+  const { data: shift, error: shiftErr } = await sb.from("night_shifts").insert({
+    window_start: windowStart.toISOString(),
+    window_end: windowEnd.toISOString(),
+    status: "running",
+  }).select("id").single();
   if (shiftErr || !shift) return json({ error: "shift_create_failed", detail: shiftErr?.message }, 500);
-
   const shiftId = shift.id as string;
 
-  // 1. Jobs board sweep
-  const { data: openJobs } = await sb
-    .from("discussion_actions")
-    .select("id, short_num, title, details, priority, status")
-    .eq("status", "open")
-    .is("promoted_task_id", null)
-    .limit(100);
-
-  let proposalCount = 0;
-  for (const job of openJobs ?? []) {
-    const risk = classifyJob(job as any);
-    const { data: obs } = await sb.from("night_observations").insert({
-      shift_id: shiftId,
-      kind: "job_review",
-      severity: risk === "high" ? "high" : "info",
-      subject_ref: { discussion_action_id: job.id, short_num: job.short_num },
-      summary: `Job #${job.short_num} (${risk}): ${job.title}`,
-      payload: { risk, priority: job.priority },
-    }).select("id").single();
-
-    if (risk === "low" && obs?.id) {
-      await sb.from("night_proposals").insert({
-        shift_id: shiftId,
-        source_observation_id: obs.id,
-        kind: "promote_job",
-        target_ref: { discussion_action_id: job.id, short_num: job.short_num },
-        rationale: `Low-risk job auto-suggested for promotion. Title: ${job.title}`,
-      });
-      proposalCount++;
-    }
+  // Step 0: global QA once per shift
+  let globalQa: { ok: boolean; status: number; checked: number | null } = { ok: false, status: 0, checked: null };
+  try {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/qa-validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-service-token": SERVICE_TOKEN ?? "" },
+      body: "{}",
+    });
+    const body = await r.json().catch(() => ({}));
+    globalQa = { ok: r.ok, status: r.status, checked: body?.checked ?? body?.count ?? null };
+  } catch (e) {
+    await sb.from("night_observations").insert({
+      shift_id: shiftId, kind: "error", severity: "high",
+      summary: `global qa-validate threw: ${e instanceof Error ? e.message : String(e)}`,
+    });
   }
 
-  // 2. Code review pass
-  await invokeJob(sb, shiftId, "scheduled-code-review", "code_review");
-  // 3. QA pass
-  await invokeJob(sb, shiftId, "qa-validate", "qa");
-  // 4. Tests — record-test-run only ingests posted runs; we record an observation noting that.
-  await recordObs(
-    sb, shiftId, "tests", "info",
-    "Test ingestion endpoint pinged; CI is responsible for posting runs.",
-    {}, { function: "record-test-run" },
-  );
+  // Eligible jobs: night_eligible + open + not promoted
+  const { data: candidates } = await sb
+    .from("discussion_actions")
+    .select("id, short_num, title, details, priority, status, promoted_task_id, night_eligible")
+    .eq("status", "open")
+    .eq("night_eligible", true)
+    .is("promoted_task_id", null)
+    .limit(MAX_JOBS_PER_SHIFT);
 
-  return json({ shift_id: shiftId, jobs_reviewed: openJobs?.length ?? 0, proposals: proposalCount });
+  let auditedCount = 0;
+  let proposalsQueued = 0;
+  const skipped: Array<{ id: string; reason: string }> = [];
+
+  for (const job of candidates ?? []) {
+    const { risk, reason } = classifyJob(job as any);
+    if (risk === "high") {
+      skipped.push({ id: job.id, reason: `risk=high (${reason})` });
+      continue;
+    }
+
+    const subjectRef = { discussion_action_id: job.id, short_num: job.short_num };
+    const { phase, suite } = inferPhaseAndSuite(job.title);
+    let worst = "info";
+
+    // 1. pulled
+    await sb.from("night_observations").insert({
+      shift_id: shiftId, kind: "job_review", severity: "info",
+      subject_ref: subjectRef,
+      summary: `pulled #${job.short_num}: ${job.title}`,
+      payload: { risk, reason, phase, suite, eligible: true },
+    });
+
+    // 2. global_qa
+    {
+      const sev = globalQa.ok ? "info" : "high";
+      worst = worse(worst, sev);
+      await sb.from("night_observations").insert({
+        shift_id: shiftId, kind: "qa", severity: sev,
+        subject_ref: subjectRef,
+        summary: `global_qa ${globalQa.ok ? "pass" : "fail"} (${globalQa.checked ?? "?"} checks)`,
+        payload: globalQa,
+      });
+    }
+
+    // 3. code_review — overlap on area keyword matches in recent findings
+    {
+      const { data: findings } = await sb
+        .from("roadmap_review_findings")
+        .select("severity, area, title")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const matches = (findings ?? []).filter((f: any) => {
+        const blob = `${f.area ?? ""} ${f.title ?? ""}`.toLowerCase();
+        return blob.includes(phase);
+      });
+      const sev = matches.reduce((acc: string, f: any) => worse(acc, f.severity ?? "info"), "info");
+      worst = worse(worst, sev);
+      await sb.from("night_observations").insert({
+        shift_id: shiftId, kind: "code_review", severity: sev,
+        subject_ref: subjectRef,
+        summary: `code_review: ${matches.length} overlapping finding(s) in '${phase}'`,
+        payload: { matches: matches.slice(0, 5) },
+      });
+    }
+
+    // 4. tests — latest test_runs for inferred suite
+    {
+      const { data: runs } = await sb
+        .from("test_runs")
+        .select("status, suite, created_at, failed")
+        .ilike("suite", `%${suite}%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const latest = runs?.[0];
+      const passed = !!latest && (latest.status === "pass" || latest.status === "passed");
+      const sev = !latest ? "low" : passed ? "info" : "high";
+      worst = worse(worst, sev);
+      await sb.from("night_observations").insert({
+        shift_id: shiftId, kind: "tests", severity: sev,
+        subject_ref: subjectRef,
+        summary: latest ? `tests ${latest.status} (suite ~${latest.suite})` : `tests: no recent run for '${suite}'`,
+        payload: { latest },
+      });
+    }
+
+    // 5. qa_checks snapshot for the inferred phase
+    {
+      const { data: checks } = await sb
+        .from("qa_checks")
+        .select("status, criterion, phase_key")
+        .eq("phase_key", phase);
+      const statuses = (checks ?? []).map((c: any) => c.status);
+      const failed = statuses.filter((s: string) => s === "fail" || s === "failed").length;
+      const unknown = statuses.filter((s: string) => s === "unknown").length;
+      const sev = failed > 0 ? "high" : unknown > 0 ? "low" : "info";
+      worst = worse(worst, sev);
+      await sb.from("night_observations").insert({
+        shift_id: shiftId, kind: "qa", severity: sev,
+        subject_ref: subjectRef,
+        summary: `qa_checks[${phase}]: ${checks?.length ?? 0} checks, ${failed} fail, ${unknown} unknown`,
+        payload: { checks: checks ?? [] },
+      });
+    }
+
+    // 6. audit_complete marker
+    const qaPassed = worst === "info" || worst === "low";
+    await sb.from("night_observations").insert({
+      shift_id: shiftId, kind: "job_review", severity: worst,
+      subject_ref: subjectRef,
+      summary: `audit_complete: worst=${worst} qa_passed=${qaPassed}`,
+      payload: { steps: 5, worst_severity: worst, qa_passed: qaPassed },
+    });
+    auditedCount++;
+
+    // 7. always-propose, audit attached
+    const rationale = `Audit: 5 steps · worst=${worst} · ${qaPassed ? "qa pass" : "qa fail — review before accept"}`;
+    await sb.from("night_proposals").insert({
+      shift_id: shiftId,
+      kind: "promote_job",
+      target_ref: subjectRef,
+      rationale,
+      payload: { worst_severity: worst, qa_passed: qaPassed, phase, suite },
+    });
+    proposalsQueued++;
+  }
+
+  return json({
+    shift_id: shiftId,
+    candidates: candidates?.length ?? 0,
+    audited: auditedCount,
+    proposals: proposalsQueued,
+    skipped,
+    global_qa: globalQa,
+  });
 }
 
 // ─── /close ───────────────────────────────────────────────────────────────
 
-async function closeShift(sb: ReturnType<typeof createClient>, _req: Request) {
+async function closeShift(sb: ReturnType<typeof createClient>) {
   const { data: shift } = await sb
     .from("night_shifts")
-    .select("id, window_start, window_end, commit_sha")
+    .select("id")
     .eq("status", "running")
     .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1).maybeSingle();
   if (!shift) return json({ error: "no_running_shift" }, 404);
-
   const shiftId = shift.id as string;
 
-  const [{ data: obs }, { data: props }] = await Promise.all([
-    sb.from("night_observations").select("kind, severity, summary").eq("shift_id", shiftId),
-    sb.from("night_proposals").select("kind, status").eq("shift_id", shiftId),
+  const [{ data: obs }, { data: props }, { data: audits }] = await Promise.all([
+    sb.from("night_observations").select("kind, severity").eq("shift_id", shiftId),
+    sb.from("night_proposals").select("status").eq("shift_id", shiftId),
+    sb.from("night_task_audit").select("audit_complete, worst_severity").eq("shift_id", shiftId),
   ]);
 
   const summary = {
     observations: obs?.length ?? 0,
-    proposals_pending: (props ?? []).filter((p: any) => p.status === "pending").length,
-    by_kind: (obs ?? []).reduce((acc: Record<string, number>, o: any) => {
-      acc[o.kind] = (acc[o.kind] ?? 0) + 1;
-      return acc;
+    by_kind: (obs ?? []).reduce((a: Record<string, number>, o: any) => {
+      a[o.kind] = (a[o.kind] ?? 0) + 1; return a;
     }, {}),
     failures: (obs ?? []).filter((o: any) => o.severity === "high").length,
+    proposals_pending: (props ?? []).filter((p: any) => p.status === "pending").length,
+    proposals_accepted: (props ?? []).filter((p: any) => p.status === "accepted").length,
+    proposals_rejected: (props ?? []).filter((p: any) => p.status === "rejected").length,
+    audits_complete: (audits ?? []).filter((a: any) => a.audit_complete).length,
+    worst_per_task: (audits ?? []).reduce((a: Record<string, number>, x: any) => {
+      const k = x.worst_severity ?? "info"; a[k] = (a[k] ?? 0) + 1; return a;
+    }, {}),
   };
 
   await sb.from("night_shifts")
