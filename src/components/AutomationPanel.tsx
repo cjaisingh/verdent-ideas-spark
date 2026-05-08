@@ -1835,6 +1835,7 @@ const DailyAiSpendCard = () => {
         metric={metric}
         drill={drill}
         onClose={() => setDrill(null)}
+        onUpdateDrill={(patch) => setDrill((d) => (d ? { ...d, ...patch } : d))}
         globalLimits={globalLimits}
         jobLimits={jobLimits}
         tz={tz}
