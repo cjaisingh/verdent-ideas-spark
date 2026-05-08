@@ -159,6 +159,8 @@ Deno.serve(async (req) => {
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500),
         request_ref: { window_start: sinceISO, window_end: untilISO },
+        price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
+        price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       });
       await maybeAlert("review_error", msg, { status: aiResp.status });
       return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
@@ -170,12 +172,18 @@ Deno.serve(async (req) => {
     const args = call?.function?.arguments ? JSON.parse(call.function.arguments) : { findings: [] };
     const findings = Array.isArray(args.findings) ? args.findings : [];
 
+    const promptTok = usage.prompt_tokens ?? 0;
+    const completionTok = usage.completion_tokens ?? 0;
+    const cost = costUsd(REVIEWER_MODEL, promptTok, completionTok);
     await sb.from("ai_usage_log").insert({
       job: "scheduled-code-review", model: REVIEWER_MODEL, trigger,
       status: "ok", status_code: 200, latency_ms: aiLatency,
       prompt_tokens: usage.prompt_tokens ?? null,
       completion_tokens: usage.completion_tokens ?? null,
       total_tokens: usage.total_tokens ?? null,
+      cost_usd: Number(cost.toFixed(6)),
+      price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
+      price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length },
     });
 
