@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ListChecks, Plus, Sparkles, Check, X, Trash2 } from "lucide-react";
+import { ListChecks, Plus, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle } from "@/lib/discussionHandles";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
