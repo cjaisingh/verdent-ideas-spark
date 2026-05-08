@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
   try {
     if (path.startsWith("/open")) return await openShift(sb, settings ?? null);
     if (path.startsWith("/close")) return await closeShift(sb);
+    if (path.startsWith("/smoke")) return await smokeTest(sb, settings ?? null, url);
     return json({ error: "not_found", path }, 404);
   } catch (e) {
     console.error("night-agent", e);
