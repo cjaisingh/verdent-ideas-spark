@@ -4,7 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
-_Nothing pending._
+### Added
+- **Daily plan** — `daily-plan` edge function (cron `30 5 * * *`) summarises open roadmap tasks, recent work-log activity, unresolved findings, failing QA probes, recent test runs, and pinned notebook entries via Lovable AI Gateway (`openai/gpt-5`) into `daily_plans` (one per day). Surfaced in the new **Daily plan** card on `/roadmap` with focus, plan markdown, risks, and recommendations. Operator-only RLS + realtime.
+- **Phase 5 / 6 / 6b roadmap expansion** — added 9 new sprints (s5.2, s5.3, s6.2–s6.6, s6b.2, s6b.3) and ~50 tasks covering entity resolution, canonical ingest spine, source adapters, conflict layer, PII/DSAR, RAG, compliance hooks, and operator SLAs. Tasks carry one-line acceptance criteria sourced from the pinned notebook research.
 
 ---
 
