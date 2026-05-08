@@ -188,7 +188,7 @@ export function CopilotDiscussionSheet({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const ws = new WebSocket(
         `wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&endpointing=600`,
-        ["token", key],
+        ["bearer", key],
       );
       wsRef.current = ws;
 
