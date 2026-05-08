@@ -130,6 +130,7 @@ Deno.serve(async (req) => {
       },
     }];
 
+    const aiStart = Date.now();
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
@@ -143,6 +144,7 @@ Deno.serve(async (req) => {
         tool_choice: { type: "function", function: { name: "submit_plan" } },
       }),
     });
+    const aiLatency = Date.now() - aiStart;
 
     if (!aiResp.ok) {
       const t = await aiResp.text();
@@ -150,11 +152,25 @@ Deno.serve(async (req) => {
       const msg = `AI gateway returned ${aiResp.status}: ${t.slice(0, 200)}`;
       const code = aiResp.status === 429 ? 429 : aiResp.status === 402 ? 402 : 500;
       await recordRun("error", code, msg);
+      await sb.from("ai_usage_log").insert({
+        job: "daily-plan", model: PLANNER_MODEL, trigger,
+        status: "error", status_code: aiResp.status, latency_ms: aiLatency,
+        error: msg.slice(0, 500), request_ref: { for_date: today },
+      });
       await maybeAlert("planner_error", msg, { status: aiResp.status });
       return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
     }
 
     const aiJson = await aiResp.json();
+    const usage = aiJson?.usage ?? {};
+    await sb.from("ai_usage_log").insert({
+      job: "daily-plan", model: PLANNER_MODEL, trigger,
+      status: "ok", status_code: 200, latency_ms: aiLatency,
+      prompt_tokens: usage.prompt_tokens ?? null,
+      completion_tokens: usage.completion_tokens ?? null,
+      total_tokens: usage.total_tokens ?? null,
+      request_ref: { for_date: today },
+    });
     const call = aiJson.choices?.[0]?.message?.tool_calls?.[0];
     const args = call?.function?.arguments ? JSON.parse(call.function.arguments) : null;
     if (!args) {
