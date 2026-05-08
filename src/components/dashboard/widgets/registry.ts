@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { AiUsageWidget } from "./AiUsageWidget";
 import { NightObservationsWidget } from "./NightObservationsWidget";
 import { OpenRisksWidget } from "./OpenRisksWidget";
 import { PendingApprovalsWidget } from "./PendingApprovalsWidget";
@@ -41,6 +42,13 @@ export const WIDGET_REGISTRY: Record<WidgetKind, WidgetEntry> = {
     description: "Latest entries on the capability events stream.",
     defaultSize: "md",
     Component: RecentCapabilityEventsWidget,
+  },
+  "ai-usage-14d": {
+    kind: "ai-usage-14d",
+    label: "AI usage · 14d",
+    description: "Per-job model, calls, tokens, and avg latency for scheduled AI calls.",
+    defaultSize: "md",
+    Component: AiUsageWidget,
   },
 };
 

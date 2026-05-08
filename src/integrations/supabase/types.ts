@@ -104,6 +104,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage_log: {
+        Row: {
+          completion_tokens: number | null
+          created_at: string
+          error: string | null
+          id: string
+          job: string
+          latency_ms: number | null
+          model: string
+          prompt_tokens: number | null
+          request_ref: Json
+          status: string
+          status_code: number | null
+          total_tokens: number | null
+          trigger: string
+        }
+        Insert: {
+          completion_tokens?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          job: string
+          latency_ms?: number | null
+          model: string
+          prompt_tokens?: number | null
+          request_ref?: Json
+          status?: string
+          status_code?: number | null
+          total_tokens?: number | null
+          trigger?: string
+        }
+        Update: {
+          completion_tokens?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          job?: string
+          latency_ms?: number | null
+          model?: string
+          prompt_tokens?: number | null
+          request_ref?: Json
+          status?: string
+          status_code?: number | null
+          total_tokens?: number | null
+          trigger?: string
+        }
+        Relationships: []
+      }
       alert_log: {
         Row: {
           created_at: string
