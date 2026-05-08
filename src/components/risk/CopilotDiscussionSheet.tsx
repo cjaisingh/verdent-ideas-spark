@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Mic, MicOff, Send, CheckCircle2, Sparkles } from "lucide-react";
+import { Mic, MicOff, Send, CheckCircle2, Sparkles, Copy } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { DiscussionHistory } from "@/components/discussions/DiscussionHistory";
+import { DiscussionActionsPanel } from "@/components/discussions/DiscussionActionsPanel";
+import { discussionHandle } from "@/lib/discussionHandles";
 
 type Msg = {
   id: string;
@@ -39,6 +41,8 @@ export function CopilotDiscussionSheet({
   open, onOpenChange, findingId, findingTitle, severity, onDecisionRecorded,
 }: Props) {
   const [discussionId, setDiscussionId] = useState<string | null>(null);
+  const [subjectOrdinal, setSubjectOrdinal] = useState<number | null>(null);
+  const [findingShortNum, setFindingShortNum] = useState<number | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -56,9 +60,13 @@ export function CopilotDiscussionSheet({
   useEffect(() => {
     if (!open) return;
     (async () => {
+      const { data: f } = await supabase
+        .from("roadmap_review_findings").select("short_num").eq("id", findingId).maybeSingle();
+      setFindingShortNum((f as any)?.short_num ?? null);
+
       const { data: existing } = await supabase
         .from("roadmap_finding_discussions")
-        .select("id")
+        .select("id, subject_ordinal")
         .eq("finding_id", findingId)
         .eq("mode", "copilot")
         .is("ended_at", null)
@@ -67,6 +75,7 @@ export function CopilotDiscussionSheet({
         .maybeSingle();
 
       let id = existing?.id;
+      let ordinal = (existing as any)?.subject_ordinal ?? null;
       if (!id) {
         const { data: u } = await supabase.auth.getUser();
         const { data: created, error } = await supabase
@@ -79,17 +88,19 @@ export function CopilotDiscussionSheet({
             title: findingTitle,
             started_by_user_id: u.user?.id ?? null,
           })
-          .select("id")
+          .select("id, subject_ordinal")
           .single();
         if (error || !created) {
           toast({ title: "Could not start discussion", description: error?.message, variant: "destructive" });
           return;
         }
         id = created.id;
+        ordinal = (created as any).subject_ordinal;
         await supabase.from("roadmap_review_findings")
           .update({ discussion_status: "copilot_open" }).eq("id", findingId);
       }
       setDiscussionId(id);
+      setSubjectOrdinal(ordinal);
 
       const { data: msgs } = await supabase
         .from("roadmap_finding_discussion_messages")
@@ -354,14 +365,31 @@ export function CopilotDiscussionSheet({
   };
 
   const transcript = useMemo(() => messages, [messages]);
+  const handle = discussionId
+    ? discussionHandle("roadmap_finding", findingShortNum, subjectOrdinal)
+    : null;
+  const copyHandle = () => {
+    if (!handle) return;
+    navigator.clipboard.writeText(handle);
+    toast({ title: "Copied", description: handle });
+  };
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) stopVoice(); onOpenChange(o); }}>
       <SheetContent side="right" className="w-full sm:max-w-2xl flex flex-col">
         <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
+          <SheetTitle className="flex items-center gap-2 flex-wrap">
             <Sparkles className="h-4 w-4" /> Discuss with Copilot
             <Badge variant="outline" className="text-[10px] uppercase">{severity}</Badge>
+            {handle && (
+              <button
+                onClick={copyHandle}
+                className="font-mono text-[10px] inline-flex items-center gap-1 rounded border px-1.5 py-0.5 hover:bg-muted"
+                title="Copy discussion handle"
+              >
+                {handle} <Copy className="h-3 w-3" />
+              </button>
+            )}
             {recording && <Badge variant="destructive" className="text-[10px] animate-pulse">REC</Badge>}
           </SheetTitle>
           <SheetDescription className="text-xs line-clamp-2">{findingTitle}</SheetDescription>
@@ -444,6 +472,14 @@ export function CopilotDiscussionSheet({
               {savingDecision ? "Saving…" : "Record decision & close"}
             </Button>
           </div>
+
+          {discussionId && (
+            <DiscussionActionsPanel
+              discussionId={discussionId}
+              subjectType="roadmap_finding"
+              subjectId={findingId}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
