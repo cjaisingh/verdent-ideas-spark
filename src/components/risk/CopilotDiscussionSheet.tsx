@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Mic, MicOff, Send, CheckCircle2, Sparkles } from "lucide-react";
+import { Mic, MicOff, Send, CheckCircle2, Sparkles, Copy } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { DiscussionHistory } from "@/components/discussions/DiscussionHistory";
+import { DiscussionActionsPanel } from "@/components/discussions/DiscussionActionsPanel";
+import { discussionHandle } from "@/lib/discussionHandles";
 
 type Msg = {
   id: string;
@@ -39,6 +41,8 @@ export function CopilotDiscussionSheet({
   open, onOpenChange, findingId, findingTitle, severity, onDecisionRecorded,
 }: Props) {
   const [discussionId, setDiscussionId] = useState<string | null>(null);
+  const [subjectOrdinal, setSubjectOrdinal] = useState<number | null>(null);
+  const [findingShortNum, setFindingShortNum] = useState<number | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
