@@ -175,7 +175,11 @@ const OperatorLayout = () => {
                   </ResizablePanel>
                   {flags.bottom && (
                     <>
-                      <ResizableHandle withHandle onDragging={setDragging} />
+                      <ResizableHandle
+                        withHandle
+                        onDragging={setDragging}
+                        className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                      />
                       <ResizablePanel
                         defaultSize={sizes.bottomHeight}
                         minSize={bounds.bottom.min}
@@ -192,7 +196,11 @@ const OperatorLayout = () => {
               </ResizablePanel>
               {flags.right && (
                 <>
-                  <ResizableHandle withHandle onDragging={setDragging} />
+                  <ResizableHandle
+                    withHandle
+                    onDragging={setDragging}
+                    className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                  />
                   <ResizablePanel
                     defaultSize={sizes.rightWidth}
                     minSize={bounds.right.min}
