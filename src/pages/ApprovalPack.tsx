@@ -300,6 +300,19 @@ export default function ApprovalPack() {
             );
           })()}
 
+          <section className="pp-legend rounded-lg border p-4 print:p-3 print:border print:border-border space-y-2 break-inside-avoid text-xs">
+            <h3 className="text-sm font-semibold">Legend</h3>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-muted-foreground">
+              <li><span className="font-mono text-foreground">[x]</span> — checklist item marked complete</li>
+              <li><span className="font-mono text-foreground">[ ]</span> — checklist item not yet complete</li>
+              <li><span className="font-mono text-foreground">✓</span> — row-level done indicator (per-row %)</li>
+              <li><span className="text-foreground">Done %</span> — completed checklist items ÷ total checklist items, per category and overall</li>
+            </ul>
+            <p className="text-[11px] text-muted-foreground">
+              Subtotal rows show <span className="font-mono">{`{done}/{total}`}</span> and the Done % for that category. The Task total row aggregates all categories within the phase.
+            </p>
+          </section>
+
           {(() => {
             const statuses = ["approved", "changes_requested", "rejected", "pending"] as const;
             const totals = statuses.reduce<Record<string, number>>((a, s) => { a[s] = 0; return a; }, {});
