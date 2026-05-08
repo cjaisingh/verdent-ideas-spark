@@ -93,6 +93,33 @@ export default function Jobs() {
     }
   };
 
+  const bulkUpdate = async (patch: Record<string, any>, label: string) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const { error } = await supabase.from("discussion_actions").update(patch).in("id", ids);
+    if (error) { toast({ title: `${label} failed`, description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${label}: ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+    clearSelection();
+  };
+
+  const bulkSetStatus = (status: string) => bulkUpdate({ status }, `Set ${status}`);
+
+  const bulkAssignOwner = async () => {
+    const owner = bulkOwner.trim() || null;
+    await bulkUpdate({ owner }, owner ? `Assigned @${owner}` : "Cleared owner");
+    setBulkOwner("");
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} job${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const { error } = await supabase.from("discussion_actions").delete().in("id", ids);
+    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `Deleted ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+    clearSelection();
+  };
+
   const promote = async (j: Job) => {
     if (j.promoted_task_id) return;
     if (!confirm(`Promote ${jobHandle(j.short_num)} to a roadmap task?`)) return;
