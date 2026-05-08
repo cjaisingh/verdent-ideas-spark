@@ -253,6 +253,7 @@ async function dispatchAlert(
   try {
     const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
     if (!settings || !settings.enabled || !settings.webhook_url) return;
+    if (reason === "cost_threshold" && settings.alert_on_cost === false) return;
     const dedupeMin = Math.max(0, Number(settings.dedupe_minutes ?? 0));
     if (dedupeMin > 0) {
       const since = new Date(Date.now() - dedupeMin * 60_000).toISOString();
