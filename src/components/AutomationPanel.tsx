@@ -1128,25 +1128,41 @@ const DailyAiSpendCard = () => {
   const groupKeyOf = (r: SpendRow) =>
     (groupBy === "job" ? r.job : r.model) || "unknown";
 
+  const valueOf = (r: SpendRow) =>
+    metric === "spend" ? Number(r.cost_usd || 0)
+    : metric === "prompt" ? Number(r.prompt_tokens || 0)
+    : Number(r.completion_tokens || 0);
+  const fmtMetric = (n: number) =>
+    metric === "spend" ? fmtUsd6(n) : `${Math.round(n).toLocaleString()} tok`;
+  const metricLabel =
+    metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens";
+
   const groups = Array.from(new Set(rows.map(groupKeyOf))).sort();
   const matrix: Record<string, Record<string, number>> = {};
-  for (const d of dayKeys) matrix[d] = {};
+  const costMatrix: Record<string, Record<string, number>> = {};
+  for (const d of dayKeys) { matrix[d] = {}; costMatrix[d] = {}; }
   let total = 0;
+  let totalCostAll = 0;
   let totalTokens = 0;
   for (const r of rows) {
     const day = (r.created_at || "").slice(0, 10);
     if (!matrix[day]) continue;
     const key = groupKeyOf(r);
+    const v = valueOf(r);
     const cost = Number(r.cost_usd || 0);
-    matrix[day][key] = (matrix[day][key] || 0) + cost;
-    total += cost;
+    matrix[day][key] = (matrix[day][key] || 0) + v;
+    costMatrix[day][key] = (costMatrix[day][key] || 0) + cost;
+    total += v;
+    totalCostAll += cost;
     totalTokens += Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0);
   }
   const dailyTotals = dayKeys.map((d) =>
     Object.values(matrix[d]).reduce((a, b) => a + b, 0));
+  const dailyCostTotals = dayKeys.map((d) =>
+    Object.values(costMatrix[d]).reduce((a, b) => a + b, 0));
   const maxDay = Math.max(0.0001, ...dailyTotals);
 
-  // top breakdown for whichever grouping is active
+  // top breakdown for whichever grouping is active (in selected metric)
   const breakdown: Array<{ key: string; cost: number }> = groups
     .map((g) => ({
       key: g,
@@ -1167,19 +1183,19 @@ const DailyAiSpendCard = () => {
   const colorFor = (key: string) =>
     palette[groups.indexOf(key) % palette.length];
 
-  // Threshold breach derivations
+  // Threshold breach derivations (always computed against cost, regardless of metric)
   const effectiveRunLimit = (job: string | null | undefined) =>
     (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
   const dayBreaches = new Set<string>();
   if (globalLimits.day != null) {
-    dayKeys.forEach((d, i) => { if (dailyTotals[i] > globalLimits.day!) dayBreaches.add(d); });
+    dayKeys.forEach((d, i) => { if (dailyCostTotals[i] > globalLimits.day!) dayBreaches.add(d); });
   }
   const cellBreaches = new Set<string>(); // "day|job"
   if (groupBy === "job") {
     for (const d of dayKeys) {
-      for (const job of Object.keys(matrix[d])) {
+      for (const job of Object.keys(costMatrix[d])) {
         const lim = jobLimits[job]?.day;
-        if (lim != null && matrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
+        if (lim != null && costMatrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
       }
     }
   }
@@ -1189,7 +1205,9 @@ const DailyAiSpendCard = () => {
   }).length;
   const hasAnyJobLimit = Object.keys(jobLimits).length > 0;
   const hasAnyLimit = globalLimits.day != null || globalLimits.run != null || hasAnyJobLimit;
-  const dailyLimitPct = globalLimits.day != null ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
+  const showThresholds = metric === "spend";
+  const dailyLimitPct = (showThresholds && globalLimits.day != null)
+    ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
 
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
