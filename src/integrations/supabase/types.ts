@@ -1867,6 +1867,7 @@ export type Database = {
           gate_snapshot: Json
           id: string
           notes: string | null
+          override_rationale: string | null
           phase_id: string
           phase_key: string
         }
@@ -1879,6 +1880,7 @@ export type Database = {
           gate_snapshot?: Json
           id?: string
           notes?: string | null
+          override_rationale?: string | null
           phase_id: string
           phase_key: string
         }
@@ -1891,6 +1893,7 @@ export type Database = {
           gate_snapshot?: Json
           id?: string
           notes?: string | null
+          override_rationale?: string | null
           phase_id?: string
           phase_key?: string
         }
@@ -1916,6 +1919,9 @@ export type Database = {
           created_at: string
           id: string
           key: string
+          manual_override_at: string | null
+          manual_override_by: string | null
+          manual_override_rationale: string | null
           order: number
           status: Database["public"]["Enums"]["roadmap_status"]
           summary: string | null
@@ -1926,6 +1932,9 @@ export type Database = {
           created_at?: string
           id?: string
           key: string
+          manual_override_at?: string | null
+          manual_override_by?: string | null
+          manual_override_rationale?: string | null
           order?: number
           status?: Database["public"]["Enums"]["roadmap_status"]
           summary?: string | null
@@ -1936,6 +1945,9 @@ export type Database = {
           created_at?: string
           id?: string
           key?: string
+          manual_override_at?: string | null
+          manual_override_by?: string | null
+          manual_override_rationale?: string | null
           order?: number
           status?: Database["public"]["Enums"]["roadmap_status"]
           summary?: string | null
