@@ -258,6 +258,7 @@ const OperatorLayout = () => {
                             <ResizableHandle
                               withHandle
                               onDragging={handleDragging}
+                              onKeyDown={handleResizeKeyDown}
                               aria-label="Drag or use arrow keys to resize bottom pane. Pane switching is locked while resizing."
                               className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                             />
@@ -300,6 +301,7 @@ const OperatorLayout = () => {
                         <ResizableHandle
                           withHandle
                           onDragging={handleDragging}
+                          onKeyDown={handleResizeKeyDown}
                           aria-label="Drag or use arrow keys to resize right pane. Pane switching is locked while resizing."
                           className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                         />
