@@ -52,13 +52,13 @@ const groups = [
   },
 ];
 
-export const AppSidebar = () => {
+export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "offcanvas" | "none" }) => {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
   const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible={collapsible}>
       <SidebarContent>
         {groups.map((g) => (
           <SidebarGroup key={g.label}>
