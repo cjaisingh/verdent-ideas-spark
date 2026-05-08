@@ -1241,7 +1241,7 @@ const DailyAiSpendCard = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
+  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
 
   const dayKeys = enumerateUtcDays(range.from, range.to);
   const daysSpan = Math.max(1, dayKeys.length);
