@@ -118,12 +118,9 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
             <it.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
             {!collapsed && <span className="flex-1 truncate">{it.title}</span>}
             {!collapsed && dot && <StatusDot color={DOT_CLASSES[dot]} label={`${it.title}: ${DOT_LABELS[dot]}`} />}
-            {!collapsed && pinned && !opts?.inFavorites && (
-              <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
-            )}
           </NavLink>
         </SidebarMenuButton>
-        {!collapsed && opts?.showPin && (
+        {!collapsed && opts?.showPin && (opts?.inFavorites || !pinned) && (
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -133,14 +130,14 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
                     e.stopPropagation();
                     toggleFavorite(it.url);
                   }}
-                  className={pinned ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 focus:opacity-100"}
-                  aria-label={pinned ? `Unpin ${it.title} from Favorites` : `Pin ${it.title} to Favorites`}
+                  className={opts?.inFavorites ? "opacity-100" : "opacity-0 group-hover/row:opacity-100 focus:opacity-100"}
+                  aria-label={opts?.inFavorites ? `Remove ${it.title} from Favorites` : `Add ${it.title} to Favorites`}
                 >
-                  <Star className={`h-3.5 w-3.5 ${pinned ? "fill-sidebar-primary text-sidebar-primary" : ""}`} />
+                  <Star className={`h-3.5 w-3.5 ${opts?.inFavorites ? "fill-sidebar-primary text-sidebar-primary" : ""}`} />
                 </SidebarMenuAction>
               </TooltipTrigger>
               <TooltipContent side="right" className="text-xs">
-                {pinned ? "Unpin from Favorites" : "Pin to Favorites"}
+                {opts?.inFavorites ? "Remove from Favorites" : "Add to Favorites"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -170,9 +167,6 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
         >
           <copilotParent.icon className={`h-4 w-4 ${parentActive || childActive ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
           {!collapsed && <span className="flex-1 truncate">{copilotParent.title}</span>}
-          {!collapsed && isFavorite(copilotParent.url) && (
-            <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
-          )}
         </SidebarMenuButton>
         {!collapsed && (
           <SidebarMenuAction
@@ -208,34 +202,31 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
                       <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
                       <span className="flex-1 truncate">{c.title}</span>
                       {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
-                      {pinned && (
-                        <Star className="h-3 w-3 fill-sidebar-primary text-sidebar-primary opacity-60" aria-label="Pinned to Favorites" />
-                      )}
                     </NavLink>
                   </SidebarMenuSubButton>
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorite(c.url);
-                          }}
-                          className={`absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground ${
-                            pinned ? "opacity-100" : "opacity-0 group-hover/subrow:opacity-100 focus:opacity-100"
-                          }`}
-                          aria-label={pinned ? `Unpin ${c.title} from Favorites` : `Pin ${c.title} to Favorites`}
-                        >
-                          <Star className={`h-3 w-3 ${pinned ? "fill-sidebar-primary text-sidebar-primary" : ""}`} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        {pinned ? "Unpin from Favorites" : "Pin to Favorites"}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                  {!pinned && (
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleFavorite(c.url);
+                            }}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/subrow:opacity-100 focus:opacity-100"
+                            aria-label={`Add ${c.title} to Favorites`}
+                          >
+                            <Star className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="text-xs">
+                          Add to Favorites
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </SidebarMenuSubItem>
               );
             })}
