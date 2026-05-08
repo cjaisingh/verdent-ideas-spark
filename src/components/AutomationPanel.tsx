@@ -499,6 +499,9 @@ type AlertSettings = {
   webhook_url: string | null; enabled: boolean;
   alert_on_review_error: boolean; alert_on_high_finding: boolean;
   alert_on_test_fail: boolean; alert_on_qa_fail: boolean;
+  alert_on_cost: boolean;
+  cost_per_run_usd: number | null;
+  cost_per_day_usd: number | null;
   dedupe_minutes: number;
 };
 type AlertLog = {
