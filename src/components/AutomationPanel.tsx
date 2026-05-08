@@ -1240,6 +1240,24 @@ const DailyAiSpendCard = () => {
   const dailyLimitPct = (showThresholds && globalLimits.day != null)
     ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
 
+  // Comparison vs. previous period
+  const prevTotal = compare ? prevRows.reduce((s, r) => s + valueOf(r), 0) : 0;
+  const prevTokens = compare ? prevRows.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0) : 0;
+  const prevCalls = compare ? prevRows.length : 0;
+  const pctChange = (curr: number, prev: number): number | null => {
+    if (!compare) return null;
+    if (prev === 0) return curr === 0 ? 0 : null; // null = N/A (no baseline)
+    return ((curr - prev) / prev) * 100;
+  };
+  const DeltaChip = ({ pct }: { pct: number | null }) => {
+    if (pct == null) return <span className="text-[9px] text-muted-foreground ml-1">vs prev: n/a</span>;
+    const up = pct > 0;
+    const flat = Math.abs(pct) < 0.05;
+    const tone = flat ? "text-muted-foreground" : up ? "text-destructive" : "text-emerald-600 dark:text-emerald-400";
+    const sign = flat ? "" : up ? "▲" : "▼";
+    return <span className={`text-[9px] ml-1 ${tone}`}>{sign} {Math.abs(pct).toFixed(1)}%</span>;
+  };
+
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
       <header className="flex items-center justify-between gap-2 flex-wrap">
