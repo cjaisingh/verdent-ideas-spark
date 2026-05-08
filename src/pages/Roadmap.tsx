@@ -606,6 +606,17 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
+                                    {/* Approval */}
+                                    <div className="border-t border-border pt-2">
+                                      <TaskApprovalPanel
+                                        taskId={task.id}
+                                        reviewStatus={(task.review_status ?? "pending") as "pending" | "approved" | "rejected" | "changes_requested"}
+                                        reviewedBy={task.reviewed_by ?? null}
+                                        reviewedAt={task.reviewed_at ?? null}
+                                        reviewNotes={task.review_notes ?? null}
+                                      />
+                                    </div>
+
                                     {/* Review checklist */}
                                     <div className="border-t border-border pt-2">
                                       <ReviewChecklistEditor taskId={task.id} />
