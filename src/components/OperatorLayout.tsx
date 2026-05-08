@@ -19,6 +19,7 @@ import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
 import { useViewport } from "@/hooks/use-viewport";
 import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
+import { PaneKeyboardHelp } from "@/components/PaneKeyboardHelp";
 
 const toastedDecisions = new Set<string>();
 
@@ -184,6 +185,18 @@ const OperatorLayout = () => {
               interacting ? "pointer-events-none select-none opacity-90" : ""
             }`}
           >
+            {/* Screen-reader-only summary of pane controls; updates whenever
+                a resize interaction is in progress. */}
+            <p className="sr-only" aria-live="polite">
+              Pane layout controls. Use Control or Command plus 1 through 4 to
+              switch pane mode. Tab to a resize handle, then arrow keys to
+              resize, or Home and End for min and max. Drag the handles with
+              the mouse to resize.
+              {interacting
+                ? " Pane mode switching is currently locked while you resize panels."
+                : ""}
+            </p>
+            {!isMobile && <PaneKeyboardHelp />}
             {!isMobile && (
               <PaneToggleGroup
                 disabled={interacting}
