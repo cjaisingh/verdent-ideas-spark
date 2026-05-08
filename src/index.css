@@ -53,6 +53,23 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Semantic tints — signal colors only. Use as text/border, or as bg-tint-*/15.
+       Never as a primary surface fill. See docs/design-system.md. */
+    --tint-night: 262 60% 50%;
+    --tint-night-foreground: 0 0% 100%;
+    --tint-event: 215 16% 47%;
+    --tint-event-foreground: 0 0% 100%;
+    --tint-approval: 38 92% 45%;
+    --tint-approval-foreground: 0 0% 100%;
+    --tint-discussion: 217 91% 55%;
+    --tint-discussion-foreground: 0 0% 100%;
+    --tint-capability: 158 64% 40%;
+    --tint-capability-foreground: 0 0% 100%;
+    --tint-risk: 0 75% 50%;
+    --tint-risk-foreground: 0 0% 100%;
+    --tint-okr: 199 89% 48%;
+    --tint-okr-foreground: 0 0% 100%;
   }
 
   .dark {
