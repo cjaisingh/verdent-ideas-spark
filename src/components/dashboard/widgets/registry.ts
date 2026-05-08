@@ -43,6 +43,13 @@ export const WIDGET_REGISTRY: Record<WidgetKind, WidgetEntry> = {
     defaultSize: "md",
     Component: RecentCapabilityEventsWidget,
   },
+  "ai-usage-14d": {
+    kind: "ai-usage-14d",
+    label: "AI usage · 14d",
+    description: "Per-job model, calls, tokens, and avg latency for scheduled AI calls.",
+    defaultSize: "md",
+    Component: AiUsageWidget,
+  },
 };
 
 export const WIDGET_LIST: WidgetEntry[] = Object.values(WIDGET_REGISTRY);
