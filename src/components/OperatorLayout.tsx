@@ -78,10 +78,18 @@ const OperatorLayout = () => {
             </div>
           </header>
           <div className="flex-1 min-h-0">
-            <ResizablePanelGroup direction="horizontal" className="h-full">
-              <ResizablePanel defaultSize={flags.right ? 78 : 100} minSize={40}>
-                <ResizablePanelGroup direction="vertical" className="h-full">
-                  <ResizablePanel defaultSize={flags.bottom ? 70 : 100} minSize={30}>
+            <ResizablePanelGroup
+              key={`h-${effectiveMode}`}
+              direction="horizontal"
+              className="h-full"
+            >
+              <ResizablePanel defaultSize={flags.right ? 100 - paneState.rightWidth : 100} minSize={40}>
+                <ResizablePanelGroup
+                  key={`v-${effectiveMode}`}
+                  direction="vertical"
+                  className="h-full"
+                >
+                  <ResizablePanel defaultSize={flags.bottom ? 100 - paneState.bottomHeight : 100} minSize={30}>
                     <main className="h-full overflow-y-auto px-6 py-6">
                       <div className="max-w-[1600px] w-full mx-auto">
                         <Outlet />
@@ -91,7 +99,12 @@ const OperatorLayout = () => {
                   {flags.bottom && (
                     <>
                       <ResizableHandle withHandle />
-                      <ResizablePanel defaultSize={30} minSize={15} maxSize={60}>
+                      <ResizablePanel
+                        defaultSize={paneState.bottomHeight}
+                        minSize={15}
+                        maxSize={60}
+                        onResize={(size) => setPaneState({ bottomHeight: Math.round(size) })}
+                      >
                         <BottomPaneEventTicker />
                       </ResizablePanel>
                     </>
@@ -101,7 +114,12 @@ const OperatorLayout = () => {
               {flags.right && (
                 <>
                   <ResizableHandle withHandle />
-                  <ResizablePanel defaultSize={22} minSize={15} maxSize={40}>
+                  <ResizablePanel
+                    defaultSize={paneState.rightWidth}
+                    minSize={15}
+                    maxSize={40}
+                    onResize={(size) => setPaneState({ rightWidth: Math.round(size) })}
+                  >
                     <RightPaneNightAgent />
                   </ResizablePanel>
                 </>

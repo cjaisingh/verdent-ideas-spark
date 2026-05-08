@@ -13,8 +13,8 @@ const STORAGE_KEY = "awip.panes.v1";
 
 const DEFAULT_STATE: PaneState = {
   mode: "left",
-  rightWidth: 340,
-  bottomHeight: 220,
+  rightWidth: 22,
+  bottomHeight: 30,
 };
 
 export function paneFlags(mode: PaneMode): { left: boolean; right: boolean; bottom: boolean } {
