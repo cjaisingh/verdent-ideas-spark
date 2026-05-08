@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
         job: "scheduled-code-review", model: REVIEWER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500),
-        request_ref: { window_start: sinceISO, window_end: untilISO },
+        request_ref: { window_start: sinceISO, window_end: untilISO, night_mode: NIGHT_MODE },
         price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
         price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       });
@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
       cost_usd: Number(cost.toFixed(6)),
       price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
       price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
-      request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length },
+      request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length, night_mode: NIGHT_MODE },
     });
     const totalTok = usage.total_tokens ?? (promptTok + completionTok);
     const prices = priceFor(REVIEWER_MODEL);
