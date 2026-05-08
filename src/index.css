@@ -109,6 +109,22 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Tints — brighter/lighter for legibility on dark surfaces. */
+    --tint-night: 262 80% 72%;
+    --tint-night-foreground: 262 30% 12%;
+    --tint-event: 215 20% 70%;
+    --tint-event-foreground: 215 30% 12%;
+    --tint-approval: 38 92% 62%;
+    --tint-approval-foreground: 38 60% 12%;
+    --tint-discussion: 217 91% 68%;
+    --tint-discussion-foreground: 217 50% 12%;
+    --tint-capability: 158 64% 58%;
+    --tint-capability-foreground: 158 40% 10%;
+    --tint-risk: 0 75% 65%;
+    --tint-risk-foreground: 0 50% 12%;
+    --tint-okr: 199 89% 65%;
+    --tint-okr-foreground: 199 50% 10%;
   }
 }
 
