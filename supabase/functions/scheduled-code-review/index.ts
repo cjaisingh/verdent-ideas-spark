@@ -271,14 +271,25 @@ async function checkCostThresholds(
   alert: (reason: string, message: string, payload?: Record<string, unknown>) => Promise<void>,
 ) {
   try {
-    const { data: settings } = await sb.from("alert_settings").select("alert_on_cost,cost_per_run_usd,cost_per_day_usd").eq("id", true).maybeSingle();
-    if (!settings || settings.alert_on_cost === false) return;
-    const perRun = settings.cost_per_run_usd != null ? Number(settings.cost_per_run_usd) : null;
-    const perDay = settings.cost_per_day_usd != null ? Number(settings.cost_per_day_usd) : null;
+    const { data: globalSettings } = await sb.from("alert_settings")
+      .select("alert_on_cost,cost_per_run_usd,cost_per_day_usd").eq("id", true).maybeSingle();
+    const { data: override } = await sb.from("alert_cost_thresholds")
+      .select("alert_on_cost,cost_per_run_usd,cost_per_day_usd").eq("job", job).maybeSingle();
+
+    const alertOn = override?.alert_on_cost ?? globalSettings?.alert_on_cost ?? true;
+    if (alertOn === false) return;
+
+    const perRunRaw = override?.cost_per_run_usd ?? globalSettings?.cost_per_run_usd ?? null;
+    const perDayRaw = override?.cost_per_day_usd ?? globalSettings?.cost_per_day_usd ?? null;
+    const perRun = perRunRaw != null ? Number(perRunRaw) : null;
+    const perDay = perDayRaw != null ? Number(perDayRaw) : null;
+    const source = (k: "run" | "day") =>
+      (k === "run" ? override?.cost_per_run_usd : override?.cost_per_day_usd) != null ? "per_job" : "global";
+
     if (perRun !== null && perRun > 0 && runCost > perRun) {
       await alert("cost_threshold",
         `Run cost $${runCost.toFixed(4)} exceeded per-run threshold $${perRun.toFixed(4)} for ${job}.`,
-        { scope: "per_run", job, run_cost_usd: runCost, threshold_usd: perRun });
+        { scope: "per_run", job, run_cost_usd: runCost, threshold_usd: perRun, threshold_source: source("run") });
     }
     if (perDay !== null && perDay > 0) {
       const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
@@ -288,7 +299,7 @@ async function checkCostThresholds(
       if (dayTotal > perDay) {
         await alert("cost_threshold",
           `Today's spend on ${job} is $${dayTotal.toFixed(4)} (threshold $${perDay.toFixed(4)}).`,
-          { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay });
+          { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay, threshold_source: source("day") });
       }
     }
   } catch (e) { console.error("checkCostThresholds failed", e); }
