@@ -46,6 +46,7 @@ const planItems: NavItem[] = [
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
   { url: "/jobs", title: "Jobs board", icon: ListChecks },
   { url: "/night-shifts", title: "Night shifts", icon: Moon },
+  { url: "/ai-usage", title: "AI usage & cost", icon: Sparkles },
   { url: "/notebook", title: "Notebook", icon: NotebookIcon },
   { url: "/runbook", title: "Runbook", icon: BookOpen },
   { url: "/memory", title: "Memory", icon: Brain },
