@@ -1266,7 +1266,7 @@ const DailyAiSpendCard = () => {
   let totalCostAll = 0;
   let totalTokens = 0;
   for (const r of rows) {
-    const day = (r.created_at || "").slice(0, 10);
+    const day = r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
     if (!matrix[day]) continue;
     const key = groupKeyOf(r);
     const v = valueOf(r);
