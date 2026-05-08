@@ -938,6 +938,47 @@ export type Database = {
         }
         Relationships: []
       }
+      discussion_action_events: {
+        Row: {
+          action_id: string | null
+          actor: string | null
+          actor_label: string | null
+          created_at: string
+          discussion_id: string | null
+          event_type: string
+          id: string
+          payload: Json
+        }
+        Insert: {
+          action_id?: string | null
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          discussion_id?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+        }
+        Update: {
+          action_id?: string | null
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          discussion_id?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_action_events_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discussion_actions: {
         Row: {
           created_at: string
