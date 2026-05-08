@@ -24,7 +24,7 @@ export const DailyPlanCard = () => {
   const load = async () => {
     const { data } = await supabase.from("daily_plans")
       .select("*").order("for_date", { ascending: false }).limit(1).maybeSingle();
-    setPlan((data as Plan) ?? null);
+    setPlan((data as unknown as Plan) ?? null);
   };
 
   useEffect(() => {
