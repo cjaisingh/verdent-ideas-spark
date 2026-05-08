@@ -634,7 +634,31 @@ export default function ApprovalPack() {
           .pp-checklist tr.pp-subtotal td { background: #e4e4e7 !important; border-top: 1px solid #a1a1aa; border-bottom: 1px solid #a1a1aa; font-weight: 600; }
           .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; }
           .pp-checklist thead th { border-bottom: 1px solid #a1a1aa; }
-          a.pp-link[href]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #555; word-break: break-all; }
+          .pp-checklist td { vertical-align: top; }
+          .pp-evidence-list { margin: 0; padding: 0; list-style: none; }
+          .pp-evidence-item { break-inside: avoid; page-break-inside: avoid; padding-bottom: 2px; }
+          .pp-evidence-item + .pp-evidence-item { border-top: 1px dotted #d4d4d8; padding-top: 2px; }
+          .pp-evidence-title {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            hyphens: auto;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            line-height: 1.25;
+          }
+          .pp-evidence-meta, .pp-evidence-path { overflow-wrap: anywhere; word-break: break-all; }
+          a.pp-link[href]::after {
+            content: " " attr(href);
+            display: block;
+            font-size: 7.5pt;
+            color: #555;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+            margin-top: 1px;
+          }
         }
       `}</style>
     </div>
