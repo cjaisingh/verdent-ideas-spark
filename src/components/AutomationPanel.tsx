@@ -1226,7 +1226,7 @@ const DailyAiSpendCard = () => {
         <div className="text-xs text-muted-foreground">Loading…</div>
       ) : rows.length === 0 ? (
         <div className="text-xs text-muted-foreground">
-          No ai_usage_log entries in the last {days} days.
+          No ai_usage_log entries between {format(range.from, "MMM dd")} and {format(range.to, "MMM dd")}.
         </div>
       ) : (
         <>
