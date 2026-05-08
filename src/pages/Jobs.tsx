@@ -31,6 +31,7 @@ export default function Jobs() {
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
