@@ -1061,6 +1061,8 @@ const DailyAiSpendCard = () => {
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
   const [globalLimits, setGlobalLimits] = useState<{ day: number | null; run: number | null }>({ day: null, run: null });
   const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
+  const [compare, setCompare] = useState(false);
+  const [prevRows, setPrevRows] = useState<SpendRow[]>([]);
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
