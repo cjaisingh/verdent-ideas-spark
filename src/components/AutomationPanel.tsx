@@ -1683,7 +1683,7 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits,
+  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits, tz,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
@@ -1692,6 +1692,7 @@ const SpendDrillDialog = ({
   onClose: () => void;
   globalLimits: { day: number | null; run: number | null };
   jobLimits: Record<string, { day: number | null; run: number | null }>;
+  tz: string;
 }) => {
   const open = !!drill;
   const effectiveRunLimit = (job: string | null | undefined) =>
