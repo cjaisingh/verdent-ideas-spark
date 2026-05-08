@@ -1496,11 +1496,28 @@ const SpendDrillDialog = ({
           (!drill.breachOnly || isRunBreach(r)))
         .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
     : [];
-  const cap = 200;
-  const shown = filtered.slice(0, cap);
   const totalCost = filtered.reduce((s, r) => s + Number(r.cost_usd || 0), 0);
   const totalTok = filtered.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0);
   const nightCount = filtered.filter(r => r?.request_ref?.night_mode === true).length;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 28,
+    overscan: 12,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0;
+
+  // Reset scroll on slice change so new drills always start at the top
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [drill?.day, drill?.groupKey, drill?.breachOnly]);
+
+  const gridCols = "minmax(72px,80px) minmax(120px,1fr) minmax(140px,1.2fr) 64px 80px 80px 80px 100px minmax(180px,2fr)";
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -1533,66 +1550,77 @@ const SpendDrillDialog = ({
             <div className="font-mono">{nightCount}</div>
           </div>
         </div>
-        <div className="max-h-[60vh] overflow-auto rounded border border-border">
-          {shown.length === 0 ? (
+        <div className="rounded border border-border overflow-hidden">
+          {filtered.length === 0 ? (
             <div className="p-4 text-xs text-muted-foreground">No runs in this slice.</div>
           ) : (
-            <table className="w-full text-[11px]">
-              <thead className="bg-muted/50 sticky top-0">
-                <tr className="text-left">
-                  <th className="px-2 py-1 font-medium">Time UTC</th>
-                  <th className="px-2 py-1 font-medium">Job</th>
-                  <th className="px-2 py-1 font-medium">Model</th>
-                  <th className="px-2 py-1 font-medium">Status</th>
-                  <th className="px-2 py-1 font-medium text-right">Prompt</th>
-                  <th className="px-2 py-1 font-medium text-right">Compl.</th>
-                  <th className="px-2 py-1 font-medium text-right">Latency</th>
-                  <th className="px-2 py-1 font-medium text-right">Cost</th>
-                  <th className="px-2 py-1 font-medium">Formula</th>
-                </tr>
-              </thead>
-              <tbody>
-                {shown.map((r, i) => {
+            <>
+              {/* Sticky header (outside scroll container so it never re-renders during scroll) */}
+              <div
+                className="grid bg-muted/50 text-[11px] font-medium border-b border-border"
+                style={{ gridTemplateColumns: gridCols }}
+              >
+                <div className="px-2 py-1">Time UTC</div>
+                <div className="px-2 py-1">Job</div>
+                <div className="px-2 py-1">Model</div>
+                <div className="px-2 py-1">Status</div>
+                <div className="px-2 py-1 text-right">Prompt</div>
+                <div className="px-2 py-1 text-right">Compl.</div>
+                <div className="px-2 py-1 text-right">Latency</div>
+                <div className="px-2 py-1 text-right">Cost</div>
+                <div className="px-2 py-1">Formula</div>
+              </div>
+              <div ref={scrollRef} className="max-h-[60vh] overflow-auto">
+                {paddingTop > 0 && <div style={{ height: paddingTop }} />}
+                {virtualRows.map((vr) => {
+                  const r = filtered[vr.index];
                   const isNight = r?.request_ref?.night_mode === true;
                   const isErr = (r.status || "ok") !== "ok";
                   const runLim = effectiveRunLimit(r.job);
                   const runBreach = runLim != null && Number(r.cost_usd || 0) > runLim;
                   return (
-                    <tr key={r.id ?? i} className={`border-t border-border/50 align-top ${runBreach ? "bg-destructive/5" : ""}`}>
-                      <td className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
+                    <div
+                      key={r.id ?? vr.key}
+                      data-index={vr.index}
+                      ref={rowVirtualizer.measureElement}
+                      className={`grid border-t border-border/50 text-[11px] ${runBreach ? "bg-destructive/5" : ""}`}
+                      style={{ gridTemplateColumns: gridCols }}
+                    >
+                      <div className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
                         {(r.created_at || "").slice(11, 19)}
-                      </td>
-                      <td className="px-2 py-1 font-mono">{r.job ?? "—"}</td>
-                      <td className="px-2 py-1 font-mono">
+                      </div>
+                      <div className="px-2 py-1 font-mono truncate" title={r.job ?? undefined}>{r.job ?? "—"}</div>
+                      <div className="px-2 py-1 font-mono truncate" title={r.model ?? undefined}>
                         {(r.model ?? "—").replace("google/", "")}
                         {isNight && <Badge variant="outline" className="ml-1 text-[9px]">night</Badge>}
-                      </td>
-                      <td className="px-2 py-1">
+                      </div>
+                      <div className="px-2 py-1">
                         <span
                           className={`inline-block rounded px-1.5 py-0.5 text-[10px] border ${isErr ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"}`}
                           title={r.error ?? undefined}
                         >{r.status ?? "ok"}</span>
-                      </td>
-                      <td className="px-2 py-1 font-mono text-right">{(r.prompt_tokens ?? 0).toLocaleString()}</td>
-                      <td className="px-2 py-1 font-mono text-right">{(r.completion_tokens ?? 0).toLocaleString()}</td>
-                      <td className="px-2 py-1 font-mono text-right text-muted-foreground">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</td>
-                      <td className="px-2 py-1 font-mono text-right">
+                      </div>
+                      <div className="px-2 py-1 font-mono text-right">{(r.prompt_tokens ?? 0).toLocaleString()}</div>
+                      <div className="px-2 py-1 font-mono text-right">{(r.completion_tokens ?? 0).toLocaleString()}</div>
+                      <div className="px-2 py-1 font-mono text-right text-muted-foreground">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</div>
+                      <div className="px-2 py-1 font-mono text-right">
                         {fmtUsdFull(Number(r.cost_usd || 0))}
                         {runBreach && (
                           <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠</span>
                         )}
-                      </td>
-                      <td className="px-2 py-1 font-mono text-muted-foreground">{formulaFor(r)}</td>
-                    </tr>
+                      </div>
+                      <div className="px-2 py-1 font-mono text-muted-foreground truncate" title={formulaFor(r)}>{formulaFor(r)}</div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+                {paddingBottom > 0 && <div style={{ height: paddingBottom }} />}
+              </div>
+            </>
           )}
         </div>
-        {filtered.length > cap && (
+        {filtered.length > 0 && (
           <div className="text-[10px] text-muted-foreground">
-            Showing first {cap} of {filtered.length} rows.
+            {filtered.length.toLocaleString()} run{filtered.length === 1 ? "" : "s"} · virtualized
           </div>
         )}
       </DialogContent>
