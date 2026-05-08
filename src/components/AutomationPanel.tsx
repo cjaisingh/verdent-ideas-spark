@@ -1056,11 +1056,44 @@ const DailyAiSpendCard = () => {
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
   const [capped, setCapped] = useState(false);
-  const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
+  const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
+  const [globalLimits, setGlobalLimits] = useState<{ day: number | null; run: number | null }>({ day: null, run: null });
+  const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
   }, [range]);
+
+  useEffect(() => {
+    let active = true;
+    const loadLimits = async () => {
+      const [s, t] = await Promise.all([
+        supabase.from("alert_settings").select("cost_per_day_usd, cost_per_run_usd, alert_on_cost").eq("id", true).maybeSingle(),
+        supabase.from("alert_cost_thresholds").select("job, cost_per_day_usd, cost_per_run_usd, alert_on_cost"),
+      ]);
+      if (!active) return;
+      const enabled = s.data?.alert_on_cost !== false;
+      setGlobalLimits({
+        day: enabled && s.data?.cost_per_day_usd != null ? Number(s.data.cost_per_day_usd) : null,
+        run: enabled && s.data?.cost_per_run_usd != null ? Number(s.data.cost_per_run_usd) : null,
+      });
+      const map: Record<string, { day: number | null; run: number | null }> = {};
+      for (const r of (t.data || [])) {
+        if (r.alert_on_cost === false) continue;
+        map[r.job] = {
+          day: r.cost_per_day_usd != null ? Number(r.cost_per_day_usd) : null,
+          run: r.cost_per_run_usd != null ? Number(r.cost_per_run_usd) : null,
+        };
+      }
+      setJobLimits(map);
+    };
+    loadLimits();
+    const ch = supabase.channel("ai_spend_limits")
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_settings" }, loadLimits)
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_cost_thresholds" }, loadLimits)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
