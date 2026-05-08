@@ -988,6 +988,7 @@ export type Database = {
           due_at: string | null
           extracted_confidence: number | null
           id: string
+          night_eligible: boolean
           owner: string | null
           priority: string
           promoted_task_id: string | null
@@ -1007,6 +1008,7 @@ export type Database = {
           due_at?: string | null
           extracted_confidence?: number | null
           id?: string
+          night_eligible?: boolean
           owner?: string | null
           priority?: string
           promoted_task_id?: string | null
@@ -1026,6 +1028,7 @@ export type Database = {
           due_at?: string | null
           extracted_confidence?: number | null
           id?: string
+          night_eligible?: boolean
           owner?: string | null
           priority?: string
           promoted_task_id?: string | null
@@ -1186,6 +1189,7 @@ export type Database = {
           decided_by: string | null
           id: string
           kind: string
+          payload: Json
           rationale: string | null
           shift_id: string
           source_observation_id: string | null
@@ -1198,6 +1202,7 @@ export type Database = {
           decided_by?: string | null
           id?: string
           kind: string
+          payload?: Json
           rationale?: string | null
           shift_id: string
           source_observation_id?: string | null
@@ -1210,6 +1215,7 @@ export type Database = {
           decided_by?: string | null
           id?: string
           kind?: string
+          payload?: Json
           rationale?: string | null
           shift_id?: string
           source_observation_id?: string | null
@@ -2470,7 +2476,25 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      night_task_audit: {
+        Row: {
+          audit_complete: boolean | null
+          discussion_action_id: string | null
+          shift_id: string | null
+          step_count: number | null
+          steps: Json | null
+          worst_severity: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "night_observations_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "night_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       auto_purge_if_enabled: { Args: never; Returns: number }

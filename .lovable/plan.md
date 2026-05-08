@@ -1,111 +1,135 @@
-# Night Agent — Nightly Observation Shift
 
-## Goal
+# Night Agent — eligible-task pipeline with audited promotion
 
-Add a bounded "Night Agent" inside AWIP that runs **22:00–06:00 local** and exercises the jobs already in the system (Jobs board, code review, QA, test runs) without acting on them. Everything it produces is an **observation** an operator reviews in the morning. AWIP stays substrate: the Night Agent is a scheduler + recorder, not a decisioner.
+Tighten the Night Agent so each shift pulls a clearly-defined set of eligible jobs, runs a fixed QA pipeline against each one, writes every step to the audit trail, and only then surfaces a proposal carrying the audit summary. Read-only contract preserved: nothing is promoted without an operator click.
 
-## Principles (non-negotiable)
+## Eligibility (flag AND rules)
 
-- **Read-only by default.** No writes to `roadmap_tasks`, `discussion_actions`, code, or GitHub branches outside the agent's own audit tables.
-- **Fully audited.** Every shift, every job invocation, every observation has a row. Nothing happens off-book.
-- **Reversible.** Because it only writes to its own tables, "rollback" = delete the shift row. No code or roadmap state to unwind.
-- **GitHub + CHANGELOG aware.** The agent records the commit SHA it observed against, and the morning summary is appended to `CHANGELOG.md` under an "Overnight observations" entry.
+A `discussion_actions` row is eligible for a shift when **all** of these hold:
 
-## Shift lifecycle
+1. `night_eligible = true` (new boolean column, default false; operator opt-in via the Jobs board).
+2. `status = 'open'` and `promoted_task_id IS NULL`.
+3. Risk classifier (`classifyJob`) returns `low` or `med` — `high` is excluded automatically even if the flag is set.
+4. No open blocker: no other `discussion_action` references it as a parent / blocker (best-effort via `details` link or, if we add it later, a `blocked_by` column — for now: no linked roadmap task in `roadmap_tasks` with status `in_progress`).
+5. Not already audited in the current shift (dedupe by `(shift_id, discussion_action_id)`).
 
-```text
-22:00  open_shift  → night_shifts row (status=running, commit_sha, window)
-22:05  sweep jobs  → for each open discussion_action: classify risk, record finding
-22:30  code review → invoke scheduled-code-review, capture summary
-23:00  qa pass     → invoke qa-validate, capture summary
-23:30  test run    → invoke record-test-run, capture pass/fail + failing tests
-00:00  loop quiet checks every hour (lightweight)
-06:00  close_shift → status=completed, write digest, append CHANGELOG entry
+The Jobs board gets a checkbox per row and a filter "Night-eligible only" so the operator can curate the pool during the day.
+
+## Per-task QA pipeline
+
+For each eligible job, the agent runs these steps **in order**, each writing a `night_observations` row tagged with `subject_ref.discussion_action_id` so we can group later:
+
+| step | observation kind | severity rule |
+|---|---|---|
+| `pulled` | `job_review` | info — records risk class + eligibility snapshot |
+| `global_qa` | `qa` | info on pass, high on fail — links to the shift-level `qa-validate` run |
+| `code_review` | `code_review` | severity = max severity of findings whose `area` matches the job's inferred area (title keywords) |
+| `tests` | `tests` | info if latest `test_runs.status = 'pass'` for the matching suite, high otherwise |
+| `qa_checks` | `qa` | severity = worst status across `qa_checks` rows for the job's `phase_key` (inferred from title; falls back to `general`) |
+| `audit_complete` | `job_review` | info — payload contains `{steps: 5, worst_severity, qa_passed: bool}` |
+
+`audit_complete` is the gate marker. The view (below) only treats a job as audited when this row exists.
+
+Global QA still runs once per shift at the start (cheap, current behaviour kept) and per-job `global_qa` references that single run rather than re-invoking it.
+
+## Audit-complete view (no new tables)
+
+```sql
+CREATE VIEW night_task_audit AS
+SELECT
+  (subject_ref->>'discussion_action_id')::uuid AS discussion_action_id,
+  shift_id,
+  count(*) FILTER (WHERE summary LIKE 'audit_complete%') > 0 AS audit_complete,
+  max(severity) AS worst_severity,
+  jsonb_agg(jsonb_build_object('kind', kind, 'severity', severity, 'summary', summary) ORDER BY created_at) AS steps
+FROM night_observations
+WHERE subject_ref ? 'discussion_action_id'
+GROUP BY shift_id, (subject_ref->>'discussion_action_id')::uuid;
 ```
 
-If a step errors, the shift continues; the failure is recorded as an observation, not a crash.
+Operator-only `SELECT`. This is what the UI and `/close` read — no new persistent table, matches the answer to "use existing observations + view".
 
-## Scope of observations
+## Proposal contract (always propose, audit attached)
 
-1. **Jobs board sweep** — for each open `discussion_actions`, the agent records a `night_observations` row tagged `job_review` with: suggested next step, risk classification (low/med/high), and (for low-risk only) a **proposed promotion** that lands in a new `night_proposals` queue. A human clicks "accept" in the morning to actually promote.
-2. **Code review pass** — runs `scheduled-code-review`, stores the run id + summary as a `code_review` observation.
-3. **QA pass** — runs `qa-validate`, stores result as a `qa` observation; failures get severity.
-4. **Test suite** — runs `record-test-run` against current `main` SHA, stores a `tests` observation; any failing test produces a `roadmap_findings` candidate (also queued, not auto-filed).
-5. **Auto-promote low-risk** — implemented as **proposals only** (`night_proposals` rows). Operator approves in the morning; only then does anything change in the Jobs board / roadmap.
+After `audit_complete` is written for a job, the agent inserts exactly one `night_proposals` row:
 
-## UI
+- `kind = 'promote_job'`
+- `target_ref = { discussion_action_id, short_num }`
+- `rationale` = one-line summary: `"Audit: 5 steps · worst=medium · global_qa=pass · tests=pass"`
+- `payload` (new column, jsonb default `{}`) carries the full step list copied from the view, so the operator sees the audit without joining anywhere.
 
-Add a **Night Agent** card to `/roadmap`'s `AutomationPanel`:
+A proposal is created **always** — including when QA fails — but the rationale + worst_severity make the failure obvious. The Accept button on the card is disabled (with a tooltip) when `worst_severity = 'high'`; the operator can still force-accept via a confirm modal. Reject is always available.
 
-- Last shift: window, commit SHA, duration, counts (`observations`, `proposals`, `failures`).
-- "Open digest" → drawer listing observations grouped by type, each with a link to the underlying run.
-- "Pending proposals (N)" → routes to a new `/jobs?night=pending` filter showing proposals with Accept / Reject (reuses the existing `ProposalReviewSheet`).
+## Promotion writes back to the audit trail
 
-No new top-level route required.
+When the operator accepts a proposal:
 
-## Rollback story
+1. Existing flow: `discussion_actions.promoted_task_id` set → `discussion_action_events` row written by trigger.
+2. New: a final `night_observations` row `kind='job_review'`, `summary='promoted'`, payload `{ proposal_id, decided_by }` so the morning digest reads end-to-end without context-switching.
 
-- Disable: flip `night_agent_enabled` in `memory_settings` → cron exits early.
-- Undo a shift: delete the `night_shifts` row (cascades to observations + proposals). Nothing else changed.
-- Undo an accepted proposal: it went through the normal Jobs board promotion path, so the existing audit trail (`discussion_action_events`, `roadmap_task_activity`) covers it.
+Rejection logs a parallel `summary='rejected'` observation.
+
+## UI changes (frontend only)
+
+- `JobsBoard` row: new `Night-eligible` checkbox + filter chip. Reads/writes `night_eligible`.
+- `NightAgentCard` proposals list: each row shows the rationale string, a colored severity dot (green/amber/red), and "View audit" expand revealing the `steps` array. Accept disabled for red unless confirmed.
+- New `/jobs?night=pending` deep link from the card.
 
 ## Technical details
 
-### New tables (migration)
+### Migration
 
-- `night_shifts` (id, started_at, ended_at, window_start, window_end, commit_sha, status, summary jsonb)
-- `night_observations` (id, shift_id fk cascade, kind enum: `job_review|code_review|qa|tests|error`, severity, subject_ref jsonb, summary text, payload jsonb, created_at)
-- `night_proposals` (id, shift_id fk cascade, source_observation_id fk, kind: `promote_job|file_finding`, target_ref jsonb, rationale text, status enum: `pending|accepted|rejected`, decided_by, decided_at)
-
-All three: RLS operator-only, realtime enabled, indices on `shift_id` and `status`.
-
-### Edge function
-
-New `night-agent` edge function (verify_jwt = false, auth via `AWIP_SERVICE_TOKEN`) with two entrypoints:
-
-- `POST /open` — creates shift, kicks off the sweep sequentially (each step has its own try/catch → observation).
-- `POST /close` — finalises shift, computes digest, appends `CHANGELOG.md` entry via GitHub API using the existing repo connection, marks status=completed.
-
-Reuses existing `scheduled-code-review`, `qa-validate`, `record-test-run` functions — does not duplicate their logic.
-
-### Cron
-
-Two `pg_cron` rows (via `supabase--insert`, not migrations, since they embed project URL + key):
-
-- `0 22 * * *` → POST `/night-agent/open`
-- `0 6 * * *` → POST `/night-agent/close`
-
-Both auth with `AWIP_SERVICE_TOKEN` per existing pattern.
-
-### CHANGELOG hook
-
-`/close` writes a single entry like:
-
-```text
-## Overnight 2026-05-09 (commit a1b2c3d)
-- 12 jobs reviewed, 3 low-risk promotion proposals queued
-- Code review: 2 medium findings recorded
-- QA: pass
-- Tests: 1 failing (auth-flow.spec.ts) — finding candidate queued
+```sql
+ALTER TABLE discussion_actions ADD COLUMN night_eligible boolean NOT NULL DEFAULT false;
+ALTER TABLE night_proposals ADD COLUMN payload jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE VIEW night_task_audit AS ...;  -- as above, with operator-only grant
 ```
 
-via GitHub Contents API using the existing GitHub integration. If the API call fails, the digest is still in `night_shifts.summary` and a follow-up observation is recorded — the shift never blocks on GitHub.
+No new tables.
 
-### Memory updates
+### `night-agent` edge function changes
 
-- Add `mem://features/night-agent` describing tables, cadence, and the read-only contract.
-- Append a Core line: `Night Agent runs 22:00–06:00, observation-only; proposals require operator accept.`
+`/open` becomes:
 
-## Out of scope (explicitly not in this plan)
+```text
+1. create shift (unchanged)
+2. invoke qa-validate once → store run id in shift.summary
+3. select eligible jobs (flag + rules)
+4. for each job (sequential, bounded to 50/shift):
+     write 'pulled'
+     write 'global_qa' referencing step 2
+     fetch latest review findings overlapping job.area → write 'code_review'
+     fetch latest test_runs for inferred suite → write 'tests'
+     snapshot qa_checks for inferred phase → write 'qa_checks'
+     write 'audit_complete' with worst_severity rolled up
+     insert night_proposals row with rationale + payload
+5. return { jobs_audited, proposals_queued, failures }
+```
 
-- Any autonomous code edits, branch creation, or PRs.
-- Auto-accepting proposals.
-- Decisioning about *which* job to do first beyond a fixed risk classifier.
-- A separate worker service — everything runs in `night-agent` edge function on cron.
+`classifyJob` extended to return reason string for the audit (logged in `pulled` payload).
+
+`/close` adds `audit_summary` to `night_shifts.summary` by reading `night_task_audit` for that shift.
+
+### Tests / smoke
+
+Manual smoke after deploy: hit `/open` with one flagged low-risk job, expect 5 observations + 1 proposal with rationale; flip the test_run to fail, re-run, expect rationale to flip to red and Accept disabled.
+
+## Memory updates
+
+- Update `mem://features/night-agent` with the eligibility rules, pipeline order, and the `night_task_audit` view.
+- Append a Core line: `Night Agent only audits jobs with night_eligible=true; every promotion preceded by an audit_complete observation.`
+
+## Out of scope
+
+- Auto-acceptance of proposals (still operator-only).
+- Inferring `phase_key` / `area` more cleverly than keyword match (good enough v1).
+- Per-job parallelism (sequential keeps shifts boring and easy to debug).
+- New tables — view-only by design.
 
 ## Acceptance
 
-- A shift opened at 23:00 produces a `night_shifts` row, observations for all four steps, and zero writes outside the three new tables (+ the CHANGELOG append).
-- Disabling `night_agent_enabled` stops the next shift cleanly.
-- Deleting a `night_shifts` row removes all its observations and proposals; no orphaned state.
-- `AutomationPanel` shows the last shift and a working pending-proposals link.
+- A flagged low-risk open job produces exactly 5 observations + 1 audit_complete + 1 proposal per shift.
+- A flagged high-risk job is excluded; an audit-complete observation is **never** written for it.
+- `night_task_audit` returns `audit_complete = true` only when all 5 steps + the marker are present.
+- Accepting a proposal writes the trailing `promoted` observation; deleting the shift cascades everything.
+- Operator can disable the whole feature with `memory_settings.night_agent_enabled = false` (existing kill switch).
