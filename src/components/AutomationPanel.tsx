@@ -1415,7 +1415,7 @@ const DailyAiSpendCard = () => {
           {/* Legend / breakdown table */}
           <div className="space-y-1">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Breakdown by {groupBy}
+              Breakdown by {groupBy} · {metricLabel}
             </div>
             <table className="w-full text-xs">
               <tbody>
