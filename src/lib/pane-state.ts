@@ -5,6 +5,7 @@ export type PaneMode = "left" | "dual" | "centre" | "bottom";
 
 export type PaneState = {
   mode: PaneMode;
+  lastNonCentre: Exclude<PaneMode, "centre">;
   rightWidth: number;
   bottomHeight: number;
 };
@@ -13,6 +14,7 @@ const STORAGE_KEY = "awip.panes.v1";
 
 const DEFAULT_STATE: PaneState = {
   mode: "left",
+  lastNonCentre: "left",
   rightWidth: 22,
   bottomHeight: 30,
 };
