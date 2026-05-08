@@ -1142,16 +1142,55 @@ const DailyAiSpendCard = () => {
             from ai_usage_log
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px]">
-          <div className="inline-flex rounded border border-border overflow-hidden">
-            {([7, 14, 30] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={`px-2 py-0.5 ${days === d ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >{d}d</button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 text-[10px] flex-wrap">
+          <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (o) setPendingRange(range); }}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-[11px] font-mono gap-1.5">
+                <CalendarIcon className="h-3 w-3" />
+                {format(range.from, "MMM dd")} → {format(range.to, "MMM dd")}
+                <span className="text-muted-foreground">({daysSpan}d)</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <div className="p-2 border-b border-border flex flex-wrap gap-1">
+                {([
+                  { label: "7d", from: new Date(Date.now() - 6 * 86_400_000), to: new Date() },
+                  { label: "14d", from: new Date(Date.now() - 13 * 86_400_000), to: new Date() },
+                  { label: "30d", from: new Date(Date.now() - 29 * 86_400_000), to: new Date() },
+                  { label: "90d", from: new Date(Date.now() - 89 * 86_400_000), to: new Date() },
+                  (() => { const n = new Date(); return { label: "This month", from: new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)), to: n }; })(),
+                  (() => { const n = new Date(); const from = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() - 1, 1)); const to = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 0)); return { label: "Last month", from, to }; })(),
+                ]).map((p) => (
+                  <Button key={p.label} variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
+                    onClick={() => {
+                      const from = startOfUtcDay(p.from); const to = startOfUtcDay(p.to);
+                      setRange({ from, to }); setPendingRange({ from, to }); setPopoverOpen(false);
+                    }}
+                  >{p.label}</Button>
+                ))}
+              </div>
+              <Calendar
+                mode="range"
+                selected={{ from: pendingRange.from, to: pendingRange.to }}
+                onSelect={(r: any) => setPendingRange({ from: r?.from, to: r?.to })}
+                numberOfMonths={2}
+                disabled={(d) => d > new Date() || d < new Date(Date.now() - 366 * 86_400_000)}
+                className="p-3 pointer-events-auto"
+              />
+              <div className="p-2 border-t border-border flex justify-end gap-2">
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => setPopoverOpen(false)}>Cancel</Button>
+                <Button size="sm" className="h-7 text-[11px]"
+                  disabled={!pendingRange.from || !pendingRange.to}
+                  onClick={() => {
+                    if (pendingRange.from && pendingRange.to) {
+                      setRange({ from: startOfUtcDay(pendingRange.from), to: startOfUtcDay(pendingRange.to) });
+                      setPopoverOpen(false);
+                    }
+                  }}
+                >Apply</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="inline-flex rounded border border-border overflow-hidden">
             {(["job", "model"] as const).map((g) => (
               <button
