@@ -245,6 +245,7 @@ export const AutomationPanel = () => {
     <div className="space-y-3">
     <AlertsCard />
     <PerJobCostThresholdsCard />
+    <DailyAiSpendCard />
     <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
