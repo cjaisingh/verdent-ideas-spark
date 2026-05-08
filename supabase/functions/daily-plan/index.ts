@@ -196,7 +196,17 @@ Deno.serve(async (req) => {
       price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       request_ref: { for_date: today },
     });
-    await checkCostThresholds(sb, "daily-plan", cost, maybeAlert);
+    const totalTok = usage.total_tokens ?? (promptTok + completionTok);
+    const prices = priceFor(PLANNER_MODEL);
+    await checkCostThresholds(sb, "daily-plan", cost, maybeAlert, {
+      model: PLANNER_MODEL,
+      prompt_tokens: promptTok,
+      completion_tokens: completionTok,
+      total_tokens: totalTok,
+      price_in_per_mtok: prices.in,
+      price_out_per_mtok: prices.out,
+      cost_usd: Number(cost.toFixed(6)),
+    });
     const call = aiJson.choices?.[0]?.message?.tool_calls?.[0];
     const args = call?.function?.arguments ? JSON.parse(call.function.arguments) : null;
     if (!args) {
