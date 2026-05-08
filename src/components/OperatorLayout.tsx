@@ -127,19 +127,19 @@ const OperatorLayout = () => {
         <AppSidebar collapsible={effectiveMode === "centre" ? "offcanvas" : "icon"} />
         <div className="flex-1 flex flex-col min-w-0">
           <header
-            aria-busy={dragging}
+            aria-busy={interacting}
             className={`h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10 transition-opacity ${
-              dragging ? "pointer-events-none select-none opacity-90" : ""
+              interacting ? "pointer-events-none select-none opacity-90" : ""
             }`}
           >
             {!isMobile && (
               <PaneToggleGroup
-                disabled={dragging}
+                disabled={interacting}
                 mode={effectiveMode}
                 onChange={(m) => {
                   // Toggles are disabled while dragging; ignore any change that
                   // still slips through and skip no-op selections.
-                  if (dragging) return;
+                  if (interacting) return;
                   if (m === effectiveMode) return;
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
@@ -153,7 +153,7 @@ const OperatorLayout = () => {
                 }}
               />
             )}
-            {dragging && (
+            {interacting && (
               <span
                 role="status"
                 aria-live="polite"
@@ -259,7 +259,7 @@ const OperatorLayout = () => {
                               withHandle
                               onDragging={handleDragging}
                               aria-label="Drag to resize bottom pane. Pane switching is locked while dragging."
-                              className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                              className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                             />
                           </TooltipTrigger>
                           <TooltipContent side="top" className="text-xs">
@@ -276,7 +276,7 @@ const OperatorLayout = () => {
                         }
                       >
                         <div className="relative h-full">
-                          {dragging && (
+                          {interacting && (
                             <span
                               role="status"
                               aria-live="polite"
@@ -301,7 +301,7 @@ const OperatorLayout = () => {
                           withHandle
                           onDragging={handleDragging}
                           aria-label="Drag to resize right pane. Pane switching is locked while dragging."
-                          className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                          className={interacting ? "opacity-40 transition-opacity" : "transition-opacity"}
                         />
                       </TooltipTrigger>
                       <TooltipContent side="left" className="text-xs">
@@ -318,7 +318,7 @@ const OperatorLayout = () => {
                     }
                   >
                     <div className="relative h-full">
-                      {dragging && (
+                      {interacting && (
                         <span
                           role="status"
                           aria-live="polite"
