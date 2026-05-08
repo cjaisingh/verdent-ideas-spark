@@ -8,8 +8,9 @@ import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare } from "luc
 import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
+import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
 
-type Job = {
+type Job = JobDetailsRecord & {
   id: string;
   short_num: number;
   subject_type: string;
