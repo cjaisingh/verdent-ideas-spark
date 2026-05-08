@@ -1,112 +1,91 @@
-## Goal
+## Cursor-style pane toggles for the operator console
 
-For every operator-confirmed Night Agent run (each accepted `night_proposal`), produce a structured **promotion audit report** that shows the exact gate snapshot at open time, the skip-reason list, and the selected candidates — and pairs it with the after-state (what the operator actually accepted/rejected and the per-job audit_complete result).
+Add a 4-icon pane control row to the header in `OperatorLayout`, exactly matching the screenshot. Wire a right pane to a Night Agent feed and a bottom pane to a live event ticker. State persists per route.
 
-This makes "why did this thing get promoted last night?" a one-click answer, and creates an immutable trail for post-hoc review.
+### The 4 icons (matching screenshot, left → right)
 
-## Scope
+| Icon (lucide)      | Mode             | Behavior                                                                    |
+|--------------------|------------------|-----------------------------------------------------------------------------|
+| `PanelLeft`        | Left only        | Left sidebar open, right + bottom closed                                    |
+| `Columns2`         | Dual             | Left + right both open, bottom closed                                       |
+| `Square`           | Centre / focus   | All panes closed — only main content visible (the "centre pane" state)      |
+| `PanelBottom`      | Bottom           | Bottom drawer open; left/right keep their last user state                   |
 
-In:
-- Persist the full gate snapshot when `/night-agent/open` runs.
-- Read endpoint that returns a before/after report per proposal or per shift.
-- Admin UI page that lists confirmed promotions with drill-down to the diff.
+Behavior:
+- Buttons act as a radio-style mode picker: clicking one snaps the layout to that preset.
+- The currently active mode gets `bg-muted text-foreground`; others are `text-muted-foreground`. Tooltips on each.
+- A user can still drag pane edges to resize after picking a mode (sizes remembered per route).
+- Keyboard shortcuts: `⌘1` left, `⌘2` dual, `⌘3` centre, `⌘4` bottom. Disabled while typing in inputs.
 
-Out (non-goals):
-- No changes to Capability Promotion (`/capabilities/:id/promote`) — different flow.
-- No changes to gate logic, eligibility rules, or the 5-step audit.
-- No new tables — reuse `night_shifts.summary` (jsonb) + `night_proposals.payload`.
-
-## Approach
-
-### 1. Capture the "before" snapshot at open time
-
-`supabase/functions/night-agent/open.ts` already computes everything we need but only stores `{ tz, window, allowed_kinds }` in `night_shifts.summary`. Extend it to also persist:
+### Layout
 
 ```text
-summary.gates              = { timezone, window, local_date, local_time,
-                               enabled, in_window, blackout_hit,
-                               allowed_kinds, blackout_dates }
-summary.skip_reasons       = string[]   // shift-level (always [] if shift opened)
-summary.candidates_total   = number
-summary.candidates_skipped = [{ short_num, title, reason }]
-summary.candidates_selected = [{ short_num, title, risk, phase, suite }]
+┌──────────────────────────────────────────────────────┐
+│ header  [▮ ▮▮ ▭ ▁]   AWIP Core   pending  signout    │
+├──────┬─────────────────────────────────┬─────────────┤
+│ left │         main / <Outlet/>        │   right     │
+│ nav  │                                 │   night     │
+│      ├─────────────────────────────────┤   agent     │
+│      │   bottom: live event ticker     │   feed      │
+└──────┴─────────────────────────────────┴─────────────┘
 ```
 
-Mirror the exact field names already used by `gates.ts` (test mode) so the report shape is consistent between dry-run and real runs.
+- Keep `SidebarProvider` + existing `AppSidebar` for the left pane.
+- Wrap (main + bottom) in a vertical `ResizablePanelGroup`, then wrap (that + right) in a horizontal `ResizablePanelGroup` from `react-resizable-panels` (already available via shadcn `resizable`).
 
-### 2. Stamp each proposal with its lineage
+### Right pane: Night Agent feed
 
-When inserting into `night_proposals`, add to `payload`:
-- `selected_at` (open timestamp)
-- `gates_snapshot_ref` = shift_id (cheap join key — the snapshot lives on the shift row)
+`src/components/panes/RightPaneNightAgent.tsx`
+- Default 340px (min 240, max 480).
+- Header: "Night Agent" + status dot (in/out of 22:00–06:00 UTC window).
+- List: latest 30 `night_observations` joined to `discussion_actions` for title/short_num, ordered `created_at desc`. Severity chip · verdict · time-ago · click → `/night`.
+- Realtime: subscribed to `night_observations` so new rows prepend live.
+- Empty state: "No observations yet tonight."
 
-No schema migration required — both columns are jsonb.
+### Bottom pane: Live event ticker
 
-### 3. Read endpoint
+`src/components/panes/BottomPaneEventTicker.tsx`
+- Default 220px (min 120, max 480).
+- Tabs: `All` · `OKR` · `Capability` · `Discussion`.
+- Streams `okr_node_events`, `capability_events`, `discussion_action_events` via realtime; merged client-side, newest first, capped at 200.
+- Each row: timestamp · source badge · event type · short payload summary · "open" link (`/roadmap`, `/capabilities/:id`, `/night`).
+- Pause/resume button to freeze auto-scroll.
 
-New route on `awip-api` (admin-only, mirrors `promotion-status` auth pattern):
+### Per-route persistence
 
-- `GET /night-agent/promotion-audit?proposal_id=...` → returns:
-  ```text
-  {
-    proposal: { id, status, decided_by, decided_at, rationale, target_ref },
-    before: {
-      shift_id, opened_at, gates, skip_reasons,
-      candidates_total, candidates_selected, candidates_skipped
-    },
-    after: {
-      audit_complete: { worst_severity, qa_passed, steps },
-      observations: [...],   // 5-step trail for this job
-      decision: "accepted" | "rejected"
-    }
-  }
-  ```
-- `GET /night-agent/promotion-audit?shift_id=...` → bulk variant (one entry per accepted/rejected proposal in that shift).
+`src/lib/pane-state.ts`:
+```ts
+type PaneMode = "left" | "dual" | "centre" | "bottom";
+type PaneState = { mode: PaneMode; rightWidth: number; bottomHeight: number };
+function usePaneState(routeKey: string): [PaneState, (p: Partial<PaneState>) => void];
+```
+- Stored in `localStorage` under `awip.panes.v1`, keyed by the first path segment (e.g. `/capabilities`).
+- Defaults: `mode: "left"`, rightWidth 340, bottomHeight 220.
+- Reads on mount and on route change so each page restores its own layout.
 
-Pure assembly logic in a new `supabase/functions/awip-api/promotion_audit.ts` (unit-testable, no I/O — takes the rows and shapes them).
+### Files
 
-### 4. UI
+**New**
+- `src/components/PaneToggleGroup.tsx`
+- `src/components/panes/RightPaneNightAgent.tsx`
+- `src/components/panes/BottomPaneEventTicker.tsx`
+- `src/lib/pane-state.ts`
+- `docs/operator-panes.md` (modes, shortcuts, persistence, how to add another pane)
 
-New page `src/pages/PromotionAudits.tsx` at `/admin/promotion-audits`:
-- Header: filter by date / shift / decision (accepted | rejected | pending).
-- Table: one row per proposal — `#short_num`, title, decision, decided_by, worst_severity chip, shift date.
-- Row click → drawer showing the report with two columns ("Before" / "After") and a candidates list with each candidate marked `selected`, `skipped (reason)`, or `promoted (the one this report is about)`.
-- Reuse `VerdictPill` for severity, existing `SectionCard` styling.
+**Edited**
+- `src/components/OperatorLayout.tsx` — render the resizable shell + `PaneToggleGroup` in the header; remove the lone `SidebarTrigger`.
+- `README.md` — one line under "Operator console" describing the pane modes/shortcuts.
+- `CHANGELOG.md` — entry under Unreleased.
 
-Surface the same drawer from the existing `NightShifts` and `NightAgentCard` "Accept" buttons via a small "View audit" link on each accepted proposal — no duplicate UI.
+### Out of scope
 
-### 5. Tests
+- No backend changes. No new tables, no edge function edits.
+- Mobile (<768px): always forced to centre mode; only the existing mobile sidebar drawer remains.
+- No drag-to-reorder; pane positions fixed.
 
-`promotion_audit_test.ts` — feed a synthetic shift row + proposals + observations and assert the assembled report shape, including:
-- Accepted proposal yields `after.decision = "accepted"` and includes the matching `audit_complete` observation.
-- A skipped candidate appears in `before.candidates_skipped` with its reason verbatim.
-- Missing `audit_complete` (legacy shift before this change) returns `after.audit_complete = null` instead of throwing.
+### Validation
 
-## Files
-
-New:
-- `supabase/functions/awip-api/promotion_audit.ts`
-- `supabase/functions/awip-api/promotion_audit_test.ts`
-- `src/pages/PromotionAudits.tsx`
-- `src/components/promotion/PromotionAuditDrawer.tsx`
-- `src/lib/promotion-audit-types.ts`
-- `docs/promotion-audit.md`
-
-Edited:
-- `supabase/functions/night-agent/open.ts` — enrich `night_shifts.summary` and `night_proposals.payload`.
-- `supabase/functions/awip-api/index.ts` — register the new route.
-- `src/App.tsx`, `src/components/AppSidebar.tsx` — link the new page.
-- `src/pages/NightShifts.tsx`, `src/components/NightAgentCard.tsx` — "View audit" link on accepted proposals.
-- `README.md`, `CHANGELOG.md`.
-
-## Verification
-
-1. Trigger `/night-agent/open` (test mode off) once; confirm `night_shifts.summary` contains `gates` + `candidates_selected`.
-2. Accept one proposal in the UI; open the audit drawer; confirm Before shows the gate snapshot and Skipped list, After shows `audit_complete` + `decision=accepted`.
-3. Reject another; confirm `decision=rejected` and the same Before snapshot is shared.
-4. Hit the endpoint with an unknown `proposal_id` → 404; without admin role → 403.
-
-## Risks
-
-- Legacy shifts opened before this change will have `summary.gates = null`; the report endpoint returns `before.gates = null` with a `legacy: true` flag rather than failing.
-- `night_shifts.summary` is jsonb so size is unbounded — cap `candidates_selected` / `candidates_skipped` at `MAX_JOBS_PER_SHIFT` (already enforced upstream).
+- Click each of the 4 icons → layout snaps to the matching preset; centre hides everything.
+- Reload `/capabilities` in dual mode and `/roadmap` in centre → both restored independently.
+- Insert rows into `night_observations` and `okr_node_events` → both panes update without refresh.
+- Keyboard shortcuts work and don't fire while typing in inputs.
