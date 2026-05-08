@@ -472,6 +472,14 @@ export function CopilotDiscussionSheet({
               {savingDecision ? "Saving…" : "Record decision & close"}
             </Button>
           </div>
+
+          {discussionId && (
+            <DiscussionActionsPanel
+              discussionId={discussionId}
+              subjectType="roadmap_finding"
+              subjectId={findingId}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
