@@ -11,28 +11,37 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const reqId = crypto.randomUUID();
+  const log = (...args: unknown[]) => console.log(`[dg-token ${reqId}]`, ...args);
+  const logErr = (...args: unknown[]) => console.error(`[dg-token ${reqId}]`, ...args);
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY");
-    if (!DEEPGRAM_API_KEY) return json({ error: "DEEPGRAM_API_KEY not configured" }, 500);
+    log("incoming", { method: req.method, hasKey: !!DEEPGRAM_API_KEY, keyPrefix: DEEPGRAM_API_KEY?.slice(0, 6) });
+    if (!DEEPGRAM_API_KEY) return json({ error: "DEEPGRAM_API_KEY not configured", reqId }, 500);
 
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader) return json({ error: "missing authorization" }, 401);
+    if (!authHeader) return json({ error: "missing authorization", reqId }, 401);
 
     const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: userRes } = await userClient.auth.getUser();
+    const { data: userRes, error: userErr } = await userClient.auth.getUser();
+    if (userErr) logErr("auth.getUser error", userErr);
     const user = userRes?.user;
-    if (!user) return json({ error: "not authenticated" }, 401);
-    const { data: hasOp } = await userClient.rpc("has_role", {
+    if (!user) return json({ error: "not authenticated", reqId }, 401);
+    const { data: hasOp, error: roleErr } = await userClient.rpc("has_role", {
       _user_id: user.id,
       _role: "operator",
     });
-    if (!hasOp) return json({ error: "operator role required" }, 403);
+    if (roleErr) logErr("has_role error", roleErr);
+    log("auth ok", { userId: user.id, hasOp });
+    if (!hasOp) return json({ error: "operator role required", reqId }, 403);
 
-    // Mint a short-lived token via /v1/auth/grant (uses master key, no keys:write needed)
+    // Mint a short-lived token via /v1/auth/grant
+    log("calling deepgram /v1/auth/grant");
     const grantRes = await fetch("https://api.deepgram.com/v1/auth/grant", {
       method: "POST",
       headers: {
@@ -41,19 +50,34 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({ ttl_seconds: 60 }),
     });
+    const respHeaders: Record<string, string> = {};
+    grantRes.headers.forEach((v, k) => { respHeaders[k] = v; });
+    const bodyText = await grantRes.text();
+    log("deepgram response", { status: grantRes.status, headers: respHeaders, body: bodyText });
+
     if (!grantRes.ok) {
-      const t = await grantRes.text();
-      console.error("deepgram grant error", grantRes.status, t);
-      return json({ error: "failed to mint deepgram token", detail: t }, 502);
+      logErr("deepgram grant error", grantRes.status, bodyText);
+      return json({
+        error: "failed to mint deepgram token",
+        reqId,
+        deepgram_status: grantRes.status,
+        deepgram_body: bodyText,
+        deepgram_headers: respHeaders,
+      }, 502);
     }
-    const grantJson = await grantRes.json();
-    // Deepgram returns { access_token, expires_in }
+    let grantJson: any = {};
+    try { grantJson = JSON.parse(bodyText); } catch (e) { logErr("parse grant body failed", e); }
     const token = grantJson.access_token ?? grantJson.key;
+    if (!token) {
+      logErr("no token in deepgram response", grantJson);
+      return json({ error: "deepgram returned no token", reqId, deepgram_body: bodyText }, 502);
+    }
     const expiry = Math.floor(Date.now() / 1000) + (grantJson.expires_in ?? 60);
-    return json({ key: token, expires_at: expiry });
+    log("minted token ok", { expiry, tokenPrefix: String(token).slice(0, 8) });
+    return json({ key: token, expires_at: expiry, reqId });
   } catch (e) {
-    console.error("deepgram-realtime-token error", e);
-    return json({ error: e instanceof Error ? e.message : "unknown error" }, 500);
+    logErr("unhandled error", e);
+    return json({ error: e instanceof Error ? e.message : "unknown error", reqId }, 500);
   }
 });
 
