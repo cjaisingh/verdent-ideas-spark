@@ -40,7 +40,9 @@ Deno.serve(async (req) => {
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   const { data: settings } = await sb
-    .from("memory_settings").select("night_agent_enabled").eq("id", true).maybeSingle();
+    .from("memory_settings")
+    .select("night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds")
+    .eq("id", true).maybeSingle();
   if (settings && settings.night_agent_enabled === false) {
     return json({ skipped: true, reason: "night_agent_disabled" });
   }
