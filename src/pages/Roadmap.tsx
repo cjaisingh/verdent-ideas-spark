@@ -98,6 +98,7 @@ const Roadmap = () => {
   });
   const [newComment, setNewComment] = useState("");
   const [commentKind, setCommentKind] = useState<"comment" | "question" | "decision">("comment");
+  const gates = useRoadmapGates();
 
   // Work-log form state
   const [logForm, setLogForm] = useState({
@@ -363,7 +364,7 @@ const Roadmap = () => {
                   </button>
                   <TriCheckbox state={phaseTriState(phase.id)} />
                   <span className="text-sm font-medium flex-1 truncate">{phase.title}</span>
-                  {phaseStatusBadge(phase.status)}
+                  <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
@@ -425,7 +426,7 @@ const Roadmap = () => {
                 <div key={phase.id} className="mb-6">
                   <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
-                    {phaseStatusBadge(phase.status)}
+                    <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
                     <Link
                       to={`/master-plan#${phase.key}`}
                       className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
