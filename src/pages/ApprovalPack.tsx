@@ -293,9 +293,9 @@ export default function ApprovalPack() {
           {(() => {
             const idx = phases.findIndex((p) => p.id === phase.id);
             const position = idx >= 0 ? `${idx + 1} of ${phases.length}` : "—";
-            const rangeLabel = phases.length > 1
-              ? `${phases[0].key} → ${phases[phases.length - 1].key}`
-              : phase.key;
+            const rangeLabel = phasesInRange.length > 1
+              ? `${phaseRange.fromKey} → ${phaseRange.toKey} (${phasesInRange.length} phases)`
+              : (phasesInRange[0]?.key ?? phase.key);
             return (
               <section className="pp-cover-page rounded-lg border p-10 print:border-0 print:p-0">
                 <div className="flex flex-col items-start justify-between min-h-[60vh] print:min-h-[24cm] gap-10">
