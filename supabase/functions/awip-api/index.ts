@@ -346,6 +346,193 @@ async function listCapabilities(url: URL) {
   return json({ capabilities: data });
 }
 
+// ---------- promotion (Phase-3 maturity) ----------
+
+async function isAdminActor(userId?: string): Promise<boolean> {
+  if (!userId) return false;
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  return !!data;
+}
+
+async function loadPromotionInputs() {
+  const [capsRes, eventsRes, approvalsRes, qaRes, measRes, connRes] = await Promise.all([
+    supabase.from("capabilities").select("*").order("id"),
+    supabase.from("capability_events")
+      .select("capability_id, event_type, created_at, payload")
+      .order("created_at", { ascending: false })
+      .limit(2000),
+    supabase.from("approval_queue").select("id, status, capability_id").eq("status", "pending"),
+    supabase.from("qa_checks").select("criterion, status, phase_key").eq("phase_key", "phase-3"),
+    supabase.from("okr_measurements").select("required_capabilities"),
+    supabase.from("capability_connectors").select("capability_id"),
+  ]);
+  if (capsRes.error) throw new Error(capsRes.error.message);
+  const eventsByCap = new Map<string, any[]>();
+  for (const e of (eventsRes.data ?? [])) {
+    const arr = eventsByCap.get(e.capability_id as string) ?? [];
+    arr.push(e);
+    eventsByCap.set(e.capability_id as string, arr);
+  }
+  const connectorsByCap = new Map<string, number>();
+  for (const c of (connRes.data ?? [])) {
+    connectorsByCap.set(c.capability_id as string, (connectorsByCap.get(c.capability_id as string) ?? 0) + 1);
+  }
+  const okrSet = new Set<string>();
+  for (const m of (measRes.data ?? [])) {
+    for (const c of ((m.required_capabilities as string[] | null) ?? [])) okrSet.add(c);
+  }
+  return {
+    capabilities: (capsRes.data ?? []) as CapabilityRow[],
+    eventsByCap,
+    approvals: (approvalsRes.data ?? []) as Array<{ id: string; status: string; capability_id: string | null }>,
+    qaChecksPhase3: (qaRes.data ?? []) as Array<{ criterion: string; status: string; phase_key: string }>,
+    okrSet,
+    connectorsByCap,
+  };
+}
+
+function evaluateOne(
+  cap: CapabilityRow,
+  events: any[],
+  approvals: Array<{ id: string; status: string; capability_id: string | null }>,
+  qaChecksPhase3: Array<{ criterion: string; status: string; phase_key: string }>,
+  okrSet: Set<string>,
+  connectorRowCount: number,
+): CapabilityPromotionStatus {
+  const status = evaluateCapability({
+    capability: cap,
+    events,
+    approvals,
+    qaChecksPhase3,
+    okrRequiredCapabilityIds: okrSet,
+  });
+  refineConnectorsGate(status, cap, connectorRowCount);
+  return status;
+}
+
+async function getPromotionStatus(userId?: string) {
+  if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
+  const inputs = await loadPromotionInputs();
+  const results = inputs.capabilities.map((cap) =>
+    evaluateOne(
+      cap,
+      inputs.eventsByCap.get(cap.id) ?? [],
+      inputs.approvals,
+      inputs.qaChecksPhase3,
+      inputs.okrSet,
+      inputs.connectorsByCap.get(cap.id) ?? 0,
+    ),
+  );
+  const summary = {
+    total: results.length,
+    promotable: results.filter((r) => r.summary.promotable && r.capability.status !== "available" && r.capability.status !== "deprecated").length,
+    blocked: results.filter((r) => !r.summary.promotable).length,
+    already_available: results.filter((r) => r.capability.status === "available").length,
+  };
+  return json({ summary, capabilities: results });
+}
+
+async function getPromotionStatusOne(capId: string, userId?: string) {
+  if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
+  const { data: cap, error } = await supabase.from("capabilities").select("*").eq("id", capId).maybeSingle();
+  if (error) return json({ error: error.message }, 500);
+  if (!cap) return json({ error: "capability not found" }, 404);
+
+  const [eventsRes, approvalsRes, qaRes, measRes, connRes] = await Promise.all([
+    supabase.from("capability_events")
+      .select("event_type, created_at, payload")
+      .eq("capability_id", capId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase.from("approval_queue").select("id, status, capability_id").eq("capability_id", capId).eq("status", "pending"),
+    supabase.from("qa_checks").select("criterion, status, phase_key").eq("phase_key", "phase-3"),
+    supabase.from("okr_measurements").select("required_capabilities"),
+    supabase.from("capability_connectors").select("id").eq("capability_id", capId),
+  ]);
+  const okrSet = new Set<string>();
+  for (const m of (measRes.data ?? [])) {
+    for (const c of ((m.required_capabilities as string[] | null) ?? [])) okrSet.add(c);
+  }
+  const status = evaluateOne(
+    cap as CapabilityRow,
+    eventsRes.data ?? [],
+    (approvalsRes.data ?? []) as any,
+    qaRes.data ?? [],
+    okrSet,
+    (connRes.data ?? []).length,
+  );
+  return json(status);
+}
+
+async function promoteCapability(req: Request, capId: string, actor: string, userId?: string) {
+  if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
+  const idemKey = req.headers.get("idempotency-key");
+  const cached = await checkIdempotency("capability_promote", idemKey);
+  if (cached) return json(cached);
+
+  const body = await req.text().then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
+  const ackRationale: string | null = body?.ack_rationale ?? null;
+
+  const evalResp = await getPromotionStatusOne(capId, userId);
+  if (evalResp.status !== 200) return evalResp;
+  const status = await evalResp.clone().json() as CapabilityPromotionStatus;
+
+  if (!status.summary.promotable) {
+    return json({ error: "capability has failing gates", gates: status.gates }, 409);
+  }
+  if (status.summary.ack_required && !ackRationale) {
+    return json({ error: "warnings present; ack_rationale required", gates: status.gates }, 409);
+  }
+
+  const { error: upErr } = await supabase
+    .from("capabilities")
+    .update({ status: "available", updated_at: new Date().toISOString() })
+    .eq("id", capId);
+  if (upErr) return json({ error: upErr.message }, 500);
+
+  await supabase.from("capability_events").insert({
+    capability_id: capId,
+    event_type: "promoted_to_available",
+    actor,
+    payload: redact({ gates: status.gates, ack_rationale: ackRationale }),
+  });
+
+  const result = { ok: true, id: capId, status: "available", ack_rationale: ackRationale };
+  await storeIdempotency("capability_promote", idemKey, null, result);
+  return json(result);
+}
+
+async function ackCapabilityWarnings(req: Request, capId: string, actor: string, userId?: string) {
+  if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
+  const idemKey = req.headers.get("idempotency-key");
+  const cached = await checkIdempotency("capability_ack_warnings", idemKey);
+  if (cached) return json(cached);
+
+  const body = await req.text().then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
+  const rationale: string | null = body?.rationale ?? null;
+  const gateKeys: string[] = Array.isArray(body?.gate_keys) ? body.gate_keys : [];
+  if (!rationale?.trim()) return json({ error: "rationale required" }, 400);
+
+  const { data: cap } = await supabase.from("capabilities").select("id").eq("id", capId).maybeSingle();
+  if (!cap) return json({ error: "capability not found" }, 404);
+
+  await supabase.from("capability_events").insert({
+    capability_id: capId,
+    event_type: "warnings_acknowledged",
+    actor,
+    payload: redact({ gate_keys: gateKeys, rationale }),
+  });
+
+  const result = { ok: true, id: capId, gate_keys: gateKeys };
+  await storeIdempotency("capability_ack_warnings", idemKey, null, result);
+  return json(result);
+}
+
 async function registerCapability(req: Request, actor: string) {
   const body = await req.json();
   const required = ["id", "name", "status"];
