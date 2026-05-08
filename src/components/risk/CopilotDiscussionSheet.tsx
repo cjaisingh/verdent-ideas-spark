@@ -60,9 +60,13 @@ export function CopilotDiscussionSheet({
   useEffect(() => {
     if (!open) return;
     (async () => {
+      const { data: f } = await supabase
+        .from("roadmap_review_findings").select("short_num").eq("id", findingId).maybeSingle();
+      setFindingShortNum((f as any)?.short_num ?? null);
+
       const { data: existing } = await supabase
         .from("roadmap_finding_discussions")
-        .select("id")
+        .select("id, subject_ordinal")
         .eq("finding_id", findingId)
         .eq("mode", "copilot")
         .is("ended_at", null)
@@ -71,6 +75,7 @@ export function CopilotDiscussionSheet({
         .maybeSingle();
 
       let id = existing?.id;
+      let ordinal = (existing as any)?.subject_ordinal ?? null;
       if (!id) {
         const { data: u } = await supabase.auth.getUser();
         const { data: created, error } = await supabase
@@ -83,17 +88,19 @@ export function CopilotDiscussionSheet({
             title: findingTitle,
             started_by_user_id: u.user?.id ?? null,
           })
-          .select("id")
+          .select("id, subject_ordinal")
           .single();
         if (error || !created) {
           toast({ title: "Could not start discussion", description: error?.message, variant: "destructive" });
           return;
         }
         id = created.id;
+        ordinal = (created as any).subject_ordinal;
         await supabase.from("roadmap_review_findings")
           .update({ discussion_status: "copilot_open" }).eq("id", findingId);
       }
       setDiscussionId(id);
+      setSubjectOrdinal(ordinal);
 
       const { data: msgs } = await supabase
         .from("roadmap_finding_discussion_messages")
