@@ -327,11 +327,22 @@ const Roadmap = () => {
           {nextUp && (
             <button
               onClick={() => setSelectedTaskId(nextUp.task.id)}
-              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-2.5 py-1.5 transition max-w-[220px]"
+              className="group flex items-center gap-2.5 rounded-lg border border-border/60 bg-gradient-to-br from-muted/30 to-muted/60 hover:from-muted/50 hover:to-muted hover:border-primary/40 px-3 py-1.5 transition-all max-w-[260px] shadow-sm"
               title={`${nextUp.task.title} · ${nextUp.phase.key} · ${nextUp.sprint.key}`}
             >
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Next up</div>
-              <div className="text-xs font-medium truncate">{nextUp.task.title}</div>
+              <span className="relative flex h-1.5 w-1.5 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+              </span>
+              <div className="min-w-0 text-left">
+                <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 leading-none mb-0.5">
+                  Next up · {nextUp.phase.key}
+                </div>
+                <div className="text-xs font-medium truncate text-foreground group-hover:text-primary transition-colors">
+                  {nextUp.task.title}
+                </div>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
             </button>
           )}
           <ProceedAction
