@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Building2, Boxes, Activity, ScrollText, Settings2, Map, BookOpen, Brain,
+  Building2, Boxes, Activity, ScrollText, Settings2, Map as MapIcon, BookOpen, Brain,
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star,
@@ -40,7 +40,7 @@ const copilotChildren: NavItem[] = [
 ];
 
 const planItems: NavItem[] = [
-  { url: "/roadmap", title: "Roadmap", icon: Map },
+  { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
   { url: "/jobs", title: "Jobs board", icon: ListChecks },
