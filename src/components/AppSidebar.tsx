@@ -28,6 +28,7 @@ const groups = [
     label: "Plan",
     items: [
       { url: "/roadmap", title: "Roadmap", icon: Map },
+      { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
       { url: "/notebook", title: "Notebook", icon: NotebookIcon },
       { url: "/runbook", title: "Runbook", icon: BookOpen },
       { url: "/memory", title: "Memory", icon: Brain },
