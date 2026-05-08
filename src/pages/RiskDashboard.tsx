@@ -4,8 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, ShieldCheck, RefreshCw, Search } from "lucide-react";
+import { AlertTriangle, ShieldCheck, RefreshCw, Search, MessagesSquare, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { CopilotDiscussionSheet } from "@/components/risk/CopilotDiscussionSheet";
+import { NoCopilotDiscussModal } from "@/components/risk/NoCopilotDiscussModal";
 
 type RiskRow = {
   id: string;
@@ -36,6 +38,9 @@ type Finding = {
   reviewer_model: string;
   diff_window_start: string | null;
   diff_window_end: string | null;
+  discussion_status: string | null;
+  decision_outcome: string | null;
+  decision_summary: string | null;
 };
 
 type Group = {
@@ -50,6 +55,7 @@ type Group = {
 const sevWeight = (s: string) => ({ critical: 4, high: 3, medium: 2, low: 1, info: 0 } as Record<string, number>)[s] ?? 0;
 const sevVariant = (s: string): "destructive" | "secondary" | "outline" =>
   s === "critical" || s === "high" ? "destructive" : s === "medium" ? "secondary" : "outline";
+
 
 export default function RiskDashboard() {
   const [rows, setRows] = useState<RiskRow[]>([]);
