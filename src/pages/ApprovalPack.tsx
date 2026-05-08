@@ -248,7 +248,7 @@ export default function ApprovalPack() {
             );
           })()}
 
-          <Card className="pp-cover">
+          <Card className="pp-summary pp-page-break">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-xl">{phase.key} — {phase.title}</CardTitle>
