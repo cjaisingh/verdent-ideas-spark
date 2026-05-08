@@ -610,4 +610,3 @@ async function evaluateOpenGates(
 
   return json(result);
 }
-}
