@@ -1260,7 +1260,7 @@ const DailyAiSpendCard = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
           <div className="font-mono">{fmtUsd6(total)}</div>
@@ -1277,6 +1277,19 @@ const DailyAiSpendCard = () => {
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
           <div className="font-mono">{totalTokens.toLocaleString()}</div>
         </div>
+        {hasAnyLimit && (
+          <button
+            type="button"
+            onClick={() => (dayBreaches.size + cellBreaches.size + runBreachCount > 0) && setDrill({ day: "*", groupKey: null, breachOnly: true })}
+            className={`rounded border p-2 text-left transition ${(dayBreaches.size + cellBreaches.size + runBreachCount) > 0 ? "border-destructive/40 bg-destructive/10 hover:bg-destructive/15" : "border-border opacity-70"}`}
+            title={(dayBreaches.size + cellBreaches.size + runBreachCount) > 0 ? "Show breaching runs" : "No breaches in range"}
+          >
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Breaches</div>
+            <div className="font-mono text-[11px]">
+              {dayBreaches.size}<span className="text-muted-foreground">d</span>·{cellBreaches.size}<span className="text-muted-foreground">j</span>·{runBreachCount}<span className="text-muted-foreground">r</span>
+            </div>
+          </button>
+        )}
       </div>
 
       {loading ? (
