@@ -80,6 +80,13 @@ export default function Dashboard() {
           dash.deleteTab(id);
         }}
         onReorder={dash.reorderTab}
+        onDuplicate={(id) => {
+          if (tabs.length >= dash.MAX_TABS) {
+            toast.error(`Max ${dash.MAX_TABS} tabs`);
+            return;
+          }
+          dash.duplicateTab(id);
+        }}
         onTemplateChange={handleTemplateChange}
       />
 
