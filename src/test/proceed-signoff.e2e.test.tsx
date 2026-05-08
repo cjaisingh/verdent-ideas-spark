@@ -142,7 +142,7 @@ const nextUp = {
 
 describe("Proceed → Sign-off → Approval e2e flow", () => {
   beforeEach(() => {
-    dbState.phases = [{ id: "phase-1", key: "P1", status: "active" }];
+    dbState.roadmap_phases = [{ id: "phase-1", key: "P1", status: "active" }];
     dbState.approval_queue = [];
     dbState.roadmap_phase_signoffs = [];
     dbState.capability_events = [];
@@ -189,7 +189,7 @@ describe("Proceed → Sign-off → Approval e2e flow", () => {
     await invokeRoadmapPhaseSignoff(aq.id as string);
 
     // Phase flipped to done
-    expect(dbState.phases[0].status).toBe("done");
+    expect(dbState.roadmap_phases[0].status).toBe("done");
 
     // Audit row recorded with full gate snapshot
     expect(dbState.roadmap_phase_signoffs.length).toBe(1);
