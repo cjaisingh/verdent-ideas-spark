@@ -1,36 +1,87 @@
 ## Goal
-Remove the duplicate star indicator next to pinned items in the non-Favorites groups, and make the star button behavior unambiguous: in regular groups it's an "Add to favorites" affordance that disappears once the item is already favorited; in the Favorites group it's an always-visible "Remove from favorites" toggle.
 
-## Current behavior (the problem)
-A row that's already pinned shows **two** stars side by side in its non-Favorites home (e.g. Dashboard under Operate): a small filled "Pinned" indicator star inline with the label, and the action star at the far right. The action star is also a toggle in both places, which is redundant.
+Write a short, opinionated design guide and add the supporting design tokens (including a small set of semantic "tints") so subsequent refactors — Roadmap cleanup, Admin tabs, Control Plane, and the new pluggable panes — all align to one yardstick.
 
-## New behavior
+This plan ships **the guide + tokens only**. No page refactors. The pane-sources plan (already approved) runs after.
 
-**Favorites group** (top section)
-- Always shows a single filled star on the right of every row.
-- Clicking it removes the item from favorites (unpin).
-- No inline indicator star, no hover requirement — it's a permanent remove handle.
-- Tooltip: "Remove from Favorites".
+## Deliverables
 
-**Other groups** (Operate, Plan, System, plus Copilot subgroup)
-- No inline "pinned" indicator star next to the label, ever.
-- If the item is **not** favorited: a hollow star appears on hover/focus on the right; clicking adds it to favorites. Tooltip: "Add to Favorites".
-- If the item **is** favorited: no star button at all on the row in this group. The only place to remove it is the Favorites group above.
+### 1. `docs/design-system.md` (new)
 
-## Files to change
-- `src/components/AppSidebar.tsx` — only file affected. Three render paths to update:
-  1. `renderRow` (lines ~106–150): drop the inline pinned-indicator block; gate the right-side `SidebarMenuAction` so it renders only when `inFavorites` (always visible, "remove" semantics) or when not pinned (hover-reveal, "add" semantics).
-  2. Copilot parent row (lines ~173–175): remove the inline pinned-indicator star.
-  3. Copilot child rows (lines ~211–238): remove the inline pinned star and apply the same "show only if not pinned" rule to the hover star button.
+Short, scannable, ~400 lines max. Sections:
 
-## Out of scope
-- No changes to `useFavorites` or persistence — only the render layer.
-- No changes to active-row styling, status dots, or the Copilot collapse behavior.
-- No new icons, no tooltip copy beyond what's listed above.
+1. **Principles** — monochrome by default, tints are signals not decoration, density over padding, one active treatment per surface.
+2. **Page layout** — canonical container: `mx-auto w-full max-w-7xl px-4 py-4` (not `py-12`). When to use full-bleed.
+3. **Page header pattern** — title + optional subtitle + actions row, fixed height, examples.
+4. **Section spacing scale** — `space-y-3` inside cards, `space-y-6` between page sections. No ad-hoc `mt-12`.
+5. **Cards vs bare sections** — when to use `<Card>` (grouped data), when not (pure lists, tables).
+6. **Tabs vs accordions vs split routes** — decision rules (used by Admin, Roadmap).
+7. **Tables & lists** — density: `text-xs` rows, `h-8` headers, zebra optional.
+8. **Tints (semantic colors)** — see below. Usage rules: badges, dots, left borders, subtle backgrounds at 10–15% alpha. Never as primary surface fill.
+9. **Iconography** — lucide only, `h-3.5 w-3.5` inline, `h-4 w-4` for buttons.
+10. **Operator pane sources** — pointer to `docs/operator-panes.md`; lists the canonical tint per source.
+
+### 2. Token additions in `src/index.css` and `tailwind.config.ts`
+
+Add a small **tint scale** as HSL CSS vars, both light and dark, exposed as Tailwind colors. These are the "subtle signal" colors used across status dots, badges, pane source headers, and category accents.
+
+```
+--tint-night        (violet)   — Night Agent, after-hours
+--tint-event        (slate)    — neutral activity / event ticker
+--tint-approval     (amber)    — needs operator action
+--tint-discussion   (blue)     — collaboration / discussion actions
+--tint-capability   (emerald)  — capability registry / promotions
+--tint-risk         (red)      — risk / failures (re-skin of destructive)
+--tint-okr          (sky)      — OKRs / roadmap
+```
+
+Each gets a foreground variant (`--tint-night-foreground`, etc.) sized for `text-on-tint` usage. Tailwind config exposes them as `tint-night`, `tint-night-foreground`, … so components use semantic names, never raw hex.
+
+Light + dark values are tuned for AA contrast on `bg-muted/40` backgrounds (the dominant pane background).
+
+### 3. Token additions: spacing primitives
+
+Short list, no new utilities — just documents the canonical Tailwind classes already in the codebase so reviewers can point at the guide:
+
+- Page container: `mx-auto w-full max-w-7xl px-4 py-4`
+- Section gap: `space-y-6`
+- Card inner gap: `space-y-3`
+- Header height: `h-12` (page), `h-9` (pane), `h-8` (table)
+
+No new Tailwind plugin; this lives in the doc.
+
+### 4. Worked example
+
+One worked example in the doc — convert `/jobs` page header conceptually (text only, no code change) — so the next refactor PRs have something concrete to copy.
+
+## Out of scope (next plans)
+
+- Refactoring Roadmap / Jobs / Admin / ControlPlane against the guide.
+- Pluggable panes (already approved, runs after this).
+- Replacing existing ad-hoc colors throughout the app (will happen incrementally).
+
+## Files
+
+**New:**
+- `docs/design-system.md`
+
+**Edited:**
+- `src/index.css` — add `--tint-*` vars (light + dark) under `:root` and `.dark`
+- `tailwind.config.ts` — extend `colors` with `tint: { night, event, approval, discussion, capability, risk, okr }` and matching `*-foreground`
+- `README.md` — add link to the design guide under "Docs"
+- `CHANGELOG.md` — entry under Unreleased
 
 ## Validation
-- A pinned item (e.g. Dashboard) shows exactly one star — in the Favorites group only.
-- Hovering the same item in its original group (Operate) shows no star button.
-- Hovering an unpinned item in any group reveals a hollow star; clicking it pins the item, the row's hover star vanishes, and the item appears in Favorites with a permanent filled star.
-- Clicking the star in Favorites removes the item; the original row's hover star reappears.
-- Collapsed sidebar still shows no stars (already the case).
+
+- New tint classes resolve in dev (e.g. `bg-tint-night/15 text-tint-night-foreground` renders with no missing-class warning).
+- Light and dark mode show readable contrast on `bg-background` and `bg-muted/40`.
+- Doc renders cleanly on GitHub (no broken anchors, fenced code blocks valid).
+- No existing component visually changes — this is additive.
+
+## After this lands
+
+The pane-sources plan picks up unchanged, but each new source uses its canonical tint from the guide:
+- Night Agent → `tint-night`
+- Event ticker → `tint-event`
+- Approvals → `tint-approval`
+- Discussion actions → `tint-discussion`
