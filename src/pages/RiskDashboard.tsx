@@ -234,7 +234,7 @@ export default function RiskDashboard() {
         ) : (
           <div className="space-y-2">
             {visibleFindings.map((f) => (
-              <Card key={f.id} className={f.acknowledged ? "opacity-60" : ""}>
+              <Card key={f.id} id={`finding-${f.id}`} className={f.acknowledged ? "opacity-60" : ""}>
                 <CardContent className="pt-4 space-y-2">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="space-y-1 min-w-0 flex-1">
@@ -244,13 +244,38 @@ export default function RiskDashboard() {
                         {f.area && <Badge variant="outline" className="text-[10px]">{f.area}</Badge>}
                         <span className="text-[10px] text-muted-foreground">{new Date(f.reviewed_at).toLocaleString()}</span>
                         <span className="text-[10px] text-muted-foreground">· {f.reviewer_model}</span>
+                        {f.discussion_status === "in_lovable_chat" && (
+                          <Badge variant="secondary" className="text-[10px]">discussing in Lovable chat</Badge>
+                        )}
+                        {f.discussion_status === "copilot_open" && (
+                          <Badge variant="secondary" className="text-[10px]">Copilot session open</Badge>
+                        )}
+                        {f.decision_outcome && (
+                          <Badge variant="default" className="text-[10px]">decision: {f.decision_outcome}</Badge>
+                        )}
                       </div>
                       <div className="font-medium">{f.title}</div>
                       {f.body && <div className="text-xs text-muted-foreground whitespace-pre-wrap">{f.body}</div>}
+                      {f.decision_summary && (
+                        <div className="text-xs italic text-muted-foreground">Rationale: {f.decision_summary}</div>
+                      )}
                     </div>
-                    <Button size="sm" variant={f.acknowledged ? "ghost" : "outline"} onClick={() => acknowledge(f.id, !f.acknowledged)}>
-                      {f.acknowledged ? "Reopen" : "Acknowledge"}
-                    </Button>
+                    <div className="flex flex-col gap-2 min-w-[200px] shrink-0">
+                      <Button size="sm" variant="outline" onClick={() => setCopilotFor(f)}>
+                        <Sparkles className="h-4 w-4 mr-1" /> Discuss with Copilot
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setChatFor(f)}>
+                        <MessagesSquare className="h-4 w-4 mr-1" /> Discuss (no Copilot)
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="mt-6"
+                        onClick={() => acknowledge(f.id, !f.acknowledged)}
+                      >
+                        {f.acknowledged ? "Reopen" : f.decision_outcome ? "Acknowledge & close" : "Acknowledge"}
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
