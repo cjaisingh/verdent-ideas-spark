@@ -1136,7 +1136,23 @@ const DailyAiSpendCard = () => {
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [knownGroups, setKnownGroups] = useState<{ job: string[]; model: string[] }>({ job: [], model: [] });
   const [tz, setTz] = useState<string>(loadStoredTz);
+  const [liveCount, setLiveCount] = useState(0);
+  const [lastInsertAt, setLastInsertAt] = useState<number | null>(null);
+  const [pulse, setPulse] = useState(false);
 
+  // Reset live counter whenever the slice the user cares about changes
+  useEffect(() => {
+    setLiveCount(0);
+    setLastInsertAt(null);
+  }, [range.from.getTime(), range.to.getTime(), tz, groupBy, groupFilter]);
+
+  // Pulse the badge briefly after each insert
+  useEffect(() => {
+    if (lastInsertAt == null) { setPulse(false); return; }
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 1500);
+    return () => clearTimeout(t);
+  }, [lastInsertAt]);
   useEffect(() => {
     try { localStorage.setItem(TZ_STORAGE_KEY, tz); } catch { /* ignore */ }
   }, [tz]);
