@@ -485,6 +485,20 @@ const Roadmap = () => {
                                   {task.module && (
                                     <span className="text-[10px] font-mono text-muted-foreground">· {task.module}</span>
                                   )}
+                                  {task.review_status && task.review_status !== "pending" && (
+                                    <span
+                                      className={`text-[9px] uppercase font-mono px-1 py-0 rounded border ${
+                                        task.review_status === "approved"
+                                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700"
+                                          : task.review_status === "rejected"
+                                          ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                          : "border-amber-500/40 bg-amber-500/10 text-amber-700"
+                                      }`}
+                                      title={task.reviewed_by ? `${task.review_status} by ${task.reviewed_by}` : task.review_status}
+                                    >
+                                      {task.review_status === "changes_requested" ? "changes" : task.review_status}
+                                    </span>
+                                  )}
                                   <div className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
                                     {totalMs > 0 && (
                                       <span className="flex items-center gap-0.5"><Timer className="h-3 w-3" />{fmtDuration(totalMs)}</span>
