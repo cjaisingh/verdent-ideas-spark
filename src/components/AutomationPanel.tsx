@@ -1439,6 +1439,7 @@ const DailyAiSpendCard = () => {
       <SpendDrillDialog
         rows={rows}
         groupBy={groupBy}
+        metric={metric}
         drill={drill}
         onClose={() => setDrill(null)}
         globalLimits={globalLimits}
