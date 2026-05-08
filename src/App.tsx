@@ -66,6 +66,7 @@ const App = () => (
             <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/night-shifts" element={<NightShifts />} />
+            <Route path="/ai-usage" element={<AiUsage />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
             <Route path="/notebook" element={<Notebook />} />
