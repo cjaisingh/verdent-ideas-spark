@@ -116,41 +116,6 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
     }
   };
 
-  const acceptProposal = async (p: Proposal, idx: number) => {
-    const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("discussion_actions").insert({
-      discussion_id: discussionId,
-      subject_type: subjectType,
-      subject_id: subjectId,
-      title: p.title,
-      details: p.details,
-      priority: p.priority,
-      owner: p.owner_hint,
-      source: "extracted",
-      extracted_confidence: p.confidence,
-      created_by: u.user?.id ?? null,
-    });
-    if (error) { toast({ title: "Could not save", description: error.message, variant: "destructive" }); return; }
-    setProposals((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const rejectProposal = async (p: Proposal, idx: number) => {
-    // Log the rejection (no row created in discussion_actions)
-    await supabase.from("discussion_action_events").insert({
-      action_id: null,
-      discussion_id: discussionId,
-      event_type: "rejected",
-      payload: {
-        title: p.title,
-        details: p.details,
-        priority: p.priority,
-        owner_hint: p.owner_hint,
-        confidence: p.confidence,
-      },
-    });
-    setProposals((prev) => prev.filter((_, i) => i !== idx));
-  };
-
   const cycleStatus = async (a: Action) => {
     const next = STATUS_NEXT[a.status] ?? "open";
     await supabase.from("discussion_actions").update({ status: next }).eq("id", a.id);
