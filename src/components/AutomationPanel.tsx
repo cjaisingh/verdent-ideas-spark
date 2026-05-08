@@ -1210,7 +1210,7 @@ const DailyAiSpendCard = () => {
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtUsd6(total / days)}</div>
+          <div className="font-mono">{fmtUsd6(total / daysSpan)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
