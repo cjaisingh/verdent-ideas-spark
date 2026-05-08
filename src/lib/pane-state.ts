@@ -44,6 +44,18 @@ export function withModeSize(
   };
 }
 
+export function clearModeSizes(state: PaneState, mode: PaneMode): PaneState {
+  if (!state.sizesByMode[mode]) return state;
+  const next = { ...state.sizesByMode };
+  delete next[mode];
+  return { ...state, sizesByMode: next };
+}
+
+export function hasModeSizeOverrides(state: PaneState, mode: PaneMode): boolean {
+  const o = state.sizesByMode[mode];
+  return !!o && (o.rightWidth != null || o.bottomHeight != null);
+}
+
 export function paneFlags(mode: PaneMode): { left: boolean; right: boolean; bottom: boolean } {
   switch (mode) {
     case "left":
