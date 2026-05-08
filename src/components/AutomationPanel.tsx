@@ -1496,11 +1496,8 @@ const DailyAiSpendCard = () => {
             className={`px-2 py-0.5 rounded border text-[11px] ${compare ? "bg-muted text-foreground border-border" : "text-muted-foreground border-border hover:text-foreground"}`}
             title="Compare against the immediately preceding period of the same length"
           >vs prev</button>
-          <button
-            type="button"
-            onClick={() => {
-              // Build daily × group pivot for the current range/grouping
-              const header = ["day", groupBy, "cost_usd", "prompt_tokens", "completion_tokens", "calls"];
+          {(() => {
+            const buildAgg = () => {
               const agg: Record<string, { cost: number; pt: number; ct: number; n: number }> = {};
               for (const r of rows) {
                 const day = r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
@@ -1513,36 +1510,78 @@ const DailyAiSpendCard = () => {
                 a.ct += Number(r.completion_tokens || 0);
                 a.n += 1;
               }
-              const esc = (v: string | number) => {
-                const s = String(v);
-                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-              };
-              const lines = [header.join(",")];
-              const keys = Object.keys(agg).sort();
-              for (const k of keys) {
-                const [day, g] = k.split("\u0000");
-                const a = agg[k];
-                lines.push([day, g, a.cost.toFixed(6), a.pt, a.ct, a.n].map(esc).join(","));
-              }
-              const csv = lines.join("\n") + "\n";
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+              return agg;
+            };
+            const fromKey = tzDayKey(range.from, tz);
+            const toKey = tzDayKey(range.to, tz);
+            const tzTag = tz === "UTC" ? "utc" : "local";
+            const baseName = `awip-spend-${fromKey}_to_${toKey}-by-${groupBy}-${tzTag}`;
+            const header = ["day", groupBy, "cost_usd", "prompt_tokens", "completion_tokens", "calls"];
+            const downloadBlob = (blob: Blob, filename: string) => {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
-              const fromKey = tzDayKey(range.from, tz);
-              const toKey = tzDayKey(range.to, tz);
-              const tzTag = tz === "UTC" ? "utc" : "local";
               a.href = url;
-              a.download = `awip-spend-${fromKey}_to_${toKey}-by-${groupBy}-${tzTag}.csv`;
+              a.download = filename;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
               setTimeout(() => URL.revokeObjectURL(url), 0);
-              toast({ title: "CSV exported", description: `${keys.length} rows · by ${groupBy} · ${tz}` });
-            }}
-            disabled={loading || rows.length === 0}
-            className="px-2 py-0.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-            title={`Export daily × ${groupBy} breakdown for the visible range as CSV`}
-          >Export CSV</button>
+            };
+            return (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const agg = buildAgg();
+                    const esc = (v: string | number) => {
+                      const s = String(v);
+                      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                    };
+                    const lines = [header.join(",")];
+                    const keys = Object.keys(agg).sort();
+                    for (const k of keys) {
+                      const [day, g] = k.split("\u0000");
+                      const a = agg[k];
+                      lines.push([day, g, a.cost.toFixed(6), a.pt, a.ct, a.n].map(esc).join(","));
+                    }
+                    const csv = lines.join("\n") + "\n";
+                    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${baseName}.csv`);
+                    toast({ title: "CSV exported", description: `${keys.length} rows · by ${groupBy} · ${tz}` });
+                  }}
+                  disabled={loading || rows.length === 0}
+                  className="px-2 py-0.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  title={`Export daily × ${groupBy} breakdown for the visible range as CSV`}
+                >Export CSV</button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const XLSX = await import("xlsx");
+                    const agg = buildAgg();
+                    const keys = Object.keys(agg).sort();
+                    const data: (string | number)[][] = [header];
+                    for (const k of keys) {
+                      const [day, g] = k.split("\u0000");
+                      const a = agg[k];
+                      data.push([day, g, Number(a.cost.toFixed(6)), a.pt, a.ct, a.n]);
+                    }
+                    const ws = XLSX.utils.aoa_to_sheet(data);
+                    ws["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 8 }];
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, `by-${groupBy}`);
+                    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+                    downloadBlob(
+                      new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                      `${baseName}.xlsx`,
+                    );
+                    toast({ title: "XLSX exported", description: `${keys.length} rows · by ${groupBy} · ${tz}` });
+                  }}
+                  disabled={loading || rows.length === 0}
+                  className="px-2 py-0.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  title={`Export daily × ${groupBy} breakdown for the visible range as XLSX`}
+                >Export XLSX</button>
+              </>
+            );
+          })()}
           <div className="inline-flex rounded border border-border overflow-hidden">
             {([
               { k: "spend", label: "$ Spend" },
