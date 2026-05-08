@@ -17,15 +17,16 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
 // ---------- Supabase client mock (must be hoisted before component import) ----------
-const navigateMock = vi.fn();
-const toastMock = vi.fn();
-
-const dbState = {
-  phases: [{ id: "phase-1", key: "P1", status: "active" }],
-  approval_queue: [] as Array<Record<string, unknown>>,
-  roadmap_phase_signoffs: [] as Array<Record<string, unknown>>,
-  capability_events: [] as Array<Record<string, unknown>>,
-};
+const { navigateMock, toastMock, dbState } = vi.hoisted(() => ({
+  navigateMock: vi.fn(),
+  toastMock: vi.fn(),
+  dbState: {
+    phases: [{ id: "phase-1", key: "P1", status: "active" }],
+    approval_queue: [] as Array<Record<string, unknown>>,
+    roadmap_phase_signoffs: [] as Array<Record<string, unknown>>,
+    capability_events: [] as Array<Record<string, unknown>>,
+  },
+}));
 
 function makeQueryBuilder(table: keyof typeof dbState) {
   let pendingFilter: { col?: string; val?: unknown } = {};
