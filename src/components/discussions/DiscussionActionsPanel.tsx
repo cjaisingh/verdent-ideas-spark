@@ -206,7 +206,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
                 <Button size="icon" variant="outline" className="h-6 w-6" onClick={() => acceptProposal(p, i)} title="Accept">
                   <Check className="h-3 w-3" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(i)} title="Reject">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => rejectProposal(p, i)} title="Reject">
                   <X className="h-3 w-3" />
                 </Button>
               </div>
