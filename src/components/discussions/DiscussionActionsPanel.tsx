@@ -53,7 +53,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
   const load = async () => {
     const { data } = await supabase
       .from("discussion_actions")
-      .select("id,short_num,title,details,status,priority,owner,source,promoted_task_id,created_at")
+      .select("id,short_num,title,details,status,priority,owner,source,promoted_task_id,due_at,created_at")
       .eq("discussion_id", discussionId)
       .order("created_at", { ascending: true });
     setItems((data ?? []) as Action[]);
