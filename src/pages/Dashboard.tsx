@@ -91,6 +91,7 @@ export default function Dashboard() {
             newId={dash.newWidgetId}
             onAdd={(slotIndex, widget) => dash.setSlotWidget(activeTab.id, slotIndex, widget)}
             onRemove={(slotIndex) => dash.setSlotWidget(activeTab.id, slotIndex, null)}
+            onSwap={(from, to) => dash.swapSlots(activeTab.id, from, to)}
           />
         )}
       </main>
