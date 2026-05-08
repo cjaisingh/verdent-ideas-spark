@@ -56,6 +56,10 @@ Every call is logged to `api_call_logs` (route, status, duration, actor, idempot
 3. All write endpoints are idempotent — same `Idempotency-Key` returns the original response.
 4. No "who acts when" logic in Core. Routing belongs in the Control Plane.
 
+## Operator console
+
+Header has a 4-mode pane toggle (left only / dual / centre / bottom): switch with the icon row or `⌘1`–`⌘4`. Right pane streams live Night Agent observations; bottom pane is a live event ticker for OKR / capability / discussion events. Mode is persisted per top-level route in `localStorage`. See [docs/operator-panes.md](docs/operator-panes.md).
+
 ## Development
 
 ```bash
