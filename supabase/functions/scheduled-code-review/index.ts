@@ -186,6 +186,7 @@ Deno.serve(async (req) => {
       price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length },
     });
+    await checkCostThresholds(sb, "scheduled-code-review", cost, maybeAlert);
 
     let highCount = 0;
     if (findings.length > 0) {
