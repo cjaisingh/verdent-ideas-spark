@@ -155,6 +155,14 @@ export default function Jobs() {
             <Badge variant="outline" className="text-[9px]">{j.source}</Badge>
             {j.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
             {j.owner && <Badge variant="outline" className="text-[9px]">@{j.owner}</Badge>}
+            {j.due_at && (
+              <Badge
+                variant="outline"
+                className={`text-[9px] ${new Date(j.due_at) < new Date() && j.status !== "done" ? "border-destructive text-destructive" : ""}`}
+              >
+                due {new Date(j.due_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </Badge>
+            )}
           </div>
           <div className="text-sm font-medium leading-snug">{j.title}</div>
           {j.details && <div className="text-xs text-muted-foreground line-clamp-3">{j.details}</div>}

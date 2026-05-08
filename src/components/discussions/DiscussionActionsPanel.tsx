@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ListChecks, Plus, Sparkles, Check, X, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle } from "@/lib/discussionHandles";
+import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
 
 type Action = {
   id: string;
@@ -17,6 +18,7 @@ type Action = {
   owner: string | null;
   source: string;
   promoted_task_id: string | null;
+  due_at: string | null;
   created_at: string;
 };
 
@@ -51,7 +53,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
   const load = async () => {
     const { data } = await supabase
       .from("discussion_actions")
-      .select("id,short_num,title,details,status,priority,owner,source,promoted_task_id,created_at")
+      .select("id,short_num,title,details,status,priority,owner,source,promoted_task_id,due_at,created_at")
       .eq("discussion_id", discussionId)
       .order("created_at", { ascending: true });
     setItems((data ?? []) as Action[]);
@@ -203,27 +205,37 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
       ) : (
         <div className="space-y-1">
           {items.map((a) => (
-            <div key={a.id} className="flex items-center gap-2 rounded border p-2 text-xs">
-              <button
-                onClick={() => cycleStatus(a)}
-                className="shrink-0"
-                title={`Status: ${a.status} (click to advance)`}
-              >
-                <Badge
-                  variant={a.status === "done" ? "secondary" : a.status === "in_progress" ? "default" : "outline"}
-                  className="text-[9px] uppercase"
+            <div key={a.id} className="rounded border p-2 text-xs space-y-1.5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => cycleStatus(a)}
+                  className="shrink-0"
+                  title={`Status: ${a.status} (click to advance)`}
                 >
-                  {a.status}
-                </Badge>
-              </button>
-              <span className="font-mono text-[10px] text-muted-foreground shrink-0">{jobHandle(a.short_num)}</span>
-              <Badge variant="outline" className="text-[9px]">{a.priority}</Badge>
-              <Badge variant="outline" className="text-[9px]">{a.source}</Badge>
-              {a.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
-              <span className="flex-1 min-w-0 truncate">{a.title}</span>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => remove(a)} title="Delete">
-                <Trash2 className="h-3 w-3" />
-              </Button>
+                  <Badge
+                    variant={a.status === "done" ? "secondary" : a.status === "in_progress" ? "default" : "outline"}
+                    className="text-[9px] uppercase"
+                  >
+                    {a.status}
+                  </Badge>
+                </button>
+                <span className="font-mono text-[10px] text-muted-foreground shrink-0">{jobHandle(a.short_num)}</span>
+                <Badge variant="outline" className="text-[9px]">{a.priority}</Badge>
+                <Badge variant="outline" className="text-[9px]">{a.source}</Badge>
+                {a.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
+                <span className="flex-1 min-w-0 truncate">{a.title}</span>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => remove(a)} title="Delete">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+              <div className="flex items-center justify-end">
+                <JobOwnerDueEditor
+                  jobId={a.id}
+                  owner={a.owner}
+                  dueAt={a.due_at}
+                  size="sm"
+                />
+              </div>
             </div>
           ))}
         </div>

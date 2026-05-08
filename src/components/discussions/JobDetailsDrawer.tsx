@@ -8,6 +8,7 @@ import { discussionHandle, jobHandle, subjectHandle } from "@/lib/discussionHand
 import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
 
 export type JobDetailsRecord = {
   id: string;
@@ -219,6 +220,20 @@ export function JobDetailsDrawer({
             ) : (
               <p className="text-sm text-muted-foreground italic">No details.</p>
             )}
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Assignment
+            </h3>
+            <JobOwnerDueEditor
+              jobId={job.id}
+              owner={job.owner}
+              dueAt={job.due_at}
+              size="md"
+            />
           </section>
 
           <Separator />
