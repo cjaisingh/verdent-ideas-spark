@@ -63,3 +63,4 @@ ADRs live in `docs/adr/`. Notable:
 - Every AI work session against a roadmap task logs `started_at`, `ended_at`, `duration_ms`, `tokens_*`, plus a one-line summary and any issues/fixes (table: `roadmap_work_log`).
 - Every epic (phase) has a one-paragraph summary visible on the roadmap.
 - UK English in all user-facing copy.
+- A phase may only be marked **done** via the operator-clicked **Proceed → Request phase sign-off** flow, which raises a `roadmap.phase_signoff` approval. Sign-off requires all four gates to pass: structural (tasks closed), QA (`qa_checks` green), night audits (no open high-severity audits), and approvals (no other pending sign-off). The `roadmap_phase_gate_status` view exposes the live state. Manual override of `roadmap_phases.status` is still possible but the badge will warn until gates pass.
