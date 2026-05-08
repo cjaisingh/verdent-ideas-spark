@@ -179,9 +179,20 @@ export function CopilotDiscussionSheet({
     const body = await resp.text();
     console.log("[mic] token response", { status: resp.status, body });
     if (!resp.ok) {
-      const retriable = resp.status === 502 || resp.status === 401 || resp.status === 504;
-      const err: any = new Error(`token mint HTTP ${resp.status}`);
+      let parsed: any = {};
+      try { parsed = JSON.parse(body); } catch {/**/}
+      // Permission errors are NOT retriable — needs a human to fix the key.
+      const nonRetriableCodes = new Set(["DG_KEY_FORBIDDEN", "DG_KEY_UNAUTHORIZED", "AUTH_NOT_OPERATOR", "CONFIG_MISSING_KEY"]);
+      const retriable =
+        !nonRetriableCodes.has(parsed?.code) &&
+        (resp.status === 502 || resp.status === 504 || parsed?.code === "DG_RATE_LIMITED");
+      const err: any = new Error(`token mint HTTP ${resp.status}${parsed?.code ? ` [${parsed.code}]` : ""}`);
       err.status = resp.status;
+      err.code = parsed?.code;
+      err.hint = parsed?.hint;
+      err.dgStatus = parsed?.deepgram_status;
+      err.dgBody = parsed?.deepgram_body;
+      err.reqId = parsed?.reqId;
       err.retriable = retriable;
       err.body = body;
       throw err;
