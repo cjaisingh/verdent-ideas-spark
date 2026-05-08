@@ -360,15 +360,22 @@ export default function ApprovalPack() {
                       .sort((a, b) => a.phase_order - b.phase_order)
                       .map((r) => {
                         const isCurrent = r.phase_id === phaseId;
+                        const rowPct = (n: number) => r.total ? Math.round(((n ?? 0) / r.total) * 100) : 0;
+                        const cell = (n: number) => (
+                          <>
+                            <span className="tabular-nums">{n ?? 0}</span>
+                            <span className="ml-1 text-[10px] text-muted-foreground tabular-nums">{rowPct(n)}%</span>
+                          </>
+                        );
                         return (
                           <tr key={r.phase_id} className={`border-t align-top ${isCurrent ? "font-medium" : ""}`}>
                             <td className="py-1 pr-2 font-mono">{r.phase_key}{isCurrent ? " ←" : ""}</td>
                             <td className="py-1 pr-2 truncate">{r.phase_title}</td>
                             <td className="py-1 pr-2 text-right tabular-nums">{r.total}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.approved ?? 0}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.changes_requested ?? 0}</td>
-                            <td className="py-1 pr-2 text-right tabular-nums">{r.counts.rejected ?? 0}</td>
-                            <td className="py-1 text-right tabular-nums">{r.counts.pending ?? 0}</td>
+                            <td className="py-1 pr-2 text-right">{cell(r.counts.approved ?? 0)}</td>
+                            <td className="py-1 pr-2 text-right">{cell(r.counts.changes_requested ?? 0)}</td>
+                            <td className="py-1 pr-2 text-right">{cell(r.counts.rejected ?? 0)}</td>
+                            <td className="py-1 text-right">{cell(r.counts.pending ?? 0)}</td>
                           </tr>
                         );
                       })}
