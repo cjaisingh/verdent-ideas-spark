@@ -44,7 +44,7 @@ export function PaneToggleGroup({ mode, onChange, disabled = false }: Props) {
       <div
         className={cn(
           "inline-flex items-center gap-0.5 rounded-md border border-border bg-muted/40 p-0.5 transition-opacity",
-          disabled && "opacity-50 pointer-events-none",
+          disabled && "opacity-50",
         )}
       >
         {MODES.map(({ mode: m, Icon, label, shortcut }) => {
@@ -54,22 +54,35 @@ export function PaneToggleGroup({ mode, onChange, disabled = false }: Props) {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  disabled={disabled}
-                  onClick={() => onChange(m)}
-                  aria-label={label}
+                  aria-disabled={disabled || undefined}
+                  onClick={(e) => {
+                    if (disabled) {
+                      e.preventDefault();
+                      return;
+                    }
+                    onChange(m);
+                  }}
+                  aria-label={disabled ? `${label} — locked while resizing panels` : label}
                   aria-pressed={active}
                   className={cn(
                     "inline-flex h-7 w-7 items-center justify-center rounded transition-colors",
                     active
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                    disabled && "cursor-not-allowed",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
-                {label} <span className="ml-1 text-muted-foreground">{shortcut}</span>
+                {disabled ? (
+                  <span>Pane switching locked while resizing panels</span>
+                ) : (
+                  <>
+                    {label} <span className="ml-1 text-muted-foreground">{shortcut}</span>
+                  </>
+                )}
               </TooltipContent>
             </Tooltip>
           );
