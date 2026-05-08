@@ -101,7 +101,12 @@ const OperatorLayout = () => {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar collapsible={effectiveMode === "centre" ? "offcanvas" : "icon"} />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10">
+          <header
+            aria-busy={dragging}
+            className={`h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10 transition-opacity ${
+              dragging ? "pointer-events-none select-none opacity-90" : ""
+            }`}
+          >
             {!isMobile && (
               <PaneToggleGroup
                 disabled={dragging}
