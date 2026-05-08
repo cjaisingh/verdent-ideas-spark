@@ -67,7 +67,7 @@ const OperatorLayout = () => {
   // PanelResizeHandle natively handles ArrowLeft/Right/Up/Down (and Home/End)
   // when focused. We piggy-back on the keydown to flip the same "interaction
   // locked" indicator that drag uses.
-  const handleResizeKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+  const handleResizeKeyDown: React.KeyboardEventHandler<keyof HTMLElementTagNameMap> = (e) => {
     if (
       e.key === "ArrowLeft" ||
       e.key === "ArrowRight" ||
