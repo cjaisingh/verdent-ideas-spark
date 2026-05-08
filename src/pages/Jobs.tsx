@@ -188,7 +188,7 @@ export default function Jobs() {
             {COLUMNS.map((c) => (
               <button
                 key={c.key}
-                onClick={() => cycleStatus(j, c.key)}
+                onClick={(e) => { e.stopPropagation(); cycleStatus(j, c.key); }}
                 disabled={j.status === c.key}
                 className={`text-[10px] px-1.5 py-0.5 rounded border ${
                   j.status === c.key ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
