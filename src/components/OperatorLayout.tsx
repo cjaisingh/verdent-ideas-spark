@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ const OperatorLayout = () => {
   const isMobile = useIsMobile();
   const effectiveMode = isMobile ? "centre" : paneState.mode;
   const flags = paneFlags(effectiveMode);
+  const [dragging, setDragging] = useState(false);
 
   const signOut = async () => {
     await supabase.auth.signOut();
