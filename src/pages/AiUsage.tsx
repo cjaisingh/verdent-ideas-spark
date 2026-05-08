@@ -145,7 +145,7 @@ export default function AiUsage() {
       b.inTok += inT;
       b.outTok += outT;
       b.totalTok += r.total_tokens ?? inT + outT;
-      b.cost += costFor(r.model, inT, outT);
+      b.cost += rowCost(r);
       const baseModel = JOB_BASELINE_MODEL[r.job] ?? r.model;
       b.baselineCost += costFor(baseModel, inT, outT);
       if (typeof r.latency_ms === "number") {
