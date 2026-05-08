@@ -219,6 +219,7 @@ const OperatorLayout = () => {
                 ? " Pane mode switching is currently locked while you resize panels."
                 : ""}
             </p>
+            <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
             {!isMobile && <PaneKeyboardHelp />}
             {!isMobile && (
               <PaneToggleGroup
@@ -360,7 +361,6 @@ const OperatorLayout = () => {
                 </Tooltip>
               </TooltipProvider>
             )}
-            <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
             <div className="ml-auto flex items-center gap-2">
               <PendingApprovalsIndicator />
               <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
