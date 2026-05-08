@@ -27,6 +27,11 @@ export default function ApprovalPack() {
   const [checklist, setChecklist] = useState<Checklist[]>([]);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(false);
+  const [orgName, setOrgName] = useState<string>(() => localStorage.getItem("awip.approvalPack.orgName") ?? "AWIP");
+
+  useEffect(() => {
+    localStorage.setItem("awip.approvalPack.orgName", orgName);
+  }, [orgName]);
 
   useEffect(() => {
     supabase.from("roadmap_phases").select("*").order("order").then(({ data }) => {
