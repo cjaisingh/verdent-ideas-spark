@@ -1859,13 +1859,14 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits, tz,
+  rows, groupBy, metric, drill, onClose, onUpdateDrill, globalLimits, jobLimits, tz,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
   metric: "spend" | "prompt" | "completion";
   drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
+  onUpdateDrill: (patch: Partial<{ breachOnly: boolean }>) => void;
   globalLimits: { day: number | null; run: number | null };
   jobLimits: Record<string, { day: number | null; run: number | null }>;
   tz: string;
@@ -1877,13 +1878,40 @@ const SpendDrillDialog = ({
     const lim = effectiveRunLimit(r.job);
     return lim != null && Number(r.cost_usd || 0) > lim;
   };
-  const filtered = drill
+  const dayKeyOf = (r: SpendRow) => r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
+
+  // Pre-compute per-day and per-(day,job) totals so we can flag breaches inside the dialog
+  const dayTotals = new Map<string, number>();
+  const cellTotals = new Map<string, number>(); // "day|job"
+  for (const r of rows) {
+    const d = dayKeyOf(r);
+    if (!d) continue;
+    const cost = Number(r.cost_usd || 0);
+    dayTotals.set(d, (dayTotals.get(d) || 0) + cost);
+    if (r.job) {
+      const k = `${d}|${r.job}`;
+      cellTotals.set(k, (cellTotals.get(k) || 0) + cost);
+    }
+  }
+  const isDayBreach = (r: SpendRow) =>
+    globalLimits.day != null && (dayTotals.get(dayKeyOf(r)) || 0) > globalLimits.day;
+  const isJobDayBreach = (r: SpendRow) => {
+    if (!r.job) return false;
+    const lim = jobLimits[r.job]?.day;
+    if (lim == null) return false;
+    return (cellTotals.get(`${dayKeyOf(r)}|${r.job}`) || 0) > lim;
+  };
+  const isAnyBreach = (r: SpendRow) =>
+    isRunBreach(r) || isDayBreach(r) || isJobDayBreach(r);
+
+  const sliceFiltered = drill
     ? rows
-        .filter(r => (drill.day === "*" || (r.created_at ? tzDayKey(new Date(r.created_at), tz) : "") === drill.day) &&
-          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
-          (!drill.breachOnly || isRunBreach(r)))
-        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+        .filter(r => (drill.day === "*" || dayKeyOf(r) === drill.day) &&
+          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey))
     : [];
+  const breachableCount = sliceFiltered.filter(isAnyBreach).length;
+  const filtered = (drill?.breachOnly ? sliceFiltered.filter(isAnyBreach) : sliceFiltered)
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
   const totalCost = filtered.reduce((s, r) => s + Number(r.cost_usd || 0), 0);
   const totalTok = filtered.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0);
   const nightCount = filtered.filter(r => r?.request_ref?.night_mode === true).length;
