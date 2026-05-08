@@ -323,6 +323,7 @@ const Roadmap = () => {
         </div>
       </div>
 
+      <DailyPlanCard />
       <AutomationPanel />
 
       <div className="grid grid-cols-12 gap-4">
