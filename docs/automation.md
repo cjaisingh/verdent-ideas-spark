@@ -9,9 +9,16 @@ How AWIP Core watches itself: scheduled AI code review, nightly tests, QA probes
 | AI code review | Weekly, Mon 06:00 UTC (`pg_cron`) | `scheduled-code-review` | `roadmap_review_findings` |
 | Nightly tests | Nightly 02:00 UTC (GitHub Actions) | `record-test-run` | `test_runs` |
 | QA probes | Weekly, Fri 16:00 UTC (`pg_cron`) | `qa-validate` | `qa_checks` |
+| Daily plan | Nightly 05:30 UTC (`pg_cron`) | `daily-plan` | `daily_plans` |
 | Failure alerts | On every job failure | `dispatchAlert` (inline helper) | `alert_log` |
 
 All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same token used by `awip-api`). RLS on every new table is operator-only; realtime is enabled so the UI updates without polling.
+
+## Daily plan
+
+`daily-plan` runs nightly and summarises the operator's day-ahead via `openai/gpt-5` through the Lovable AI Gateway. Inputs: open roadmap tasks, last 7 days of `roadmap_work_log`, unacknowledged `roadmap_review_findings`, non-passing `qa_checks`, recent `test_runs`, pinned `notebook_entries`. Output: a single `daily_plans` row per date with `focus`, markdown `plan_md`, structured `risks[]`, and `recommendations[]`.
+
+**UI:** **Daily plan** card at the top of `/roadmap`. Operators can re-run on demand via **Generate now**.
 
 ## AI code review
 
