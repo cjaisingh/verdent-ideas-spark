@@ -1516,7 +1516,15 @@ const DailyAiSpendCard = () => {
             const toKey = tzDayKey(range.to, tz);
             const tzTag = tz === "UTC" ? "utc" : "local";
             const baseName = `awip-spend-${fromKey}_to_${toKey}-by-${groupBy}-${tzTag}`;
-            const header = ["day", groupBy, "cost_usd", "prompt_tokens", "completion_tokens", "calls"];
+            const header = [
+              "day",
+              groupBy,
+              "cost_usd (USD, full precision)",
+              "prompt_tokens (count)",
+              "completion_tokens (count)",
+              "calls (count)",
+            ];
+            const xlsxHeader = ["day", groupBy, "cost_usd (USD)", "prompt_tokens", "completion_tokens", "calls"];
             const downloadBlob = (blob: Blob, filename: string) => {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
@@ -1537,12 +1545,14 @@ const DailyAiSpendCard = () => {
                       const s = String(v);
                       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
                     };
-                    const lines = [header.join(",")];
+                    const lines = [header.map(esc).join(",")];
                     const keys = Object.keys(agg).sort();
                     for (const k of keys) {
                       const [day, g] = k.split("\u0000");
                       const a = agg[k];
-                      lines.push([day, g, a.cost.toFixed(6), a.pt, a.ct, a.n].map(esc).join(","));
+                      // Full numeric precision — no rounding. toString() emits the
+                      // shortest exact representation of the accumulated double.
+                      lines.push([day, g, a.cost.toString(), a.pt, a.ct, a.n].map(esc).join(","));
                     }
                     const csv = lines.join("\n") + "\n";
                     downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${baseName}.csv`);
@@ -1550,7 +1560,7 @@ const DailyAiSpendCard = () => {
                   }}
                   disabled={loading || rows.length === 0}
                   className="px-2 py-0.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
-                  title={`Export daily × ${groupBy} breakdown for the visible range as CSV`}
+                  title={`Export daily × ${groupBy} breakdown for the visible range as CSV (full numeric precision)`}
                 >Export CSV</button>
                 <button
                   type="button"
@@ -1558,11 +1568,11 @@ const DailyAiSpendCard = () => {
                     const XLSX = await import("xlsx");
                     const agg = buildAgg();
                     const keys = Object.keys(agg).sort();
-                    const data: (string | number)[][] = [header];
+                    const data: (string | number)[][] = [xlsxHeader];
                     for (const k of keys) {
                       const [day, g] = k.split("\u0000");
                       const a = agg[k];
-                      data.push([day, g, Number(a.cost.toFixed(6)), a.pt, a.ct, a.n]);
+                      data.push([day, g, a.cost, a.pt, a.ct, a.n]);
                     }
                     const ws = XLSX.utils.aoa_to_sheet(data);
                     ws["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 8 }];
