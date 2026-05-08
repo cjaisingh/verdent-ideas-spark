@@ -32,6 +32,8 @@ export default function Jobs() {
   const [subjectFilter, setSubjectFilter] = useState<string>("all");
   const [showDone, setShowDone] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -69,8 +71,14 @@ export default function Jobs() {
   }, []);
 
   const cycleStatus = async (j: Job, target: string) => {
+    if (j.status === target) return;
+    // Optimistic update
+    setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, status: target } : x)));
     const { error } = await supabase.from("discussion_actions").update({ status: target }).eq("id", j.id);
-    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    if (error) {
+      setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, status: j.status } : x)));
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    }
   };
 
   const promote = async (j: Job) => {
@@ -145,7 +153,14 @@ export default function Jobs() {
     return (
       <Card
         key={j.id}
-        className="hover:shadow-sm transition cursor-pointer"
+        draggable
+        onDragStart={(e) => {
+          setDraggingId(j.id);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", j.id);
+        }}
+        onDragEnd={() => { setDraggingId(null); setDragOverCol(null); }}
+        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""}`}
         onClick={() => setActiveJobId(j.id)}
       >
         <CardContent className="pt-3 pb-3 space-y-1.5">
@@ -253,12 +268,36 @@ export default function Jobs() {
       ) : (
         <div className="grid gap-3 md:grid-cols-3">
           {COLUMNS.map((c) => (
-            <div key={c.key} className="space-y-2">
+            <div
+              key={c.key}
+              className={`space-y-2 rounded-md transition-colors ${
+                dragOverCol === c.key ? "bg-primary/5 ring-2 ring-primary/40" : ""
+              }`}
+              onDragOver={(e) => {
+                if (!draggingId) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragOverCol !== c.key) setDragOverCol(c.key);
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverCol === c.key) setDragOverCol(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData("text/plain") || draggingId;
+                setDragOverCol(null);
+                setDraggingId(null);
+                if (!id) return;
+                const job = jobs.find((x) => x.id === id);
+                if (job && job.status !== c.key) cycleStatus(job, c.key);
+              }}
+            >
               <div className="flex items-center justify-between text-xs font-medium text-muted-foreground px-1">
                 <span>{c.label}</span>
                 <Badge variant="outline" className="text-[10px]">{grouped[c.key]?.length ?? 0}</Badge>
               </div>
-              <div className="space-y-2 min-h-[60px]">
+              <div className="space-y-2 min-h-[120px] p-1">
                 {(grouped[c.key] ?? []).map(renderCard)}
               </div>
             </div>
