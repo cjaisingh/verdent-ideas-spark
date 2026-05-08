@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -25,6 +25,8 @@ const toastedDecisions = new Set<string>();
 
 const OperatorLayout = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isOnTenants = location.pathname === "/tenants" || location.pathname.startsWith("/tenants/");
   const [paneState, setPaneState] = usePaneState();
   const viewport = useViewport();
   const isMobile = viewport === "mobile";
@@ -219,7 +221,17 @@ const OperatorLayout = () => {
                 ? " Pane mode switching is currently locked while you resize panels."
                 : ""}
             </p>
-            <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
+            <Link
+              to="/tenants"
+              aria-current={isOnTenants ? "page" : undefined}
+              className={`font-semibold text-sm rounded px-1.5 py-0.5 transition-colors ${
+                isOnTenants
+                  ? "bg-primary/10 text-primary ring-1 ring-primary/30"
+                  : "text-foreground hover:text-primary"
+              }`}
+            >
+              AWIP Core
+            </Link>
             {!isMobile && <PaneKeyboardHelp />}
             {!isMobile && (
               <PaneToggleGroup
