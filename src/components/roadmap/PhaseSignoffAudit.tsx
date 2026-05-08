@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, CheckCircle2, ShieldCheck } from "lucide-react";
 import { format } from "date-fns";
+import { OvernightRunControl } from "./OvernightRunControl";
 
 interface SignoffRow {
   id: string;
@@ -97,6 +98,9 @@ function SignoffRowItem({ row }: { row: SignoffRow }) {
         <Badge variant={allOk ? "secondary" : "destructive"} className="font-mono text-[10px]">
           {allOk ? "all gates ✓" : `${blockerCount} blocker${blockerCount === 1 ? "" : "s"}`}
         </Badge>
+        <div onClick={(e) => e.stopPropagation()}>
+          <OvernightRunControl phaseId={row.phase_id} phaseKey={row.phase_key} />
+        </div>
         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent className="border-t bg-muted/30 px-3 py-2">
