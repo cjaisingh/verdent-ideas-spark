@@ -238,6 +238,9 @@ export default function Jobs() {
                 due {new Date(j.due_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </Badge>
             )}
+            {(j as any).night_eligible && (
+              <Badge variant="outline" className="text-[9px] gap-0.5"><Moon className="h-2.5 w-2.5" /> night</Badge>
+            )}
           </div>
           <div className="text-sm font-medium leading-snug">{j.title}</div>
           {j.details && <div className="text-xs text-muted-foreground line-clamp-3">{j.details}</div>}
@@ -246,6 +249,13 @@ export default function Jobs() {
               {dHandle ? <span className="font-mono">{dHandle}</span> : <span className="font-mono">{subj}</span>}
             </span>
             <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleNightEligible(j, !(j as any).night_eligible); }}
+                className={`inline-flex items-center gap-0.5 hover:underline ${(j as any).night_eligible ? "text-foreground" : ""}`}
+                title={(j as any).night_eligible ? "Unmark night-eligible" : "Mark night-eligible"}
+              >
+                <Moon className="h-3 w-3" />
+              </button>
               {j.subject_type === "roadmap_finding" && (
                 <Link
                   to={`/roadmap/risks#finding-${j.subject_id}`}
@@ -312,6 +322,9 @@ export default function Jobs() {
             <option value="all">All subjects</option>
             {subjectTypes.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
+          <Button size="sm" variant={nightOnly ? "default" : "outline"} onClick={() => setNightOnly((v) => !v)}>
+            <Moon className="h-3.5 w-3.5 mr-1" /> Night-eligible only
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setShowDone((v) => !v)}>
             {showDone ? "Hide done" : "Show done"}
           </Button>
