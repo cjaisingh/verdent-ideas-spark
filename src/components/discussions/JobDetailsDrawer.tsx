@@ -68,6 +68,58 @@ type AuditEvent = {
   created_at: string;
 };
 
+const fmtVal = (v: unknown): string => {
+  if (v == null || v === "") return "—";
+  if (typeof v === "string") {
+    // ISO date?
+    if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return new Date(v).toLocaleDateString();
+    return v;
+  }
+  return JSON.stringify(v);
+};
+
+function formatEvent(e: { event_type: string; payload: any }): { label: string; detail?: string } {
+  const p = e.payload ?? {};
+  switch (e.event_type) {
+    case "created":
+      return { label: "Created", detail: p.title };
+    case "accepted":
+      return {
+        label: "Accepted from extraction",
+        detail: p.extracted_confidence != null
+          ? `${p.title ?? ""} · conf ${(p.extracted_confidence * 100).toFixed(0)}%`
+          : p.title,
+      };
+    case "rejected":
+      return { label: "Proposal rejected", detail: p.title };
+    case "extracted":
+      return { label: "Extracted from transcript", detail: p.title };
+    case "status_changed":
+      return { label: `Status: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "owner_changed":
+      return { label: `Owner: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "due_changed":
+      return { label: `Due date: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "priority_changed":
+      return { label: `Priority: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "title_changed":
+      return { label: "Title changed", detail: `${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "promoted":
+      return { label: "Promoted to roadmap task", detail: p.task_id };
+    case "deleted":
+      return { label: "Deleted", detail: p.title };
+    default:
+      return { label: e.event_type };
+  }
+}
+
+function eventColor(type: string): string {
+  if (type === "promoted") return "bg-emerald-500";
+  if (type === "deleted" || type === "rejected") return "bg-destructive";
+  if (type === "accepted" || type === "created" || type === "extracted") return "bg-primary";
+  return "bg-muted-foreground";
+}
+
 export function JobDetailsDrawer({
   job,
   subjectShortNum,
