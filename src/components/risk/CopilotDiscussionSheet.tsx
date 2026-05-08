@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Mic, MicOff, Send, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { DiscussionHistory } from "@/components/discussions/DiscussionHistory";
 
 type Msg = {
   id: string;
