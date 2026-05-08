@@ -1125,6 +1125,31 @@ const DailyAiSpendCard = () => {
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [range.from.getTime(), range.to.getTime()]);
 
+  // Previous-period fetch (same length, immediately before range.from)
+  useEffect(() => {
+    if (!compare) { setPrevRows([]); return; }
+    let cancelled = false;
+    const fromMs = startOfUtcDay(range.from).getTime();
+    const toMs = endExclusiveUtcDay(range.to).getTime();
+    const span = toMs - fromMs;
+    const prevFrom = new Date(fromMs - span);
+    const prevTo = new Date(fromMs);
+    const load = async () => {
+      const { data, error } = await supabase
+        .from("ai_usage_log")
+        .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, status, request_ref")
+        .gte("created_at", prevFrom.toISOString())
+        .lt("created_at", prevTo.toISOString())
+        .order("created_at", { ascending: false })
+        .limit(5000);
+      if (cancelled) return;
+      if (error) toast({ title: "Failed to load comparison period", description: error.message, variant: "destructive" });
+      setPrevRows((data as SpendRow[]) || []);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [compare, range.from.getTime(), range.to.getTime()]);
+
   const dayKeys = enumerateUtcDays(range.from, range.to);
   const daysSpan = Math.max(1, dayKeys.length);
   const sparseLabels = daysSpan > 31;
