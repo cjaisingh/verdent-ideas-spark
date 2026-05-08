@@ -408,7 +408,7 @@ const OperatorLayout = () => {
                         minSize={bounds.bottom.min}
                         maxSize={bounds.bottom.max}
                         onResize={(size) =>
-                          setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }, viewport))
+                          { const { vp, em } = interactionTarget(); setPaneState((prev) => withModeSize(prev, em, { bottomHeight: Math.round(size) }, vp)); }
                         }
                       >
                         <div className="relative h-full">
@@ -451,7 +451,7 @@ const OperatorLayout = () => {
                     minSize={bounds.right.min}
                     maxSize={bounds.right.max}
                     onResize={(size) =>
-                      setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }, viewport))
+                      { const { vp, em } = interactionTarget(); setPaneState((prev) => withModeSize(prev, em, { rightWidth: Math.round(size) }, vp)); }
                     }
                   >
                     <div className="relative h-full">
