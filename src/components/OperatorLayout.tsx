@@ -177,13 +177,13 @@ const OperatorLayout = () => {
             <ResizablePanelGroup
               key={`h-${viewport}-${effectiveMode}`}
               direction="horizontal"
-              className="h-full"
+              className="h-full animate-fade-in"
             >
               <ResizablePanel defaultSize={flags.right ? 100 - sizes.rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
                   key={`v-${viewport}-${effectiveMode}`}
                   direction="vertical"
-                  className="h-full"
+                  className="h-full animate-fade-in"
                 >
                   <ResizablePanel defaultSize={flags.bottom ? 100 - sizes.bottomHeight : 100} minSize={30}>
                     <main className="h-full overflow-y-auto px-6 py-6">
