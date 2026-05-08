@@ -3,21 +3,46 @@ import { useLocation } from "react-router-dom";
 
 export type PaneMode = "left" | "dual" | "centre" | "bottom";
 
+export type ModeSizes = { rightWidth?: number; bottomHeight?: number };
+
 export type PaneState = {
   mode: PaneMode;
   lastNonCentre: Exclude<PaneMode, "centre">;
-  rightWidth: number;
-  bottomHeight: number;
+  /** Per-mode size overrides (panel-group percentages). */
+  sizesByMode: Partial<Record<PaneMode, ModeSizes>>;
 };
 
 const STORAGE_KEY = "awip.panes.v1";
 
+const DEFAULT_SIZES: Required<ModeSizes> = { rightWidth: 22, bottomHeight: 30 };
+
 const DEFAULT_STATE: PaneState = {
   mode: "left",
   lastNonCentre: "left",
-  rightWidth: 22,
-  bottomHeight: 30,
+  sizesByMode: {},
 };
+
+export function getModeSizes(state: PaneState, mode: PaneMode): Required<ModeSizes> {
+  const overrides = state.sizesByMode[mode] ?? {};
+  return {
+    rightWidth: overrides.rightWidth ?? DEFAULT_SIZES.rightWidth,
+    bottomHeight: overrides.bottomHeight ?? DEFAULT_SIZES.bottomHeight,
+  };
+}
+
+export function withModeSize(
+  state: PaneState,
+  mode: PaneMode,
+  patch: ModeSizes,
+): PaneState {
+  return {
+    ...state,
+    sizesByMode: {
+      ...state.sizesByMode,
+      [mode]: { ...(state.sizesByMode[mode] ?? {}), ...patch },
+    },
+  };
+}
 
 export function paneFlags(mode: PaneMode): { left: boolean; right: boolean; bottom: boolean } {
   switch (mode) {
