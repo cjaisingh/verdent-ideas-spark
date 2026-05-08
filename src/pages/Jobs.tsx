@@ -257,6 +257,26 @@ export default function Jobs() {
           ))}
         </div>
       )}
+
+      <JobDetailsDrawer
+        job={jobs.find((j) => j.id === activeJobId) ?? null}
+        subjectShortNum={
+          activeJobId
+            ? findings[jobs.find((j) => j.id === activeJobId)?.subject_id ?? ""]?.short_num ?? null
+            : null
+        }
+        discussionOrdinal={
+          activeJobId
+            ? (() => {
+                const j = jobs.find((x) => x.id === activeJobId);
+                return j?.discussion_id ? discs[j.discussion_id]?.subject_ordinal ?? null : null;
+              })()
+            : null
+        }
+        open={!!activeJobId}
+        onOpenChange={(o) => { if (!o) setActiveJobId(null); }}
+        onPromote={(j) => promote(j as Job)}
+      />
     </div>
   );
 }
