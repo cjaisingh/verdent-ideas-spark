@@ -14,6 +14,12 @@ import {
   type CapabilityRow,
   type CapabilityPromotionStatus,
 } from "./promotion_gates.ts";
+import {
+  buildReport as buildPromotionAuditReport,
+  type ObservationRow as PaObservationRow,
+  type ProposalRow as PaProposalRow,
+  type ShiftRow as PaShiftRow,
+} from "./promotion_audit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
