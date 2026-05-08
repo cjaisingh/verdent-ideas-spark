@@ -1316,6 +1316,12 @@ const DailyAiSpendCard = () => {
               </div>
             </PopoverContent>
           </Popover>
+          <button
+            type="button"
+            onClick={() => setCompare((v) => !v)}
+            className={`px-2 py-0.5 rounded border text-[11px] ${compare ? "bg-muted text-foreground border-border" : "text-muted-foreground border-border hover:text-foreground"}`}
+            title="Compare against the immediately preceding period of the same length"
+          >vs prev</button>
           <div className="inline-flex rounded border border-border overflow-hidden">
             {([
               { k: "spend", label: "$ Spend" },
