@@ -1,11 +1,18 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldAlert } from "lucide-react";
 import type { PhaseGate } from "@/hooks/useRoadmapGates";
+
+interface Override {
+  rationale?: string | null;
+  by?: string | null;
+  at?: string | null;
+}
 
 interface Props {
   phaseStatus: string;
   gate?: PhaseGate;
+  override?: Override;
 }
 
 function blockerLines(g: PhaseGate): string[] {
@@ -17,13 +24,45 @@ function blockerLines(g: PhaseGate): string[] {
   return lines;
 }
 
-export function PhaseGateBadge({ phaseStatus, gate }: Props) {
+export function PhaseGateBadge({ phaseStatus, gate, override }: Props) {
   const map: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
     done: "default", active: "secondary", planned: "outline", paused: "destructive",
   };
   const baseVariant = map[phaseStatus] ?? "outline";
+  const hasOverride = !!override?.rationale;
 
-  // DONE but not all gates pass: amber warn variant
+  // DONE via manual override → amber badge with rationale tooltip
+  if (phaseStatus === "done" && hasOverride) {
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="text-[10px] uppercase border-amber-500 text-amber-600 dark:text-amber-400 gap-1 cursor-help">
+              <ShieldAlert className="h-3 w-3" /> Done · override
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs space-y-1">
+            <p className="font-medium">Manual override</p>
+            <p className="text-xs whitespace-pre-wrap">{override!.rationale}</p>
+            <p className="text-[10px] text-muted-foreground">
+              by {override!.by ?? "unknown"}
+              {override!.at ? ` · ${new Date(override!.at).toLocaleString()}` : ""}
+            </p>
+            {gate && !gate.all_ok && (
+              <div className="pt-1 border-t border-border/60">
+                <p className="text-[10px] font-medium mb-0.5">Gates failing at override:</p>
+                <ul className="text-[10px] list-disc pl-4">
+                  {blockerLines(gate).map((l) => <li key={l}>{l}</li>)}
+                </ul>
+              </div>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  // DONE but not all gates pass (no recorded override) → legacy warn variant
   if (phaseStatus === "done" && gate && !gate.all_ok) {
     return (
       <TooltipProvider delayDuration={150}>
