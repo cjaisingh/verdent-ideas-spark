@@ -20,6 +20,7 @@ import { EvidencePanel } from "@/components/EvidencePanel";
 import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
 import { ProceedAction } from "@/components/roadmap/ProceedAction";
+import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
 import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
