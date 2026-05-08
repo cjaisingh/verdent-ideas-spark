@@ -1021,7 +1021,7 @@ const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
-// Date helpers (UTC-based to match the rest of the panel)
+// Date helpers — UTC primitives plus tz-aware variants for daily bucketing
 const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 const endExclusiveUtcDay = (d: Date) => new Date(startOfUtcDay(d).getTime() + 86_400_000);
 const utcDayKey = (d: Date) => startOfUtcDay(d).toISOString().slice(0, 10);
@@ -1031,6 +1031,75 @@ const enumerateUtcDays = (from: Date, to: Date) => {
   const end = startOfUtcDay(to).getTime();
   while (cur <= end) { out.push(new Date(cur).toISOString().slice(0, 10)); cur += 86_400_000; }
   return out;
+};
+
+// Timezone-aware helpers (tz === "UTC" falls back to UTC primitives for perf/safety)
+const tzDayKey = (d: Date, tz: string): string => {
+  if (tz === "UTC") return utcDayKey(d);
+  // en-CA gives YYYY-MM-DD ordering
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+};
+const tzOffsetMinutes = (d: Date, tz: string): number => {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const parts = dtf.formatToParts(d).reduce<Record<string, string>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = p.value; return acc;
+  }, {});
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+    +parts.hour % 24, +parts.minute, +parts.second);
+  return (asUtc - d.getTime()) / 60_000;
+};
+const startOfTzDay = (d: Date, tz: string): Date => {
+  if (tz === "UTC") return startOfUtcDay(d);
+  const key = tzDayKey(d, tz);
+  const [y, m, day] = key.split("-").map(Number);
+  const guess = Date.UTC(y, m - 1, day);
+  // Two-pass to handle DST edges correctly
+  let off = tzOffsetMinutes(new Date(guess), tz);
+  let inst = guess - off * 60_000;
+  off = tzOffsetMinutes(new Date(inst), tz);
+  return new Date(guess - off * 60_000);
+};
+const endExclusiveTzDay = (d: Date, tz: string): Date => {
+  if (tz === "UTC") return endExclusiveUtcDay(d);
+  const start = startOfTzDay(d, tz);
+  // Add 26h then snap back to handle DST (23h or 25h days)
+  return startOfTzDay(new Date(start.getTime() + 26 * 3_600_000), tz);
+};
+const enumerateTzDays = (from: Date, to: Date, tz: string): string[] => {
+  if (tz === "UTC") return enumerateUtcDays(from, to);
+  const out: string[] = [];
+  let cur = startOfTzDay(from, tz);
+  const endKey = tzDayKey(to, tz);
+  let safety = 0;
+  while (safety++ < 4000) {
+    const k = tzDayKey(cur, tz);
+    out.push(k);
+    if (k >= endKey) break;
+    cur = endExclusiveTzDay(cur, tz);
+  }
+  return out;
+};
+const tzTimeOfDay = (d: Date, tz: string): string => {
+  if (tz === "UTC") return d.toISOString().slice(11, 19);
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz, hour12: false,
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).format(d);
+};
+const TZ_STORAGE_KEY = "awip.spend.tz";
+const localTz = (() => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; }
+  catch { return "UTC"; }
+})();
+const loadStoredTz = (): string => {
+  try { return localStorage.getItem(TZ_STORAGE_KEY) || "UTC"; }
+  catch { return "UTC"; }
 };
 const RANGE_STORAGE_KEY = "awip.spend.range";
 const defaultRange = () => {
@@ -1066,6 +1135,11 @@ const DailyAiSpendCard = () => {
   const [rowLimit, setRowLimit] = useState<number>(5000);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [knownGroups, setKnownGroups] = useState<{ job: string[]; model: string[] }>({ job: [], model: [] });
+  const [tz, setTz] = useState<string>(loadStoredTz);
+
+  useEffect(() => {
+    try { localStorage.setItem(TZ_STORAGE_KEY, tz); } catch { /* ignore */ }
+  }, [tz]);
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
@@ -1112,8 +1186,8 @@ const DailyAiSpendCard = () => {
       let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
-        .gte("created_at", startOfUtcDay(range.from).toISOString())
-        .lt("created_at", endExclusiveUtcDay(range.to).toISOString());
+        .gte("created_at", startOfTzDay(range.from, tz).toISOString())
+        .lt("created_at", endExclusiveTzDay(range.to, tz).toISOString());
       if (groupFilter) q = q.eq(groupBy, groupFilter);
       const { data, error } = await q
         .order("created_at", { ascending: false })
@@ -1140,14 +1214,14 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
+  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
 
   // Previous-period fetch (same length, immediately before range.from)
   useEffect(() => {
     if (!compare) { setPrevRows([]); return; }
     let cancelled = false;
-    const fromMs = startOfUtcDay(range.from).getTime();
-    const toMs = endExclusiveUtcDay(range.to).getTime();
+    const fromMs = startOfTzDay(range.from, tz).getTime();
+    const toMs = endExclusiveTzDay(range.to, tz).getTime();
     const span = toMs - fromMs;
     const prevFrom = new Date(fromMs - span);
     const prevTo = new Date(fromMs);
@@ -1167,9 +1241,9 @@ const DailyAiSpendCard = () => {
     };
     load();
     return () => { cancelled = true; };
-  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
+  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
 
-  const dayKeys = enumerateUtcDays(range.from, range.to);
+  const dayKeys = enumerateTzDays(range.from, range.to, tz);
   const daysSpan = Math.max(1, dayKeys.length);
   const sparseLabels = daysSpan > 31;
   const groupKeyOf = (r: SpendRow) =>
@@ -1192,7 +1266,7 @@ const DailyAiSpendCard = () => {
   let totalCostAll = 0;
   let totalTokens = 0;
   for (const r of rows) {
-    const day = (r.created_at || "").slice(0, 10);
+    const day = r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
     if (!matrix[day]) continue;
     const key = groupKeyOf(r);
     const v = valueOf(r);
@@ -1335,6 +1409,20 @@ const DailyAiSpendCard = () => {
               </div>
             </PopoverContent>
           </Popover>
+          <label
+            className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px]"
+            title="Timezone used for daily buckets and times in the drill-down"
+          >
+            <span className="text-muted-foreground">tz</span>
+            <select
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="bg-transparent font-mono text-[11px] outline-none"
+            >
+              <option value="UTC">UTC</option>
+              <option value={localTz}>Local ({localTz})</option>
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setCompare((v) => !v)}
@@ -1574,6 +1662,7 @@ const DailyAiSpendCard = () => {
         onClose={() => setDrill(null)}
         globalLimits={globalLimits}
         jobLimits={jobLimits}
+        tz={tz}
       />
     </section>
   );
@@ -1594,7 +1683,7 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits,
+  rows, groupBy, metric, drill, onClose, globalLimits, jobLimits, tz,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
@@ -1603,6 +1692,7 @@ const SpendDrillDialog = ({
   onClose: () => void;
   globalLimits: { day: number | null; run: number | null };
   jobLimits: Record<string, { day: number | null; run: number | null }>;
+  tz: string;
 }) => {
   const open = !!drill;
   const effectiveRunLimit = (job: string | null | undefined) =>
@@ -1613,7 +1703,7 @@ const SpendDrillDialog = ({
   };
   const filtered = drill
     ? rows
-        .filter(r => (drill.day === "*" || (r.created_at || "").slice(0, 10) === drill.day) &&
+        .filter(r => (drill.day === "*" || (r.created_at ? tzDayKey(new Date(r.created_at), tz) : "") === drill.day) &&
           (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
           (!drill.breachOnly || isRunBreach(r)))
         .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
@@ -1682,7 +1772,7 @@ const SpendDrillDialog = ({
                 className="grid bg-muted/50 text-[11px] font-medium border-b border-border"
                 style={{ gridTemplateColumns: gridCols }}
               >
-                <div className="px-2 py-1">Time UTC</div>
+                <div className="px-2 py-1">Time {tz === "UTC" ? "UTC" : tz}</div>
                 <div className="px-2 py-1">Job</div>
                 <div className="px-2 py-1">Model</div>
                 <div className="px-2 py-1">Status</div>
@@ -1709,7 +1799,7 @@ const SpendDrillDialog = ({
                       style={{ gridTemplateColumns: gridCols }}
                     >
                       <div className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
-                        {(r.created_at || "").slice(11, 19)}
+                        {r.created_at ? tzTimeOfDay(new Date(r.created_at), tz) : ""}
                       </div>
                       <div className="px-2 py-1 font-mono truncate" title={r.job ?? undefined}>{r.job ?? "—"}</div>
                       <div className="px-2 py-1 font-mono truncate" title={r.model ?? undefined}>
