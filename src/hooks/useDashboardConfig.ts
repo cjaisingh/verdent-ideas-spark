@@ -156,8 +156,6 @@ export function useDashboardConfig() {
     });
   }, [update]);
 
-  }, [update]);
-
   const duplicateTab = useCallback((tabId: string) => {
     update((prev) => {
       if (prev.tabs.length >= MAX_TABS) return prev;
