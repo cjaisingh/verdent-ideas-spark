@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Check, X, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Copy, RotateCcw } from "lucide-react";
 import { TEMPLATE_LIST } from "./templates";
 import type { Tab, TemplateId } from "./widgets/types";
 import {
@@ -18,6 +18,7 @@ export function DashboardTabs({
   onDuplicate,
   onReorder,
   onTemplateChange,
+  onReset,
 }: {
   tabs: Tab[];
   activeTabId: string | null;
@@ -30,6 +31,7 @@ export function DashboardTabs({
   onDuplicate: (id: string) => void;
   onReorder: (fromId: string, toId: string) => void;
   onTemplateChange: (id: string, template: TemplateId) => void;
+  onReset: (id: string) => void;
 }) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -163,6 +165,16 @@ export function DashboardTabs({
               ))}
             </SelectContent>
           </Select>
+          <button
+            type="button"
+            onClick={() => onReset(activeTab.id)}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs text-foreground hover:bg-accent"
+            aria-label="Reset tab to defaults"
+            title="Reset this tab's layout and widgets to defaults"
+          >
+            <RotateCcw className="h-3 w-3" />
+            Reset
+          </button>
         </div>
       )}
 
