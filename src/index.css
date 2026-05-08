@@ -54,8 +54,9 @@ All colors MUST be HSL.
 
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    /* Semantic tints — signal colors only. Use as text/border, or as bg-tint-*/15.
-       Never as a primary surface fill. See docs/design-system.md. */
+    /* Semantic tints — signal colors only. Use as text/border, or as a low-alpha
+       background (e.g. bg-tint-night / 15). Never as a primary surface fill.
+       See docs/design-system.md. */
     --tint-night: 262 60% 50%;
     --tint-night-foreground: 0 0% 100%;
     --tint-event: 215 16% 47%;
