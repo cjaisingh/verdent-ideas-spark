@@ -501,15 +501,33 @@ async function evaluateOpenGates(
   if (allowedKinds.length === 0) skipReasons.push("no_allowed_kinds");
   const wouldOpenShift = skipReasons.length === 0;
 
-  const { data: candidates } = await sb
+  // Filters (CSV or repeated). All optional; missing = no filter.
+  const csv = (k: string) =>
+    url.searchParams.getAll(k).flatMap((v) => v.split(",")).map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const phaseFilter = new Set(csv("phase"));
+  const riskFilter = new Set(csv("risk"));
+  const verdictFilter = (url.searchParams.get("verdict") ?? "").toLowerCase(); // 'audit'|'skip'|''
+  const titleQuery = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const shortNumsRaw = csv("short_num");
+  const shortNums = new Set(shortNumsRaw.map((s) => Number(s)).filter((n) => Number.isFinite(n)));
+  const limitParam = Number(url.searchParams.get("limit") ?? "");
+  const limit = Number.isFinite(limitParam) && limitParam > 0
+    ? Math.min(Math.floor(limitParam), MAX_JOBS_PER_SHIFT)
+    : MAX_JOBS_PER_SHIFT;
+
+  let dbq = sb
     .from("discussion_actions")
     .select("id, short_num, title, details, priority")
     .eq("status", "open")
     .eq("night_eligible", true)
-    .is("promoted_task_id", null)
-    .limit(MAX_JOBS_PER_SHIFT);
+    .is("promoted_task_id", null);
+  if (titleQuery) dbq = dbq.ilike("title", `%${titleQuery}%`);
+  if (shortNums.size > 0) dbq = dbq.in("short_num", Array.from(shortNums));
+  // Pull a generous slice, then apply phase/risk/verdict in-memory (those
+  // are derived fields not present in the table).
+  const { data: candidates } = await dbq.limit(MAX_JOBS_PER_SHIFT);
 
-  const jobPreview = (candidates ?? []).map((j: any) => {
+  const classified = (candidates ?? []).map((j: any) => {
     const cls = classifyJob(j);
     const { phase, suite } = inferPhaseAndSuite(j.title);
     const reasons: string[] = [];
@@ -522,6 +540,24 @@ async function evaluateOpenGates(
       skip_reasons: reasons,
     };
   });
+
+  const filtered = classified.filter((j) => {
+    if (phaseFilter.size > 0 && !phaseFilter.has(j.phase)) return false;
+    if (riskFilter.size > 0 && !riskFilter.has(j.risk)) return false;
+    if (verdictFilter === "audit" && !j.would_audit) return false;
+    if (verdictFilter === "skip" && j.would_audit) return false;
+    return true;
+  });
+  const jobPreview = filtered.slice(0, limit);
+
+  const filtersApplied = {
+    phase: Array.from(phaseFilter),
+    risk: Array.from(riskFilter),
+    verdict: verdictFilter || null,
+    q: titleQuery || null,
+    short_num: Array.from(shortNums),
+    limit,
+  };
 
   const result = {
     test_mode: true,
