@@ -32,40 +32,25 @@ Deno.serve(async (req) => {
     });
     if (!hasOp) return json({ error: "operator role required" }, 403);
 
-    // Create a short-lived (60s) project-scoped key with usage:write only.
-    // Find the project_id first.
-    const projRes = await fetch("https://api.deepgram.com/v1/projects", {
-      headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-    });
-    if (!projRes.ok) {
-      const t = await projRes.text();
-      console.error("deepgram projects error", projRes.status, t);
-      return json({ error: "failed to list deepgram projects" }, 502);
-    }
-    const projects = await projRes.json();
-    const projectId = projects?.projects?.[0]?.project_id;
-    if (!projectId) return json({ error: "no deepgram project found" }, 502);
-
-    const expiry = Math.floor(Date.now() / 1000) + 60; // 60s
-    const keyRes = await fetch(`https://api.deepgram.com/v1/projects/${projectId}/keys`, {
+    // Mint a short-lived token via /v1/auth/grant (uses master key, no keys:write needed)
+    const grantRes = await fetch("https://api.deepgram.com/v1/auth/grant", {
       method: "POST",
       headers: {
         Authorization: `Token ${DEEPGRAM_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        comment: `awip-finding-stt-${user.id}`,
-        scopes: ["usage:write"],
-        time_to_live_in_seconds: 60,
-      }),
+      body: JSON.stringify({ ttl_seconds: 60 }),
     });
-    if (!keyRes.ok) {
-      const t = await keyRes.text();
-      console.error("deepgram key error", keyRes.status, t);
-      return json({ error: "failed to mint deepgram key" }, 502);
+    if (!grantRes.ok) {
+      const t = await grantRes.text();
+      console.error("deepgram grant error", grantRes.status, t);
+      return json({ error: "failed to mint deepgram token", detail: t }, 502);
     }
-    const keyJson = await keyRes.json();
-    return json({ key: keyJson.key, expires_at: expiry });
+    const grantJson = await grantRes.json();
+    // Deepgram returns { access_token, expires_in }
+    const token = grantJson.access_token ?? grantJson.key;
+    const expiry = Math.floor(Date.now() / 1000) + (grantJson.expires_in ?? 60);
+    return json({ key: token, expires_at: expiry });
   } catch (e) {
     console.error("deepgram-realtime-token error", e);
     return json({ error: e instanceof Error ? e.message : "unknown error" }, 500);
