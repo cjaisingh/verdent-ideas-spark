@@ -67,6 +67,8 @@ export default function ApprovalPack() {
     return { tasks: tasks.length, checked, totalChecks: checklist.length, evidence: evidence.length, byStatus };
   }, [tasks, checklist, evidence]);
 
+  const generatedAt = useMemo(() => new Date().toLocaleString(), [phaseId, tasks.length]);
+
   const buildMarkdown = (): string => {
     if (!phase) return "";
     const lines: string[] = [];
@@ -139,7 +141,22 @@ export default function ApprovalPack() {
     toast({ title: "Markdown exported" });
   };
 
-  const printPdf = () => window.print();
+  const printPdf = () => {
+    if (!phase) return;
+    const root = document.documentElement;
+    root.style.setProperty("--pp-phase", `"${phase.key} — ${phase.title.replace(/"/g, "'")}"`);
+    root.style.setProperty("--pp-generated", `"Generated ${generatedAt.replace(/"/g, "'")}"`);
+    const cleanup = () => {
+      root.style.removeProperty("--pp-phase");
+      root.style.removeProperty("--pp-generated");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    window.print();
+  };
+
+  const evByItem = (taskId: string, itemKey: string) =>
+    evidence.filter((e) => e.task_id === taskId && e.checklist_item === itemKey);
 
   return (
     <div className="container py-6 space-y-6">
@@ -169,8 +186,8 @@ export default function ApprovalPack() {
       {loading || !phase ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : (
-        <article id="approval-pack-print" className="space-y-6 print:space-y-4">
-          <Card>
+        <article id="approval-pack-print" className="space-y-6 print:space-y-4 pp-doc">
+          <Card className="pp-cover">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="text-xl">{phase.key} — {phase.title}</CardTitle>
@@ -183,15 +200,20 @@ export default function ApprovalPack() {
                 <Stat label="Tasks" value={summary.tasks} />
                 <Stat label="Checks complete" value={`${summary.checked}/${summary.totalChecks}`} />
                 <Stat label="Evidence" value={summary.evidence} />
-                <Stat label="Generated" value={new Date().toLocaleString()} />
+                <Stat label="Generated" value={generatedAt} />
               </div>
+              {Object.keys(summary.byStatus).length > 0 && (
+                <div className="text-xs text-muted-foreground pt-1">
+                  Review status: {Object.entries(summary.byStatus).map(([k, v]) => `${k}=${v}`).join(" · ")}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {sprints.map((sp) => {
+          {sprints.map((sp, sprintIdx) => {
             const sprintTasks = tasks.filter((t) => t.sprint_id === sp.id);
             return (
-              <Card key={sp.id} className="break-inside-avoid">
+              <Card key={sp.id} className={`pp-sprint break-inside-avoid ${sprintIdx > 0 ? "pp-page-break" : ""}`}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Sprint {sp.key} — {sp.title}</CardTitle>
                   {sp.goal && <p className="text-xs text-muted-foreground">{sp.goal}</p>}
@@ -203,7 +225,7 @@ export default function ApprovalPack() {
                     const cls = checklist.filter((c) => c.task_id === t.id);
                     const taskEv = evidence.filter((e) => e.task_id === t.id && !e.checklist_item);
                     return (
-                      <div key={t.id} className="rounded-md border p-3 space-y-2 break-inside-avoid">
+                      <div key={t.id} className="pp-task rounded-md border p-3 space-y-2 break-inside-avoid">
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <div className="font-medium">
                             <span className="font-mono text-xs text-muted-foreground mr-2">{t.key}</span>
@@ -219,43 +241,72 @@ export default function ApprovalPack() {
                         {t.review_notes && <p className="text-xs"><span className="font-semibold">Review notes:</span> {t.review_notes}</p>}
 
                         {cls.length > 0 && (
-                          <div className="space-y-1">
-                            <div className="text-xs font-semibold">Checklist</div>
-                            {cls.map((c) => {
-                              const itemEv = evidence.filter((e) => e.task_id === t.id && e.checklist_item === c.item_key);
-                              return (
-                                <div key={c.id} className="text-xs pl-1">
-                                  <div className="flex items-start gap-2">
-                                    <span className="font-mono">{c.checked ? "[x]" : "[ ]"}</span>
-                                    <span className="text-muted-foreground">[{c.category}]</span>
-                                    <span>{c.label}</span>
-                                    {c.checked_by && <span className="text-muted-foreground">— {c.checked_by}</span>}
-                                  </div>
-                                  {c.note && <div className="pl-6 text-muted-foreground italic">{c.note}</div>}
-                                  {itemEv.map((e) => (
-                                    <div key={e.id} className="pl-6 text-muted-foreground">
-                                      ↳ {e.url ? <a href={e.url} target="_blank" rel="noreferrer" className="underline">{e.title}</a> : e.title}
-                                      {e.storage_path && <span className="ml-1">(file: {e.storage_path})</span>}
-                                      {e.source && <span className="ml-1">— {e.source}</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <table className="pp-checklist w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="text-left text-muted-foreground">
+                                <th className="w-8 py-1 pr-2 font-medium">✓</th>
+                                <th className="w-24 py-1 pr-2 font-medium">Category</th>
+                                <th className="py-1 pr-2 font-medium">Item</th>
+                                <th className="py-1 pr-2 font-medium">Evidence</th>
+                                <th className="w-28 py-1 font-medium">Reviewer</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cls.map((c) => {
+                                const itemEv = evByItem(t.id, c.item_key);
+                                return (
+                                  <tr key={c.id} className="align-top border-t">
+                                    <td className="py-1 pr-2 font-mono">{c.checked ? "[x]" : "[ ]"}</td>
+                                    <td className="py-1 pr-2 uppercase tracking-wide text-[10px] text-muted-foreground">{c.category}</td>
+                                    <td className="py-1 pr-2">
+                                      <div>{c.label}</div>
+                                      {c.note && <div className="text-muted-foreground italic">{c.note}</div>}
+                                    </td>
+                                    <td className="py-1 pr-2">
+                                      {itemEv.length === 0 ? (
+                                        <span className="text-muted-foreground">—</span>
+                                      ) : itemEv.map((e) => (
+                                        <div key={e.id}>
+                                          {e.url ? (
+                                            <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
+                                          ) : e.title}
+                                          {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
+                                          {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
+                                        </div>
+                                      ))}
+                                    </td>
+                                    <td className="py-1 text-muted-foreground">{c.checked_by ?? "—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         )}
 
                         {taskEv.length > 0 && (
                           <div className="space-y-1">
                             <div className="text-xs font-semibold flex items-center gap-1"><FileText className="h-3 w-3" /> Task evidence</div>
-                            {taskEv.map((e) => (
-                              <div key={e.id} className="text-xs pl-1 text-muted-foreground">
-                                • {e.url ? <a href={e.url} target="_blank" rel="noreferrer" className="underline">{e.title}</a> : e.title}
-                                {e.storage_path && <span className="ml-1">(file: {e.storage_path})</span>}
-                                {e.source && <span className="ml-1">— {e.source}</span>}
-                                {e.note && <span className="ml-1">— {e.note}</span>}
-                              </div>
-                            ))}
+                            <table className="pp-checklist w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="text-left text-muted-foreground">
+                                  <th className="py-1 pr-2 font-medium">Title</th>
+                                  <th className="w-32 py-1 pr-2 font-medium">Source</th>
+                                  <th className="py-1 font-medium">Note</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {taskEv.map((e) => (
+                                  <tr key={e.id} className="align-top border-t">
+                                    <td className="py-1 pr-2">
+                                      {e.url ? <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a> : e.title}
+                                      {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
+                                    </td>
+                                    <td className="py-1 pr-2 text-muted-foreground">{e.source ?? "—"}</td>
+                                    <td className="py-1 text-muted-foreground">{e.note ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         )}
                       </div>
@@ -270,10 +321,29 @@ export default function ApprovalPack() {
 
       <style>{`
         @media print {
-          @page { margin: 1.5cm; }
-          body { background: white !important; }
-          aside, nav, header.print\\:hidden { display: none !important; }
+          @page {
+            size: A4;
+            margin: 2cm 1.5cm;
+            @top-left { content: "AWIP — Approval Pack"; font: 9pt -apple-system, system-ui, sans-serif; color: #555; }
+            @top-right { content: var(--pp-phase, ""); font: 9pt -apple-system, system-ui, sans-serif; color: #555; }
+            @bottom-left { content: var(--pp-generated, ""); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
+            @bottom-right { content: "Page " counter(page) " / " counter(pages); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
+          }
+          html, body { background: white !important; color: #111 !important; }
+          body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          aside, nav, [data-sidebar], .print\\:hidden, [data-sonner-toaster] { display: none !important; }
           .container { max-width: 100% !important; padding: 0 !important; }
+          .pp-doc { display: block; }
+          .pp-page-break { break-before: page; page-break-before: always; }
+          .pp-sprint, .pp-task { break-inside: avoid; page-break-inside: avoid; }
+          .pp-task { orphans: 3; widows: 3; }
+          .pp-checklist { font-size: 9pt; }
+          .pp-checklist thead { display: table-header-group; }
+          .pp-checklist tr { page-break-inside: avoid; break-inside: avoid; }
+          .pp-checklist tbody tr:nth-child(even) td { background: #f5f5f7; }
+          .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; padding: 4px 6px; }
+          .pp-checklist thead th { border-bottom: 1px solid #a1a1aa; }
+          a.pp-link[href]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #555; word-break: break-all; }
         }
       `}</style>
     </div>
