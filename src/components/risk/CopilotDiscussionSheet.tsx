@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Mic, MicOff, Send, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { DiscussionHistory } from "@/components/discussions/DiscussionHistory";
 
 type Msg = {
   id: string;
@@ -70,7 +71,14 @@ export function CopilotDiscussionSheet({
         const { data: u } = await supabase.auth.getUser();
         const { data: created, error } = await supabase
           .from("roadmap_finding_discussions")
-          .insert({ finding_id: findingId, mode: "copilot", started_by_user_id: u.user?.id ?? null })
+          .insert({
+            finding_id: findingId,
+            subject_type: "roadmap_finding",
+            subject_id: findingId,
+            mode: "copilot",
+            title: findingTitle,
+            started_by_user_id: u.user?.id ?? null,
+          })
           .select("id")
           .single();
         if (error || !created) {
@@ -360,6 +368,11 @@ export function CopilotDiscussionSheet({
         </SheetHeader>
 
         <div ref={scrollerRef} className="flex-1 overflow-y-auto space-y-3 py-3 pr-1">
+          <DiscussionHistory
+            subjectType="roadmap_finding"
+            subjectId={findingId}
+            excludeDiscussionId={discussionId}
+          />
           {transcript.length === 0 && !streaming && (
             <p className="text-xs text-muted-foreground">No messages yet. Type or hit the mic to start.</p>
           )}
