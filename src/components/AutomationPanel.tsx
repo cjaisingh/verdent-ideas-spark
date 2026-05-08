@@ -1166,6 +1166,30 @@ const DailyAiSpendCard = () => {
   const colorFor = (key: string) =>
     palette[groups.indexOf(key) % palette.length];
 
+  // Threshold breach derivations
+  const effectiveRunLimit = (job: string | null | undefined) =>
+    (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
+  const dayBreaches = new Set<string>();
+  if (globalLimits.day != null) {
+    dayKeys.forEach((d, i) => { if (dailyTotals[i] > globalLimits.day!) dayBreaches.add(d); });
+  }
+  const cellBreaches = new Set<string>(); // "day|job"
+  if (groupBy === "job") {
+    for (const d of dayKeys) {
+      for (const job of Object.keys(matrix[d])) {
+        const lim = jobLimits[job]?.day;
+        if (lim != null && matrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
+      }
+    }
+  }
+  const runBreachCount = rows.filter(r => {
+    const lim = effectiveRunLimit(r.job);
+    return lim != null && Number(r.cost_usd || 0) > lim;
+  }).length;
+  const hasAnyJobLimit = Object.keys(jobLimits).length > 0;
+  const hasAnyLimit = globalLimits.day != null || globalLimits.run != null || hasAnyJobLimit;
+  const dailyLimitPct = globalLimits.day != null ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
+
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
       <header className="flex items-center justify-between gap-2 flex-wrap">
