@@ -439,7 +439,12 @@ const Roadmap = () => {
                 <div key={phase.id} className="mb-6">
                   <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
-                    <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
+                    <PhaseGateBadge
+                      phaseStatus={phase.status}
+                      gate={gates.get(phase.id)}
+                      override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
+                    />
+                    <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
                     <Link
                       to={`/master-plan#${phase.key}`}
                       className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
