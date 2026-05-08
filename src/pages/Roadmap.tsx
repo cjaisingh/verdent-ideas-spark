@@ -14,6 +14,7 @@ import { DailyPlanCard } from "@/components/DailyPlanCard";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
+import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
