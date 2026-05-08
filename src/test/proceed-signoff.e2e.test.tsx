@@ -21,7 +21,7 @@ const { navigateMock, toastMock, dbState } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
   toastMock: vi.fn(),
   dbState: {
-    phases: [{ id: "phase-1", key: "P1", status: "active" }],
+    roadmap_phases: [{ id: "phase-1", key: "P1", status: "active" }],
     approval_queue: [] as Array<Record<string, unknown>>,
     roadmap_phase_signoffs: [] as Array<Record<string, unknown>>,
     capability_events: [] as Array<Record<string, unknown>>,
