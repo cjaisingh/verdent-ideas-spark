@@ -1056,11 +1056,44 @@ const DailyAiSpendCard = () => {
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
   const [capped, setCapped] = useState(false);
-  const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
+  const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
+  const [globalLimits, setGlobalLimits] = useState<{ day: number | null; run: number | null }>({ day: null, run: null });
+  const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
   }, [range]);
+
+  useEffect(() => {
+    let active = true;
+    const loadLimits = async () => {
+      const [s, t] = await Promise.all([
+        supabase.from("alert_settings").select("cost_per_day_usd, cost_per_run_usd, alert_on_cost").eq("id", true).maybeSingle(),
+        supabase.from("alert_cost_thresholds").select("job, cost_per_day_usd, cost_per_run_usd, alert_on_cost"),
+      ]);
+      if (!active) return;
+      const enabled = s.data?.alert_on_cost !== false;
+      setGlobalLimits({
+        day: enabled && s.data?.cost_per_day_usd != null ? Number(s.data.cost_per_day_usd) : null,
+        run: enabled && s.data?.cost_per_run_usd != null ? Number(s.data.cost_per_run_usd) : null,
+      });
+      const map: Record<string, { day: number | null; run: number | null }> = {};
+      for (const r of (t.data || [])) {
+        if (r.alert_on_cost === false) continue;
+        map[r.job] = {
+          day: r.cost_per_day_usd != null ? Number(r.cost_per_day_usd) : null,
+          run: r.cost_per_run_usd != null ? Number(r.cost_per_run_usd) : null,
+        };
+      }
+      setJobLimits(map);
+    };
+    loadLimits();
+    const ch = supabase.channel("ai_spend_limits")
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_settings" }, loadLimits)
+      .on("postgres_changes", { event: "*", schema: "public", table: "alert_cost_thresholds" }, loadLimits)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1133,6 +1166,30 @@ const DailyAiSpendCard = () => {
   const colorFor = (key: string) =>
     palette[groups.indexOf(key) % palette.length];
 
+  // Threshold breach derivations
+  const effectiveRunLimit = (job: string | null | undefined) =>
+    (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
+  const dayBreaches = new Set<string>();
+  if (globalLimits.day != null) {
+    dayKeys.forEach((d, i) => { if (dailyTotals[i] > globalLimits.day!) dayBreaches.add(d); });
+  }
+  const cellBreaches = new Set<string>(); // "day|job"
+  if (groupBy === "job") {
+    for (const d of dayKeys) {
+      for (const job of Object.keys(matrix[d])) {
+        const lim = jobLimits[job]?.day;
+        if (lim != null && matrix[d][job] > lim) cellBreaches.add(`${d}|${job}`);
+      }
+    }
+  }
+  const runBreachCount = rows.filter(r => {
+    const lim = effectiveRunLimit(r.job);
+    return lim != null && Number(r.cost_usd || 0) > lim;
+  }).length;
+  const hasAnyJobLimit = Object.keys(jobLimits).length > 0;
+  const hasAnyLimit = globalLimits.day != null || globalLimits.run != null || hasAnyJobLimit;
+  const dailyLimitPct = globalLimits.day != null ? Math.min(100, (globalLimits.day / maxDay) * 100) : null;
+
   return (
     <section className="rounded-md border border-border bg-card p-3 space-y-3">
       <header className="flex items-center justify-between gap-2 flex-wrap">
@@ -1203,7 +1260,7 @@ const DailyAiSpendCard = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
           <div className="font-mono">{fmtUsd6(total)}</div>
@@ -1220,6 +1277,19 @@ const DailyAiSpendCard = () => {
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
           <div className="font-mono">{totalTokens.toLocaleString()}</div>
         </div>
+        {hasAnyLimit && (
+          <button
+            type="button"
+            onClick={() => (dayBreaches.size + cellBreaches.size + runBreachCount > 0) && setDrill({ day: "*", groupKey: null, breachOnly: true })}
+            className={`rounded border p-2 text-left transition ${(dayBreaches.size + cellBreaches.size + runBreachCount) > 0 ? "border-destructive/40 bg-destructive/10 hover:bg-destructive/15" : "border-border opacity-70"}`}
+            title={(dayBreaches.size + cellBreaches.size + runBreachCount) > 0 ? "Show breaching runs" : "No breaches in range"}
+          >
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Breaches</div>
+            <div className="font-mono text-[11px]">
+              {dayBreaches.size}<span className="text-muted-foreground">d</span>·{cellBreaches.size}<span className="text-muted-foreground">j</span>·{runBreachCount}<span className="text-muted-foreground">r</span>
+            </div>
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -1236,42 +1306,74 @@ const DailyAiSpendCard = () => {
             </div>
           )}
           {/* Stacked bar chart */}
-          <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
-            {dayKeys.map((d, idx) => {
-              const dayTotal = dailyTotals[idx];
-              const heightPct = (dayTotal / maxDay) * 100;
-              const segments = groups
-                .map((g) => ({ g, c: matrix[d][g] || 0 }))
-                .filter((s) => s.c > 0);
-              const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
-              return (
-                <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
-                  <div
-                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
-                    style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}\n(click for runs)`}
-                    onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
-                  >
-                    {segments.map((s) => (
-                      <div
-                        key={s.g}
-                        className="cursor-pointer hover:opacity-80"
-                        style={{
-                          height: `${(s.c / dayTotal) * 100}%`,
-                          background: colorFor(s.g),
-                        }}
-                        onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
-                        title={`${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
-                      />
-                    ))}
+          <div className="relative">
+            {dailyLimitPct != null && (
+              <>
+                <div
+                  className="absolute left-0 right-0 border-t border-dashed border-destructive/70 pointer-events-none z-10"
+                  style={{ bottom: `calc(12px + (100% - 12px) * ${dailyLimitPct / 100})` }}
+                />
+                <div
+                  className="absolute right-0 text-[9px] font-mono text-destructive bg-card px-1 pointer-events-none z-10"
+                  style={{ bottom: `calc(12px + (100% - 12px) * ${dailyLimitPct / 100} - 6px)` }}
+                >daily limit {fmtUsd6(globalLimits.day!)}</div>
+              </>
+            )}
+            <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
+              {dayKeys.map((d, idx) => {
+                const dayTotal = dailyTotals[idx];
+                const heightPct = (dayTotal / maxDay) * 100;
+                const segments = groups
+                  .map((g) => ({ g, c: matrix[d][g] || 0 }))
+                  .filter((s) => s.c > 0);
+                const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
+                const dayBreached = dayBreaches.has(d);
+                return (
+                  <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
+                    <div
+                      className={`w-full flex flex-col-reverse rounded-sm overflow-hidden cursor-pointer ${dayBreached ? "bg-destructive/10 ring-1 ring-destructive/40" : "bg-muted/40 hover:ring-1 hover:ring-border"}`}
+                      style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
+                      title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${cellBreaches.has(`${d}|${s.g}`) ? "⚠ " : ""}${s.g}: ${fmtUsd6(s.c)}`).join("\n")}${dayBreached ? `\n⚠ over daily limit by ${fmtUsd6(dayTotal - globalLimits.day!)}` : ""}\n(click for runs)`}
+                      onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
+                    >
+                      {segments.map((s) => {
+                        const segBreached = cellBreaches.has(`${d}|${s.g}`);
+                        return (
+                          <div
+                            key={s.g}
+                            className={`cursor-pointer hover:opacity-80 ${segBreached ? "outline outline-1 outline-destructive" : ""}`}
+                            style={{
+                              height: `${(s.c / dayTotal) * 100}%`,
+                              background: colorFor(s.g),
+                            }}
+                            onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
+                            title={`${segBreached ? "⚠ " : ""}${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="text-[9px] text-muted-foreground font-mono h-3">
+                      {showLabel ? d.slice(5) : ""}
+                    </div>
                   </div>
-                  <div className="text-[9px] text-muted-foreground font-mono h-3">
-                    {showLabel ? d.slice(5) : ""}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
+          {hasAnyLimit && (
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
+              {globalLimits.day != null && (
+                <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-destructive/70" /> daily limit {fmtUsd6(globalLimits.day)}</span>
+              )}
+              {hasAnyJobLimit && groupBy === "job" && <span>⚠ = job-day breach</span>}
+              {hasAnyJobLimit && groupBy === "model" && (
+                <span>Switch to "by job" to see per-job threshold breaches.</span>
+              )}
+              {(globalLimits.run != null || Object.values(jobLimits).some(l => l.run != null)) && (
+                <span>per-run breaches shown in drill-down</span>
+              )}
+            </div>
+          )}
 
           {/* Legend / breakdown table */}
           <div className="space-y-1">
@@ -1302,6 +1404,8 @@ const DailyAiSpendCard = () => {
         groupBy={groupBy}
         drill={drill}
         onClose={() => setDrill(null)}
+        globalLimits={globalLimits}
+        jobLimits={jobLimits}
       />
     </section>
   );
@@ -1322,18 +1426,27 @@ const formulaFor = (r: SpendRow): string => {
 };
 
 const SpendDrillDialog = ({
-  rows, groupBy, drill, onClose,
+  rows, groupBy, drill, onClose, globalLimits, jobLimits,
 }: {
   rows: SpendRow[];
   groupBy: "job" | "model";
-  drill: { day: string; groupKey: string | null } | null;
+  drill: { day: string; groupKey: string | null; breachOnly?: boolean } | null;
   onClose: () => void;
+  globalLimits: { day: number | null; run: number | null };
+  jobLimits: Record<string, { day: number | null; run: number | null }>;
 }) => {
   const open = !!drill;
+  const effectiveRunLimit = (job: string | null | undefined) =>
+    (job && jobLimits[job]?.run != null) ? jobLimits[job]!.run! : globalLimits.run;
+  const isRunBreach = (r: SpendRow) => {
+    const lim = effectiveRunLimit(r.job);
+    return lim != null && Number(r.cost_usd || 0) > lim;
+  };
   const filtered = drill
     ? rows
-        .filter(r => (r.created_at || "").slice(0, 10) === drill.day &&
-          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey))
+        .filter(r => (drill.day === "*" || (r.created_at || "").slice(0, 10) === drill.day) &&
+          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey) &&
+          (!drill.breachOnly || isRunBreach(r)))
         .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
     : [];
   const cap = 200;
@@ -1347,7 +1460,8 @@ const SpendDrillDialog = ({
       <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="text-sm font-mono">
-            {drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            {drill?.day === "*" ? "All days" : drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+            {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
           <DialogDescription className="text-xs">
             Individual ai_usage_log runs in this slice.
@@ -1393,8 +1507,10 @@ const SpendDrillDialog = ({
                 {shown.map((r, i) => {
                   const isNight = r?.request_ref?.night_mode === true;
                   const isErr = (r.status || "ok") !== "ok";
+                  const runLim = effectiveRunLimit(r.job);
+                  const runBreach = runLim != null && Number(r.cost_usd || 0) > runLim;
                   return (
-                    <tr key={r.id ?? i} className="border-t border-border/50 align-top">
+                    <tr key={r.id ?? i} className={`border-t border-border/50 align-top ${runBreach ? "bg-destructive/5" : ""}`}>
                       <td className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
                         {(r.created_at || "").slice(11, 19)}
                       </td>
@@ -1412,7 +1528,12 @@ const SpendDrillDialog = ({
                       <td className="px-2 py-1 font-mono text-right">{(r.prompt_tokens ?? 0).toLocaleString()}</td>
                       <td className="px-2 py-1 font-mono text-right">{(r.completion_tokens ?? 0).toLocaleString()}</td>
                       <td className="px-2 py-1 font-mono text-right text-muted-foreground">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</td>
-                      <td className="px-2 py-1 font-mono text-right">{fmtUsdFull(Number(r.cost_usd || 0))}</td>
+                      <td className="px-2 py-1 font-mono text-right">
+                        {fmtUsdFull(Number(r.cost_usd || 0))}
+                        {runBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1 font-mono text-muted-foreground">{formulaFor(r)}</td>
                     </tr>
                   );
