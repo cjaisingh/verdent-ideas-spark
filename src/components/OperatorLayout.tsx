@@ -12,8 +12,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { SIZE_BOUNDS, clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
-import { RotateCcw } from "lucide-react";
+import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { Monitor, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
@@ -141,6 +141,26 @@ const OperatorLayout = () => {
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs">
                     Reset pane sizes for {effectiveMode}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {!isMobile && hasViewportSizeOverrides(paneState, viewport) && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setPaneState(clearViewportSizes(paneState, viewport))}
+                      aria-label={`Reset sizes for ${viewport} screens`}
+                    >
+                      <Monitor className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Reset sizes for this screen ({viewport})
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
