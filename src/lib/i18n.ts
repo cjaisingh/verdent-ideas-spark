@@ -89,11 +89,22 @@ function subscribe(cb: () => void) {
   return () => listeners.delete(cb);
 }
 
-export function t(key: string, locale: Locale = currentLocale): string {
-  return dictionaries[locale]?.[key] ?? dictionaries.en[key] ?? key;
+export function t(key: string, locale: Locale = currentLocale, vars?: Record<string, string>): string {
+  const raw = dictionaries[locale]?.[key] ?? dictionaries.en[key] ?? key;
+  if (!vars) return raw;
+  return raw.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? `{${k}}`);
 }
 
-export function useT(): (key: string) => string {
+export function routeName(key: RouteKey, locale: Locale = currentLocale): string {
+  return routeNames[locale]?.[key] ?? routeNames.en[key];
+}
+
+export function useT(): (key: string, vars?: Record<string, string>) => string {
   const locale = useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
-  return (key: string) => t(key, locale);
+  return (key, vars) => t(key, locale, vars);
+}
+
+export function useRouteName(): (key: RouteKey) => string {
+  const locale = useSyncExternalStore(subscribe, getLocale, () => "en" as Locale);
+  return (key) => routeName(key, locale);
 }
