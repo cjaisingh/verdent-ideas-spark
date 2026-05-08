@@ -444,8 +444,8 @@ export default function ApprovalPack() {
       <style>{`
         @media print {
           @page {
-            size: A4;
-            margin: 2cm 1.5cm;
+            size: ${paperSize};
+            margin: ${density === "compact" ? "1.2cm 1cm" : density === "relaxed" ? "2.4cm 2cm" : "2cm 1.5cm"};
             @top-left { content: "AWIP — Approval Pack"; font: 9pt -apple-system, system-ui, sans-serif; color: #555; }
             @top-right { content: var(--pp-phase, ""); font: 9pt -apple-system, system-ui, sans-serif; color: #555; }
             @bottom-left { content: var(--pp-generated, ""); font: 8.5pt -apple-system, system-ui, sans-serif; color: #777; }
@@ -457,20 +457,30 @@ export default function ApprovalPack() {
             @bottom-left { content: ""; }
             @bottom-right { content: ""; }
           }
-          .pp-cover-page { break-after: page; page-break-after: always; min-height: 24cm; padding: 0 !important; border: 0 !important; }
+          .pp-cover-page { break-after: page; page-break-after: always; min-height: ${paperSize === "Letter" ? "22cm" : "24cm"}; padding: 0 !important; border: 0 !important; }
           html, body { background: white !important; color: #111 !important; }
-          body { font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pp-density-compact  { font-size: 8.5pt; }
+          .pp-density-standard { font-size: 10pt; }
+          .pp-density-relaxed  { font-size: 11pt; }
+          .pp-density-compact  .pp-checklist { font-size: 7.5pt; }
+          .pp-density-standard .pp-checklist { font-size: 9pt; }
+          .pp-density-relaxed  .pp-checklist { font-size: 10pt; }
+          .pp-density-compact  .pp-checklist th, .pp-density-compact  .pp-checklist td { padding: 2px 4px; }
+          .pp-density-standard .pp-checklist th, .pp-density-standard .pp-checklist td { padding: 4px 6px; }
+          .pp-density-relaxed  .pp-checklist th, .pp-density-relaxed  .pp-checklist td { padding: 6px 8px; }
+          .pp-density-compact  .pp-task { padding: 6px 8px; }
+          .pp-density-relaxed  .pp-task { padding: 14px 16px; }
           aside, nav, [data-sidebar], .print\\:hidden, [data-sonner-toaster] { display: none !important; }
           .container { max-width: 100% !important; padding: 0 !important; }
           .pp-doc { display: block; }
           .pp-page-break { break-before: page; page-break-before: always; }
           .pp-sprint, .pp-task { break-inside: avoid; page-break-inside: avoid; }
           .pp-task { orphans: 3; widows: 3; }
-          .pp-checklist { font-size: 9pt; }
           .pp-checklist thead { display: table-header-group; }
           .pp-checklist tr { page-break-inside: avoid; break-inside: avoid; }
           .pp-checklist tbody tr:nth-child(even) td { background: #f5f5f7; }
-          .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; padding: 4px 6px; }
+          .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; }
           .pp-checklist thead th { border-bottom: 1px solid #a1a1aa; }
           a.pp-link[href]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #555; word-break: break-all; }
         }
