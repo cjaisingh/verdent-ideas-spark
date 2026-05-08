@@ -305,6 +305,46 @@ export default function Jobs() {
         </div>
       </header>
 
+      {selected.size > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-md border bg-card/95 backdrop-blur px-3 py-2 shadow-sm">
+          <span className="text-sm font-medium">
+            {selected.size} selected
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelected(new Set(filtered.map((j) => j.id)))}
+          >
+            Select all visible ({filtered.length})
+          </Button>
+          <span className="mx-1 h-5 w-px bg-border" />
+          <span className="text-xs text-muted-foreground">Status:</span>
+          {COLUMNS.map((c) => (
+            <Button key={c.key} size="sm" variant="outline" onClick={() => bulkSetStatus(c.key)}>
+              {c.label}
+            </Button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-border" />
+          <Input
+            value={bulkOwner}
+            onChange={(e) => setBulkOwner(e.target.value)}
+            placeholder="owner (blank = clear)"
+            className="h-8 w-44"
+            onKeyDown={(e) => { if (e.key === "Enter") bulkAssignOwner(); }}
+          />
+          <Button size="sm" variant="outline" onClick={bulkAssignOwner}>
+            Assign owner
+          </Button>
+          <span className="mx-1 h-5 w-px bg-border" />
+          <Button size="sm" variant="destructive" onClick={bulkDelete}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={clearSelection}>
+            <X className="h-3.5 w-3.5 mr-1" /> Clear
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : filtered.length === 0 ? (
