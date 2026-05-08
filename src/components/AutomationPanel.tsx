@@ -1799,7 +1799,7 @@ const SpendDrillDialog = ({
                       style={{ gridTemplateColumns: gridCols }}
                     >
                       <div className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
-                        {(r.created_at || "").slice(11, 19)}
+                        {r.created_at ? tzTimeOfDay(new Date(r.created_at), tz) : ""}
                       </div>
                       <div className="px-2 py-1 font-mono truncate" title={r.job ?? undefined}>{r.job ?? "—"}</div>
                       <div className="px-2 py-1 font-mono truncate" title={r.model ?? undefined}>
