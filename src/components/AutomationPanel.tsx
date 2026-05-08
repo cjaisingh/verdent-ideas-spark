@@ -1350,19 +1350,35 @@ const DailyAiSpendCard = () => {
       <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total ({metricLabel})</div>
-          <div className="font-mono">{fmtMetric(total)}</div>
+          <div className="font-mono">
+            {fmtMetric(total)}
+            {compare && <DeltaChip pct={pctChange(total, prevTotal)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {fmtMetric(prevTotal)}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtMetric(total / daysSpan)}</div>
+          <div className="font-mono">
+            {fmtMetric(total / daysSpan)}
+            {compare && <DeltaChip pct={pctChange(total / daysSpan, prevTotal / daysSpan)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {fmtMetric(prevTotal / daysSpan)}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
-          <div className="font-mono">{rows.length}</div>
+          <div className="font-mono">
+            {rows.length}
+            {compare && <DeltaChip pct={pctChange(rows.length, prevCalls)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {prevCalls.toLocaleString()}</div>}
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
-          <div className="font-mono">{totalTokens.toLocaleString()}</div>
+          <div className="font-mono">
+            {totalTokens.toLocaleString()}
+            {compare && <DeltaChip pct={pctChange(totalTokens, prevTokens)} />}
+          </div>
+          {compare && <div className="text-[9px] text-muted-foreground font-mono">prev {prevTokens.toLocaleString()}</div>}
         </div>
         {hasAnyLimit && (
           <button
