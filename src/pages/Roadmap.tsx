@@ -24,6 +24,7 @@ import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
 import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
 import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
 import { OvernightRunBadge } from "@/components/roadmap/OvernightRunBadge";
+import { OvernightRunControl } from "@/components/roadmap/OvernightRunControl";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
@@ -390,7 +391,12 @@ const Roadmap = () => {
                     override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
                   />
                   <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
-                  {gates.get(phase.id)?.approvals_ok && <OvernightRunBadge phaseId={phase.id} />}
+                  {gates.get(phase.id)?.approvals_ok && (
+                    <>
+                      <OvernightRunBadge phaseId={phase.id} />
+                      <OvernightRunControl phaseId={phase.id} phaseKey={phase.key} />
+                    </>
+                  )}
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
@@ -458,7 +464,12 @@ const Roadmap = () => {
                       override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
                     />
                     <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
-                    {gates.get(phase.id)?.approvals_ok && <OvernightRunBadge phaseId={phase.id} />}
+                    {gates.get(phase.id)?.approvals_ok && (
+                      <>
+                        <OvernightRunBadge phaseId={phase.id} />
+                        <OvernightRunControl phaseId={phase.id} phaseKey={phase.key} />
+                      </>
+                    )}
                     <Link
                       to={`/master-plan#${phase.key}`}
                       className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
