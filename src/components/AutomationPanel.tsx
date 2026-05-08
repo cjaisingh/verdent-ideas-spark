@@ -1186,8 +1186,8 @@ const DailyAiSpendCard = () => {
       let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
-        .gte("created_at", startOfUtcDay(range.from).toISOString())
-        .lt("created_at", endExclusiveUtcDay(range.to).toISOString());
+        .gte("created_at", startOfTzDay(range.from, tz).toISOString())
+        .lt("created_at", endExclusiveTzDay(range.to, tz).toISOString());
       if (groupFilter) q = q.eq(groupBy, groupFilter);
       const { data, error } = await q
         .order("created_at", { ascending: false })
