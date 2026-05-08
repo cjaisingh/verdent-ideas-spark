@@ -313,9 +313,29 @@ async function checkCostThresholds(
         .select("cost_usd").eq("job", job).gte("created_at", dayStart.toISOString());
       const dayTotal = (rows ?? []).reduce((s: number, r: { cost_usd: number | null }) => s + Number(r.cost_usd ?? 0), 0);
       if (dayTotal > perDay) {
-        await alert("cost_threshold",
-          `Today's spend on ${job} is $${dayTotal.toFixed(4)} (threshold $${perDay.toFixed(4)}).`,
-          { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay, threshold_source: source("day") });
+        // Per-day dedupe: only re-alert if today's spend has grown by another full
+        // threshold-worth since the last delivered per-day alert for this job.
+        const { data: priorAlerts } = await sb.from("alert_log")
+          .select("payload")
+          .eq("job", job).eq("reason", "cost_threshold").eq("delivered", true)
+          .gte("created_at", dayStart.toISOString());
+        const lastAlerted = (priorAlerts ?? []).reduce((m: number, r: { payload: Record<string, unknown> | null }) => {
+          const p = r.payload ?? {};
+          if ((p as { scope?: string }).scope !== "per_day") return m;
+          const v = Number((p as { day_cost_usd?: number | null }).day_cost_usd ?? 0);
+          return v > m ? v : m;
+        }, 0);
+        const isFirstToday = lastAlerted === 0;
+        const grewByThreshold = (dayTotal - lastAlerted) >= perDay;
+        if (isFirstToday || grewByThreshold) {
+          await alert("cost_threshold",
+            `Today's spend on ${job} is $${dayTotal.toFixed(4)} (threshold $${perDay.toFixed(4)}${
+              isFirstToday ? "" : `, last alert at $${lastAlerted.toFixed(4)}`
+            }).`,
+            { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay,
+              threshold_source: source("day"),
+              previous_alert_day_cost_usd: isFirstToday ? null : lastAlerted });
+        }
       }
     }
   } catch (e) { console.error("checkCostThresholds failed", e); }
