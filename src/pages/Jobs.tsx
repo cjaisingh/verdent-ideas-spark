@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ListChecks, RefreshCw, ExternalLink, ArrowUpRightFromSquare, Trash2, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
@@ -34,6 +35,17 @@ export default function Jobs() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOwner, setBulkOwner] = useState("");
+
+  const toggleSelect = (id: string, on: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelected(new Set());
 
   const load = async () => {
     setLoading(true);
@@ -79,6 +91,33 @@ export default function Jobs() {
       setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, status: j.status } : x)));
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
     }
+  };
+
+  const bulkUpdate = async (patch: Record<string, any>, label: string) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const { error } = await supabase.from("discussion_actions").update(patch as never).in("id", ids);
+    if (error) { toast({ title: `${label} failed`, description: error.message, variant: "destructive" }); return; }
+    toast({ title: `${label}: ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+    clearSelection();
+  };
+
+  const bulkSetStatus = (status: string) => bulkUpdate({ status }, `Set ${status}`);
+
+  const bulkAssignOwner = async () => {
+    const owner = bulkOwner.trim() || null;
+    await bulkUpdate({ owner }, owner ? `Assigned @${owner}` : "Cleared owner");
+    setBulkOwner("");
+  };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} job${ids.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    const { error } = await supabase.from("discussion_actions").delete().in("id", ids);
+    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `Deleted ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+    clearSelection();
   };
 
   const promote = async (j: Job) => {
@@ -160,11 +199,18 @@ export default function Jobs() {
           e.dataTransfer.setData("text/plain", j.id);
         }}
         onDragEnd={() => { setDraggingId(null); setDragOverCol(null); }}
-        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""}`}
+        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""} ${selected.has(j.id) ? "ring-2 ring-primary" : ""}`}
         onClick={() => setActiveJobId(j.id)}
       >
         <CardContent className="pt-3 pb-3 space-y-1.5">
           <div className="flex items-center gap-1.5 flex-wrap">
+            <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center">
+              <Checkbox
+                checked={selected.has(j.id)}
+                onCheckedChange={(v) => toggleSelect(j.id, !!v)}
+                aria-label={`Select ${handle}`}
+              />
+            </span>
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
             <Badge variant="outline" className="text-[9px] uppercase">{j.priority}</Badge>
             <Badge variant="outline" className="text-[9px]">{j.source}</Badge>
@@ -258,6 +304,46 @@ export default function Jobs() {
           <Button size="sm" variant="ghost" onClick={load}><RefreshCw className="h-4 w-4" /></Button>
         </div>
       </header>
+
+      {selected.size > 0 && (
+        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-md border bg-card/95 backdrop-blur px-3 py-2 shadow-sm">
+          <span className="text-sm font-medium">
+            {selected.size} selected
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setSelected(new Set(filtered.map((j) => j.id)))}
+          >
+            Select all visible ({filtered.length})
+          </Button>
+          <span className="mx-1 h-5 w-px bg-border" />
+          <span className="text-xs text-muted-foreground">Status:</span>
+          {COLUMNS.map((c) => (
+            <Button key={c.key} size="sm" variant="outline" onClick={() => bulkSetStatus(c.key)}>
+              {c.label}
+            </Button>
+          ))}
+          <span className="mx-1 h-5 w-px bg-border" />
+          <Input
+            value={bulkOwner}
+            onChange={(e) => setBulkOwner(e.target.value)}
+            placeholder="owner (blank = clear)"
+            className="h-8 w-44"
+            onKeyDown={(e) => { if (e.key === "Enter") bulkAssignOwner(); }}
+          />
+          <Button size="sm" variant="outline" onClick={bulkAssignOwner}>
+            Assign owner
+          </Button>
+          <span className="mx-1 h-5 w-px bg-border" />
+          <Button size="sm" variant="destructive" onClick={bulkDelete}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={clearSelection}>
+            <X className="h-3.5 w-3.5 mr-1" /> Clear
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
