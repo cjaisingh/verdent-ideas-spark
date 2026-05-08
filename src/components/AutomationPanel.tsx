@@ -1243,7 +1243,7 @@ const DailyAiSpendCard = () => {
     return () => { cancelled = true; };
   }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
 
-  const dayKeys = enumerateUtcDays(range.from, range.to);
+  const dayKeys = enumerateTzDays(range.from, range.to, tz);
   const daysSpan = Math.max(1, dayKeys.length);
   const sparseLabels = daysSpan > 31;
   const groupKeyOf = (r: SpendRow) =>
