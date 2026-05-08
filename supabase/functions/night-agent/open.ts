@@ -19,7 +19,7 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
 
   const now = new Date();
   const local = localParts(now, tz);
-  const enabled = (settings as any)?.night_agent_enabled !== false;
+  const enabled = settings?.night_agent_enabled !== false;
   const inWin = inWindow(local.hhmm, winStart, winEnd);
   const blackoutHit = blackouts.includes(local.date);
 
