@@ -225,6 +225,20 @@ export function JobDetailsDrawer({
 
           <section>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Assignment
+            </h3>
+            <JobOwnerDueEditor
+              jobId={job.id}
+              owner={job.owner}
+              dueAt={job.due_at}
+              size="md"
+            />
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
               Timeline
             </h3>
             <ol className="space-y-2">
