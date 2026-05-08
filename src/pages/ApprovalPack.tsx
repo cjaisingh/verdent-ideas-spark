@@ -353,9 +353,11 @@ export default function ApprovalPack() {
           </section>
 
           {(() => {
+            const inRangeIds = new Set(phasesInRange.map((p) => p.id));
+            const filteredStats = allPhaseStats.filter((r) => inRangeIds.has(r.phase_id));
             const statuses = ["approved", "changes_requested", "rejected", "pending"] as const;
             const totals = statuses.reduce<Record<string, number>>((a, s) => { a[s] = 0; return a; }, {});
-            for (const r of allPhaseStats) for (const s of statuses) totals[s] += r.counts[s] ?? 0;
+            for (const r of filteredStats) for (const s of statuses) totals[s] += r.counts[s] ?? 0;
             const grandTotal = Object.values(totals).reduce((a, b) => a + b, 0);
             const pct = (n: number) => grandTotal ? Math.round((n / grandTotal) * 100) : 0;
             return (
@@ -363,7 +365,8 @@ export default function ApprovalPack() {
                 <header className="flex items-baseline justify-between gap-3 flex-wrap">
                   <h2 className="text-xl font-semibold">Approval status by phase</h2>
                   <div className="text-xs text-muted-foreground">
-                    {grandTotal} task{grandTotal === 1 ? "" : "s"} across {allPhaseStats.length} phase{allPhaseStats.length === 1 ? "" : "s"}
+                    {grandTotal} task{grandTotal === 1 ? "" : "s"} across {filteredStats.length} phase{filteredStats.length === 1 ? "" : "s"}
+                    {phasesInRange.length > 1 && ` · range ${phaseRange.fromKey} → ${phaseRange.toKey}`}
                   </div>
                 </header>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
