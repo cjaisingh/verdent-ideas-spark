@@ -132,6 +132,9 @@ const OperatorLayout = () => {
     ) {
       if (!sizesAtInteractionStartRef.current) {
         sizesAtInteractionStartRef.current = getModeSizes(paneState, effectiveMode, viewport);
+        viewportAtDragStartRef.current = viewport;
+        effectiveModeAtDragStartRef.current = effectiveMode;
+        modeAtDragStartRef.current = paneState.mode;
       }
       setKbResizing(true);
       if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
@@ -140,6 +143,9 @@ const OperatorLayout = () => {
         const before = sizesAtInteractionStartRef.current;
         sizesAtInteractionStartRef.current = null;
         if (before) commitHistory(before);
+        viewportAtDragStartRef.current = null;
+        effectiveModeAtDragStartRef.current = null;
+        modeAtDragStartRef.current = null;
       }, 400);
     }
   };
