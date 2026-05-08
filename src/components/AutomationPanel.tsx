@@ -1054,6 +1054,7 @@ const DailyAiSpendCard = () => {
   const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date }>(range);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
+  const [metric, setMetric] = useState<"spend" | "prompt" | "completion">("spend");
   const [loading, setLoading] = useState(true);
   const [capped, setCapped] = useState(false);
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null; breachOnly?: boolean } | null>(null);
