@@ -143,7 +143,11 @@ export default function Jobs() {
     const disc = j.discussion_id ? discs[j.discussion_id] : null;
     const dHandle = disc ? discussionHandle(j.subject_type, finding?.short_num, disc.subject_ordinal) : null;
     return (
-      <Card key={j.id} className="hover:shadow-sm transition">
+      <Card
+        key={j.id}
+        className="hover:shadow-sm transition cursor-pointer"
+        onClick={() => setActiveJobId(j.id)}
+      >
         <CardContent className="pt-3 pb-3 space-y-1.5">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
