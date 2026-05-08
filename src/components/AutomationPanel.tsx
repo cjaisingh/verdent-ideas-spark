@@ -1152,20 +1152,22 @@ const DailyAiSpendCard = () => {
     const prevFrom = new Date(fromMs - span);
     const prevTo = new Date(fromMs);
     const load = async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, status, request_ref")
         .gte("created_at", prevFrom.toISOString())
-        .lt("created_at", prevTo.toISOString())
+        .lt("created_at", prevTo.toISOString());
+      if (groupFilter) q = q.eq(groupBy, groupFilter);
+      const { data, error } = await q
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(rowLimit);
       if (cancelled) return;
       if (error) toast({ title: "Failed to load comparison period", description: error.message, variant: "destructive" });
       setPrevRows((data as SpendRow[]) || []);
     };
     load();
     return () => { cancelled = true; };
-  }, [compare, range.from.getTime(), range.to.getTime()]);
+  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
 
   const dayKeys = enumerateUtcDays(range.from, range.to);
   const daysSpan = Math.max(1, dayKeys.length);
