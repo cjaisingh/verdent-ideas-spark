@@ -59,8 +59,19 @@ Deno.serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY");
-    slog("incoming", { method: req.method, hasKey: !!DEEPGRAM_API_KEY, keyPrefix: DEEPGRAM_API_KEY?.slice(0, 6) });
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Prefer DB-stored secret (admin-rotatable), fall back to env var.
+    let DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY") ?? "";
+    let keySource: "db" | "env" | "none" = DEEPGRAM_API_KEY ? "env" : "none";
+    try {
+      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const { data: row } = await admin
+        .from("app_secrets").select("value").eq("key", "DEEPGRAM_API_KEY").maybeSingle();
+      if (row?.value) { DEEPGRAM_API_KEY = row.value; keySource = "db"; }
+    } catch (e) { slogErr("db_secret_read_failed", { message: e instanceof Error ? e.message : String(e) }); }
+
+    slog("incoming", { method: req.method, hasKey: !!DEEPGRAM_API_KEY, keySource, keyPrefix: DEEPGRAM_API_KEY?.slice(0, 6) });
     if (!DEEPGRAM_API_KEY) return fail("CONFIG_MISSING_KEY", 500, "DEEPGRAM_API_KEY not configured");
 
     const authHeader = req.headers.get("Authorization") ?? "";

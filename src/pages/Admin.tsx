@@ -7,6 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
+import AppSecretsPanel from "@/components/admin/AppSecretsPanel";
 
 type AppRole = "admin" | "operator";
 const ROLES: AppRole[] = ["admin", "operator"];
@@ -234,6 +235,8 @@ const Admin = () => {
           </Table>
         </div>
       </section>
+
+      <AppSecretsPanel />
     </div>
   );
 };
