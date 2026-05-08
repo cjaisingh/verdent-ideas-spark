@@ -426,7 +426,7 @@ export default function ApprovalPack() {
                     const cls = checklist.filter((c) => c.task_id === t.id);
                     const taskEv = evidence.filter((e) => e.task_id === t.id && !e.checklist_item);
                     return (
-                      <div key={t.id} className="pp-task rounded-md border p-3 space-y-2 break-inside-avoid">
+                      <div key={t.id} className="pp-task rounded-md border p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2 flex-wrap">
                           <div className="font-medium">
                             <span className="font-mono text-xs text-muted-foreground mr-2">{t.key}</span>
