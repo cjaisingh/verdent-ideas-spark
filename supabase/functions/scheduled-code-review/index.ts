@@ -186,6 +186,7 @@ Deno.serve(async (req) => {
       price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length },
     });
+    await checkCostThresholds(sb, "scheduled-code-review", cost, maybeAlert);
 
     let highCount = 0;
     if (findings.length > 0) {
@@ -237,6 +238,7 @@ async function dispatchAlert(
       high_finding: "alert_on_high_finding",
       test_fail: "alert_on_test_fail",
       qa_fail: "alert_on_qa_fail",
+      cost_threshold: "alert_on_cost",
     };
     const flag = flagMap[reason];
     if (flag && settings[flag] === false) return;
@@ -260,4 +262,34 @@ async function dispatchAlert(
     } catch (e) { error = e instanceof Error ? e.message : String(e); }
     await sb.from("alert_log").insert({ job, reason, message, delivered, status_code, error, payload });
   } catch (e) { console.error("dispatchAlert failed", e); }
+}
+
+async function checkCostThresholds(
+  sb: ReturnType<typeof createClient>,
+  job: string,
+  runCost: number,
+  alert: (reason: string, message: string, payload?: Record<string, unknown>) => Promise<void>,
+) {
+  try {
+    const { data: settings } = await sb.from("alert_settings").select("alert_on_cost,cost_per_run_usd,cost_per_day_usd").eq("id", true).maybeSingle();
+    if (!settings || settings.alert_on_cost === false) return;
+    const perRun = settings.cost_per_run_usd != null ? Number(settings.cost_per_run_usd) : null;
+    const perDay = settings.cost_per_day_usd != null ? Number(settings.cost_per_day_usd) : null;
+    if (perRun !== null && perRun > 0 && runCost > perRun) {
+      await alert("cost_threshold",
+        `Run cost $${runCost.toFixed(4)} exceeded per-run threshold $${perRun.toFixed(4)} for ${job}.`,
+        { scope: "per_run", job, run_cost_usd: runCost, threshold_usd: perRun });
+    }
+    if (perDay !== null && perDay > 0) {
+      const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+      const { data: rows } = await sb.from("ai_usage_log")
+        .select("cost_usd").eq("job", job).gte("created_at", dayStart.toISOString());
+      const dayTotal = (rows ?? []).reduce((s: number, r: { cost_usd: number | null }) => s + Number(r.cost_usd ?? 0), 0);
+      if (dayTotal > perDay) {
+        await alert("cost_threshold",
+          `Today's spend on ${job} is $${dayTotal.toFixed(4)} (threshold $${perDay.toFixed(4)}).`,
+          { scope: "per_day", job, day_cost_usd: dayTotal, threshold_usd: perDay });
+      }
+    }
+  } catch (e) { console.error("checkCostThresholds failed", e); }
 }
