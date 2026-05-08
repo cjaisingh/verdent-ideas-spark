@@ -1,6 +1,7 @@
 // Extract candidate action items from a Copilot discussion transcript.
 // Auth: operator JWT. Returns {proposals: [...]}; client decides what to persist.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { pickModel } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +72,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: pickModel("google/gemini-2.5-flash"),
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Subject: ${disc.title ?? "(untitled)"}\n\nTranscript:\n${transcript}` },
