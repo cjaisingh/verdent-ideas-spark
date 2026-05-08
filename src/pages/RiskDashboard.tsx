@@ -64,6 +64,8 @@ export default function RiskDashboard() {
   const [groupBy, setGroupBy] = useState<"phase" | "module">("phase");
   const [showResolved, setShowResolved] = useState(false);
   const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const [copilotFor, setCopilotFor] = useState<Finding | null>(null);
+  const [chatFor, setChatFor] = useState<Finding | null>(null);
 
   const load = async () => {
     setLoading(true);
