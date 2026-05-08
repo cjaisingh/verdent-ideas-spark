@@ -43,8 +43,11 @@ export default function ApprovalPack() {
 
   useEffect(() => {
     supabase.from("roadmap_phases").select("*").order("order").then(({ data }) => {
-      setPhases((data ?? []) as Phase[]);
-      if (data?.length && !phaseId) setPhaseId(data[0].id);
+      const list = (data ?? []) as Phase[];
+      setPhases(list);
+      if (list.length && !phaseId) setPhaseId(list[0].id);
+      if (list.length && !rangeFromId) setRangeFromId(list[0].id);
+      if (list.length && !rangeToId) setRangeToId(list[list.length - 1].id);
     });
   }, []);
 
