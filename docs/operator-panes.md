@@ -24,7 +24,7 @@ type PaneMode = "left" | "dual" | "centre" | "bottom";
 type PaneState = { mode: PaneMode; rightWidth: number; bottomHeight: number };
 ```
 
-`rightWidth` / `bottomHeight` are reserved for future drag-resize persistence. For now sizes are reset to defaults on each page load; users can still resize within a session via the drag handles.
+`rightWidth` and `bottomHeight` are stored as **panel-group percentages** (0–100) and updated live via `react-resizable-panels`' `onResize` callback. When you switch back to a route, the saved size is reapplied as `defaultSize` (the panel group is keyed by mode so it remounts cleanly).
 
 ## Pane content
 
