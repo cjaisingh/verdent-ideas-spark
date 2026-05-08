@@ -39,6 +39,31 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+  // Admin-only test mode: dry-run /open that returns gate evaluation
+  // without writing a shift, observations, or proposals. Requires an
+  // operator session JWT carrying the 'admin' role — never accepts the
+  // cron service token (gate verification is a human action).
+  const isOpenTest =
+    path.startsWith("/open/test") ||
+    (path.startsWith("/open") && (url.searchParams.get("test") === "1" || url.searchParams.get("dryRun") === "1"));
+  if (isOpenTest) {
+    if (triggeredByCron) return json({ error: "test mode requires operator JWT, not service token" }, 403);
+    const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
+    const token = auth.replace(/^Bearer\s+/i, "");
+    const { data: claims, error: claimsErr } = await userClient.auth.getClaims(token);
+    if (claimsErr || !claims?.claims?.sub) return json({ error: "unauthorized" }, 401);
+    const userId = claims.claims.sub as string;
+    const { data: isAdmin } = await sb.rpc("has_role", { _user_id: userId, _role: "admin" });
+    if (!isAdmin) return json({ error: "forbidden: admin role required" }, 403);
+
+    const { data: settings } = await sb
+      .from("memory_settings")
+      .select("night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds")
+      .eq("id", true).maybeSingle();
+    return await evaluateOpenGates(sb, settings ?? null, url, userId);
+  }
+
   const { data: settings } = await sb
     .from("memory_settings")
     .select("night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds")
