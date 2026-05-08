@@ -1,48 +1,54 @@
 ## Goal
-Make stacked-bar segments in the Daily AI spend card clickable. Clicking opens a drill-down dialog listing the individual `ai_usage_log` runs for that (day × group key) cell, with tokens, model, and the exact cost formula.
+Replace the fixed 7/14/30-day toggle on the Daily AI spend card with a flexible date range picker, so any start/end date pair can be queried.
 
 ## Scope
-Frontend-only change in `src/components/AutomationPanel.tsx`. No schema, RLS, or edge function changes — `ai_usage_log` already has `prompt_tokens`, `completion_tokens`, `price_in_per_mtok`, `price_out_per_mtok`, `cost_usd`, `latency_ms`, `status`, `request_ref`, and is operator-readable.
+Frontend only — `src/components/AutomationPanel.tsx`, `DailyAiSpendCard`. No schema, RLS, or edge function changes. The drill-down dialog continues to use the in-memory `rows` and works unchanged.
 
 ## UX
-- Each segment in the stacked bar gets `cursor-pointer` and an `onClick` that opens a shadcn `Dialog`.
-- Whole-bar click (clicking the muted background area) opens the dialog scoped to that day across all groups.
-- Dialog title: `Aug 12 · by job · scheduled-code-review` (day + grouping + segment key, or "All groups" for whole-bar).
-- Header summary chips: total cost, total tokens, call count, night-mode count.
-- Table columns:
-  - Time (HH:MM:SS UTC)
-  - Job
-  - Model (with a small "night" badge when `request_ref.night_mode === true`)
-  - Status (ok / error pill, tooltip with `error` text if present)
-  - Prompt tok
-  - Completion tok
-  - Latency (ms)
-  - Cost (USD, 6dp)
-  - **Formula** — rendered as `(p/1e6 × $price_in) + (c/1e6 × $price_out) = $cost`, e.g. `(1,204/1M × $0.10) + (532/1M × $0.40) = $0.000333`. Shown muted/mono. Falls back to `—` if either price column is null.
-- Rows sorted newest first. Capped at 200 with a "+N more" footer note (drill-downs for a single cell rarely exceed this).
-- Empty state: "No runs in this slice."
+- Replace the `[7d | 14d | 30d]` segmented control with:
+  - A **range Popover trigger** button: `Aug 01 → Aug 14 (14d)`. Icon: `CalendarIcon` from lucide.
+  - Inside the popover: shadcn `Calendar` with `mode="range"` (`pointer-events-auto`), constrained `disabled={d => d > today || d < oneYearAgo}`.
+  - Quick presets row above the calendar: **7d · 14d · 30d · 90d · This month · Last month**. Clicking a preset sets the range and closes the popover.
+  - Footer: **Apply** + **Cancel**. Apply only enabled when both `from` and `to` are set.
+- Selected range is shown as button label and persists per-session in `localStorage` key `awip.spend.range` (`{ from, to }` ISO strings).
+- The "by job / by model" toggle stays as-is, to its right.
+- The four summary chips keep working; "Avg / day" divides by `(to - from + 1)` days instead of the old fixed `days`.
 
 ## Data flow
-- The card already loads up to 5,000 rows for the chosen window. Reuse those in-memory rows — no extra round-trip.
-- New local state: `drill: { day: string; groupKey: string | null } | null`.
-- Filtering: `rows.filter(r => r.created_at.slice(0,10) === day && (groupKey === null || groupKeyOf(r) === groupKey))`.
-- To get `price_in_per_mtok` / `price_out_per_mtok` / `latency_ms` / `status` / `error` / `request_ref`, extend the existing `select(...)` and `SpendRow` type with those columns. (Same query, more fields.)
+- Replace `days` state with `range: { from: Date; to: Date }` (default = last 14d, ending today UTC).
+- The query becomes:
+  ```ts
+  .gte("created_at", startOfUtcDay(range.from).toISOString())
+  .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
+  ```
+  i.e. inclusive of both day buckets.
+- `dayKeys` is built by walking `range.from → range.to` UTC inclusive.
+- Row cap stays at 5,000. If the response hits 5,000 we surface a small inline warning: `"Showing first 5,000 rows for this range — narrow the dates for full totals."` (detected when `data.length === 5000`).
+- Realtime subscription on `ai_usage_log` INSERT remains and triggers `load()` (which respects the current range).
 
 ## Implementation outline
-1. Extend `SpendRow` type and the `.select()` string.
-2. Add `Dialog` imports (`@/components/ui/dialog`) and a `Table` (`@/components/ui/table`) — both already used elsewhere in the codebase.
-3. Add `drill` state and `openDrill(day, groupKey)` helper.
-4. Wire `onClick` on each `<div>` segment and on the bar wrapper.
-5. Add a `<DrillDialog>` subcomponent in the same file that takes `rows`, `day`, `groupKey`, formats the formula, and renders the table.
-6. Keep existing realtime subscription — when new rows stream in, the dialog list updates because it derives from `rows`.
+1. Add imports: `Calendar`, `Popover/PopoverTrigger/PopoverContent`, `Button`, `CalendarIcon`, `format` from `date-fns` (already a dependency).
+2. New helpers (top of file or local): `startOfUtcDay(d)`, `endExclusiveUtcDay(d)`, `utcDayKey(d) → "YYYY-MM-DD"`, `daysBetweenInclusive(a,b)`, `enumerateUtcDays(from,to)`.
+3. Refactor `DailyAiSpendCard`:
+   - State: `range`, draft `pendingRange` while popover open, `popoverOpen`.
+   - `dayKeys = enumerateUtcDays(range.from, range.to)`.
+   - Replace fixed `days` math with `daysSpan = dayKeys.length`.
+   - Persist/restore `range` from `localStorage` on mount.
+4. New small subcomponent `<SpendRangePicker value pendingValue onApply onCancel presets />` rendered inside the popover. Presets implemented as plain buttons calling `onApply(preset)` directly.
+5. Empty/loading text uses the formatted range, not "last N days".
+6. Bar widths: when range is large (e.g. 90d), bar gap shrinks (`gap-0.5`) and day labels switch to every-7th tick to avoid clutter. Threshold: `daysSpan > 31 → sparse labels`.
 
 ## Out of scope
-- No CSV export (can be a follow-up).
-- No editing or re-running entries from the dialog.
-- No changes to backend, types, or other panels.
+- No comparison range / overlay (current vs previous period).
+- No timezone selector — stays UTC to match the rest of the panel.
+- No URL query-string sync (localStorage only).
+- No CSV export.
 
 ## Validation
-- Click a colored segment → dialog opens with only that group's runs for that day; cost sum in the header matches the segment tooltip total.
-- Click a sparse day's bar background → dialog lists all runs for that day.
-- Verify formula renders correctly for: night-mode flash-lite call, a row missing prices (shows `—`), and an `error` row (status pill + tooltip).
-- Toggle `by job` ↔ `by model` and re-open → drill respects the active grouping.
+- Pick a 3-day range with known activity → totals match a `SELECT sum(cost_usd)` over the same window.
+- Pick "This month" on the 1st of the month → renders a single-day bar with no NaN.
+- Pick a 90-day range → labels render sparsely, chart doesn't overflow.
+- Pick a future-end / inverted range → Apply disabled (calendar prevents future, range mode prevents inverted).
+- Click a bar segment → drill-down dialog still shows the right rows for that day×group.
+- Reload page → the previously selected range is restored from localStorage.
+- Hit a 5,000-row range (e.g. last 90d on a heavy account) → warning chip appears.
