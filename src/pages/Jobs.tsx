@@ -199,11 +199,18 @@ export default function Jobs() {
           e.dataTransfer.setData("text/plain", j.id);
         }}
         onDragEnd={() => { setDraggingId(null); setDragOverCol(null); }}
-        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""}`}
+        className={`hover:shadow-sm transition cursor-pointer ${draggingId === j.id ? "opacity-50" : ""} ${selected.has(j.id) ? "ring-2 ring-primary" : ""}`}
         onClick={() => setActiveJobId(j.id)}
       >
         <CardContent className="pt-3 pb-3 space-y-1.5">
           <div className="flex items-center gap-1.5 flex-wrap">
+            <span onClick={(e) => e.stopPropagation()} className="inline-flex items-center">
+              <Checkbox
+                checked={selected.has(j.id)}
+                onCheckedChange={(v) => toggleSelect(j.id, !!v)}
+                aria-label={`Select ${handle}`}
+              />
+            </span>
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
             <Badge variant="outline" className="text-[9px] uppercase">{j.priority}</Badge>
             <Badge variant="outline" className="text-[9px]">{j.source}</Badge>
