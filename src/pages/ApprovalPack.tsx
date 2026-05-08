@@ -501,15 +501,26 @@ export default function ApprovalPack() {
                                           <td className="py-1 pr-2 align-top">
                                             {itemEv.length === 0 ? (
                                               <span className="text-muted-foreground">—</span>
-                                            ) : itemEv.map((e) => (
-                                              <div key={e.id} className="break-words">
-                                                {e.url ? (
-                                                  <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
-                                                ) : e.title}
-                                                {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
-                                                {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
-                                              </div>
-                                            ))}
+                                            ) : (
+                                              <ul className="pp-evidence-list space-y-1">
+                                                {itemEv.map((e) => (
+                                                  <li key={e.id} className="pp-evidence-item">
+                                                    <div className="pp-evidence-title">
+                                                      {e.url ? (
+                                                        <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline" title={e.title}>{e.title}</a>
+                                                      ) : <span title={e.title}>{e.title}</span>}
+                                                    </div>
+                                                    {(e.storage_path || e.source) && (
+                                                      <div className="pp-evidence-meta text-[10px] text-muted-foreground">
+                                                        {e.storage_path && <span className="pp-evidence-path">file: {e.storage_path}</span>}
+                                                        {e.storage_path && e.source && <span> · </span>}
+                                                        {e.source && <span>{e.source}</span>}
+                                                      </div>
+                                                    )}
+                                                  </li>
+                                                ))}
+                                              </ul>
+                                            )}
                                           </td>
                                           <td className="py-1 text-muted-foreground truncate">{c.checked_by ?? "—"}</td>
                                         </tr>,
