@@ -997,16 +997,24 @@ const PerJobCostThresholdsCard = () => {
 // Daily AI spend — chart + breakdowns from ai_usage_log
 // ─────────────────────────────────────────────────────────────────────────
 type SpendRow = {
+  id?: string;
   created_at: string;
   job: string | null;
   model: string | null;
   cost_usd: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
+  price_in_per_mtok: number | null;
+  price_out_per_mtok: number | null;
+  latency_ms: number | null;
+  status: string | null;
+  error: string | null;
+  request_ref: any;
 };
 
 const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
 const DailyAiSpendCard = () => {
   const [rows, setRows] = useState<SpendRow[]>([]);
