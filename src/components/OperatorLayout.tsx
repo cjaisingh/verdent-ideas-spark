@@ -12,21 +12,30 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { SIZE_BOUNDS, clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useViewport } from "@/hooks/use-viewport";
 
 const toastedDecisions = new Set<string>();
 
 const OperatorLayout = () => {
   const navigate = useNavigate();
   const [paneState, setPaneState] = usePaneState();
-  const isMobile = useIsMobile();
-  const effectiveMode = isMobile ? "centre" : paneState.mode;
+  const viewport = useViewport();
+  const isMobile = viewport === "mobile";
+  // Force narrow viewports off dual/bottom (would crush main content); mobile forced to centre.
+  const effectiveMode =
+    viewport === "mobile"
+      ? "centre"
+      : viewport === "narrow" && (paneState.mode === "dual" || paneState.mode === "bottom")
+        ? "left"
+        : paneState.mode;
   const flags = paneFlags(effectiveMode);
+  const sizes = getModeSizes(paneState, effectiveMode, viewport);
+  const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
 
   const signOut = async () => {
