@@ -70,7 +70,14 @@ export function CopilotDiscussionSheet({
         const { data: u } = await supabase.auth.getUser();
         const { data: created, error } = await supabase
           .from("roadmap_finding_discussions")
-          .insert({ finding_id: findingId, mode: "copilot", started_by_user_id: u.user?.id ?? null })
+          .insert({
+            finding_id: findingId,
+            subject_type: "roadmap_finding",
+            subject_id: findingId,
+            mode: "copilot",
+            title: findingTitle,
+            started_by_user_id: u.user?.id ?? null,
+          })
           .select("id")
           .single();
         if (error || !created) {
