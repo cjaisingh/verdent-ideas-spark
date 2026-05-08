@@ -1466,6 +1466,53 @@ const DailyAiSpendCard = () => {
             className={`px-2 py-0.5 rounded border text-[11px] ${compare ? "bg-muted text-foreground border-border" : "text-muted-foreground border-border hover:text-foreground"}`}
             title="Compare against the immediately preceding period of the same length"
           >vs prev</button>
+          <button
+            type="button"
+            onClick={() => {
+              // Build daily × group pivot for the current range/grouping
+              const header = ["day", groupBy, "cost_usd", "prompt_tokens", "completion_tokens", "calls"];
+              const agg: Record<string, { cost: number; pt: number; ct: number; n: number }> = {};
+              for (const r of rows) {
+                const day = r.created_at ? tzDayKey(new Date(r.created_at), tz) : "";
+                if (!day) continue;
+                const g = (groupBy === "job" ? r.job : r.model) || "unknown";
+                const k = `${day}\u0000${g}`;
+                const a = agg[k] || (agg[k] = { cost: 0, pt: 0, ct: 0, n: 0 });
+                a.cost += Number(r.cost_usd || 0);
+                a.pt += Number(r.prompt_tokens || 0);
+                a.ct += Number(r.completion_tokens || 0);
+                a.n += 1;
+              }
+              const esc = (v: string | number) => {
+                const s = String(v);
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+              };
+              const lines = [header.join(",")];
+              const keys = Object.keys(agg).sort();
+              for (const k of keys) {
+                const [day, g] = k.split("\u0000");
+                const a = agg[k];
+                lines.push([day, g, a.cost.toFixed(6), a.pt, a.ct, a.n].map(esc).join(","));
+              }
+              const csv = lines.join("\n") + "\n";
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              const fromKey = tzDayKey(range.from, tz);
+              const toKey = tzDayKey(range.to, tz);
+              const tzTag = tz === "UTC" ? "utc" : "local";
+              a.href = url;
+              a.download = `awip-spend-${fromKey}_to_${toKey}-by-${groupBy}-${tzTag}.csv`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(() => URL.revokeObjectURL(url), 0);
+              toast({ title: "CSV exported", description: `${keys.length} rows · by ${groupBy} · ${tz}` });
+            }}
+            disabled={loading || rows.length === 0}
+            className="px-2 py-0.5 rounded border border-border text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            title={`Export daily × ${groupBy} breakdown for the visible range as CSV`}
+          >Export CSV</button>
           <div className="inline-flex rounded border border-border overflow-hidden">
             {([
               { k: "spend", label: "$ Spend" },
