@@ -10,6 +10,7 @@ import { InlineEdit } from "@/components/InlineEdit";
 import { TurnTracker } from "@/components/TurnTracker";
 import { WorkLogPulse } from "@/components/WorkLogPulse";
 import { AutomationPanel } from "@/components/AutomationPanel";
+import { DailyPlanCard } from "@/components/DailyPlanCard";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
