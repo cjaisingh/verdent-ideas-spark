@@ -1063,6 +1063,9 @@ const DailyAiSpendCard = () => {
   const [jobLimits, setJobLimits] = useState<Record<string, { day: number | null; run: number | null }>>({});
   const [compare, setCompare] = useState(false);
   const [prevRows, setPrevRows] = useState<SpendRow[]>([]);
+  const [rowLimit, setRowLimit] = useState<number>(5000);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [knownGroups, setKnownGroups] = useState<{ job: string[]; model: string[] }>({ job: [], model: [] });
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
@@ -1099,22 +1102,36 @@ const DailyAiSpendCard = () => {
     return () => { active = false; supabase.removeChannel(ch); };
   }, []);
 
+  // Reset group filter if user switches the group dimension
+  useEffect(() => { setGroupFilter(null); }, [groupBy]);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const { data, error } = await supabase
+      let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
         .gte("created_at", startOfUtcDay(range.from).toISOString())
-        .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
+        .lt("created_at", endExclusiveUtcDay(range.to).toISOString());
+      if (groupFilter) q = q.eq(groupBy, groupFilter);
+      const { data, error } = await q
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(rowLimit);
       if (!cancelled) {
         if (error) toast({ title: "Failed to load AI spend", description: error.message, variant: "destructive" });
         const list = (data as SpendRow[]) || [];
         setRows(list);
-        setCapped(list.length === 5000);
+        setCapped(list.length === rowLimit);
+        setKnownGroups((prev) => {
+          const jobs = new Set(prev.job);
+          const models = new Set(prev.model);
+          for (const r of list) {
+            if (r.job) jobs.add(r.job);
+            if (r.model) models.add(r.model);
+          }
+          return { job: Array.from(jobs).sort(), model: Array.from(models).sort() };
+        });
         setLoading(false);
       }
     };
@@ -1123,7 +1140,7 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [range.from.getTime(), range.to.getTime()]);
+  }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
 
   // Previous-period fetch (same length, immediately before range.from)
   useEffect(() => {
@@ -1135,20 +1152,22 @@ const DailyAiSpendCard = () => {
     const prevFrom = new Date(fromMs - span);
     const prevTo = new Date(fromMs);
     const load = async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, status, request_ref")
         .gte("created_at", prevFrom.toISOString())
-        .lt("created_at", prevTo.toISOString())
+        .lt("created_at", prevTo.toISOString());
+      if (groupFilter) q = q.eq(groupBy, groupFilter);
+      const { data, error } = await q
         .order("created_at", { ascending: false })
-        .limit(5000);
+        .limit(rowLimit);
       if (cancelled) return;
       if (error) toast({ title: "Failed to load comparison period", description: error.message, variant: "destructive" });
       setPrevRows((data as SpendRow[]) || []);
     };
     load();
     return () => { cancelled = true; };
-  }, [compare, range.from.getTime(), range.to.getTime()]);
+  }, [compare, range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter]);
 
   const dayKeys = enumerateUtcDays(range.from, range.to);
   const daysSpan = Math.max(1, dayKeys.length);
@@ -1399,9 +1418,45 @@ const DailyAiSpendCard = () => {
         <div className="text-xs text-muted-foreground">Loading…</div>
       ) : (
         <>
-          {capped && (
-            <div className="text-[10px] rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-1">
-              Showing first 5,000 rows for this range — narrow the dates for full totals.
+          {(capped || groupFilter || rowLimit !== 5000) && (
+            <div className={`text-[10px] rounded border px-2 py-1 flex flex-wrap items-center gap-2 ${capped ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400" : "border-border bg-muted/30 text-muted-foreground"}`}>
+              <span className="font-mono">
+                {capped
+                  ? `Capped at ${rowLimit.toLocaleString()} rows — totals may be incomplete.`
+                  : `Loaded ${rows.length.toLocaleString()} rows (cap ${rowLimit.toLocaleString()}).`}
+              </span>
+              <label className="flex items-center gap-1">
+                <span>Row cap</span>
+                <select
+                  value={rowLimit}
+                  onChange={(e) => setRowLimit(Number(e.target.value))}
+                  className="bg-background border border-border rounded px-1 py-0.5 text-[10px] font-mono"
+                >
+                  {[5000, 10000, 25000, 50000].map((n) => (
+                    <option key={n} value={n}>{n.toLocaleString()}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1">
+                <span>Filter {groupBy}</span>
+                <select
+                  value={groupFilter ?? ""}
+                  onChange={(e) => setGroupFilter(e.target.value || null)}
+                  className="bg-background border border-border rounded px-1 py-0.5 text-[10px] font-mono max-w-[180px]"
+                >
+                  <option value="">All</option>
+                  {knownGroups[groupBy].map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </label>
+              {(groupFilter || rowLimit !== 5000) && (
+                <button
+                  type="button"
+                  onClick={() => { setGroupFilter(null); setRowLimit(5000); }}
+                  className="underline hover:text-foreground"
+                >reset</button>
+              )}
             </div>
           )}
           {/* Stacked bar chart */}
