@@ -301,48 +301,84 @@ export default function ApprovalPack() {
                         {t.acceptance && <p className="text-xs"><span className="font-semibold">Acceptance:</span> {t.acceptance}</p>}
                         {t.review_notes && <p className="text-xs"><span className="font-semibold">Review notes:</span> {t.review_notes}</p>}
 
-                        {cls.length > 0 && (
-                          <table className="pp-checklist w-full text-xs border-collapse">
-                            <thead>
-                              <tr className="text-left text-muted-foreground">
-                                <th className="w-8 py-1 pr-2 font-medium">✓</th>
-                                <th className="w-24 py-1 pr-2 font-medium">Category</th>
-                                <th className="py-1 pr-2 font-medium">Item</th>
-                                <th className="py-1 pr-2 font-medium">Evidence</th>
-                                <th className="w-28 py-1 font-medium">Reviewer</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {cls.map((c) => {
-                                const itemEv = evByItem(t.id, c.item_key);
-                                return (
-                                  <tr key={c.id} className="align-top border-t">
-                                    <td className="py-1 pr-2 font-mono">{c.checked ? "[x]" : "[ ]"}</td>
-                                    <td className="py-1 pr-2 uppercase tracking-wide text-[10px] text-muted-foreground">{c.category}</td>
-                                    <td className="py-1 pr-2">
-                                      <div>{c.label}</div>
-                                      {c.note && <div className="text-muted-foreground italic">{c.note}</div>}
-                                    </td>
-                                    <td className="py-1 pr-2">
-                                      {itemEv.length === 0 ? (
-                                        <span className="text-muted-foreground">—</span>
-                                      ) : itemEv.map((e) => (
-                                        <div key={e.id}>
-                                          {e.url ? (
-                                            <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
-                                          ) : e.title}
-                                          {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
-                                          {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
-                                        </div>
-                                      ))}
-                                    </td>
-                                    <td className="py-1 text-muted-foreground">{c.checked_by ?? "—"}</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        )}
+                        {cls.length > 0 && (() => {
+                          const catTotals = cls.reduce<Record<string, { done: number; total: number }>>((acc, c) => {
+                            const k = c.category || "—";
+                            acc[k] ??= { done: 0, total: 0 };
+                            acc[k].total += 1;
+                            if (c.checked) acc[k].done += 1;
+                            return acc;
+                          }, {});
+                          const taskDone = cls.filter((c) => c.checked).length;
+                          const taskPct = Math.round((taskDone / cls.length) * 100);
+                          return (
+                            <table className="pp-checklist w-full text-xs border-collapse table-fixed">
+                              <colgroup>
+                                <col style={{ width: "32px" }} />
+                                <col style={{ width: "96px" }} />
+                                <col />
+                                <col style={{ width: "64px" }} />
+                                <col style={{ width: "38%" }} />
+                                <col style={{ width: "112px" }} />
+                              </colgroup>
+                              <thead>
+                                <tr className="text-left text-muted-foreground">
+                                  <th className="py-1 pr-2 font-medium text-center">✓</th>
+                                  <th className="py-1 pr-2 font-medium">Category</th>
+                                  <th className="py-1 pr-2 font-medium">Item</th>
+                                  <th className="py-1 pr-2 font-medium text-right">Done %</th>
+                                  <th className="py-1 pr-2 font-medium">Evidence</th>
+                                  <th className="py-1 font-medium">Reviewer</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {cls.map((c) => {
+                                  const itemEv = evByItem(t.id, c.item_key);
+                                  const cat = catTotals[c.category || "—"];
+                                  const catPct = cat.total ? Math.round((cat.done / cat.total) * 100) : 0;
+                                  return (
+                                    <tr key={c.id} className="align-top border-t">
+                                      <td className="py-1 pr-2 font-mono text-center">{c.checked ? "[x]" : "[ ]"}</td>
+                                      <td className="py-1 pr-2 uppercase tracking-wide text-[10px] text-muted-foreground truncate">{c.category}</td>
+                                      <td className="py-1 pr-2">
+                                        <div className="break-words">{c.label}</div>
+                                        {c.note && <div className="text-muted-foreground italic break-words">{c.note}</div>}
+                                      </td>
+                                      <td className="py-1 pr-2 text-right tabular-nums">
+                                        <span className="text-muted-foreground">{cat.done}/{cat.total}</span>
+                                        <span className="ml-1 font-medium">{catPct}%</span>
+                                      </td>
+                                      <td className="py-1 pr-2 align-top">
+                                        {itemEv.length === 0 ? (
+                                          <span className="text-muted-foreground">—</span>
+                                        ) : itemEv.map((e) => (
+                                          <div key={e.id} className="break-words">
+                                            {e.url ? (
+                                              <a href={e.url} target="_blank" rel="noreferrer" className="pp-link underline">{e.title}</a>
+                                            ) : e.title}
+                                            {e.storage_path && <span className="ml-1 text-muted-foreground">(file: {e.storage_path})</span>}
+                                            {e.source && <span className="ml-1 text-muted-foreground">— {e.source}</span>}
+                                          </div>
+                                        ))}
+                                      </td>
+                                      <td className="py-1 text-muted-foreground truncate">{c.checked_by ?? "—"}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t font-medium">
+                                  <td className="py-1 pr-2" colSpan={3}>Task total</td>
+                                  <td className="py-1 pr-2 text-right tabular-nums">
+                                    <span className="text-muted-foreground">{taskDone}/{cls.length}</span>
+                                    <span className="ml-1">{taskPct}%</span>
+                                  </td>
+                                  <td colSpan={2} />
+                                </tr>
+                              </tfoot>
+                            </table>
+                          );
+                        })()}
 
                         {taskEv.length > 0 && (
                           <div className="space-y-1">
