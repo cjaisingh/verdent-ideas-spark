@@ -96,7 +96,7 @@ export default function Jobs() {
   const bulkUpdate = async (patch: Record<string, any>, label: string) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const { error } = await supabase.from("discussion_actions").update(patch).in("id", ids);
+    const { error } = await supabase.from("discussion_actions").update(patch as never).in("id", ids);
     if (error) { toast({ title: `${label} failed`, description: error.message, variant: "destructive" }); return; }
     toast({ title: `${label}: ${ids.length} job${ids.length === 1 ? "" : "s"}` });
     clearSelection();
