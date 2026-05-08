@@ -45,6 +45,7 @@ const groups = [
       { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
       { url: "/runbooks", title: "Runbooks", icon: Library },
       { url: "/admin", title: "Admin", icon: Shield },
+      { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
       { url: "/status", title: "Status", icon: Heart },
     ],
   },

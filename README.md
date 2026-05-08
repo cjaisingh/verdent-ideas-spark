@@ -41,6 +41,10 @@ All endpoints accept either an operator JWT (`Authorization: Bearer …`) or the
 | `GET` | `/events/recent` | Merged OKR + capability event stream. Params: `limit`, `since`, `tenant_id` |
 | `GET` | `/capabilities/demand` | Capabilities ranked by `active_kr_count`, then `tenant_count`. Surfaces `unknown` capabilities referenced by KRs but never registered |
 | `GET` | `/capabilities/:id/demand-detail` | Capability + driving KRs + tenants |
+| `GET` | `/capabilities/promotion-status` | Admin-only. Phase-3 maturity gates per capability. See `docs/capability-promotion.md` |
+| `GET` | `/capabilities/:id/promotion-status` | Admin-only. Single-capability variant |
+| `POST` | `/capabilities/:id/promote` | Admin-only. Promote to `available` if no gates fail. Idempotent |
+| `POST` | `/capabilities/:id/ack-warnings` | Admin-only. Ack warning-level gates with a rationale |
 
 Every call is logged to `api_call_logs` (route, status, duration, actor, idempotency replay flag).
 
