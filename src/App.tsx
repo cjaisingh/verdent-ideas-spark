@@ -20,6 +20,7 @@ import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import RiskDashboard from "./pages/RiskDashboard";
+import ApprovalPack from "./pages/ApprovalPack";
 import Runbook from "./pages/Runbook";
 import Runbooks from "./pages/Runbooks";
 import Memory from "./pages/Memory";
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/roadmap/risks" element={<RiskDashboard />} />
+            <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
             <Route path="/notebook" element={<Notebook />} />
