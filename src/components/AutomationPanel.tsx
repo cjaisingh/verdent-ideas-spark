@@ -1160,7 +1160,10 @@ const DailyAiSpendCard = () => {
     Object.values(matrix[d]).reduce((a, b) => a + b, 0));
   const dailyCostTotals = dayKeys.map((d) =>
     Object.values(costMatrix[d]).reduce((a, b) => a + b, 0));
-  const maxDay = Math.max(0.0001, ...dailyTotals);
+  const dataMax = Math.max(0, ...dailyTotals);
+  const maxDay = dataMax > 0
+    ? dataMax
+    : (metric === "spend" && globalLimits.day != null ? globalLimits.day : 1);
 
   // top breakdown for whichever grouping is active (in selected metric)
   const breakdown: Array<{ key: string; cost: number }> = groups
