@@ -244,9 +244,22 @@ export function useDashboardConfig() {
     }));
   }, [update]);
 
+
+  /** Reset a tab back to the default template + seeded widgets. Keeps tab id and name. */
+  const resetTab = useCallback((tabId: string) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, template: DEFAULT_TAB_TEMPLATE, widgets: defaultTabWidgets() }
+          : t,
+      ),
+    }));
+  }, [update]);
+
   return {
     config, loaded, userId, MAX_TABS,
-    setActiveTab, addTab, renameTab, deleteTab, duplicateTab, reorderTab, setTemplate, setSlotWidget, swapSlots,
+    setActiveTab, addTab, renameTab, deleteTab, duplicateTab, reorderTab, setTemplate, setSlotWidget, swapSlots, resetTab,
     newWidgetId: shortId,
   };
 }
