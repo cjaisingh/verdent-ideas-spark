@@ -279,7 +279,7 @@ export function JobDetailsDrawer({
 
           <section>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
-              Timeline
+              Context
             </h3>
             <ol className="space-y-2">
               {timeline.map((t, i) => (
@@ -298,7 +298,41 @@ export function JobDetailsDrawer({
                 </li>
               ))}
             </ol>
-            {loading && <p className="text-xs text-muted-foreground">Loading timeline…</p>}
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Activity log
+            </h3>
+            {events.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                {loading ? "Loading activity…" : "No activity recorded yet."}
+              </p>
+            ) : (
+              <ol className="space-y-2">
+                {events.map((e, i) => {
+                  const { label, detail } = formatEvent(e);
+                  return (
+                    <li key={e.id} className="flex gap-3 text-sm">
+                      <div className="flex flex-col items-center pt-1">
+                        <div className={`h-2 w-2 rounded-full ${eventColor(e.event_type)}`} />
+                        {i < events.length - 1 && <div className="flex-1 w-px bg-border mt-1 min-h-[16px]" />}
+                      </div>
+                      <div className="flex-1 pb-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{new Date(e.created_at).toLocaleString()}</span>
+                          {e.actor_label && <span>· {e.actor_label}</span>}
+                        </div>
+                        <div className="font-medium">{label}</div>
+                        {detail && <div className="text-xs text-muted-foreground break-words">{detail}</div>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
           </section>
 
           <Separator />
