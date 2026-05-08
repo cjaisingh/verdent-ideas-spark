@@ -2062,7 +2062,13 @@ const SpendDrillDialog = ({
                       <div className="px-2 py-1 font-mono text-right">
                         {fmtUsdFull(Number(r.cost_usd || 0))}
                         {runBreach && (
-                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠</span>
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠ run</span>
+                        )}
+                        {dayBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Day total over daily cap (${fmtUsd6(globalLimits.day!)})`}>⚠ day</span>
+                        )}
+                        {jobDayBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Job-day total over per-job cap (${fmtUsd6(jobLimits[r.job!]!.day!)})`}>⚠ job</span>
                         )}
                       </div>
                       <div className="px-2 py-1 font-mono text-muted-foreground truncate" title={formulaFor(r)}>{formulaFor(r)}</div>
