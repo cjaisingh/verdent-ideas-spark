@@ -192,6 +192,25 @@ export default function ApprovalPack() {
               <option key={p.id} value={p.id}>{p.key} · {p.title}</option>
             ))}
           </select>
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={density} onChange={(e) => setDensity(e.target.value as any)}
+            title="Print density"
+            aria-label="Print density"
+          >
+            <option value="compact">Compact</option>
+            <option value="standard">Standard</option>
+            <option value="relaxed">Relaxed</option>
+          </select>
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={paperSize} onChange={(e) => setPaperSize(e.target.value as any)}
+            title="Paper size"
+            aria-label="Paper size"
+          >
+            <option value="A4">A4</option>
+            <option value="Letter">Letter</option>
+          </select>
           <Button size="sm" variant="outline" onClick={downloadMarkdown} disabled={!phase}>
             <Download className="h-4 w-4 mr-1" /> Markdown
           </Button>
