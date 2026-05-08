@@ -589,6 +589,11 @@ const Roadmap = () => {
                                       </div>
                                     </div>
 
+                                    {/* Review checklist */}
+                                    <div className="border-t border-border pt-2">
+                                      <ReviewChecklistEditor taskId={task.id} />
+                                    </div>
+
                                     {/* Research evidence */}
                                     <div className="border-t border-border pt-2">
                                       <EvidencePanel taskId={task.id} />
