@@ -1392,7 +1392,7 @@ const DailyAiSpendCard = () => {
               })}
             </div>
           </div>
-          {hasAnyLimit && (
+          {hasAnyLimit && showThresholds && (
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
               {globalLimits.day != null && (
                 <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-destructive/70" /> daily limit {fmtUsd6(globalLimits.day)}</span>
@@ -1404,6 +1404,11 @@ const DailyAiSpendCard = () => {
               {(globalLimits.run != null || Object.values(jobLimits).some(l => l.run != null)) && (
                 <span>per-run breaches shown in drill-down</span>
               )}
+            </div>
+          )}
+          {hasAnyLimit && !showThresholds && (
+            <div className="text-[10px] text-muted-foreground">
+              Cost thresholds hidden while viewing {metricLabel}.
             </div>
           )}
 
