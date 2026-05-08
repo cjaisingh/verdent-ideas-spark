@@ -390,6 +390,7 @@ const Roadmap = () => {
                     override={{ rationale: phase.manual_override_rationale, by: phase.manual_override_by, at: phase.manual_override_at }}
                   />
                   <PhaseOverrideButton phaseId={phase.id} phaseKey={phase.key} phaseStatus={phase.status} gate={gates.get(phase.id)} />
+                  {gates.get(phase.id)?.approvals_ok && <OvernightRunBadge phaseId={phase.id} />}
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
