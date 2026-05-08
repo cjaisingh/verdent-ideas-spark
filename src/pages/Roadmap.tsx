@@ -812,8 +812,39 @@ const Roadmap = () => {
               );
             })}
           </div>
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="plan" className="mt-0">
+          <DailyPlanCard />
+        </TabsContent>
+
+        <TabsContent value="automation" className="mt-0 space-y-4">
+          <div className="flex justify-end">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  <Settings className="h-3.5 w-3.5 mr-1.5" />
+                  Auto-log settings
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[480px] sm:max-w-[480px] overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Auto-log settings</SheetTitle>
+                </SheetHeader>
+                <div className="mt-4">
+                  <AutoLogSettings />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+          <AutomationPanel />
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-0 space-y-4">
+          <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
+          <WorkLogPulse />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
