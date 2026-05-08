@@ -93,7 +93,7 @@ export default function AiUsage() {
     for (const r of list) {
       const inT = r.prompt_tokens ?? 0;
       const outT = r.completion_tokens ?? 0;
-      actualCost += costFor(r.model, inT, outT);
+      actualCost += rowCost(r);
       const baseModel = JOB_BASELINE_MODEL[r.job] ?? r.model;
       baselineCost += costFor(baseModel, inT, outT);
       totalTok += r.total_tokens ?? inT + outT;
