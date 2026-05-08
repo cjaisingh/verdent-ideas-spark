@@ -236,7 +236,12 @@ const OperatorLayout = () => {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => setPaneState(clearModeSizes(paneState, effectiveMode, viewport))}
+                      onClick={() => {
+                        setPaneState(clearModeSizes(paneState, effectiveMode, viewport));
+                        toast.success("Pane sizes reset", {
+                          description: `Restored defaults for ${effectiveMode} on this route (${viewport}).`,
+                        });
+                      }}
                       aria-label="Reset pane sizes"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
@@ -256,7 +261,12 @@ const OperatorLayout = () => {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => setPaneState(clearViewportSizes(paneState, viewport))}
+                      onClick={() => {
+                        setPaneState(clearViewportSizes(paneState, viewport));
+                        toast.success("Pane sizes reset", {
+                          description: `Cleared all saved sizes for ${viewport} screens on this route.`,
+                        });
+                      }}
                       aria-label={`Reset sizes for ${viewport} screens`}
                     >
                       <Monitor className="h-3.5 w-3.5" />
@@ -276,14 +286,17 @@ const OperatorLayout = () => {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() =>
+                      onClick={() => {
                         setPaneState({
                           mode: "left",
                           lastNonCentre: "left",
                           sizesByMode: undefined,
                           sizesByViewportMode: {},
-                        })
-                      }
+                        });
+                        toast.success("Layout reset", {
+                          description: "Pane mode and all saved sizes restored to defaults for this route.",
+                        });
+                      }}
                       aria-label="Reset layout to default for this route"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
