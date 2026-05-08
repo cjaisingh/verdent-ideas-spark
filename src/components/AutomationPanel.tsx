@@ -515,6 +515,7 @@ const AlertsCard = () => {
   const [draftUrl, setDraftUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [costTesting, setCostTesting] = useState(false);
 
   const load = async () => {
     const [{ data: settings }, { data: log }] = await Promise.all([
@@ -568,6 +569,50 @@ const AlertsCard = () => {
     } catch (e) {
       toast({ title: "Test failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally { setTesting(false); }
+  };
+
+  const sendCostTest = async () => {
+    if (!s) return;
+    const url = (s.webhook_url ?? draftUrl).trim();
+    if (!url) { toast({ title: "Save a webhook URL first", variant: "destructive" }); return; }
+    const perRun = s.cost_per_run_usd;
+    const perDay = s.cost_per_day_usd;
+    const simulatedRun = perRun != null ? Number(perRun) + 0.01 : 0.5;
+    const simulatedDay = perDay != null ? Number(perDay) + 0.01 : 1.0;
+    const message = `TEST cost_threshold · simulated run $${simulatedRun.toFixed(4)} (per-run threshold ${perRun ?? "off"}) · simulated day total $${simulatedDay.toFixed(4)} (per-day threshold ${perDay ?? "off"})`;
+    const payload = {
+      test: true,
+      scope: "manual_test",
+      job: "manual-test",
+      run_cost_usd: simulatedRun,
+      day_cost_usd: simulatedDay,
+      threshold_per_run_usd: perRun,
+      threshold_per_day_usd: perDay,
+    };
+    setCostTesting(true);
+    let delivered = false; let status_code: number | null = null; let error: string | null = null;
+    try {
+      const r = await fetch(url, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: `🔔 manual-test · cost_threshold\n${message}`,
+          job: "manual-test", reason: "cost_threshold", message, payload, ts: new Date().toISOString(),
+        }),
+      });
+      status_code = r.status; delivered = r.ok;
+      if (!r.ok) error = (await r.text()).slice(0, 300);
+      toast({ title: r.ok ? "Cost alert sent" : `Cost alert failed (${r.status})`, variant: r.ok ? "default" : "destructive" });
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      toast({ title: "Cost alert failed", description: error, variant: "destructive" });
+    } finally {
+      try {
+        await supabase.from("alert_log" as any).insert({
+          job: "manual-test", reason: "cost_threshold", message, delivered, status_code, error, payload,
+        });
+      } catch { /* ignore log insert errors */ }
+      setCostTesting(false);
+    }
   };
 
   if (!s) return null;
@@ -646,6 +691,10 @@ const AlertsCard = () => {
             className="w-20 bg-background border border-border rounded px-1 py-0.5 text-right" />
         </label>
         <span className="text-[10px] opacity-70">leave blank to disable</span>
+        <button onClick={sendCostTest} disabled={costTesting}
+          className="ml-auto text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
+          {costTesting ? "Sending…" : "Test cost alert"}
+        </button>
       </div>
 
       {logs.length > 0 && (
