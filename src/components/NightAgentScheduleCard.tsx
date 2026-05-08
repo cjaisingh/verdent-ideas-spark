@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Clock, Calendar, Tags, Loader2 } from "lucide-react";
+import { Clock, Calendar, Tags, Loader2, FlaskConical } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 // Common IANA zones; the input is free-form so any IANA value works.
 const TZ_PRESETS = [
@@ -41,6 +42,28 @@ export const NightAgentScheduleCard = () => {
   const [s, setS] = useState<Settings | null>(null);
   const [saving, setSaving] = useState(false);
   const [draftDate, setDraftDate] = useState("");
+  const [smoking, setSmoking] = useState(false);
+  const [smokeResult, setSmokeResult] = useState<any>(null);
+
+  const runSmoke = async () => {
+    setSmoking(true);
+    setSmokeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("night-agent/smoke", { method: "POST" });
+      if (error) throw error;
+      setSmokeResult(data);
+      toast({
+        title: data?.would_run ? "Smoke test: would run" : "Smoke test: would skip",
+        description: data?.would_run
+          ? `${data.candidate_jobs ?? 0} candidate job(s) · test shift recorded`
+          : `Skip reasons: ${(data?.skip_reasons ?? []).join(", ") || "unknown"}`,
+      });
+    } catch (e: any) {
+      toast({ title: "Smoke test failed", description: e?.message ?? String(e), variant: "destructive" });
+    } finally {
+      setSmoking(false);
+    }
+  };
 
   const load = async () => {
     const { data } = await supabase
@@ -254,6 +277,49 @@ export const NightAgentScheduleCard = () => {
           </div>
         ) : (
           <div className="text-[10px] text-muted-foreground italic">No blackout dates set.</div>
+        )}
+      </div>
+
+
+      {/* Smoke test */}
+      <div className="border-t border-border pt-2 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <FlaskConical className="h-3 w-3" /> Smoke test
+            <span className="italic">— evaluates gates now, records a test shift</span>
+          </div>
+          <button
+            type="button"
+            onClick={runSmoke}
+            disabled={smoking}
+            className="text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            {smoking ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+            Run smoke test
+          </button>
+        </div>
+        {smokeResult && (
+          <div className="text-[11px] rounded border border-border bg-muted/30 p-2 space-y-1 font-mono">
+            <div>
+              would_run: <span className={smokeResult.would_run ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
+                {String(smokeResult.would_run)}
+              </span>
+            </div>
+            <div>local: {smokeResult.gates?.local_date} {smokeResult.gates?.local_time} ({smokeResult.gates?.timezone})</div>
+            <div>window: {smokeResult.gates?.window} · in_window: {String(smokeResult.gates?.in_window)} · blackout: {String(smokeResult.gates?.blackout_hit)}</div>
+            <div>candidate_jobs: {smokeResult.candidate_jobs}</div>
+            {smokeResult.skip_reasons?.length > 0 && (
+              <div>skip_reasons: {smokeResult.skip_reasons.join(", ")}</div>
+            )}
+            {smokeResult.shift_id && (
+              <div>
+                test shift:{" "}
+                <Link to="/night-shifts" className="underline hover:text-foreground">
+                  {String(smokeResult.shift_id).slice(0, 8)}…
+                </Link>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
