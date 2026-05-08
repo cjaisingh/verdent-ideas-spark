@@ -1268,6 +1268,19 @@ const DailyAiSpendCard = () => {
             </PopoverContent>
           </Popover>
           <div className="inline-flex rounded border border-border overflow-hidden">
+            {([
+              { k: "spend", label: "$ Spend" },
+              { k: "prompt", label: "Prompt tok" },
+              { k: "completion", label: "Completion tok" },
+            ] as const).map((m) => (
+              <button
+                key={m.k}
+                onClick={() => setMetric(m.k)}
+                className={`px-2 py-0.5 ${metric === m.k ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >{m.label}</button>
+            ))}
+          </div>
+          <div className="inline-flex rounded border border-border overflow-hidden">
             {(["job", "model"] as const).map((g) => (
               <button
                 key={g}
@@ -1281,12 +1294,12 @@ const DailyAiSpendCard = () => {
 
       <div className={`grid grid-cols-2 ${hasAnyLimit ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2 text-xs`}>
         <div className="rounded border border-border p-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total</div>
-          <div className="font-mono">{fmtUsd6(total)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Total ({metricLabel})</div>
+          <div className="font-mono">{fmtMetric(total)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtUsd6(total / daysSpan)}</div>
+          <div className="font-mono">{fmtMetric(total / daysSpan)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
