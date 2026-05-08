@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import AppSecretsPanel from "@/components/admin/AppSecretsPanel";
+import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 
 type AppRole = "admin" | "operator";
 const ROLES: AppRole[] = ["admin", "operator"];
@@ -235,6 +236,8 @@ const Admin = () => {
           </Table>
         </div>
       </section>
+
+      <TelegramBotPanel />
 
       <AppSecretsPanel />
     </div>
