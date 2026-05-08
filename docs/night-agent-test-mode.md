@@ -14,6 +14,23 @@ Authorization: Bearer <operator session JWT — must carry the 'admin' role>
 Aliases: `?dryRun=1`, or path `/open/test`. Optional `?at=<ISO timestamp>` evaluates
 the gates against an arbitrary moment instead of `now()`.
 
+### Candidate filters (all optional, combinable)
+
+| Param | Accepts | Effect |
+|---|---|---|
+| `phase` | CSV or repeated · `general,auth,roadmap,copilot,jobs` | Only jobs whose inferred phase matches. |
+| `risk` | CSV or repeated · `low,med,high` | Only jobs at these risk levels. |
+| `verdict` | `audit` or `skip` | Only jobs that would audit, or only those that would skip. |
+| `q` | substring | Case-insensitive `ilike` filter on the job title. |
+| `short_num` | CSV of integers | Only jobs with these `#short_num` handles. |
+| `limit` | integer (1–50) | Cap the returned `jobs[]` (default 50). |
+
+`q` and `short_num` are pushed into SQL; `phase` / `risk` / `verdict` are applied
+after classification. The response always echoes `filters_applied` and reports
+`candidates_total` (classified), `candidates_after_filter`, and `candidates_returned`.
+
+Example: `POST /night-agent/open?test=1&phase=jobs,roadmap&risk=med,high&verdict=audit&limit=10`
+
 The cron service token (`x-awip-service-token`) is **rejected** with `403` — gate
 verification is a human action and must be tied to an operator identity.
 
