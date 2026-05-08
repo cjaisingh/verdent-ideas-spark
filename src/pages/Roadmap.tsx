@@ -858,6 +858,10 @@ const Roadmap = () => {
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           <WorkLogPulse />
         </TabsContent>
+
+        <TabsContent value="signoffs" className="mt-0 space-y-4">
+          <PhaseSignoffAudit limit={50} />
+        </TabsContent>
       </Tabs>
     </div>
   );
