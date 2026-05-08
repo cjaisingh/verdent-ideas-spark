@@ -170,49 +170,86 @@ export function CopilotDiscussionSheet({
     }
   };
 
+  const mintToken = async (): Promise<string | null> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deepgram-realtime-token`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session?.access_token}` },
+    });
+    const body = await resp.text();
+    console.log("[mic] token response", { status: resp.status, body });
+    if (!resp.ok) {
+      const retriable = resp.status === 502 || resp.status === 401 || resp.status === 504;
+      const err: any = new Error(`token mint HTTP ${resp.status}`);
+      err.status = resp.status;
+      err.retriable = retriable;
+      err.body = body;
+      throw err;
+    }
+    try { return JSON.parse(body).key ?? null; } catch { return null; }
+  };
+
+  const openSocket = (key: string): Promise<WebSocket> => new Promise((resolve, reject) => {
+    const ws = new WebSocket(
+      `wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&endpointing=600`,
+      ["bearer", key],
+    );
+    let settled = false;
+    ws.onopen = () => { if (!settled) { settled = true; resolve(ws); } };
+    ws.onclose = (ev) => {
+      if (!settled) {
+        settled = true;
+        const retriable = ev.code === 1006 || ev.code === 1008 || ev.code === 4001 || ev.code === 4008;
+        const err: any = new Error(`ws closed before open (code ${ev.code})`);
+        err.code = ev.code;
+        err.reason = ev.reason;
+        err.retriable = retriable;
+        reject(err);
+      }
+    };
+    ws.onerror = (e) => console.error("[mic] ws error during open", e);
+  });
+
   const startVoice = async () => {
     if (recording) return;
+    let stream: MediaStream | null = null;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log("[mic] requesting deepgram token");
-      const tokenResp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deepgram-realtime-token`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      const tokenBody = await tokenResp.text();
-      console.log("[mic] token response", { status: tokenResp.status, body: tokenBody });
-      if (!tokenResp.ok) {
-        let parsed: any = {};
-        try { parsed = JSON.parse(tokenBody); } catch {/**/}
-        console.error("[mic] token mint failed", parsed);
-        toast({
-          title: "Mic unavailable",
-          description: `HTTP ${tokenResp.status} — ${parsed?.error ?? "unknown"}${parsed?.deepgram_status ? ` (deepgram ${parsed.deepgram_status}: ${parsed.deepgram_body})` : ""}`,
-          variant: "destructive",
-        });
-        return;
-      }
-      const { key } = JSON.parse(tokenBody);
-      console.log("[mic] token ok, opening websocket");
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const ws = new WebSocket(
-        `wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&endpointing=600`,
-        ["bearer", key],
-      );
-      wsRef.current = ws;
-
-      let finalText = "";
-      ws.onopen = () => {
-        console.log("[mic] ws open");
-        const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        mediaRef.current = mr;
-        mr.ondataavailable = (ev) => {
-          if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(ev.data);
-        };
-        mr.start(250);
-        setRecording(true);
+      const tryOnce = async (): Promise<WebSocket> => {
+        console.log("[mic] minting token");
+        const key = await mintToken();
+        if (!key) throw new Error("no key returned");
+        console.log("[mic] opening websocket");
+        return await openSocket(key);
       };
+
+      let ws: WebSocket;
+      try {
+        ws = await tryOnce();
+      } catch (e: any) {
+        if (e?.retriable) {
+          console.warn("[mic] first attempt failed, retrying once", { err: e.message, status: e.status, code: e.code });
+          toast({ title: "Reconnecting mic…", description: "Retrying after first failure" });
+          await new Promise((r) => setTimeout(r, 400));
+          ws = await tryOnce();
+        } else {
+          throw e;
+        }
+      }
+
+      wsRef.current = ws;
+      let finalText = "";
+
+      console.log("[mic] ws open");
+      const mr = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      mediaRef.current = mr;
+      mr.ondataavailable = (ev) => {
+        if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) ws.send(ev.data);
+      };
+      mr.start(250);
+      setRecording(true);
+
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
@@ -247,9 +284,15 @@ export function CopilotDiscussionSheet({
         finalText = "";
         if (said) await sendMessage(said, "voice");
       };
-    } catch (e) {
-      console.error("[mic] startVoice exception", e);
-      toast({ title: "Mic error", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } catch (e: any) {
+      console.error("[mic] startVoice failed", e);
+      try { stream?.getTracks().forEach((t) => t.stop()); } catch {/**/}
+      const detail = e?.status
+        ? `HTTP ${e.status}${e.body ? ` — ${e.body}` : ""}`
+        : e?.code
+        ? `WS ${e.code}${e.reason ? `: ${e.reason}` : ""}`
+        : e instanceof Error ? e.message : String(e);
+      toast({ title: "Mic unavailable", description: detail, variant: "destructive" });
     }
   };
 
