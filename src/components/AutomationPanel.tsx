@@ -1230,16 +1230,22 @@ const DailyAiSpendCard = () => {
         </div>
       ) : (
         <>
+          {capped && (
+            <div className="text-[10px] rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-1">
+              Showing first 5,000 rows for this range — narrow the dates for full totals.
+            </div>
+          )}
           {/* Stacked bar chart */}
-          <div className="flex items-end gap-1 h-32 border-b border-border pb-1">
-            {dayKeys.map((d) => {
-              const dayTotal = dailyTotals[dayKeys.indexOf(d)];
+          <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
+            {dayKeys.map((d, idx) => {
+              const dayTotal = dailyTotals[idx];
               const heightPct = (dayTotal / maxDay) * 100;
               const segments = groups
                 .map((g) => ({ g, c: matrix[d][g] || 0 }))
                 .filter((s) => s.c > 0);
+              const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
               return (
-                <div key={d} className="flex-1 flex flex-col items-center gap-1 group">
+                <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
                   <div
                     className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
                     style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
@@ -1259,8 +1265,8 @@ const DailyAiSpendCard = () => {
                       />
                     ))}
                   </div>
-                  <div className="text-[9px] text-muted-foreground font-mono">
-                    {d.slice(5)}
+                  <div className="text-[9px] text-muted-foreground font-mono h-3">
+                    {showLabel ? d.slice(5) : ""}
                   </div>
                 </div>
               );
