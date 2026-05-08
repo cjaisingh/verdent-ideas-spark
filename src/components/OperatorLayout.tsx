@@ -37,15 +37,21 @@ const OperatorLayout = () => {
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
-  // Suppress toggle changes briefly after a drag ends to swallow the trailing
-  // click/pointerup that resizable handles can dispatch on nearby elements.
-  const dragEndAtRef = useRef(0);
+  // Snapshot the focus mode at drag start so it can be restored if anything
+  // (a stray click, keyboard shortcut, etc.) tried to change it mid-drag.
+  const modeAtDragStartRef = useRef<typeof paneState.mode | null>(null);
   const handleDragging = (d: boolean) => {
+    if (d) {
+      modeAtDragStartRef.current = paneState.mode;
+    } else {
+      const snapshot = modeAtDragStartRef.current;
+      modeAtDragStartRef.current = null;
+      if (snapshot && snapshot !== paneState.mode) {
+        setPaneState({ mode: snapshot });
+      }
+    }
     setDragging(d);
-    if (!d) dragEndAtRef.current = Date.now();
   };
-  const isResizeInteractionLocked = () =>
-    dragging || Date.now() - dragEndAtRef.current < 250;
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -93,9 +99,9 @@ const OperatorLayout = () => {
                 disabled={dragging}
                 mode={effectiveMode}
                 onChange={(m) => {
-                  // Ignore toggle changes mid-drag (or right after) so the
-                  // selected pane mode stays put until the resize completes.
-                  if (isResizeInteractionLocked()) return;
+                  // Toggles are disabled while dragging; ignore any change that
+                  // still slips through and skip no-op selections.
+                  if (dragging) return;
                   if (m === effectiveMode) return;
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
