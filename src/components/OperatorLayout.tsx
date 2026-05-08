@@ -222,11 +222,21 @@ const OperatorLayout = () => {
                   </ResizablePanel>
                   {flags.bottom && (
                     <>
-                      <ResizableHandle
-                        withHandle
-                        onDragging={handleDragging}
-                        className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
-                      />
+                      <TooltipProvider delayDuration={400}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <ResizableHandle
+                              withHandle
+                              onDragging={handleDragging}
+                              aria-label="Drag to resize bottom pane. Pane switching is locked while dragging."
+                              className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Drag to resize · pane switching locked while dragging
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <ResizablePanel
                         defaultSize={sizes.bottomHeight}
                         minSize={bounds.bottom.min}
@@ -254,11 +264,21 @@ const OperatorLayout = () => {
               </ResizablePanel>
               {flags.right && (
                 <>
-                  <ResizableHandle
-                    withHandle
-                    onDragging={handleDragging}
-                    className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
-                  />
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <ResizableHandle
+                          withHandle
+                          onDragging={handleDragging}
+                          aria-label="Drag to resize right pane. Pane switching is locked while dragging."
+                          className={dragging ? "opacity-40 transition-opacity" : "transition-opacity"}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="text-xs">
+                        Drag to resize · pane switching locked while dragging
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <ResizablePanel
                     defaultSize={sizes.rightWidth}
                     minSize={bounds.right.min}
