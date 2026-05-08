@@ -195,6 +195,10 @@ async function openShift(sb: ReturnType<typeof createClient>, settings: NightSet
 
     const subjectRef = { discussion_action_id: job.id, short_num: job.short_num };
     const { phase, suite } = inferPhaseAndSuite(job.title);
+    if (!allowedKinds.includes(phase)) {
+      skipped.push({ id: job.id, reason: `kind '${phase}' not allowed` });
+      continue;
+    }
     let worst = "info";
 
     // 1. pulled
