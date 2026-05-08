@@ -12,21 +12,30 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { SIZE_BOUNDS, clearModeSizes, getModeSizes, hasModeSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { RightPaneNightAgent } from "@/components/panes/RightPaneNightAgent";
 import { BottomPaneEventTicker } from "@/components/panes/BottomPaneEventTicker";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useViewport } from "@/hooks/use-viewport";
 
 const toastedDecisions = new Set<string>();
 
 const OperatorLayout = () => {
   const navigate = useNavigate();
   const [paneState, setPaneState] = usePaneState();
-  const isMobile = useIsMobile();
-  const effectiveMode = isMobile ? "centre" : paneState.mode;
+  const viewport = useViewport();
+  const isMobile = viewport === "mobile";
+  // Force narrow viewports off dual/bottom (would crush main content); mobile forced to centre.
+  const effectiveMode =
+    viewport === "mobile"
+      ? "centre"
+      : viewport === "narrow" && (paneState.mode === "dual" || paneState.mode === "bottom")
+        ? "left"
+        : paneState.mode;
   const flags = paneFlags(effectiveMode);
+  const sizes = getModeSizes(paneState, effectiveMode, viewport);
+  const bounds = SIZE_BOUNDS[viewport];
   const [dragging, setDragging] = useState(false);
 
   const signOut = async () => {
@@ -70,23 +79,24 @@ const OperatorLayout = () => {
         <AppSidebar collapsible={effectiveMode === "centre" ? "offcanvas" : "icon"} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10">
-            <PaneToggleGroup
-              disabled={dragging}
-              mode={effectiveMode}
-              onChange={(m) => {
-                if (m === "centre") {
-                  // Toggle: re-clicking centre returns to last non-centre mode.
-                  if (paneState.mode === "centre") {
-                    setPaneState({ mode: paneState.lastNonCentre });
+            {!isMobile && (
+              <PaneToggleGroup
+                disabled={dragging}
+                mode={effectiveMode}
+                onChange={(m) => {
+                  if (m === "centre") {
+                    if (paneState.mode === "centre") {
+                      setPaneState({ mode: paneState.lastNonCentre });
+                    } else {
+                      setPaneState({ mode: "centre", lastNonCentre: paneState.mode as Exclude<typeof paneState.mode, "centre"> });
+                    }
                   } else {
-                    setPaneState({ mode: "centre", lastNonCentre: paneState.mode as Exclude<typeof paneState.mode, "centre"> });
+                    setPaneState({ mode: m, lastNonCentre: m });
                   }
-                } else {
-                  setPaneState({ mode: m, lastNonCentre: m });
-                }
-              }}
-            />
-            {(flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode) && (
+                }}
+              />
+            )}
+            {!isMobile && (flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -118,13 +128,13 @@ const OperatorLayout = () => {
               direction="horizontal"
               className="h-full"
             >
-              <ResizablePanel defaultSize={flags.right ? 100 - getModeSizes(paneState, effectiveMode).rightWidth : 100} minSize={40}>
+              <ResizablePanel defaultSize={flags.right ? 100 - sizes.rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
                   key={`v-${effectiveMode}`}
                   direction="vertical"
                   className="h-full"
                 >
-                  <ResizablePanel defaultSize={flags.bottom ? 100 - getModeSizes(paneState, effectiveMode).bottomHeight : 100} minSize={30}>
+                  <ResizablePanel defaultSize={flags.bottom ? 100 - sizes.bottomHeight : 100} minSize={30}>
                     <main className="h-full overflow-y-auto px-6 py-6">
                       <div className="max-w-[1600px] w-full mx-auto">
                         <Outlet />
@@ -135,9 +145,9 @@ const OperatorLayout = () => {
                     <>
                       <ResizableHandle withHandle onDragging={setDragging} />
                       <ResizablePanel
-                        defaultSize={getModeSizes(paneState, effectiveMode).bottomHeight}
-                        minSize={15}
-                        maxSize={60}
+                        defaultSize={sizes.bottomHeight}
+                        minSize={bounds.bottom.min}
+                        maxSize={bounds.bottom.max}
                         onResize={(size) =>
                           setPaneState(withModeSize(paneState, effectiveMode, { bottomHeight: Math.round(size) }))
                         }
@@ -152,9 +162,9 @@ const OperatorLayout = () => {
                 <>
                   <ResizableHandle withHandle onDragging={setDragging} />
                   <ResizablePanel
-                    defaultSize={getModeSizes(paneState, effectiveMode).rightWidth}
-                    minSize={15}
-                    maxSize={40}
+                    defaultSize={sizes.rightWidth}
+                    minSize={bounds.right.min}
+                    maxSize={bounds.right.max}
                     onResize={(size) =>
                       setPaneState(withModeSize(paneState, effectiveMode, { rightWidth: Math.round(size) }))
                     }
