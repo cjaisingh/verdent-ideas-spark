@@ -606,7 +606,8 @@ export default function ApprovalPack() {
           .pp-task { orphans: 3; widows: 3; }
           .pp-checklist thead { display: table-header-group; }
           .pp-checklist tr { page-break-inside: avoid; break-inside: avoid; }
-          .pp-checklist tbody tr:nth-child(even) td { background: #f5f5f7; }
+          .pp-checklist tbody tr:nth-child(even):not(.pp-subtotal) td { background: #f5f5f7; }
+          .pp-checklist tr.pp-subtotal td { background: #e4e4e7 !important; border-top: 1px solid #a1a1aa; border-bottom: 1px solid #a1a1aa; font-weight: 600; }
           .pp-checklist th, .pp-checklist td { border-color: #d4d4d8 !important; }
           .pp-checklist thead th { border-bottom: 1px solid #a1a1aa; }
           a.pp-link[href]::after { content: " (" attr(href) ")"; font-size: 8pt; color: #555; word-break: break-all; }
