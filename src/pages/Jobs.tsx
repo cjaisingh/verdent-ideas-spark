@@ -71,8 +71,14 @@ export default function Jobs() {
   }, []);
 
   const cycleStatus = async (j: Job, target: string) => {
+    if (j.status === target) return;
+    // Optimistic update
+    setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, status: target } : x)));
     const { error } = await supabase.from("discussion_actions").update({ status: target }).eq("id", j.id);
-    if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    if (error) {
+      setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, status: j.status } : x)));
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    }
   };
 
   const promote = async (j: Job) => {
