@@ -175,13 +175,13 @@ const OperatorLayout = () => {
           </header>
           <div className="flex-1 min-h-0">
             <ResizablePanelGroup
-              key={`h-${effectiveMode}`}
+              key={`h-${viewport}-${effectiveMode}`}
               direction="horizontal"
               className="h-full"
             >
               <ResizablePanel defaultSize={flags.right ? 100 - sizes.rightWidth : 100} minSize={40}>
                 <ResizablePanelGroup
-                  key={`v-${effectiveMode}`}
+                  key={`v-${viewport}-${effectiveMode}`}
                   direction="vertical"
                   className="h-full"
                 >
