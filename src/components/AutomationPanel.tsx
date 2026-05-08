@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check, Moon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
@@ -996,22 +997,31 @@ const PerJobCostThresholdsCard = () => {
 // Daily AI spend — chart + breakdowns from ai_usage_log
 // ─────────────────────────────────────────────────────────────────────────
 type SpendRow = {
+  id?: string;
   created_at: string;
   job: string | null;
   model: string | null;
   cost_usd: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
+  price_in_per_mtok: number | null;
+  price_out_per_mtok: number | null;
+  latency_ms: number | null;
+  status: string | null;
+  error: string | null;
+  request_ref: any;
 };
 
 const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
 const DailyAiSpendCard = () => {
   const [rows, setRows] = useState<SpendRow[]>([]);
   const [days, setDays] = useState<7 | 14 | 30>(14);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
+  const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1020,7 +1030,7 @@ const DailyAiSpendCard = () => {
       const since = new Date(Date.now() - days * 86_400_000).toISOString();
       const { data, error } = await supabase
         .from("ai_usage_log")
-        .select("created_at, job, model, cost_usd, prompt_tokens, completion_tokens")
+        .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(5000);
@@ -1154,17 +1164,21 @@ const DailyAiSpendCard = () => {
               return (
                 <div key={d} className="flex-1 flex flex-col items-center gap-1 group">
                   <div
-                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40"
+                    className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
                     style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
-                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}`}
+                    title={`${d} · ${fmtUsd6(dayTotal)}\n${segments.map(s => `${s.g}: ${fmtUsd6(s.c)}`).join("\n")}\n(click for runs)`}
+                    onClick={() => dayTotal > 0 && setDrill({ day: d, groupKey: null })}
                   >
                     {segments.map((s) => (
                       <div
                         key={s.g}
+                        className="cursor-pointer hover:opacity-80"
                         style={{
                           height: `${(s.c / dayTotal) * 100}%`,
                           background: colorFor(s.g),
                         }}
+                        onClick={(e) => { e.stopPropagation(); setDrill({ day: d, groupKey: s.g }); }}
+                        title={`${s.g} · ${fmtUsd6(s.c)} (click for runs)`}
                       />
                     ))}
                   </div>
@@ -1200,7 +1214,137 @@ const DailyAiSpendCard = () => {
           </div>
         </>
       )}
+      <SpendDrillDialog
+        rows={rows}
+        groupBy={groupBy}
+        drill={drill}
+        onClose={() => setDrill(null)}
+      />
     </section>
+  );
+};
+
+// ─────────────────────── Spend drill-down dialog ───────────────────────
+const groupKeyForRow = (r: SpendRow, groupBy: "job" | "model") =>
+  (groupBy === "job" ? r.job : r.model) || "unknown";
+
+const formulaFor = (r: SpendRow): string => {
+  const p = Number(r.prompt_tokens || 0);
+  const c = Number(r.completion_tokens || 0);
+  const pi = r.price_in_per_mtok == null ? null : Number(r.price_in_per_mtok);
+  const po = r.price_out_per_mtok == null ? null : Number(r.price_out_per_mtok);
+  const cost = Number(r.cost_usd || 0);
+  if (pi == null || po == null) return "—";
+  return `(${p.toLocaleString()}/1M × $${pi.toFixed(2)}) + (${c.toLocaleString()}/1M × $${po.toFixed(2)}) = $${cost.toFixed(6)}`;
+};
+
+const SpendDrillDialog = ({
+  rows, groupBy, drill, onClose,
+}: {
+  rows: SpendRow[];
+  groupBy: "job" | "model";
+  drill: { day: string; groupKey: string | null } | null;
+  onClose: () => void;
+}) => {
+  const open = !!drill;
+  const filtered = drill
+    ? rows
+        .filter(r => (r.created_at || "").slice(0, 10) === drill.day &&
+          (drill.groupKey === null || groupKeyForRow(r, groupBy) === drill.groupKey))
+        .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+    : [];
+  const cap = 200;
+  const shown = filtered.slice(0, cap);
+  const totalCost = filtered.reduce((s, r) => s + Number(r.cost_usd || 0), 0);
+  const totalTok = filtered.reduce((s, r) => s + Number(r.prompt_tokens || 0) + Number(r.completion_tokens || 0), 0);
+  const nightCount = filtered.filter(r => r?.request_ref?.night_mode === true).length;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-5xl">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-mono">
+            {drill?.day} · by {groupBy} · {drill?.groupKey ?? "All groups"}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Individual ai_usage_log runs in this slice.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="rounded border border-border p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost</div>
+            <div className="font-mono">{fmtUsdFull(totalCost)}</div>
+          </div>
+          <div className="rounded border border-border p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
+            <div className="font-mono">{filtered.length}</div>
+          </div>
+          <div className="rounded border border-border p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</div>
+            <div className="font-mono">{totalTok.toLocaleString()}</div>
+          </div>
+          <div className="rounded border border-border p-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Night-mode</div>
+            <div className="font-mono">{nightCount}</div>
+          </div>
+        </div>
+        <div className="max-h-[60vh] overflow-auto rounded border border-border">
+          {shown.length === 0 ? (
+            <div className="p-4 text-xs text-muted-foreground">No runs in this slice.</div>
+          ) : (
+            <table className="w-full text-[11px]">
+              <thead className="bg-muted/50 sticky top-0">
+                <tr className="text-left">
+                  <th className="px-2 py-1 font-medium">Time UTC</th>
+                  <th className="px-2 py-1 font-medium">Job</th>
+                  <th className="px-2 py-1 font-medium">Model</th>
+                  <th className="px-2 py-1 font-medium">Status</th>
+                  <th className="px-2 py-1 font-medium text-right">Prompt</th>
+                  <th className="px-2 py-1 font-medium text-right">Compl.</th>
+                  <th className="px-2 py-1 font-medium text-right">Latency</th>
+                  <th className="px-2 py-1 font-medium text-right">Cost</th>
+                  <th className="px-2 py-1 font-medium">Formula</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((r, i) => {
+                  const isNight = r?.request_ref?.night_mode === true;
+                  const isErr = (r.status || "ok") !== "ok";
+                  return (
+                    <tr key={r.id ?? i} className="border-t border-border/50 align-top">
+                      <td className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
+                        {(r.created_at || "").slice(11, 19)}
+                      </td>
+                      <td className="px-2 py-1 font-mono">{r.job ?? "—"}</td>
+                      <td className="px-2 py-1 font-mono">
+                        {(r.model ?? "—").replace("google/", "")}
+                        {isNight && <Badge variant="outline" className="ml-1 text-[9px]">night</Badge>}
+                      </td>
+                      <td className="px-2 py-1">
+                        <span
+                          className={`inline-block rounded px-1.5 py-0.5 text-[10px] border ${isErr ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"}`}
+                          title={r.error ?? undefined}
+                        >{r.status ?? "ok"}</span>
+                      </td>
+                      <td className="px-2 py-1 font-mono text-right">{(r.prompt_tokens ?? 0).toLocaleString()}</td>
+                      <td className="px-2 py-1 font-mono text-right">{(r.completion_tokens ?? 0).toLocaleString()}</td>
+                      <td className="px-2 py-1 font-mono text-right text-muted-foreground">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</td>
+                      <td className="px-2 py-1 font-mono text-right">{fmtUsdFull(Number(r.cost_usd || 0))}</td>
+                      <td className="px-2 py-1 font-mono text-muted-foreground">{formulaFor(r)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {filtered.length > cap && (
+          <div className="text-[10px] text-muted-foreground">
+            Showing first {cap} of {filtered.length} rows.
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 };
 
