@@ -8,6 +8,7 @@
 // writes findings to roadmap_review_findings.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +16,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-service-token",
 };
 
-const REVIEWER_MODEL = "google/gemini-2.5-flash";
+const REVIEWER_DAYTIME_MODEL = "google/gemini-2.5-flash";
 
 // USD per 1M tokens — Lovable AI Gateway list prices. Keep in sync with src/lib/aiPricing.ts.
 const PRICING: Record<string, { in: number; out: number }> = {
@@ -79,6 +80,10 @@ Deno.serve(async (req) => {
     const untilISO = new Date().toISOString();
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+    // Night-cheap policy: between 22:00 and 06:00 UTC every AI job uses gemini-2.5-flash-lite.
+    const REVIEWER_MODEL = pickModel(REVIEWER_DAYTIME_MODEL);
+    const NIGHT_MODE = isNightUTC();
 
     const [logs, skips, taskActivity] = await Promise.all([
       sb.from("roadmap_work_log").select("created_at, source, model, summary, issues, fixes, duration_ms, tokens_total")
@@ -158,7 +163,7 @@ Deno.serve(async (req) => {
         job: "scheduled-code-review", model: REVIEWER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500),
-        request_ref: { window_start: sinceISO, window_end: untilISO },
+        request_ref: { window_start: sinceISO, window_end: untilISO, night_mode: NIGHT_MODE },
         price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
         price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
       });
@@ -184,7 +189,7 @@ Deno.serve(async (req) => {
       cost_usd: Number(cost.toFixed(6)),
       price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
       price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
-      request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length },
+      request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length, night_mode: NIGHT_MODE },
     });
     const totalTok = usage.total_tokens ?? (promptTok + completionTok);
     const prices = priceFor(REVIEWER_MODEL);

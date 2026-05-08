@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check, Moon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
@@ -246,6 +247,7 @@ export const AutomationPanel = () => {
     <AlertsCard />
     <PerJobCostThresholdsCard />
     <DailyAiSpendCard />
+    <OvernightQueueCard />
     <CostAlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
@@ -1198,6 +1200,107 @@ const DailyAiSpendCard = () => {
           </div>
         </>
       )}
+    </section>
+  );
+};
+
+// ─────────────────────────── Overnight Queue ───────────────────────────
+interface OvernightRunRow {
+  id: string;
+  phase_id: string;
+  phase_key: string;
+  status: string;
+  requested_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  scheduled_for: string;
+  model: string | null;
+  result: any;
+  error: string | null;
+}
+
+const OvernightQueueCard = () => {
+  const [rows, setRows] = useState<OvernightRunRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      const { data } = await supabase
+        .from("roadmap_phase_overnight_runs")
+        .select("id, phase_id, phase_key, status, requested_at, started_at, finished_at, scheduled_for, model, result, error")
+        .order("requested_at", { ascending: false })
+        .limit(20);
+      if (!active) return;
+      setRows((data ?? []) as OvernightRunRow[]);
+      setLoading(false);
+    };
+    load();
+    const ch = supabase
+      .channel("overnight_queue_panel")
+      .on("postgres_changes", { event: "*", schema: "public", table: "roadmap_phase_overnight_runs" }, load)
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(ch); };
+  }, []);
+
+  const queued = rows.filter(r => r.status === "queued" || r.status === "running");
+  const recent = rows.filter(r => r.status !== "queued" && r.status !== "running").slice(0, 5);
+
+  return (
+    <section className="rounded-md border border-border bg-card p-3 space-y-3">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Moon className="h-4 w-4" /> Overnight phase queue
+        </div>
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          22:00–06:00 UTC · gemini-2.5-flash-lite
+        </span>
+      </header>
+
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Queued / running ({queued.length})</p>
+        {loading ? (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : queued.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nothing scheduled. Use “Run overnight” on an approved phase.</p>
+        ) : (
+          <ul className="space-y-1">
+            {queued.map(r => (
+              <li key={r.id} className="flex items-center gap-2 text-xs">
+                <Badge variant={r.status === "running" ? "secondary" : "outline"} className="text-[10px]">{r.status}</Badge>
+                <span className="font-mono">{r.phase_key}</span>
+                <span className="ml-auto text-muted-foreground">scheduled {r.scheduled_for}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Recent ({recent.length})</p>
+        {recent.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No runs yet.</p>
+        ) : (
+          <ul className="space-y-1">
+            {recent.map(r => (
+              <li key={r.id} className="flex items-center gap-2 text-xs">
+                <Badge
+                  variant={r.status === "done" ? "default" : r.status === "failed" ? "destructive" : "outline"}
+                  className="text-[10px]"
+                >{r.status}</Badge>
+                <span className="font-mono">{r.phase_key}</span>
+                {r.model && <span className="font-mono text-[10px] text-muted-foreground">{r.model.replace("google/", "")}</span>}
+                {typeof r.result?.cost_usd === "number" && (
+                  <span className="font-mono text-[10px] text-muted-foreground">${r.result.cost_usd.toFixed(4)}</span>
+                )}
+                <span className="ml-auto text-muted-foreground">
+                  {r.finished_at ? new Date(r.finished_at).toLocaleString() : "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
   );
 };

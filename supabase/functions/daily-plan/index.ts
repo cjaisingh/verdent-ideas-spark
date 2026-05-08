@@ -5,6 +5,7 @@
 // plus risks and recommendations. Result stored in `daily_plans` (one per day).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-service-token",
 };
 
-const PLANNER_MODEL = "google/gemini-2.5-flash-lite";
+const PLANNER_DAYTIME_MODEL = "google/gemini-2.5-flash-lite";
 
 // USD per 1M tokens — Lovable AI Gateway list prices. Keep in sync with src/lib/aiPricing.ts.
 const PRICING: Record<string, { in: number; out: number }> = {
@@ -69,6 +70,10 @@ Deno.serve(async (req) => {
 
     const sinceISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const today = new Date().toISOString().slice(0, 10);
+
+    // Night-cheap policy: 22:00–06:00 UTC forces gemini-2.5-flash-lite (already the default here).
+    const PLANNER_MODEL = pickModel(PLANNER_DAYTIME_MODEL);
+    const NIGHT_MODE = isNightUTC();
 
     const [phases, sprints, tasks, workLog, findings, qa, testRuns, notebook] = await Promise.all([
       sb.from("roadmap_phases").select("key, title, status, summary, order").order("order"),
@@ -172,7 +177,7 @@ Deno.serve(async (req) => {
       await sb.from("ai_usage_log").insert({
         job: "daily-plan", model: PLANNER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
-        error: msg.slice(0, 500), request_ref: { for_date: today },
+        error: msg.slice(0, 500), request_ref: { for_date: today, night_mode: NIGHT_MODE },
         price_in_per_mtok: priceFor(PLANNER_MODEL).in,
         price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       });
@@ -194,7 +199,7 @@ Deno.serve(async (req) => {
       cost_usd: Number(cost.toFixed(6)),
       price_in_per_mtok: priceFor(PLANNER_MODEL).in,
       price_out_per_mtok: priceFor(PLANNER_MODEL).out,
-      request_ref: { for_date: today },
+      request_ref: { for_date: today, night_mode: NIGHT_MODE },
     });
     const totalTok = usage.total_tokens ?? (promptTok + completionTok);
     const prices = priceFor(PLANNER_MODEL);

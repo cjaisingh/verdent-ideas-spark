@@ -1950,6 +1950,69 @@ export type Database = {
           },
         ]
       }
+      roadmap_phase_overnight_runs: {
+        Row: {
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          model: string | null
+          phase_id: string
+          phase_key: string
+          requested_at: string
+          requested_by: string
+          result: Json | null
+          scheduled_for: string
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          model?: string | null
+          phase_id: string
+          phase_key: string
+          requested_at?: string
+          requested_by: string
+          result?: Json | null
+          scheduled_for?: string
+          started_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          model?: string | null
+          phase_id?: string
+          phase_key?: string
+          requested_at?: string
+          requested_by?: string
+          result?: Json | null
+          scheduled_for?: string
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_phase_overnight_runs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_overnight_runs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmap_phase_signoffs: {
         Row: {
           approval_id: string | null
@@ -2738,6 +2801,7 @@ export type Database = {
           title: string
         }[]
       }
+      cancel_overnight_run: { Args: { _id: string }; Returns: undefined }
       db_analyze_public: { Args: never; Returns: undefined }
       db_list_all_columns: {
         Args: never
