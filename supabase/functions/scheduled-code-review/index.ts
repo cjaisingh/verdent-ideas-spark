@@ -238,6 +238,7 @@ async function dispatchAlert(
       high_finding: "alert_on_high_finding",
       test_fail: "alert_on_test_fail",
       qa_fail: "alert_on_qa_fail",
+      cost_threshold: "alert_on_cost",
     };
     const flag = flagMap[reason];
     if (flag && settings[flag] === false) return;
