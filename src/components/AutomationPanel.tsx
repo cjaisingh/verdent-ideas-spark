@@ -1136,7 +1136,23 @@ const DailyAiSpendCard = () => {
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [knownGroups, setKnownGroups] = useState<{ job: string[]; model: string[] }>({ job: [], model: [] });
   const [tz, setTz] = useState<string>(loadStoredTz);
+  const [liveCount, setLiveCount] = useState(0);
+  const [lastInsertAt, setLastInsertAt] = useState<number | null>(null);
+  const [pulse, setPulse] = useState(false);
 
+  // Reset live counter whenever the slice the user cares about changes
+  useEffect(() => {
+    setLiveCount(0);
+    setLastInsertAt(null);
+  }, [range.from.getTime(), range.to.getTime(), tz, groupBy, groupFilter]);
+
+  // Pulse the badge briefly after each insert
+  useEffect(() => {
+    if (lastInsertAt == null) { setPulse(false); return; }
+    setPulse(true);
+    const t = setTimeout(() => setPulse(false), 1500);
+    return () => clearTimeout(t);
+  }, [lastInsertAt]);
   useEffect(() => {
     try { localStorage.setItem(TZ_STORAGE_KEY, tz); } catch { /* ignore */ }
   }, [tz]);
@@ -1210,8 +1226,20 @@ const DailyAiSpendCard = () => {
       }
     };
     load();
+    const fromIso = startOfTzDay(range.from, tz).toISOString();
+    const toIso = endExclusiveTzDay(range.to, tz).toISOString();
     const ch = supabase.channel("ai_spend_panel")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, (payload: any) => {
+        const newRow = payload?.new as SpendRow | undefined;
+        const ts = newRow?.created_at;
+        const inRange = !!ts && ts >= fromIso && ts < toIso;
+        const matchesFilter = !groupFilter || (newRow && (groupBy === "job" ? newRow.job : newRow.model) === groupFilter);
+        if (inRange && matchesFilter) {
+          setLiveCount((c) => c + 1);
+          setLastInsertAt(Date.now());
+        }
+        load();
+      })
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [range.from.getTime(), range.to.getTime(), rowLimit, groupBy, groupFilter, tz]);
@@ -1359,6 +1387,15 @@ const DailyAiSpendCard = () => {
           <span className="text-[10px] text-muted-foreground font-normal">
             from ai_usage_log
           </span>
+          {liveCount > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 text-[10px] font-mono transition-shadow ${pulse ? "shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]" : ""}`}
+              title={lastInsertAt ? `Last insert ${new Date(lastInsertAt).toLocaleTimeString()}` : "New rows arrived"}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full bg-emerald-500 ${pulse ? "animate-pulse" : ""}`} />
+              live · +{liveCount}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-[10px] flex-wrap">
           <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (o) setPendingRange(range); }}>
