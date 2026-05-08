@@ -13,7 +13,7 @@ type Task = {
   acceptance: string | null; status: string; module: string | null; capability_id: string | null;
   review_status: string; reviewed_by: string | null; reviewed_at: string | null; review_notes: string | null;
 };
-type Checklist = { id: string; task_id: string; category: string; label: string; checked: boolean; note: string | null; checked_by: string | null; checked_at: string | null; order: number };
+type Checklist = { id: string; task_id: string; item_key: string; category: string; label: string; checked: boolean; note: string | null; checked_by: string | null; checked_at: string | null; order: number };
 type Evidence = { id: string; task_id: string; checklist_item: string | null; kind: string; title: string; url: string | null; storage_path: string | null; note: string | null; source: string | null };
 
 const reviewBadgeVariant = (s: string) =>
