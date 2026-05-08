@@ -1507,8 +1507,10 @@ const SpendDrillDialog = ({
                 {shown.map((r, i) => {
                   const isNight = r?.request_ref?.night_mode === true;
                   const isErr = (r.status || "ok") !== "ok";
+                  const runLim = effectiveRunLimit(r.job);
+                  const runBreach = runLim != null && Number(r.cost_usd || 0) > runLim;
                   return (
-                    <tr key={r.id ?? i} className="border-t border-border/50 align-top">
+                    <tr key={r.id ?? i} className={`border-t border-border/50 align-top ${runBreach ? "bg-destructive/5" : ""}`}>
                       <td className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
                         {(r.created_at || "").slice(11, 19)}
                       </td>
@@ -1526,7 +1528,12 @@ const SpendDrillDialog = ({
                       <td className="px-2 py-1 font-mono text-right">{(r.prompt_tokens ?? 0).toLocaleString()}</td>
                       <td className="px-2 py-1 font-mono text-right">{(r.completion_tokens ?? 0).toLocaleString()}</td>
                       <td className="px-2 py-1 font-mono text-right text-muted-foreground">{r.latency_ms != null ? `${r.latency_ms}ms` : "—"}</td>
-                      <td className="px-2 py-1 font-mono text-right">{fmtUsdFull(Number(r.cost_usd || 0))}</td>
+                      <td className="px-2 py-1 font-mono text-right">
+                        {fmtUsdFull(Number(r.cost_usd || 0))}
+                        {runBreach && (
+                          <span className="ml-1 inline-block rounded px-1 text-[9px] bg-destructive/10 text-destructive border border-destructive/30" title={`Over per-run limit (${fmtUsd6(runLim!)})`}>⚠</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1 font-mono text-muted-foreground">{formulaFor(r)}</td>
                     </tr>
                   );
