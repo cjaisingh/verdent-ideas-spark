@@ -1944,8 +1944,45 @@ const SpendDrillDialog = ({
             <span className="ml-2 text-muted-foreground">· viewing {metric === "spend" ? "spend" : metric === "prompt" ? "prompt tokens" : "completion tokens"}</span>
             {drill?.breachOnly && <span className="ml-2 text-destructive">· breaches only</span>}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            Individual ai_usage_log runs in this slice.
+          <DialogDescription className="text-xs flex items-center gap-2 flex-wrap">
+            <span>Individual ai_usage_log runs in this slice.</span>
+            {(() => {
+              const dayN = sliceFiltered.filter(isDayBreach).length;
+              const jobN = sliceFiltered.filter(isJobDayBreach).length;
+              const runN = sliceFiltered.filter(isRunBreach).length;
+              const anyConfigured = globalLimits.day != null || globalLimits.run != null
+                || Object.values(jobLimits).some(l => l.day != null || l.run != null);
+              if (!anyConfigured) return null;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateDrill({ breachOnly: !drill?.breachOnly })}
+                    disabled={breachableCount === 0}
+                    className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-mono transition ${
+                      drill?.breachOnly
+                        ? "border-destructive/60 bg-destructive/15 text-destructive"
+                        : breachableCount > 0
+                          ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 cursor-pointer"
+                          : "border-border text-muted-foreground opacity-70 cursor-default"
+                    }`}
+                    title={breachableCount === 0
+                      ? "No threshold breaches in this slice"
+                      : drill?.breachOnly ? "Show all runs" : "Show only rows that exceeded a per-day, per-job, or per-run threshold"}
+                  >
+                    <span aria-hidden>⚠</span>
+                    {drill?.breachOnly ? "showing breaches only" : `breaches only (${breachableCount})`}
+                  </button>
+                  {breachableCount > 0 && (
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      day <span className="text-destructive">{dayN}</span>
+                      {" · "}job-day <span className="text-destructive">{jobN}</span>
+                      {" · "}run <span className="text-destructive">{runN}</span>
+                    </span>
+                  )}
+                </>
+              );
+            })()}
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
