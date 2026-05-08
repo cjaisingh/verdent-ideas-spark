@@ -2,7 +2,8 @@ export type WidgetKind =
   | "pending-approvals"
   | "night-observations-24h"
   | "open-risks"
-  | "recent-capability-events";
+  | "recent-capability-events"
+  | "ai-usage-14d";
 
 export type WidgetSize = "sm" | "md" | "lg";
 
