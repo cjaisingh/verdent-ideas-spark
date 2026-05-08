@@ -236,6 +236,16 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
           ))}
         </div>
       )}
+
+      <ProposalReviewSheet
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        discussionId={discussionId}
+        subjectType={subjectType}
+        subjectId={subjectId}
+        proposals={proposals as ReviewProposal[]}
+        onDone={() => setProposals([])}
+      />
     </div>
   );
 }
