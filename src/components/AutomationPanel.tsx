@@ -1418,9 +1418,45 @@ const DailyAiSpendCard = () => {
         <div className="text-xs text-muted-foreground">Loading…</div>
       ) : (
         <>
-          {capped && (
-            <div className="text-[10px] rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-1">
-              Showing first 5,000 rows for this range — narrow the dates for full totals.
+          {(capped || groupFilter || rowLimit !== 5000) && (
+            <div className={`text-[10px] rounded border px-2 py-1 flex flex-wrap items-center gap-2 ${capped ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400" : "border-border bg-muted/30 text-muted-foreground"}`}>
+              <span className="font-mono">
+                {capped
+                  ? `Capped at ${rowLimit.toLocaleString()} rows — totals may be incomplete.`
+                  : `Loaded ${rows.length.toLocaleString()} rows (cap ${rowLimit.toLocaleString()}).`}
+              </span>
+              <label className="flex items-center gap-1">
+                <span>Row cap</span>
+                <select
+                  value={rowLimit}
+                  onChange={(e) => setRowLimit(Number(e.target.value))}
+                  className="bg-background border border-border rounded px-1 py-0.5 text-[10px] font-mono"
+                >
+                  {[5000, 10000, 25000, 50000].map((n) => (
+                    <option key={n} value={n}>{n.toLocaleString()}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1">
+                <span>Filter {groupBy}</span>
+                <select
+                  value={groupFilter ?? ""}
+                  onChange={(e) => setGroupFilter(e.target.value || null)}
+                  className="bg-background border border-border rounded px-1 py-0.5 text-[10px] font-mono max-w-[180px]"
+                >
+                  <option value="">All</option>
+                  {knownGroups[groupBy].map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </label>
+              {(groupFilter || rowLimit !== 5000) && (
+                <button
+                  type="button"
+                  onClick={() => { setGroupFilter(null); setRowLimit(5000); }}
+                  className="underline hover:text-foreground"
+                >reset</button>
+              )}
             </div>
           )}
           {/* Stacked bar chart */}
