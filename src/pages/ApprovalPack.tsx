@@ -46,6 +46,33 @@ export default function ApprovalPack() {
     });
   }, []);
 
+  const [allPhaseStats, setAllPhaseStats] = useState<
+    Array<{ phase_id: string; phase_key: string; phase_title: string; phase_order: number; counts: Record<string, number>; total: number }>
+  >([]);
+
+  useEffect(() => {
+    if (!phases.length) return;
+    (async () => {
+      const { data: allSprints } = await supabase.from("roadmap_sprints").select("id, phase_id");
+      const sprintToPhase = new Map<string, string>((allSprints ?? []).map((s: any) => [s.id, s.phase_id]));
+      const { data: allTasks } = await supabase.from("roadmap_tasks").select("sprint_id, review_status");
+      const acc: Record<string, Record<string, number>> = {};
+      for (const t of (allTasks ?? []) as Array<{ sprint_id: string; review_status: string }>) {
+        const pid = sprintToPhase.get(t.sprint_id);
+        if (!pid) continue;
+        acc[pid] ??= {};
+        acc[pid][t.review_status] = (acc[pid][t.review_status] ?? 0) + 1;
+      }
+      setAllPhaseStats(
+        phases.map((p) => {
+          const counts = acc[p.id] ?? {};
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          return { phase_id: p.id, phase_key: p.key, phase_title: p.title, phase_order: p.order, counts, total };
+        }),
+      );
+    })();
+  }, [phases]);
+
   useEffect(() => {
     if (!phaseId) return;
     setLoading(true);
