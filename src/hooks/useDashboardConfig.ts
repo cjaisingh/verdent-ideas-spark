@@ -192,9 +192,26 @@ export function useDashboardConfig() {
     }));
   }, [update]);
 
+  /** Swap (or move-into-empty) two slots within the same tab. */
+  const swapSlots = useCallback((tabId: string, fromIndex: number, toIndex: number) => {
+    update((prev) => ({
+      ...prev,
+      tabs: prev.tabs.map((t) => {
+        if (t.id !== tabId || fromIndex === toIndex) return t;
+        if (fromIndex < 0 || toIndex < 0) return t;
+        if (fromIndex >= t.widgets.length || toIndex >= t.widgets.length) return t;
+        const widgets = t.widgets.slice();
+        const tmp = widgets[fromIndex];
+        widgets[fromIndex] = widgets[toIndex];
+        widgets[toIndex] = tmp;
+        return { ...t, widgets };
+      }),
+    }));
+  }, [update]);
+
   return {
     config, loaded, userId, MAX_TABS,
-    setActiveTab, addTab, renameTab, deleteTab, reorderTab, setTemplate, setSlotWidget,
+    setActiveTab, addTab, renameTab, deleteTab, reorderTab, setTemplate, setSlotWidget, swapSlots,
     newWidgetId: shortId,
   };
 }
