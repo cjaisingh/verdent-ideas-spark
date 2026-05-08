@@ -19,11 +19,19 @@ type Row = {
   prompt_tokens: number | null;
   completion_tokens: number | null;
   total_tokens: number | null;
+  cost_usd: number | null;
   latency_ms: number | null;
   error: string | null;
   request_ref: Record<string, unknown> | null;
   created_at: string;
 };
+
+// Use the value persisted by the edge function when available; otherwise fall back
+// to the client-side pricing table (handles rows logged before cost_usd was added).
+function rowCost(r: Row): number {
+  if (typeof r.cost_usd === "number") return r.cost_usd;
+  return costFor(r.model, r.prompt_tokens ?? 0, r.completion_tokens ?? 0);
+}
 
 const WINDOWS = [
   { id: "1d", label: "24h", days: 1 },
@@ -53,7 +61,7 @@ export default function AiUsage() {
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
     const { data, error } = await supabase
       .from("ai_usage_log")
-      .select("id,job,model,trigger,status,status_code,prompt_tokens,completion_tokens,total_tokens,latency_ms,error,request_ref,created_at")
+      .select("id,job,model,trigger,status,status_code,prompt_tokens,completion_tokens,total_tokens,cost_usd,latency_ms,error,request_ref,created_at")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1000);
@@ -85,7 +93,7 @@ export default function AiUsage() {
     for (const r of list) {
       const inT = r.prompt_tokens ?? 0;
       const outT = r.completion_tokens ?? 0;
-      actualCost += costFor(r.model, inT, outT);
+      actualCost += rowCost(r);
       const baseModel = JOB_BASELINE_MODEL[r.job] ?? r.model;
       baselineCost += costFor(baseModel, inT, outT);
       totalTok += r.total_tokens ?? inT + outT;
@@ -137,7 +145,7 @@ export default function AiUsage() {
       b.inTok += inT;
       b.outTok += outT;
       b.totalTok += r.total_tokens ?? inT + outT;
-      b.cost += costFor(r.model, inT, outT);
+      b.cost += rowCost(r);
       const baseModel = JOB_BASELINE_MODEL[r.job] ?? r.model;
       b.baselineCost += costFor(baseModel, inT, outT);
       if (typeof r.latency_ms === "number") {
@@ -285,7 +293,7 @@ export default function AiUsage() {
                 {recent.map((r) => {
                   const inT = r.prompt_tokens ?? 0;
                   const outT = r.completion_tokens ?? 0;
-                  const cost = costFor(r.model, inT, outT);
+                  const cost = rowCost(r);
                   const ts = new Date(r.created_at);
                   return (
                     <TableRow key={r.id}>

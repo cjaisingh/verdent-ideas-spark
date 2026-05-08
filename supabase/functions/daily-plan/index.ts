@@ -14,6 +14,23 @@ const corsHeaders = {
 
 const PLANNER_MODEL = "google/gemini-2.5-flash-lite";
 
+// USD per 1M tokens — Lovable AI Gateway list prices. Keep in sync with src/lib/aiPricing.ts.
+const PRICING: Record<string, { in: number; out: number }> = {
+  "google/gemini-2.5-flash-lite": { in: 0.10, out: 0.40 },
+  "google/gemini-2.5-flash": { in: 0.30, out: 2.50 },
+  "google/gemini-2.5-pro": { in: 1.25, out: 10.00 },
+  "openai/gpt-5-nano": { in: 0.05, out: 0.40 },
+  "openai/gpt-5-mini": { in: 0.25, out: 2.00 },
+  "openai/gpt-5": { in: 1.25, out: 10.00 },
+};
+function priceFor(model: string) {
+  return PRICING[model] ?? { in: 0, out: 0 };
+}
+function costUsd(model: string, promptTok: number, completionTok: number) {
+  const p = priceFor(model);
+  return (promptTok / 1_000_000) * p.in + (completionTok / 1_000_000) * p.out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -156,6 +173,8 @@ Deno.serve(async (req) => {
         job: "daily-plan", model: PLANNER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500), request_ref: { for_date: today },
+        price_in_per_mtok: priceFor(PLANNER_MODEL).in,
+        price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       });
       await maybeAlert("planner_error", msg, { status: aiResp.status });
       return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
@@ -163,12 +182,18 @@ Deno.serve(async (req) => {
 
     const aiJson = await aiResp.json();
     const usage = aiJson?.usage ?? {};
+    const promptTok = usage.prompt_tokens ?? 0;
+    const completionTok = usage.completion_tokens ?? 0;
+    const cost = costUsd(PLANNER_MODEL, promptTok, completionTok);
     await sb.from("ai_usage_log").insert({
       job: "daily-plan", model: PLANNER_MODEL, trigger,
       status: "ok", status_code: 200, latency_ms: aiLatency,
       prompt_tokens: usage.prompt_tokens ?? null,
       completion_tokens: usage.completion_tokens ?? null,
       total_tokens: usage.total_tokens ?? null,
+      cost_usd: Number(cost.toFixed(6)),
+      price_in_per_mtok: priceFor(PLANNER_MODEL).in,
+      price_out_per_mtok: priceFor(PLANNER_MODEL).out,
       request_ref: { for_date: today },
     });
     const call = aiJson.choices?.[0]?.message?.tool_calls?.[0];

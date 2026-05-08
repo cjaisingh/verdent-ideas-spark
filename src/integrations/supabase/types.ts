@@ -107,12 +107,15 @@ export type Database = {
       ai_usage_log: {
         Row: {
           completion_tokens: number | null
+          cost_usd: number | null
           created_at: string
           error: string | null
           id: string
           job: string
           latency_ms: number | null
           model: string
+          price_in_per_mtok: number | null
+          price_out_per_mtok: number | null
           prompt_tokens: number | null
           request_ref: Json
           status: string
@@ -122,12 +125,15 @@ export type Database = {
         }
         Insert: {
           completion_tokens?: number | null
+          cost_usd?: number | null
           created_at?: string
           error?: string | null
           id?: string
           job: string
           latency_ms?: number | null
           model: string
+          price_in_per_mtok?: number | null
+          price_out_per_mtok?: number | null
           prompt_tokens?: number | null
           request_ref?: Json
           status?: string
@@ -137,12 +143,15 @@ export type Database = {
         }
         Update: {
           completion_tokens?: number | null
+          cost_usd?: number | null
           created_at?: string
           error?: string | null
           id?: string
           job?: string
           latency_ms?: number | null
           model?: string
+          price_in_per_mtok?: number | null
+          price_out_per_mtok?: number | null
           prompt_tokens?: number | null
           request_ref?: Json
           status?: string
