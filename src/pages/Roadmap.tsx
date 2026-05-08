@@ -435,7 +435,7 @@ const Roadmap = () => {
                       <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>
-                  <div className="pl-6 mb-3 text-xs">
+                  <div className="pl-6 mb-3 text-xs space-y-2">
                     <InlineEdit
                       value={phase.summary}
                       onSave={(v) => updatePhaseSummary(phase.id, v)}
@@ -443,6 +443,7 @@ const Roadmap = () => {
                       placeholder="Add an epic description…"
                       textClassName="text-muted-foreground italic"
                     />
+                    <PhaseGateChip gate={gates.get(phase.id)} />
                   </div>
                   {sps.map((sprint) => {
                     const ts = tasksBySprint.get(sprint.id) ?? [];
