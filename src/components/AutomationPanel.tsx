@@ -4,6 +4,7 @@ import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, Alert
 import { toast } from "@/hooks/use-toast";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
+import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
 
 type Finding = {
   id: string; created_at: string; severity: string; category: string | null;
@@ -245,6 +246,7 @@ export const AutomationPanel = () => {
     <AlertsCard />
     <NightAgentScheduleCard />
     <NightAgentCard />
+    <NightAgentTestModeCard />
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
       {/* Code review */}
       <section className="rounded-md border border-border bg-card p-3 space-y-2">
