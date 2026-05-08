@@ -301,10 +301,10 @@ const Roadmap = () => {
   }, [phases, sprintsByPhase, tasksBySprint]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
+    <div className="mx-auto w-full max-w-7xl px-4 py-4 space-y-4">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Roadmap</h1>
+          <h1 className="text-xl font-semibold">Roadmap</h1>
           <p className="text-sm text-muted-foreground">
             Phases, sprints, tasks. Click a checkbox to cycle status. Click any text to edit.
           </p>
@@ -316,26 +316,31 @@ const Roadmap = () => {
           </Link>
         </div>
         <div className="flex items-center gap-2">
-          <AutoLogSettings />
           <WorkLogPulse />
           <TurnTracker nextUpTaskId={nextUp?.task.id ?? null} />
           {nextUp && (
             <button
               onClick={() => setSelectedTaskId(nextUp.task.id)}
-              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-3 py-2 transition"
+              className="text-left rounded-md border border-border bg-muted/40 hover:bg-muted px-2.5 py-1.5 transition max-w-[220px]"
+              title={`${nextUp.task.title} · ${nextUp.phase.key} · ${nextUp.sprint.key}`}
             >
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Next up</div>
-              <div className="text-sm font-medium">{nextUp.task.title}</div>
-              <div className="text-xs text-muted-foreground font-mono">{nextUp.phase.key} · {nextUp.sprint.key}</div>
+              <div className="text-xs font-medium truncate">{nextUp.task.title}</div>
             </button>
           )}
         </div>
       </div>
 
-      <DailyPlanCard />
-      <AutomationPanel />
+      <Tabs defaultValue="roadmap" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
+          <TabsTrigger value="plan">Daily plan</TabsTrigger>
+          <TabsTrigger value="automation">Automation</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-12 gap-4">
+        <TabsContent value="roadmap" className="mt-0">
+          <div className="grid grid-cols-12 gap-4">
         {/* TREE */}
         <div className="col-span-5 border border-border rounded-md p-2 max-h-[75vh] overflow-auto">
           {phases.map((phase) => {
