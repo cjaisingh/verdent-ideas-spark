@@ -28,10 +28,16 @@ export default function ApprovalPack() {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(false);
   const [orgName, setOrgName] = useState<string>(() => localStorage.getItem("awip.approvalPack.orgName") ?? "AWIP");
+  const [density, setDensity] = useState<"compact" | "standard" | "relaxed">(
+    () => (localStorage.getItem("awip.approvalPack.density") as any) ?? "standard",
+  );
+  const [paperSize, setPaperSize] = useState<"A4" | "Letter">(
+    () => (localStorage.getItem("awip.approvalPack.paper") as any) ?? "A4",
+  );
 
-  useEffect(() => {
-    localStorage.setItem("awip.approvalPack.orgName", orgName);
-  }, [orgName]);
+  useEffect(() => { localStorage.setItem("awip.approvalPack.orgName", orgName); }, [orgName]);
+  useEffect(() => { localStorage.setItem("awip.approvalPack.density", density); }, [density]);
+  useEffect(() => { localStorage.setItem("awip.approvalPack.paper", paperSize); }, [paperSize]);
 
   useEffect(() => {
     supabase.from("roadmap_phases").select("*").order("order").then(({ data }) => {
