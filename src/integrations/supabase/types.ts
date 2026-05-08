@@ -1450,6 +1450,79 @@ export type Database = {
           },
         ]
       }
+      roadmap_finding_discussion_messages: {
+        Row: {
+          body: string
+          created_at: string
+          discussion_id: string
+          id: string
+          model: string | null
+          role: string
+          source: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          discussion_id: string
+          id?: string
+          model?: string | null
+          role: string
+          source: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          discussion_id?: string
+          id?: string
+          model?: string | null
+          role?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_finding_discussion_messages_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_finding_discussions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_finding_discussions: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          finding_id: string
+          id: string
+          mode: string
+          started_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          finding_id: string
+          id?: string
+          mode: string
+          started_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          finding_id?: string
+          id?: string
+          mode?: string
+          started_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_finding_discussions_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_review_findings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roadmap_phases: {
         Row: {
           created_at: string
@@ -1490,8 +1563,13 @@ export type Database = {
           body: string | null
           category: string | null
           created_at: string
+          decision_outcome: string | null
+          decision_recorded_at: string | null
+          decision_recorded_by: string | null
+          decision_summary: string | null
           diff_window_end: string | null
           diff_window_start: string | null
+          discussion_status: string
           id: string
           reviewed_at: string
           reviewer_model: string
@@ -1504,8 +1582,13 @@ export type Database = {
           body?: string | null
           category?: string | null
           created_at?: string
+          decision_outcome?: string | null
+          decision_recorded_at?: string | null
+          decision_recorded_by?: string | null
+          decision_summary?: string | null
           diff_window_end?: string | null
           diff_window_start?: string | null
+          discussion_status?: string
           id?: string
           reviewed_at?: string
           reviewer_model: string
@@ -1518,8 +1601,13 @@ export type Database = {
           body?: string | null
           category?: string | null
           created_at?: string
+          decision_outcome?: string | null
+          decision_recorded_at?: string | null
+          decision_recorded_by?: string | null
+          decision_summary?: string | null
           diff_window_end?: string | null
           diff_window_start?: string | null
+          discussion_status?: string
           id?: string
           reviewed_at?: string
           reviewer_model?: string
