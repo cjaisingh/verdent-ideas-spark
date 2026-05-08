@@ -4,6 +4,7 @@ import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, Alert
 import { toast } from "@/hooks/use-toast";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
+import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
 
 type Finding = {
   id: string; created_at: string; severity: string; category: string | null;
