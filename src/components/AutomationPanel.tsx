@@ -2031,6 +2031,9 @@ const SpendDrillDialog = ({
                   const isErr = (r.status || "ok") !== "ok";
                   const runLim = effectiveRunLimit(r.job);
                   const runBreach = runLim != null && Number(r.cost_usd || 0) > runLim;
+                  const dayBreach = isDayBreach(r);
+                  const jobDayBreach = isJobDayBreach(r);
+                  const anyBreach = runBreach || dayBreach || jobDayBreach;
                   return (
                     <div
                       key={r.id ?? vr.key}
