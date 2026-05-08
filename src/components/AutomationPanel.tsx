@@ -1387,6 +1387,15 @@ const DailyAiSpendCard = () => {
           <span className="text-[10px] text-muted-foreground font-normal">
             from ai_usage_log
           </span>
+          {liveCount > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 text-[10px] font-mono transition-shadow ${pulse ? "shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]" : ""}`}
+              title={lastInsertAt ? `Last insert ${new Date(lastInsertAt).toLocaleTimeString()}` : "New rows arrived"}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full bg-emerald-500 ${pulse ? "animate-pulse" : ""}`} />
+              live · +{liveCount}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-[10px] flex-wrap">
           <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (o) setPendingRange(range); }}>
