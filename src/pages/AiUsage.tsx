@@ -293,7 +293,7 @@ export default function AiUsage() {
                 {recent.map((r) => {
                   const inT = r.prompt_tokens ?? 0;
                   const outT = r.completion_tokens ?? 0;
-                  const cost = costFor(r.model, inT, outT);
+                  const cost = rowCost(r);
                   const ts = new Date(r.created_at);
                   return (
                     <TableRow key={r.id}>
