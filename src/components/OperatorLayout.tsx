@@ -42,33 +42,45 @@ const OperatorLayout = () => {
   // Keyboard-driven resizing flag — debounced off after the last arrow keystroke.
   const [kbResizing, setKbResizing] = useState(false);
   const kbTimerRef = useRef<number | null>(null);
-  // Snapshot the focus mode at drag start so it can be restored if anything
-  // (a stray click, keyboard shortcut, etc.) tried to change it mid-drag.
+  // Snapshots locked at the start of an interaction (drag or keyboard burst).
+  // We pin viewport+mode here so a viewport transition mid-drag (window resize,
+  // route change) can't redirect the persisted size into the wrong bucket and
+  // can't overwrite the mode the user had selected before they started dragging.
   const modeAtDragStartRef = useRef<typeof paneState.mode | null>(null);
+  const viewportAtDragStartRef = useRef<typeof viewport | null>(null);
+  const effectiveModeAtDragStartRef = useRef<typeof effectiveMode | null>(null);
   // Session-only resize history (not persisted across reloads).
   const [history, setHistory] = useState<ResizeHistoryEntry[]>([]);
-  // Snapshot of sizes at the start of an interaction (drag or keyboard burst).
   const sizesAtInteractionStartRef = useRef<{ rightWidth: number; bottomHeight: number } | null>(null);
+  /** Returns the (viewport, effectiveMode) pair that writes/clamps should use:
+   *  the snapshot from the start of the interaction if one is active, otherwise
+   *  the live values. */
+  const interactionTarget = (): { vp: typeof viewport; em: typeof effectiveMode } => ({
+    vp: viewportAtDragStartRef.current ?? viewport,
+    em: effectiveModeAtDragStartRef.current ?? effectiveMode,
+  });
   const commitHistory = (before: { rightWidth: number; bottomHeight: number }) => {
-    const after = getModeSizes(paneState, effectiveMode, viewport);
+    const { vp, em } = interactionTarget();
+    const after = getModeSizes(paneState, em, vp);
+    const f = paneFlags(em);
     const entries: ResizeHistoryEntry[] = [];
-    if (flags.right && before.rightWidth !== after.rightWidth) {
+    if (f.right && before.rightWidth !== after.rightWidth) {
       entries.push({
         id: `${Date.now()}-r`,
         ts: Date.now(),
-        viewport,
-        mode: effectiveMode,
+        viewport: vp,
+        mode: em,
         axis: "right",
         before: before.rightWidth,
         after: after.rightWidth,
       });
     }
-    if (flags.bottom && before.bottomHeight !== after.bottomHeight) {
+    if (f.bottom && before.bottomHeight !== after.bottomHeight) {
       entries.push({
         id: `${Date.now()}-b`,
         ts: Date.now(),
-        viewport,
-        mode: effectiveMode,
+        viewport: vp,
+        mode: em,
         axis: "bottom",
         before: before.bottomHeight,
         after: after.bottomHeight,
@@ -79,20 +91,25 @@ const OperatorLayout = () => {
   const handleDragging = (d: boolean) => {
     if (d) {
       modeAtDragStartRef.current = paneState.mode;
+      viewportAtDragStartRef.current = viewport;
+      effectiveModeAtDragStartRef.current = effectiveMode;
       sizesAtInteractionStartRef.current = getModeSizes(paneState, effectiveMode, viewport);
     } else {
-      const snapshot = modeAtDragStartRef.current;
+      const modeSnap = modeAtDragStartRef.current;
+      const { vp, em } = interactionTarget();
       modeAtDragStartRef.current = null;
-      if (snapshot && snapshot !== paneState.mode) {
-        setPaneState({ mode: snapshot });
+      viewportAtDragStartRef.current = null;
+      effectiveModeAtDragStartRef.current = null;
+      // Restore the user-selected mode if anything (incl. a viewport transition
+      // that downgraded dual/bottom to left) changed it during the drag.
+      if (modeSnap && modeSnap !== paneState.mode) {
+        setPaneState({ mode: modeSnap });
       }
-      // Final safety pass: re-run the clamp on whatever sizes ended up saved
-      // for this viewport+mode so a value can't sit outside the current bounds
-      // (e.g. if SIZE_BOUNDS shrank since the last drag). Only re-write if
-      // there was already a custom override — don't materialise defaults.
-      if (hasModeSizeOverrides(paneState, effectiveMode, viewport)) {
-        const current = getModeSizes(paneState, effectiveMode, viewport);
-        setPaneState((prev) => withModeSize(prev, effectiveMode, current, viewport));
+      // Final clamp pass against the snapshot bucket — never the live one,
+      // which may have been swapped out by a viewport change mid-drag.
+      if (hasModeSizeOverrides(paneState, em, vp)) {
+        const current = getModeSizes(paneState, em, vp);
+        setPaneState((prev) => withModeSize(prev, em, current, vp));
       }
       const before = sizesAtInteractionStartRef.current;
       sizesAtInteractionStartRef.current = null;
@@ -115,6 +132,9 @@ const OperatorLayout = () => {
     ) {
       if (!sizesAtInteractionStartRef.current) {
         sizesAtInteractionStartRef.current = getModeSizes(paneState, effectiveMode, viewport);
+        viewportAtDragStartRef.current = viewport;
+        effectiveModeAtDragStartRef.current = effectiveMode;
+        modeAtDragStartRef.current = paneState.mode;
       }
       setKbResizing(true);
       if (kbTimerRef.current) window.clearTimeout(kbTimerRef.current);
@@ -123,6 +143,9 @@ const OperatorLayout = () => {
         const before = sizesAtInteractionStartRef.current;
         sizesAtInteractionStartRef.current = null;
         if (before) commitHistory(before);
+        viewportAtDragStartRef.current = null;
+        effectiveModeAtDragStartRef.current = null;
+        modeAtDragStartRef.current = null;
       }, 400);
     }
   };
@@ -385,7 +408,7 @@ const OperatorLayout = () => {
                         minSize={bounds.bottom.min}
                         maxSize={bounds.bottom.max}
                         onResize={(size) =>
-                          setPaneState((prev) => withModeSize(prev, effectiveMode, { bottomHeight: Math.round(size) }, viewport))
+                          { const { vp, em } = interactionTarget(); setPaneState((prev) => withModeSize(prev, em, { bottomHeight: Math.round(size) }, vp)); }
                         }
                       >
                         <div className="relative h-full">
@@ -428,7 +451,7 @@ const OperatorLayout = () => {
                     minSize={bounds.right.min}
                     maxSize={bounds.right.max}
                     onResize={(size) =>
-                      setPaneState((prev) => withModeSize(prev, effectiveMode, { rightWidth: Math.round(size) }, viewport))
+                      { const { vp, em } = interactionTarget(); setPaneState((prev) => withModeSize(prev, em, { rightWidth: Math.round(size) }, vp)); }
                     }
                   >
                     <div className="relative h-full">
