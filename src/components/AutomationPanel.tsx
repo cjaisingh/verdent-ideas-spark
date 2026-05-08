@@ -2039,7 +2039,7 @@ const SpendDrillDialog = ({
                       key={r.id ?? vr.key}
                       data-index={vr.index}
                       ref={rowVirtualizer.measureElement}
-                      className={`grid border-t border-border/50 text-[11px] ${runBreach ? "bg-destructive/5" : ""}`}
+                      className={`grid border-t border-border/50 text-[11px] ${anyBreach ? "bg-destructive/5" : ""}`}
                       style={{ gridTemplateColumns: gridCols }}
                     >
                       <div className="px-2 py-1 font-mono text-muted-foreground whitespace-nowrap">
