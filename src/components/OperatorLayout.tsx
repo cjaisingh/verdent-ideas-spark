@@ -246,7 +246,12 @@ const OperatorLayout = () => {
                   </Link>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
-                  {tenantsTooltip}
+                  <div>{tenantsTooltip}</div>
+                  {isOnTenants && (
+                    <div className="mt-0.5 text-[10px] text-muted-foreground">
+                      {t("nav.currentPage")}
+                    </div>
+                  )}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
