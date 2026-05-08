@@ -37,7 +37,11 @@ export async function evaluateOpenGates(
   if (allowedKinds.length === 0) skipReasons.push("no_allowed_kinds");
   const wouldOpenShift = skipReasons.length === 0;
 
-  const f = parseOpenTestFilters(url);
+  const parsed = parseOpenTestFilters(url);
+  if (!parsed.ok) {
+    return json({ error: "invalid_filters", details: parsed.errors }, 400);
+  }
+  const f = parsed.filters;
 
   let dbq = sb
     .from("discussion_actions")
