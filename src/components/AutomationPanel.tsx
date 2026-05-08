@@ -1135,6 +1135,11 @@ const DailyAiSpendCard = () => {
   const [rowLimit, setRowLimit] = useState<number>(5000);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [knownGroups, setKnownGroups] = useState<{ job: string[]; model: string[] }>({ job: [], model: [] });
+  const [tz, setTz] = useState<string>(loadStoredTz);
+
+  useEffect(() => {
+    try { localStorage.setItem(TZ_STORAGE_KEY, tz); } catch { /* ignore */ }
+  }, [tz]);
 
   useEffect(() => {
     try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
