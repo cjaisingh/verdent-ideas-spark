@@ -12,6 +12,7 @@ import { WorkLogPulse } from "@/components/WorkLogPulse";
 import { AutomationPanel } from "@/components/AutomationPanel";
 import { DailyPlanCard } from "@/components/DailyPlanCard";
 import { AutoLogSettings } from "@/components/AutoLogSettings";
+import { EvidencePanel } from "@/components/EvidencePanel";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
