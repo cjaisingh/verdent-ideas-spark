@@ -57,6 +57,36 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        tint: {
+          night: {
+            DEFAULT: "hsl(var(--tint-night))",
+            foreground: "hsl(var(--tint-night-foreground))",
+          },
+          event: {
+            DEFAULT: "hsl(var(--tint-event))",
+            foreground: "hsl(var(--tint-event-foreground))",
+          },
+          approval: {
+            DEFAULT: "hsl(var(--tint-approval))",
+            foreground: "hsl(var(--tint-approval-foreground))",
+          },
+          discussion: {
+            DEFAULT: "hsl(var(--tint-discussion))",
+            foreground: "hsl(var(--tint-discussion-foreground))",
+          },
+          capability: {
+            DEFAULT: "hsl(var(--tint-capability))",
+            foreground: "hsl(var(--tint-capability-foreground))",
+          },
+          risk: {
+            DEFAULT: "hsl(var(--tint-risk))",
+            foreground: "hsl(var(--tint-risk-foreground))",
+          },
+          okr: {
+            DEFAULT: "hsl(var(--tint-okr))",
+            foreground: "hsl(var(--tint-okr-foreground))",
+          },
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
