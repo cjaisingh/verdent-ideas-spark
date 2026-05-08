@@ -1,39 +1,66 @@
 # Operator panes
 
-The operator console uses a 4-mode pane layout controlled by the toggle row in the header.
+The operator console uses a 4-mode pane layout controlled by the toggle row in the header. The right and bottom panes are **pluggable**: each has a smart default per route and an in-pane picker to swap source.
 
 ## Modes
 
 | Icon (lucide) | Mode      | Layout                                          | Shortcut |
 |---------------|-----------|-------------------------------------------------|----------|
 | `PanelLeft`   | `left`    | left sidebar only                               | ⌘1 / Ctrl+1 |
-| `Columns2`    | `dual`    | left sidebar + right Night Agent feed           | ⌘2 / Ctrl+2 |
+| `Columns2`    | `dual`    | left sidebar + right pane                       | ⌘2 / Ctrl+2 |
 | `Square`      | `centre`  | all panes closed — main content fills viewport  | ⌘3 / Ctrl+3 |
-| `PanelBottom` | `bottom`  | left sidebar + bottom live event ticker         | ⌘4 / Ctrl+4 |
+| `PanelBottom` | `bottom`  | left sidebar + bottom pane                      | ⌘4 / Ctrl+4 |
 
-Shortcuts are ignored while typing in inputs/textareas.
-
-On mobile (<768px) the layout is forced to `centre`; the existing offcanvas sidebar drawer is unaffected.
+Shortcuts are ignored while typing in inputs/textareas. On mobile (<768px) the layout is forced to `centre`.
 
 ## Persistence
 
-State is stored in `localStorage` under `awip.panes.v1`, keyed by the **first path segment** of the route (e.g. `/capabilities`, `/roadmap`, `/night`). Each top-level route remembers its own mode independently, so opening the right pane on `/capabilities` does not affect `/roadmap`.
+Stored in `localStorage` under `awip.panes.v1`, keyed by the **first path segment** of the route (`/capabilities`, `/roadmap`, …). Each top-level route remembers its mode, sizes, **and source choices** independently.
 
 ```ts
 type PaneMode = "left" | "dual" | "centre" | "bottom";
-type PaneState = { mode: PaneMode; rightWidth: number; bottomHeight: number };
+type PaneSlotKey = "right" | "bottom";
+type PaneState = {
+  mode: PaneMode;
+  // …sizes (per viewport+mode)
+  sourcesByViewportSlot?: Partial<Record<ViewportClass, Partial<Record<PaneSlotKey, string>>>>;
+};
 ```
 
-`rightWidth` and `bottomHeight` are stored as **panel-group percentages** (0–100) and updated live via `react-resizable-panels`' `onResize` callback. When you switch back to a route, the saved size is reapplied as `defaultSize` (the panel group is keyed by mode so it remounts cleanly).
+`rightWidth` / `bottomHeight` are panel-group percentages; saved per viewport class so a wide-screen size doesn't crush a narrow one.
 
-## Pane content
+## Pane sources
 
-- **Right (`RightPaneNightAgent`)** — last 30 `night_observations`, prepended in real time. Header dot shows whether the current UTC time is inside the 22:00–06:00 night window.
-- **Bottom (`BottomPaneEventTicker`)** — merged stream of `okr_node_events`, `capability_events`, and `discussion_action_events` (capped at 200, newest first). Tabs filter by source; pause/resume freezes the auto-prepend.
+Both slots can host any source. The picker lives in the pane header (icon + label dropdown). The selection is stored per route + viewport.
 
-## Adding a new pane
+| Source id | Label | Tint | Default route |
+|---|---|---|---|
+| `night-agent` | Night Agent | `tint-night` | `/night` |
+| `event-ticker` | Event ticker | `tint-event` | `/events` |
+| `approvals` | Pending approvals | `tint-approval` | `/admin` |
+| `discussion-actions` | Discussion actions | `tint-discussion` | `/jobs` |
 
-1. Create the component under `src/components/panes/`.
-2. Add a new `PaneMode` value and matching entry in `MODES` inside `src/components/PaneToggleGroup.tsx`.
-3. Update `paneFlags()` in `src/lib/pane-state.ts` to map the new mode to `{ left, right, bottom, … }` flags.
-4. Render it conditionally in `OperatorLayout.tsx`.
+### Per-route defaults
+
+`src/lib/pane-defaults.ts`:
+
+| Route | Right default | Bottom default |
+|---|---|---|
+| `/dashboard` | Night Agent | Event ticker |
+| `/roadmap` | Approvals | Event ticker |
+| `/capabilities` | Night Agent | Event ticker |
+| `/jobs` | Discussion actions | Event ticker |
+| `/copilot` | Discussion actions | Event ticker |
+| `/night` (-shifts) | Night Agent | Event ticker |
+| `/admin`, `/approvals` | Approvals | Event ticker |
+| (fallback) | Night Agent | Event ticker |
+
+Defaults apply when no override is saved for that (route, viewport, slot). The picker shows a small amber dot when the slot is overridden; "Reset to route default" is the last item in the dropdown.
+
+The big "Reset layout" button in the header (`RefreshCw`) clears mode, sizes, **and** source overrides for the current route.
+
+## Adding a new source
+
+1. Create a body-only component under `src/components/panes/bodies/`. It owns its own scrolling (`h-full overflow-y-auto`) and sub-toolbars, but **not** the source picker header — `PaneSlot` provides that.
+2. Register it in `src/components/panes/sources.ts`: id, label, lucide icon, tint classes from `docs/design-system.md`, canonical `openHref`, and a `lazy()` import of the body.
+3. (Optional) Add it to the per-route default map in `src/lib/pane-defaults.ts` if a particular route should land on it by default.
