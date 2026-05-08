@@ -19,15 +19,35 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
 
   const now = new Date();
   const local = localParts(now, tz);
+  const enabled = (settings as any)?.night_agent_enabled !== false;
+  const inWin = inWindow(local.hhmm, winStart, winEnd);
+  const blackoutHit = blackouts.includes(local.date);
 
-  if (blackouts.includes(local.date)) {
-    return json({ skipped: true, reason: "blackout_date", tz, date: local.date });
+  // Gate snapshot — persisted on the shift row so the promotion audit
+  // report can show the exact pre-conditions of every promotion.
+  const gatesSnapshot = {
+    timezone: tz,
+    window: `${winStart}-${winEnd}`,
+    local_date: local.date,
+    local_time: local.hhmm,
+    enabled,
+    in_window: inWin,
+    blackout_hit: blackoutHit,
+    allowed_kinds: allowedKinds,
+    blackout_dates: blackouts,
+  };
+
+  if (!enabled) {
+    return json({ skipped: true, reason: "night_agent_disabled", gates: gatesSnapshot });
   }
-  if (!inWindow(local.hhmm, winStart, winEnd)) {
-    return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}` });
+  if (blackoutHit) {
+    return json({ skipped: true, reason: "blackout_date", tz, date: local.date, gates: gatesSnapshot });
+  }
+  if (!inWin) {
+    return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}`, gates: gatesSnapshot });
   }
   if (allowedKinds.length === 0) {
-    return json({ skipped: true, reason: "no_allowed_kinds" });
+    return json({ skipped: true, reason: "no_allowed_kinds", gates: gatesSnapshot });
   }
 
   // Window timestamps recorded against the wall clock; tz remembered in summary.
