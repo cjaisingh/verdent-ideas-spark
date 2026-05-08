@@ -19,6 +19,9 @@ import { AutoLogSettings } from "@/components/AutoLogSettings";
 import { EvidencePanel } from "@/components/EvidencePanel";
 import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
+import { ProceedAction } from "@/components/roadmap/ProceedAction";
+import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
+import { useRoadmapGates } from "@/hooks/useRoadmapGates";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -61,12 +64,7 @@ const taskMarker = (status: string) => {
   }
 };
 
-const phaseStatusBadge = (s: string) => {
-  const map: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-    done: "default", active: "secondary", planned: "outline", paused: "destructive",
-  };
-  return <Badge variant={map[s] ?? "outline"} className="text-[10px] uppercase">{s}</Badge>;
-};
+// Replaced by <PhaseGateBadge /> which understands gate status.
 
 const TriCheckbox = ({ state, onClick }: { state: "empty" | "partial" | "full"; onClick?: (e: React.MouseEvent) => void }) => {
   const base = "h-4 w-4 rounded-[4px] border flex items-center justify-center shrink-0 transition";
@@ -100,6 +98,7 @@ const Roadmap = () => {
   });
   const [newComment, setNewComment] = useState("");
   const [commentKind, setCommentKind] = useState<"comment" | "question" | "decision">("comment");
+  const gates = useRoadmapGates();
 
   // Work-log form state
   const [logForm, setLogForm] = useState({
@@ -328,6 +327,17 @@ const Roadmap = () => {
               <div className="text-xs font-medium truncate">{nextUp.task.title}</div>
             </button>
           )}
+          <ProceedAction
+            nextUp={nextUp}
+            activePhaseGate={nextUp ? gates.get(nextUp.phase.id) : undefined}
+            activeSprintAllDone={
+              !!nextUp &&
+              (tasksBySprint.get(nextUp.sprint.id) ?? []).every(
+                (t) => t.status === "done" || t.status === "wont_do",
+              )
+            }
+            onSelectTask={setSelectedTaskId}
+          />
         </div>
       </div>
 
@@ -354,7 +364,7 @@ const Roadmap = () => {
                   </button>
                   <TriCheckbox state={phaseTriState(phase.id)} />
                   <span className="text-sm font-medium flex-1 truncate">{phase.title}</span>
-                  {phaseStatusBadge(phase.status)}
+                  <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
                 </div>
                 {!phaseCollapsed && sps.map((sprint) => {
                   const sprintCollapsed = collapsed.has(sprint.id);
@@ -416,7 +426,7 @@ const Roadmap = () => {
                 <div key={phase.id} className="mb-6">
                   <div className="flex items-center gap-3 mb-1 pl-6">
                     <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{phase.title}</div>
-                    {phaseStatusBadge(phase.status)}
+                    <PhaseGateBadge phaseStatus={phase.status} gate={gates.get(phase.id)} />
                     <Link
                       to={`/master-plan#${phase.key}`}
                       className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5"
@@ -425,7 +435,7 @@ const Roadmap = () => {
                       <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>
-                  <div className="pl-6 mb-3 text-xs">
+                  <div className="pl-6 mb-3 text-xs space-y-2">
                     <InlineEdit
                       value={phase.summary}
                       onSave={(v) => updatePhaseSummary(phase.id, v)}
@@ -433,6 +443,7 @@ const Roadmap = () => {
                       placeholder="Add an epic description…"
                       textClassName="text-muted-foreground italic"
                     />
+                    <PhaseGateChip gate={gates.get(phase.id)} />
                   </div>
                   {sps.map((sprint) => {
                     const ts = tasksBySprint.get(sprint.id) ?? [];
