@@ -64,7 +64,7 @@ const OperatorLayout = () => {
   return (
     <SidebarProvider open={flags.left} onOpenChange={(o) => setPaneState({ mode: o ? "left" : "centre" })}>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
+        <AppSidebar collapsible={effectiveMode === "centre" ? "offcanvas" : "icon"} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10">
             <PaneToggleGroup
