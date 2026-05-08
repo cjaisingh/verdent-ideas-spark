@@ -334,6 +334,25 @@ export default function RiskDashboard() {
           </div>
         )}
       </section>
+
+      {copilotFor && (
+        <CopilotDiscussionSheet
+          open={!!copilotFor}
+          onOpenChange={(o) => { if (!o) { setCopilotFor(null); load(); } }}
+          findingId={copilotFor.id}
+          findingTitle={copilotFor.title}
+          severity={copilotFor.severity}
+          onDecisionRecorded={load}
+        />
+      )}
+      {chatFor && (
+        <NoCopilotDiscussModal
+          open={!!chatFor}
+          onOpenChange={(o) => { if (!o) { setChatFor(null); load(); } }}
+          finding={chatFor}
+          onMarked={load}
+        />
+      )}
     </div>
   );
 }
