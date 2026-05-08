@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check, Moon } from "lucide-react";
+import { ShieldCheck, FlaskConical, ClipboardCheck, Loader2, ExternalLink, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Check, Moon, Calendar as CalendarIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { format } from "date-fns";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
@@ -1016,27 +1020,64 @@ const fmtUsd6 = (n: number) =>
   n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
 const fmtUsdFull = (n: number) => `$${n.toFixed(6)}`;
 
+// Date helpers (UTC-based to match the rest of the panel)
+const startOfUtcDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+const endExclusiveUtcDay = (d: Date) => new Date(startOfUtcDay(d).getTime() + 86_400_000);
+const utcDayKey = (d: Date) => startOfUtcDay(d).toISOString().slice(0, 10);
+const enumerateUtcDays = (from: Date, to: Date) => {
+  const out: string[] = [];
+  let cur = startOfUtcDay(from).getTime();
+  const end = startOfUtcDay(to).getTime();
+  while (cur <= end) { out.push(new Date(cur).toISOString().slice(0, 10)); cur += 86_400_000; }
+  return out;
+};
+const RANGE_STORAGE_KEY = "awip.spend.range";
+const defaultRange = () => {
+  const to = startOfUtcDay(new Date());
+  const from = new Date(to.getTime() - 13 * 86_400_000);
+  return { from, to };
+};
+const loadStoredRange = (): { from: Date; to: Date } => {
+  try {
+    const raw = localStorage.getItem(RANGE_STORAGE_KEY);
+    if (!raw) return defaultRange();
+    const p = JSON.parse(raw);
+    const from = new Date(p.from); const to = new Date(p.to);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return defaultRange();
+    return { from: startOfUtcDay(from), to: startOfUtcDay(to) };
+  } catch { return defaultRange(); }
+};
+
 const DailyAiSpendCard = () => {
   const [rows, setRows] = useState<SpendRow[]>([]);
-  const [days, setDays] = useState<7 | 14 | 30>(14);
+  const [range, setRange] = useState<{ from: Date; to: Date }>(loadStoredRange);
+  const [pendingRange, setPendingRange] = useState<{ from?: Date; to?: Date }>(range);
+  const [popoverOpen, setPopoverOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<"job" | "model">("job");
   const [loading, setLoading] = useState(true);
+  const [capped, setCapped] = useState(false);
   const [drill, setDrill] = useState<{ day: string; groupKey: string | null } | null>(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(RANGE_STORAGE_KEY, JSON.stringify({ from: range.from.toISOString(), to: range.to.toISOString() })); } catch { /* ignore */ }
+  }, [range]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const since = new Date(Date.now() - days * 86_400_000).toISOString();
       const { data, error } = await supabase
         .from("ai_usage_log")
         .select("id, created_at, job, model, cost_usd, prompt_tokens, completion_tokens, price_in_per_mtok, price_out_per_mtok, latency_ms, status, error, request_ref")
-        .gte("created_at", since)
+        .gte("created_at", startOfUtcDay(range.from).toISOString())
+        .lt("created_at", endExclusiveUtcDay(range.to).toISOString())
         .order("created_at", { ascending: false })
         .limit(5000);
       if (!cancelled) {
         if (error) toast({ title: "Failed to load AI spend", description: error.message, variant: "destructive" });
-        setRows((data as SpendRow[]) || []);
+        const list = (data as SpendRow[]) || [];
+        setRows(list);
+        setCapped(list.length === 5000);
         setLoading(false);
       }
     };
@@ -1045,14 +1086,11 @@ const DailyAiSpendCard = () => {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ai_usage_log" }, load)
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [days]);
+  }, [range.from.getTime(), range.to.getTime()]);
 
-  // bucket per day (UTC) per group key
-  const dayKeys: string[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86_400_000);
-    dayKeys.push(d.toISOString().slice(0, 10));
-  }
+  const dayKeys = enumerateUtcDays(range.from, range.to);
+  const daysSpan = Math.max(1, dayKeys.length);
+  const sparseLabels = daysSpan > 31;
   const groupKeyOf = (r: SpendRow) =>
     (groupBy === "job" ? r.job : r.model) || "unknown";
 
@@ -1104,16 +1142,55 @@ const DailyAiSpendCard = () => {
             from ai_usage_log
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px]">
-          <div className="inline-flex rounded border border-border overflow-hidden">
-            {([7, 14, 30] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={`px-2 py-0.5 ${days === d ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              >{d}d</button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 text-[10px] flex-wrap">
+          <Popover open={popoverOpen} onOpenChange={(o) => { setPopoverOpen(o); if (o) setPendingRange(range); }}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-7 px-2 text-[11px] font-mono gap-1.5">
+                <CalendarIcon className="h-3 w-3" />
+                {format(range.from, "MMM dd")} → {format(range.to, "MMM dd")}
+                <span className="text-muted-foreground">({daysSpan}d)</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <div className="p-2 border-b border-border flex flex-wrap gap-1">
+                {([
+                  { label: "7d", from: new Date(Date.now() - 6 * 86_400_000), to: new Date() },
+                  { label: "14d", from: new Date(Date.now() - 13 * 86_400_000), to: new Date() },
+                  { label: "30d", from: new Date(Date.now() - 29 * 86_400_000), to: new Date() },
+                  { label: "90d", from: new Date(Date.now() - 89 * 86_400_000), to: new Date() },
+                  (() => { const n = new Date(); return { label: "This month", from: new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)), to: n }; })(),
+                  (() => { const n = new Date(); const from = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() - 1, 1)); const to = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 0)); return { label: "Last month", from, to }; })(),
+                ]).map((p) => (
+                  <Button key={p.label} variant="ghost" size="sm" className="h-6 px-2 text-[10px]"
+                    onClick={() => {
+                      const from = startOfUtcDay(p.from); const to = startOfUtcDay(p.to);
+                      setRange({ from, to }); setPendingRange({ from, to }); setPopoverOpen(false);
+                    }}
+                  >{p.label}</Button>
+                ))}
+              </div>
+              <Calendar
+                mode="range"
+                selected={{ from: pendingRange.from, to: pendingRange.to }}
+                onSelect={(r: any) => setPendingRange({ from: r?.from, to: r?.to })}
+                numberOfMonths={2}
+                disabled={(d) => d > new Date() || d < new Date(Date.now() - 366 * 86_400_000)}
+                className="p-3 pointer-events-auto"
+              />
+              <div className="p-2 border-t border-border flex justify-end gap-2">
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => setPopoverOpen(false)}>Cancel</Button>
+                <Button size="sm" className="h-7 text-[11px]"
+                  disabled={!pendingRange.from || !pendingRange.to}
+                  onClick={() => {
+                    if (pendingRange.from && pendingRange.to) {
+                      setRange({ from: startOfUtcDay(pendingRange.from), to: startOfUtcDay(pendingRange.to) });
+                      setPopoverOpen(false);
+                    }
+                  }}
+                >Apply</Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <div className="inline-flex rounded border border-border overflow-hidden">
             {(["job", "model"] as const).map((g) => (
               <button
@@ -1133,7 +1210,7 @@ const DailyAiSpendCard = () => {
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg / day</div>
-          <div className="font-mono">{fmtUsd6(total / days)}</div>
+          <div className="font-mono">{fmtUsd6(total / daysSpan)}</div>
         </div>
         <div className="rounded border border-border p-2">
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Calls</div>
@@ -1149,20 +1226,26 @@ const DailyAiSpendCard = () => {
         <div className="text-xs text-muted-foreground">Loading…</div>
       ) : rows.length === 0 ? (
         <div className="text-xs text-muted-foreground">
-          No ai_usage_log entries in the last {days} days.
+          No ai_usage_log entries between {format(range.from, "MMM dd")} and {format(range.to, "MMM dd")}.
         </div>
       ) : (
         <>
+          {capped && (
+            <div className="text-[10px] rounded border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-1">
+              Showing first 5,000 rows for this range — narrow the dates for full totals.
+            </div>
+          )}
           {/* Stacked bar chart */}
-          <div className="flex items-end gap-1 h-32 border-b border-border pb-1">
-            {dayKeys.map((d) => {
-              const dayTotal = dailyTotals[dayKeys.indexOf(d)];
+          <div className={`flex items-end ${daysSpan > 31 ? "gap-0.5" : "gap-1"} h-32 border-b border-border pb-1`}>
+            {dayKeys.map((d, idx) => {
+              const dayTotal = dailyTotals[idx];
               const heightPct = (dayTotal / maxDay) * 100;
               const segments = groups
                 .map((g) => ({ g, c: matrix[d][g] || 0 }))
                 .filter((s) => s.c > 0);
+              const showLabel = !sparseLabels || idx === 0 || idx === dayKeys.length - 1 || idx % 7 === 0;
               return (
-                <div key={d} className="flex-1 flex flex-col items-center gap-1 group">
+                <div key={d} className="flex-1 flex flex-col items-center gap-1 group min-w-0">
                   <div
                     className="w-full flex flex-col-reverse rounded-sm overflow-hidden bg-muted/40 cursor-pointer hover:ring-1 hover:ring-border"
                     style={{ height: `${Math.max(heightPct, dayTotal > 0 ? 2 : 0)}%`, minHeight: dayTotal > 0 ? 2 : 0 }}
@@ -1182,8 +1265,8 @@ const DailyAiSpendCard = () => {
                       />
                     ))}
                   </div>
-                  <div className="text-[9px] text-muted-foreground font-mono">
-                    {d.slice(5)}
+                  <div className="text-[9px] text-muted-foreground font-mono h-3">
+                    {showLabel ? d.slice(5) : ""}
                   </div>
                 </div>
               );
