@@ -8,6 +8,12 @@
 //   GET  /okr/tree?tenant_id=...           -> fetch full tree (incl. superseded)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { scanLesson, describeIssues } from "./lessonSafety.ts";
+import {
+  evaluateCapability,
+  refineConnectorsGate,
+  type CapabilityRow,
+  type CapabilityPromotionStatus,
+} from "./promotion_gates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
