@@ -347,6 +347,7 @@ const Roadmap = () => {
           <TabsTrigger value="plan">Daily plan</TabsTrigger>
           <TabsTrigger value="automation">Automation</TabsTrigger>
           <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="signoffs">Sign-offs</TabsTrigger>
         </TabsList>
 
         <TabsContent value="roadmap" className="mt-0">
