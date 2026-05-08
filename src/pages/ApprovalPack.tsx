@@ -397,7 +397,7 @@ export default function ApprovalPack() {
                     </tr>
                   </thead>
                   <tbody>
-                    {allPhaseStats
+                    {filteredStats
                       .slice()
                       .sort((a, b) => a.phase_order - b.phase_order)
                       .map((r) => {
