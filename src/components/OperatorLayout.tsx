@@ -69,7 +69,18 @@ const OperatorLayout = () => {
           <header className="h-12 flex items-center border-b border-border px-3 gap-3 sticky top-0 bg-background z-10">
             <PaneToggleGroup
               mode={effectiveMode}
-              onChange={(m) => setPaneState({ mode: m })}
+              onChange={(m) => {
+                if (m === "centre") {
+                  // Toggle: re-clicking centre returns to last non-centre mode.
+                  if (paneState.mode === "centre") {
+                    setPaneState({ mode: paneState.lastNonCentre });
+                  } else {
+                    setPaneState({ mode: "centre", lastNonCentre: paneState.mode as Exclude<typeof paneState.mode, "centre"> });
+                  }
+                } else {
+                  setPaneState({ mode: m, lastNonCentre: m });
+                }
+              }}
             />
             <Link to="/tenants" className="font-semibold text-sm">AWIP Core</Link>
             <div className="ml-auto flex items-center gap-2">
