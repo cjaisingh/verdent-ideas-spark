@@ -8,6 +8,7 @@ import { discussionHandle, jobHandle, subjectHandle } from "@/lib/discussionHand
 import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
 
 export type JobDetailsRecord = {
   id: string;
