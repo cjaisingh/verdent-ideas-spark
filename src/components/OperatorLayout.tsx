@@ -96,6 +96,16 @@ const OperatorLayout = () => {
                 }}
               />
             )}
+            {dragging && (
+              <span
+                role="status"
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                Resizing panels… switching locked
+              </span>
+            )}
             {!isMobile && (flags.right || flags.bottom) && hasModeSizeOverrides(paneState, effectiveMode) && (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
