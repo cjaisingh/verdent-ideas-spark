@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { TEMPLATES } from "@/components/dashboard/templates";
 import type { DashboardConfig, Tab, TemplateId, Widget, WidgetKind } from "@/components/dashboard/widgets/types";
@@ -110,18 +111,26 @@ export function useDashboardConfig() {
     return () => { cancelled = true; };
   }, []);
 
-  const persist = useCallback(async (cfg: DashboardConfig) => {
-    if (!userId) return;
-    await supabase
+  const persist = useCallback(async (cfg: DashboardConfig): Promise<{ ok: boolean }> => {
+    if (!userId) return { ok: true };
+    const { error } = await supabase
       .from("operator_dashboards")
       .update({ tabs: cfg.tabs as never, active_tab_id: cfg.activeTabId })
       .eq("user_id", userId);
+    return { ok: !error };
   }, [userId]);
 
+  const flushPendingSave = useCallback(() => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+  }, []);
+
   const scheduleSave = useCallback((cfg: DashboardConfig) => {
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    flushPendingSave();
     saveTimer.current = window.setTimeout(() => { void persist(cfg); }, SAVE_DEBOUNCE_MS);
-  }, [persist]);
+  }, [persist, flushPendingSave]);
 
   /** Mutate config locally + debounce a save. */
   const update = useCallback((mutator: (prev: DashboardConfig) => DashboardConfig) => {
@@ -227,22 +236,46 @@ export function useDashboardConfig() {
     }));
   }, [update]);
 
-  /** Swap (or move-into-empty) two slots within the same tab. */
+  /**
+   * Swap (or move-into-empty) two slots within the same tab.
+   * Persists immediately and reverts the local state if the server rejects it,
+   * so positions stay consistent across reloads.
+   */
   const swapSlots = useCallback((tabId: string, fromIndex: number, toIndex: number) => {
-    update((prev) => ({
-      ...prev,
-      tabs: prev.tabs.map((t) => {
-        if (t.id !== tabId || fromIndex === toIndex) return t;
-        if (fromIndex < 0 || toIndex < 0) return t;
-        if (fromIndex >= t.widgets.length || toIndex >= t.widgets.length) return t;
-        const widgets = t.widgets.slice();
-        const tmp = widgets[fromIndex];
-        widgets[fromIndex] = widgets[toIndex];
-        widgets[toIndex] = tmp;
-        return { ...t, widgets };
-      }),
-    }));
-  }, [update]);
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const tab = prev.tabs.find((t) => t.id === tabId);
+      if (!tab) return prev;
+      if (fromIndex >= tab.widgets.length || toIndex >= tab.widgets.length) return prev;
+
+      const snapshot = prev;
+      const next: DashboardConfig = {
+        ...prev,
+        tabs: prev.tabs.map((t) => {
+          if (t.id !== tabId) return t;
+          const widgets = t.widgets.slice();
+          const tmp = widgets[fromIndex];
+          widgets[fromIndex] = widgets[toIndex];
+          widgets[toIndex] = tmp;
+          return { ...t, widgets };
+        }),
+      };
+
+      // Cancel any debounced save so it can't overwrite our immediate persist
+      // (and so a stale earlier state isn't pushed after the swap).
+      flushPendingSave();
+      void (async () => {
+        const { ok } = await persist(next);
+        if (!ok) {
+          setConfig(snapshot);
+          toast.error("Couldn't save widget swap — reverted");
+        }
+      })();
+
+      return next;
+    });
+  }, [persist, flushPendingSave]);
 
 
   /** Reset a tab back to the default template + seeded widgets. Keeps tab id and name. */
