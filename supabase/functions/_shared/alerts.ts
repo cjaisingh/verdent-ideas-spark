@@ -72,4 +72,13 @@ export async function dispatchAlert(
   try {
     await sb.from("alert_log").insert({ job, reason, message, delivered, status_code, error, payload });
   } catch (e) { console.error("alert_log insert failed", e); }
+  // Structured log line so dispatch attempts surface in edge_request_logs
+  // alongside the wrapping function's request id (W1 logger coverage).
+  try {
+    console.log(JSON.stringify({
+      tag: "alerts.dispatch", job, reason, delivered, status_code,
+      error: error ? error.slice(0, 200) : null,
+      message: message.slice(0, 200),
+    }));
+  } catch { /**/ }
 }
