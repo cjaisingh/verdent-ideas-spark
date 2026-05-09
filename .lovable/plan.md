@@ -1,57 +1,199 @@
-## Goal
+# AWIP Operational Maturity — Six Workstream Plan
 
-When the operator clicks **Preview re-queue**, the panel currently shows raw `planned_inserts` JSON. It does not warn that one of those inserts will collide with an existing row — e.g. there's already a `queued` run for the same `phase_id` today, or a `running` row started 5 minutes ago. Add a diff view that highlights duplicates *before* the operator flips off dry-run.
+Closes the loops the current ecosystem leaves open: backlog rot, observation glut without synthesis, reactive-only monitoring, doc drift, ungoverned ops actions, and missing CI signal.
 
-## What "duplicate" means
+Owner roles below are roles, not people. **Operator** = you (final authority on apply/dismiss). **Lovable agent** = me (implementation, scaffolding, drafts). **Cron** = automated.
 
-For each planned insert (`phase_id`, `scheduled_for = today`):
+---
 
-1. **Hard duplicate** — an existing row with the same `phase_id` AND same `scheduled_for`, in any non-terminal status (`queued`, `running`). Re-queueing would create a second active run for the same phase on the same day.
-2. **Active elsewhere** — an existing row for the same `phase_id` in `queued` or `running` for *any* `scheduled_for` (covers stale rows from yesterday that never finished).
-3. **Recently done** — same `phase_id` finished `done` within the last 6 hours. Probably wasted work.
-4. **Clean** — no collision. Safe to insert.
+## Workstream 1 — Morning Review (daily backlog hygiene)
 
-Severity ordering (worst wins): hard > active > recent > clean.
+**Goal:** No `discussion_actions` row sits in `in_progress` for more than 7 days unseen. Promotion-vs-shipping mismatch is surfaced every morning.
 
-## Behaviour
+**Deliverables**
+- `morning_reviews` table (operator-only RLS, realtime).
+- Edge function `morning-review` (`GET ?days=7`).
+- Cron `scheduled-morning-review` 06:00 UTC.
+- Page `/morning-review`: KPI strip, Stuck Jobs, Promotion Drift, Night-Agent throughput, Cron heartbeat, Open findings, Top actions, Acknowledge button.
+- Mirror-task-status one-click action (closes JOB-1/JOB-2 class bug).
+- `docs/morning-review.md`, `mem://features/morning-review.md`.
 
-- Dry-run query is extended: in addition to building `planned_inserts`, fetch existing `roadmap_phase_overnight_runs` for the selected `phase_id`s scoped to the relevant window (today + last 24h). One round-trip via `.in('phase_id', [...])`.
-- Each planned insert is annotated with `{ collision: 'hard'|'active'|'recent'|'clean', existing: [{id, status, scheduled_for, requested_at, started_at}] }`.
-- The result panel renders a **diff table** above the raw JSON:
-  - Columns: phase_key · planned status · collision badge · existing rows (compact: `queued@today`, `running@2026-05-08 (started 14m ago)`, etc.) · per-row checkbox to *exclude* this phase from the actual run.
-  - Badge colors: hard → destructive, active → secondary, recent → outline, clean → default.
-- Summary chip strip at the top: `3 clean · 1 recent · 2 active · 1 hard`.
-- The **Re-queue & run** button (when dry-run is off) also runs the same collision check first; if any `hard` collisions remain in the selection it requires a second click on a confirm dialog ("X hard duplicates will be created — proceed anyway?"). `active` and `recent` only warn.
-- Excluded phases are tracked in a `Set<string>` of `phase_id` and stripped from `inserts` at execution time.
+**Owner:** Lovable agent builds; Operator acknowledges daily.
 
-## Technical changes (single file)
+---
 
-`src/components/admin/OvernightBackfillPanel.tsx`:
+## Workstream 2 — Lessons-Learned Loop (weekly synthesis → durable rules)
 
-- Add types `Collision = 'hard' | 'active' | 'recent' | 'clean'` and `AnnotatedInsert = { phase_id, phase_key, scheduled_for, collision, existing: ExistingRef[] }`.
-- New state: `excluded: Set<string>` (phase_id), `confirmOpen: boolean`.
-- Refactor `backfillAndRun` into:
-  - `buildPlan()` — builds `inserts`, queries existing rows, returns `AnnotatedInsert[]` and summary counts.
-  - `previewPlan()` — calls `buildPlan`, sets `lastResult` with the annotated structure.
-  - `executePlan()` — calls `buildPlan`, filters out `excluded`, opens AlertDialog if any `hard` remain, otherwise inserts + invokes runner (existing logic).
-- Render a new `<Table>` for the annotated diff between the summary chips and the raw JSON `<pre>`. Keep the raw JSON behind a `<details>` toggle so it doesn't dominate the panel.
-- Use existing `STATUS_VARIANT` for existing-row badges; add a small `COLLISION_VARIANT` map.
-- Confirm dialog uses shadcn `AlertDialog`.
+**Goal:** Recurring observations become rules (memory entries, cron tweaks, roadmap findings) instead of repeating noise.
 
-No schema changes, no edge function changes, no new tables.
+**Deliverables**
+- `lessons` table (`category`, `severity`, `evidence jsonb`, `recommendation`, `status`, `applied_as`).
+- Edge function `lessons-synthesize` (clusters last N days from `night_observations`, `roadmap_review_findings`, `automation_runs`, `discussion_action_events`).
+- Cron `scheduled-lessons-weekly` Sunday 05:00 UTC.
+- Page `/lessons` (or extend existing): cards per lesson, evidence chips (deep-link), Apply / Defer / Reject. Apply writes a `mem://` entry or files a roadmap finding.
+- Cross-link from `/morning-review` ("Applied lessons this week").
+- `docs/lessons-loop.md`, `mem://features/lessons-loop.md`.
 
-## Out of scope
+**Owner:** Lovable agent drafts lessons; Operator applies/defers/rejects.
 
-- Server-side uniqueness constraint on `(phase_id, scheduled_for)` — would be the proper fix but is a behavior change for cron and out of this request's scope. Mention in a follow-up note.
-- Auto-cancelling the colliding existing rows — operator decides via the exclude checkbox.
+---
 
-## Files
+## Workstream 3 — Periodic Deep Audit (weekly + monthly, 5 dimensions)
 
-- edited: `src/components/admin/OvernightBackfillPanel.tsx`
+**Goal:** Quantified score across security, ISO27001 readiness, performance, roadmap adherence, resilience. Trend over time.
 
-## Verification
+**Deliverables**
+- `deep_audit_runs` table (`scope`, `dimension_scores jsonb`, `findings jsonb`, `overall_score`).
+- Edge function `deep-audit` with sub-modules: `security.ts`, `iso27001.ts`, `performance.ts`, `roadmap.ts`, `resilience.ts`.
+- Crons: weekly Sunday 04:00 UTC, monthly 1st 04:30 UTC.
+- Page `/audits`: score chips, dimension accordions, ISO27001 control matrix, sparkline trend, "Promote to lesson/finding" buttons.
+- High-severity findings auto-file into `roadmap_review_findings` AND draft a `lessons` row.
+- Score-drop > 10 pts week-over-week → alert via `_shared/alerts.ts`.
+- `docs/deep-audit.md`, `docs/iso27001-controls.md`, `mem://features/deep-audit.md`.
 
-- With dry-run on, select a phase that already has a `queued` row today → expect `hard` badge + summary `1 hard`.
-- Select a phase with no recent runs → `clean`.
-- With dry-run off and one `hard` selected → confirm dialog appears.
-- Existing dry-run JSON output still present under the toggle.
+**Owner:** Cron generates; Operator reviews weekly, signs off monthly.
+
+---
+
+## Workstream 4 — Logger Agent (structured edge logging + retention)
+
+**Goal:** Every edge function emits structured logs with a request-id. Frontend errors are captured. Retention policies are explicit.
+
+**Deliverables**
+- `_shared/logger.ts` middleware: wraps every function handler, injects `x-request-id`, logs `{request_id, function, user_id_hash, status, latency_ms, classified_error}` to a new `edge_request_logs` table.
+- Refactor existing functions to use the middleware (incremental — start with `awip-api`, `overnight-phase-runner`, alerts dispatcher).
+- `_shared/frontend-error-capture.ts` + `<ErrorBoundary>` at app root → POSTs to a thin `frontend-errors` edge function → `frontend_error_logs` table.
+- Retention: nightly `retention-sweep` cron deletes `edge_request_logs > 30d`, `frontend_error_logs > 30d`, `automation_runs > 30d` (configurable per table in a `retention_policy` table — already partially exists, formalise).
+- `docs/logging.md`, `mem://features/logging.md`.
+
+**Owner:** Lovable agent builds; no per-day operator action.
+
+---
+
+## Workstream 5 — Sentinel Agent (continuous 15-min watcher)
+
+**Goal:** Catch silent failures (cron stopped, 5xx spike, RLS denial spike, secret rotation overdue) between the per-job alerts and the daily Morning Review.
+
+**Deliverables**
+- Edge function `sentinel-tick` running every 15 min via cron.
+- Watchers (each one ~10 lines, easy to add more):
+  - **Cron silence**: each known cron job must have a row in its tracking table within its expected window, else open a `sentinel_findings` row + dispatch alert.
+  - **Edge 5xx rate**: pulls `function_edge_logs` last 15 min; > N% errors per function → alert.
+  - **RLS denial spike**: postgres logs grep for `permission denied` over baseline.
+  - **Secret rotation overdue**: `AWIP_SERVICE_TOKEN` rotated > 90d ago → warn; > 180d → alert.
+  - **Unknown role grants**: any `role_change_audit` insert in last 15m by a non-admin actor.
+- `sentinel_findings` table (operator-only RLS, realtime); rolled into Morning Review and Deep Audit.
+- Page section on `/automation`: live Sentinel status strip.
+- `docs/sentinel.md`, `mem://features/sentinel.md`.
+
+**Owner:** Cron; Operator triages findings as they appear.
+
+---
+
+## Workstream 6 — Doc-Drift Agent + GitHub hardening
+
+**Goal:** Code shipped without docs/changelog/memory entry is auto-flagged. CI gives independent signal.
+
+**Deliverables — Doc-Drift**
+- Edge function `doc-drift-scan` (weekly, Saturday 03:00 UTC):
+  - Diffs git log of last 7 days vs `docs/`, `CHANGELOG.md`, `mem://features/`, `roadmap_tasks` history.
+  - For each new edge function or migration without a matching doc, drafts a `lessons` row category=`process` with one-click "Scaffold doc" action that creates the file with TODO sections.
+- Surfaces in `/lessons` and Morning Review.
+
+**Deliverables — GitHub hardening (one-time, then maintained)**
+- `.github/workflows/`:
+  - `codeql.yml` — security scan on PR + weekly.
+  - `dependabot.yml` — weekly npm + GitHub Actions updates.
+  - `gitleaks.yml` — secret scanning on every push.
+  - `lighthouse.yml` — perf budget on PR (LCP, TBT, bundle size).
+  - `axe.yml` — accessibility check on PR.
+  - `lint-and-typecheck.yml` — required check on PR.
+- Branch protection: `main` requires PR + passing required checks. (Operator action in GitHub UI; doc the steps.)
+- `docs/ci-cd.md`, `mem://preferences/ci.md`.
+
+**Owner:** Lovable agent scaffolds workflows; Operator enables branch protection and reviews CI failures as they appear.
+
+---
+
+## Cross-cutting plumbing (built once, used by all six)
+
+- `_shared/alerts.ts` — already exists, extend to take `{source, severity, dedupe_key}` so Sentinel and Deep Audit don't double-alert.
+- `_shared/model-policy.ts` — already exists; all AI calls in synthesis/audit go through `pickModel()` so night runs stay cheap.
+- `_shared/idempotency.ts` — already pattern; new tables get `(date_window, content_hash)` unique indexes where applicable.
+- New roles: none — all surfaces are `has_role('operator')` read, `has_role('admin')` apply.
+- Realtime: enabled on `morning_reviews`, `lessons`, `deep_audit_runs`, `sentinel_findings`, `edge_request_logs`, `frontend_error_logs`.
+
+---
+
+## Execution timeline (6 weeks, sequenced for compounding value)
+
+```text
+Week 1  ── WS4 Logger (foundation: everything else benefits from request-ids)
+            • _shared/logger.ts + edge_request_logs + retention table
+            • Wrap awip-api, overnight-phase-runner, alerts dispatcher
+            • Frontend ErrorBoundary + frontend_error_logs
+
+Week 2  ── WS1 Morning Review (daily value from day 8)
+            • morning_reviews table + edge fn + cron
+            • /morning-review page with all 7 sections
+            • Mirror-task-status one-click
+
+Week 3  ── WS5 Sentinel (closes silent-failure gap)
+            • sentinel-tick cron + sentinel_findings table
+            • Cron-silence + 5xx-rate + secret-age + role-grant watchers
+            • Surface on /automation and Morning Review
+
+Week 4  ── WS2 Lessons Loop (turns the now-richer signal into rules)
+            • lessons table + lessons-synthesize fn + weekly cron
+            • /lessons page with Apply/Defer/Reject
+            • Cross-link from Morning Review
+
+Week 5  ── WS3 Deep Audit (weekly + monthly assurance)
+            • deep_audit_runs + 5 sub-modules + 2 crons
+            • /audits page + ISO27001 matrix
+            • Auto-promote high-sev to lessons/findings
+
+Week 6  ── WS6 Doc-Drift + GitHub hardening (governance)
+            • doc-drift-scan weekly cron
+            • 6 GitHub Actions workflows
+            • Branch protection enabled
+            • README + CHANGELOG + mem index updates for everything
+
+Ongoing ── Daily Morning Review ack (5 min), weekly Lessons triage (15 min),
+            monthly Deep Audit signoff (30 min).
+```
+
+Each week is shippable on its own — if priorities change, stopping after any week leaves working value, not a half-built scaffold.
+
+---
+
+## Out of scope (queued, not in this plan)
+
+- Auto-closing stale jobs (Morning Review surfaces only).
+- External SIEM export of ISO27001 evidence.
+- Frontend perf instrumentation beyond Lighthouse CI (no RUM yet).
+- LLM-driven auto-application of lessons (always proposes, human applies).
+- Human external security review — defer until customer data is in scope; budget line noted.
+- Server-side uniqueness on `(phase_id, scheduled_for)` for overnight runs (separate small change).
+
+---
+
+## Acceptance per workstream
+
+- **WS1**: 7 consecutive days with morning review acknowledged; at least one stuck job resolved via mirror action.
+- **WS2**: at least 3 lessons applied (= memory entry written or finding filed).
+- **WS3**: 4 weekly audits + 1 monthly audit complete; trend visible.
+- **WS4**: 100% of edge functions wrapped; one frontend error captured end-to-end.
+- **WS5**: at least one true-positive Sentinel finding caught before Morning Review surfaced it.
+- **WS6**: PR with failing CodeQL/Lighthouse/axe blocked from merge; doc-drift caught one undocumented edge function.
+
+---
+
+## Files (high level)
+
+- New tables (5 migrations): `morning_reviews`, `lessons`, `deep_audit_runs`, `sentinel_findings`, `edge_request_logs` + `frontend_error_logs` + `retention_policy` formalisation.
+- New edge functions: `morning-review`, `scheduled-morning-review`, `lessons-synthesize`, `scheduled-lessons-weekly`, `deep-audit` (+ 5 modules), `scheduled-deep-audit-weekly`, `scheduled-deep-audit-monthly`, `sentinel-tick`, `frontend-errors`, `doc-drift-scan`, `retention-sweep`.
+- New shared: `_shared/logger.ts`, `_shared/frontend-error-capture.ts`, alerts dedupe extension.
+- New pages: `/morning-review`, `/lessons` (or extension), `/audits`. Sentinel strip added to `/automation`.
+- New CI: 6 workflows under `.github/workflows/`.
+- New docs: `morning-review.md`, `lessons-loop.md`, `deep-audit.md`, `iso27001-controls.md`, `logging.md`, `sentinel.md`, `ci-cd.md`. Updates to `README.md`, `CHANGELOG.md`, `mem://index.md`.
