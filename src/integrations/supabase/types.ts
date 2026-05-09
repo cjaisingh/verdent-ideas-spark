@@ -1749,6 +1749,95 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_tasks: {
+        Row: {
+          area: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          notes: string | null
+          sort_order: number
+          status: Database["public"]["Enums"]["plan_status"]
+          title: string
+          updated_at: string
+          updated_by: string | null
+          updated_by_label: string | null
+          workstream_id: string
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          status?: Database["public"]["Enums"]["plan_status"]
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_label?: string | null
+          workstream_id: string
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          status?: Database["public"]["Enums"]["plan_status"]
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_label?: string | null
+          workstream_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_tasks_workstream_id_fkey"
+            columns: ["workstream_id"]
+            isOneToOne: false
+            referencedRelation: "plan_workstreams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plan_workstreams: {
+        Row: {
+          created_at: string
+          id: string
+          slug: string
+          sort_order: number
+          status: Database["public"]["Enums"]["plan_status"]
+          summary: string | null
+          target_week: number | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          slug: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["plan_status"]
+          summary?: string | null
+          target_week?: number | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          slug?: string
+          sort_order?: number
+          status?: Database["public"]["Enums"]["plan_status"]
+          summary?: string | null
+          target_week?: number | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       qa_checks: {
         Row: {
           created_at: string
@@ -2996,6 +3085,7 @@ export type Database = {
       okr_creator: "discovery_ai" | "awip" | "human"
       okr_kind: "objective" | "key_result"
       okr_status: "draft" | "active" | "superseded" | "achieved" | "abandoned"
+      plan_status: "todo" | "in_progress" | "blocked" | "done"
       roadmap_comment_kind: "comment" | "question" | "decision"
       roadmap_status: "planned" | "active" | "done" | "paused"
       roadmap_task_status:
@@ -3139,6 +3229,7 @@ export const Constants = {
       okr_creator: ["discovery_ai", "awip", "human"],
       okr_kind: ["objective", "key_result"],
       okr_status: ["draft", "active", "superseded", "achieved", "abandoned"],
+      plan_status: ["todo", "in_progress", "blocked", "done"],
       roadmap_comment_kind: ["comment", "question", "decision"],
       roadmap_status: ["planned", "active", "done", "paused"],
       roadmap_task_status: [
