@@ -139,3 +139,21 @@ Deno.test("job_error_rate: ignores jobs not in allowlist", () => {
   const out = checkJobErrorRate(NOW, runs);
   assertEquals(out.length, 0);
 });
+
+Deno.test("job_error_rate: includes triggering run ids in subject_ref + payload", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = [
+    { id: "r-newest", job: "morning-review", status: "error", created_at: t(5) },
+    { id: "r-mid",    job: "morning-review", status: "error", created_at: t(40) },
+    { id: "r-old",    job: "morning-review", status: "error", created_at: t(60 * 5) },
+    { id: "r-ok",     job: "morning-review", status: "ok",    created_at: t(120) },
+  ];
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 1);
+  const f = out[0];
+  // Newest first, capped to ids only
+  assertEquals(f.subject_ref.run_ids, ["r-newest", "r-mid", "r-old"]);
+  assertEquals(f.subject_ref.latest_error_run_id, "r-newest");
+  assertEquals(f.payload.error_run_ids_24h, ["r-newest", "r-mid", "r-old"]);
+  assertEquals(f.payload.error_run_ids_1h, ["r-newest", "r-mid"]);
+});
