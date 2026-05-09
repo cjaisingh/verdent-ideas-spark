@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,12 @@ export function SentinelStatusStrip() {
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [drawerFinding, setDrawerFinding] = useState<Finding | null>(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const focusedFindingId = searchParams.get("finding");
+  const [showAll, setShowAll] = useState(false);
+  const findingRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const scrolledFindingRef = useRef<string | null>(null);
 
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
@@ -112,8 +119,29 @@ export function SentinelStatusStrip() {
     tone === "amber" ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" :
     "bg-destructive/20 text-destructive";
 
+  // When the user returns from a CronJobDetail back-link, we receive
+  // ?finding=<id>. Auto-expand the full list (so the row is rendered) and
+  // scroll/highlight it once findings are loaded.
+  const targetExists = !!focusedFindingId && findings.some((f) => f.id === focusedFindingId);
+  const targetInTopThree = targetExists && findings.slice(0, 3).some((f) => f.id === focusedFindingId);
+  useEffect(() => {
+    if (targetExists && !targetInTopThree) setShowAll(true);
+  }, [targetExists, targetInTopThree]);
+
+  useEffect(() => {
+    if (!focusedFindingId) return;
+    if (scrolledFindingRef.current === focusedFindingId) return;
+    const el = findingRefs.current[focusedFindingId];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrolledFindingRef.current = focusedFindingId;
+    }
+  }, [focusedFindingId, findings, showAll, location.key]);
+
+  const visibleFindings = showAll ? findings : findings.slice(0, 3);
+
   return (
-    <Card>
+    <Card id="sentinel-status-strip">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -143,11 +171,20 @@ export function SentinelStatusStrip() {
               <p className="text-sm text-muted-foreground">No open findings.</p>
             ) : (
               <ul className="text-sm space-y-2">
-                {findings.slice(0, 3).map((f) => {
+                {visibleFindings.map((f) => {
                   const ref = findingRunsRef(f);
                   const runCount = ref?.runIds.length ?? 0;
+                  const isFocused = focusedFindingId === f.id;
                   return (
-                  <li key={f.id} className="flex items-start justify-between gap-2 border-b border-border/40 pb-2 last:border-0">
+                  <li
+                    key={f.id}
+                    id={`sentinel-finding-${f.id}`}
+                    ref={(el) => { findingRefs.current[f.id] = el; }}
+                    className={[
+                      "flex items-start justify-between gap-2 border-b border-border/40 pb-2 last:border-0 transition-colors",
+                      isFocused ? "ring-2 ring-amber-500/60 ring-inset rounded bg-amber-500/5 px-2 py-1" : "",
+                    ].join(" ")}
+                  >
                     <div className="flex-1 min-w-0">
                       <div className="line-clamp-2">{f.summary}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
@@ -172,7 +209,17 @@ export function SentinelStatusStrip() {
               </ul>
             )}
             {findings.length > 3 && (
-              <div className="text-xs text-muted-foreground mt-2">+{findings.length - 3} more</div>
+              <div className="text-xs text-muted-foreground mt-2">
+                {showAll ? (
+                  <button type="button" onClick={() => setShowAll(false)} className="hover:underline">
+                    Show fewer
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setShowAll(true)} className="hover:underline">
+                    +{findings.length - 3} more
+                  </button>
+                )}
+              </div>
             )}
           </>
         )}
@@ -187,8 +234,10 @@ export function SentinelStatusStrip() {
             runIds={ref?.runIds ?? []}
             runIds1h={ref?.runIds1h ?? []}
             runIds24h={ref?.runIds24h ?? []}
+            findingId={drawerFinding?.id}
             findingSummary={drawerFinding?.summary}
             findingKind={drawerFinding?.kind}
+            backTo={{ label: "Sentinel", href: "/roadmap" }}
           />
         );
       })()}

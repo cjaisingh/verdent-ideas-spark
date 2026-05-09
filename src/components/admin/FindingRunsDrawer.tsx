@@ -54,8 +54,12 @@ export type FindingRunsDrawerProps = {
   // can toggle between the 1h and 24h triggering sets.
   runIds1h?: string[];
   runIds24h?: string[];
+  findingId?: string;
   findingSummary?: string;
   findingKind?: string;
+  // Where the drawer was opened from, used to render a "back to X" link on
+  // the cron-health drill-down. Defaults to "sentinel".
+  backTo?: { label: string; href: string };
 };
 
 export function FindingRunsDrawer({
@@ -65,8 +69,10 @@ export function FindingRunsDrawer({
   runIds,
   runIds1h,
   runIds24h,
+  findingId,
   findingSummary,
   findingKind,
+  backTo,
 }: FindingRunsDrawerProps) {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(false);
@@ -122,6 +128,11 @@ export function FindingRunsDrawer({
     if (params.toString() === "") {
       const focusParam = runIds.slice(0, 25).join(",");
       if (focusParam) params.set("focus", focusParam);
+    }
+    if (findingId) params.set("finding", findingId);
+    if (backTo) {
+      params.set("backLabel", backTo.label);
+      params.set("backHref", backTo.href);
     }
     const qs = params.toString();
     return `/admin/cron-health/${job}${qs ? `?${qs}` : ""}`;
