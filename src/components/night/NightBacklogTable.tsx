@@ -86,10 +86,12 @@ const NightBacklogTable = () => {
   const [phases, setPhases] = useState<PhaseRow[]>([]);
   const [proposals, setProposals] = useState<ProposalRow[]>([]);
   const [settings, setSettings] = useState<SettingsRow | null>(null);
+  const [promotedNightCount, setPromotedNightCount] = useState(0);
+  const [nightlyPhases, setNightlyPhases] = useState(0);
   const [running, setRunning] = useState(false);
 
   const load = async () => {
-    const [{ data: a }, { data: p }, { data: pr }, { data: s }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: pr }, { data: s }, { count: promotedCount }, { count: nightlyCount }] = await Promise.all([
       supabase
         .from("discussion_actions" as any)
         .select("id, short_num, title, priority, status, discussion_id, updated_at")
@@ -110,11 +112,22 @@ const NightBacklogTable = () => {
         .from("memory_settings" as any)
         .select("night_agent_enabled, night_window_start, night_window_end, night_timezone, night_blackout_dates, night_allowed_kinds")
         .maybeSingle(),
+      supabase
+        .from("discussion_actions" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("night_eligible", true)
+        .neq("status", "open"),
+      supabase
+        .from("roadmap_phases" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("run_overnight", true),
     ]);
     setAudits((a as any) ?? []);
     setPhases((p as any) ?? []);
     setProposals((pr as any) ?? []);
     setSettings((s as any) ?? null);
+    setPromotedNightCount(promotedCount ?? 0);
+    setNightlyPhases(nightlyCount ?? 0);
   };
 
   useEffect(() => {
