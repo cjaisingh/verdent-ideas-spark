@@ -51,6 +51,48 @@ const OperatorLayout = () => {
   const flags = paneFlags(effectiveMode);
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
+
+  // Resolve which source is wired into each slot for THIS route+viewport, so
+  // the data-signal indicator + auto-open logic match what PaneSlot will render.
+  const resolveSlotSource = (slot: "right" | "bottom"): PaneSourceId => {
+    const raw = getSlotSource(paneState, slot, viewport);
+    return isPaneSourceId(raw) ? raw : defaultSourceForRoute(routeKey, slot);
+  };
+  const rightSourceId = resolveSlotSource("right");
+  const bottomSourceId = resolveSlotSource("bottom");
+  const paneSignals = usePaneDataSignals();
+  const rightSignal = paneSignals[rightSourceId];
+  const bottomSignal = paneSignals[bottomSourceId];
+  // Indicators only show on toggles for hidden panes that currently have data.
+  // "dual" reveals the right pane; "bottom" reveals the bottom pane.
+  const toggleIndicators = isMobile
+    ? undefined
+    : {
+        dual: !flags.right && rightSignal.hasData
+          ? { count: rightSignal.count, sourceLabel: PANE_SOURCES[rightSourceId].label }
+          : undefined,
+        bottom: !flags.bottom && bottomSignal.hasData
+          ? { count: bottomSignal.count, sourceLabel: PANE_SOURCES[bottomSourceId].label }
+          : undefined,
+      };
+
+  // Auto-open: once per route per browser session, if the user hasn't moved
+  // off the default "left" mode and a hidden pane has data, switch to the
+  // mode that reveals it. Manual changes set the session flag too, so we
+  // never override the user's explicit choice.
+  const autoOpenSessionKey = `awip.panes.autoOpened.${routeKey}`;
+  useEffect(() => {
+    if (isMobile) return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(autoOpenSessionKey)) return;
+    if (paneState.mode !== "left") return;
+    // Wait until the signals hook has reported anything (counts loaded).
+    if (!rightSignal.hasData && !bottomSignal.hasData) return;
+    const next = rightSignal.hasData ? "dual" : "bottom";
+    sessionStorage.setItem(autoOpenSessionKey, "1");
+    setPaneState({ mode: next, lastNonCentre: next });
+  }, [isMobile, paneState.mode, rightSignal.hasData, bottomSignal.hasData, autoOpenSessionKey, setPaneState]);
+
   const [dragging, setDragging] = useState(false);
   // Keyboard-driven resizing flag — debounced off after the last arrow keystroke.
   const [kbResizing, setKbResizing] = useState(false);
