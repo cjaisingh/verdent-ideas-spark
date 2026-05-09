@@ -49,7 +49,7 @@ export function SentinelStatusStrip() {
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
       supabase.from("sentinel_findings")
-        .select("id,kind,severity,summary,status,first_seen_at,last_seen_at")
+        .select("id,kind,severity,summary,status,first_seen_at,last_seen_at,subject_ref,payload")
         .eq("status", "open").order("last_seen_at", { ascending: false }).limit(50),
       supabase.from("automation_runs")
         .select("created_at,status,message")
