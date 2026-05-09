@@ -93,7 +93,7 @@ Templates exist in `companion-live-state.ts`; UI buttons not yet mounted.
 
 ---
 
-## Part 3 — Two-way voice on the Companion (parity with Copilot)
+## Part 3 — 🟡 Two-way voice on the Companion (parity with Copilot)
 
 `/copilot` already has the full Deepgram realtime loop:
 - `supabase/functions/copilot-voice` — WebSocket: mic → Deepgram STT → AI Gateway → Aura TTS → audio back
@@ -102,7 +102,9 @@ Templates exist in `companion-live-state.ts`; UI buttons not yet mounted.
 
 We reuse it as-is — **no new edge function**.
 
-### 3a. New `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC)
+### 3a. 🟡 New `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC)
+**Status:** stub component shipped + mounted on `/companion` to keep the build green. Full Deepgram loop port pending.
+
 Lifts the mic loop from `Copilot.tsx`:
 - Push-to-talk + hands-free toggle (VAD turn-end)
 - WebSocket to existing `copilot-voice`
