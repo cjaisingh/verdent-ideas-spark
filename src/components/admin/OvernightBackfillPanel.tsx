@@ -107,6 +107,31 @@ const OvernightBackfillPanel = () => {
         scheduled_for: today,
         status: "queued",
       }));
+      const runnerUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overnight-phase-runner`;
+
+      if (dryRun) {
+        const planned_runner_calls = picks.map((r) => ({
+          for_phase_key: r.phase_key,
+          for_phase_id: r.phase_id,
+          original_run_id: r.id,
+          run_id: "<would-be-generated>",
+          method: "POST",
+          url: runnerUrl,
+          body: { run_id: "<would-be-generated>" },
+        }));
+        setLastResult({
+          dry_run: true,
+          would_requeue: inserts.length,
+          planned_inserts: inserts,
+          planned_runner_calls,
+        });
+        toast({
+          title: `Dry run: would re-queue ${inserts.length} phase${inserts.length === 1 ? "" : "s"}`,
+          description: "No rows inserted, runner not invoked.",
+        });
+        return;
+      }
+
       const { data: inserted, error: insErr } = await supabase
         .from("roadmap_phase_overnight_runs")
         .insert(inserts)
@@ -118,10 +143,9 @@ const OvernightBackfillPanel = () => {
       // the next 15-min cron tick. The function processes one explicit run_id
       // per call (cron sweeps the whole queue when no body is given).
       const { data: { session } } = await supabase.auth.getSession();
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overnight-phase-runner`;
       const results: unknown[] = [];
       for (const id of newIds) {
-        const resp = await fetch(url, {
+        const resp = await fetch(runnerUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -143,7 +167,7 @@ const OvernightBackfillPanel = () => {
       await refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Backfill failed", description: msg, variant: "destructive" });
+      toast({ title: dryRun ? "Dry run failed" : "Backfill failed", description: msg, variant: "destructive" });
     } finally {
       setBusy(false);
     }
