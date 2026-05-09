@@ -2,6 +2,7 @@
 // Auth: operator JWT. Persists assistant turns into roadmap_finding_discussion_messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { withLogger } from "../_shared/logger.ts";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
