@@ -309,6 +309,21 @@ const Plan = () => {
                       </div>
                     );
                   })()}
+                  {(Number(ws.est_human_hours) > 0 || Number(ws.est_ai_build_usd) > 0) && (() => {
+                    const human = Number(ws.est_human_hours || 0) * HUMAN_HOURLY_GBP;
+                    const ai = Number(ws.est_ai_build_usd || 0) * USD_TO_GBP;
+                    const ratio = ai > 0 ? human / ai : 0;
+                    return (
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="tabular-nums">
+                          Build: AI <span className="text-foreground">{fmtGbp(ai)}</span>
+                          {" vs "}Human <span className="text-foreground">{fmtGbp(human)}</span>
+                          {Number(ws.est_human_hours) > 0 && <> ({ws.est_human_hours}h)</>}
+                        </span>
+                        {ratio > 0 && <Badge variant="outline" className="text-[9px] py-0 px-1.5">{ratio.toFixed(0)}× cheaper</Badge>}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
