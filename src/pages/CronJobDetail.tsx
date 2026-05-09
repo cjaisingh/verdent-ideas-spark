@@ -110,6 +110,16 @@ export default function CronJobDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job]);
 
+  // Scroll the first focused run into view once the rows are rendered.
+  useEffect(() => {
+    if (scrolledRef.current) return;
+    if (focusIds.size === 0 || runs.length === 0) return;
+    if (focusRef.current) {
+      focusRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      scrolledRef.current = true;
+    }
+  }, [runs, focusIds]);
+
   const triggerNow = async () => {
     setRunning(true);
     try {
