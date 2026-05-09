@@ -59,7 +59,9 @@ function loadSettings(): CompanionSettings {
 function defaults(): CompanionSettings {
   return {
     ollama_base_url: "http://localhost:11434",
-    ollama_model: "qwen2.5:14b-instruct",
+    // Gemma 3 4B runs comfortably on M4 24GB and is fast for chat + morning review.
+    // Override in Settings (e.g. gemma2:9b, qwen2.5:14b-instruct) if you want more depth.
+    ollama_model: "gemma3:4b",
     cloud_model: "google/gemini-2.5-flash",
     use_cloud: false,
     rag_enabled: true,
