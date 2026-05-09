@@ -14,8 +14,13 @@ import { toast } from "@/hooks/use-toast";
 import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
   ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
+  Activity, Inbox,
 } from "lucide-react";
 import { VoiceDictateButton } from "@/components/companion/VoiceDictateButton";
+import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
+import { IphoneInstallHelpCard } from "@/components/companion/IphoneInstallHelpCard";
+import { CompanionVoiceDock } from "@/components/companion/CompanionVoiceDock";
+import { fetchLiveState, formatLiveStateBlock, liveStateAge, seedLovableFocus, seedOperatorQueue, type LiveState } from "@/lib/companion-live-state";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
@@ -156,7 +161,7 @@ function LocalModelPicker({
   );
 }
 
-import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
+// (InstallPwaButton imported at top)
 
 function pickClosestModel(target: string, available: string[]): string | null {
   if (!available.length) return null;
