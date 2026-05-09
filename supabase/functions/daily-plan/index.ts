@@ -11,7 +11,7 @@ import { withLogger } from "../_shared/logger.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-service-token",
+    "authorization, x-client-info, apikey, content-type, x-service-token, x-awip-service-token",
 };
 
 const PLANNER_DAYTIME_MODEL = "google/gemini-2.5-flash-lite";
