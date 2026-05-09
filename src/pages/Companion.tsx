@@ -331,15 +331,15 @@ export default function Companion() {
   // Persist settings
   useEffect(() => { saveSettings(settings); }, [settings]);
 
-  // Probe Ollama health
+  // Probe Ollama health (uses loopback variant resolution)
   useEffect(() => {
     let cancelled = false;
-    if (settings.use_cloud) { setHealthOk(null); return; }
+    if (settings.use_cloud) { setHealthOk(null); setResolvedOllamaUrl(null); return; }
     (async () => {
       try {
-        const r = await fetch(`${settings.ollama_base_url}/api/tags`, { signal: AbortSignal.timeout(2000) });
-        if (!cancelled) setHealthOk(r.ok);
-      } catch { if (!cancelled) setHealthOk(false); }
+        const { baseUrl } = await resolveAndFetchOllama(settings.ollama_base_url, 2500);
+        if (!cancelled) { setHealthOk(true); setResolvedOllamaUrl(baseUrl); }
+      } catch { if (!cancelled) { setHealthOk(false); setResolvedOllamaUrl(null); } }
     })();
     return () => { cancelled = true; };
   }, [settings.ollama_base_url, settings.use_cloud]);
