@@ -129,6 +129,11 @@ export function FindingRunsDrawer({
       const focusParam = runIds.slice(0, 25).join(",");
       if (focusParam) params.set("focus", focusParam);
     }
+    if (findingId) params.set("finding", findingId);
+    if (backTo) {
+      params.set("backLabel", backTo.label);
+      params.set("backHref", backTo.href);
+    }
     const qs = params.toString();
     return `/admin/cron-health/${job}${qs ? `?${qs}` : ""}`;
   };
