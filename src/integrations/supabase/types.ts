@@ -3200,6 +3200,54 @@ export type Database = {
         }
         Relationships: []
       }
+      sentinel_findings: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          first_seen_at: string
+          id: string
+          kind: string
+          last_seen_at: string
+          payload: Json
+          resolved_at: string | null
+          severity: string
+          status: string
+          subject_ref: Json
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          first_seen_at?: string
+          id?: string
+          kind: string
+          last_seen_at?: string
+          payload?: Json
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          subject_ref?: Json
+          summary: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          first_seen_at?: string
+          id?: string
+          kind?: string
+          last_seen_at?: string
+          payload?: Json
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          subject_ref?: Json
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_gateway_logs: {
         Row: {
           attempt: number

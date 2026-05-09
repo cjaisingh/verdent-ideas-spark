@@ -43,6 +43,8 @@ const copilotChildren: NavItem[] = [
 const planItems: NavItem[] = [
   { url: "/companion", title: "Companion (local LLM)", icon: Bot },
   { url: "/plan", title: "Plan (workstreams)", icon: Target },
+  { url: "/morning-review", title: "Morning Review", icon: Sparkles },
+  { url: "/admin/lessons", title: "Lessons Loop", icon: GraduationCap },
   { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
