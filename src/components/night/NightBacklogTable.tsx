@@ -157,7 +157,7 @@ const NightBacklogTable = () => {
         source: "phase",
         ref: p.phase_key ?? p.phase_id.slice(0, 8),
         title: p.phase_key ? `Overnight phase ${p.phase_key}` : "Overnight phase run",
-        meta: `${p.status}${p.model ? ` · ${p.model}` : ""}`,
+        meta: `${p.status}${p.requested_by === null ? " · auto" : ""}${p.model ? ` · ${p.model}` : ""}`,
         queuedAt: p.requested_at,
         href: p.phase_key ? `/roadmap?phase=${encodeURIComponent(p.phase_key)}` : "/roadmap",
         badgeTone: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
