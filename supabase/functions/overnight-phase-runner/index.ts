@@ -8,6 +8,7 @@
 // Body: { run_id?: string }  // if omitted, processes all due queued rows.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
+import { dispatchAlert } from "../_shared/alerts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
