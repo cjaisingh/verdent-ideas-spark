@@ -177,7 +177,7 @@ export default function NightShifts() {
             const isOpen = open.has(sh.id);
             const tz = sh.summary?.tz ?? "UTC";
             return (
-              <li key={sh.id} className="rounded-md border border-border bg-card">
+              <li key={sh.id} id={`shift-${sh.id}`} className="rounded-md border border-border bg-card scroll-mt-4">
                 <button
                   type="button"
                   onClick={() => toggle(sh.id)}
