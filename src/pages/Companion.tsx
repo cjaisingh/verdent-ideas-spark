@@ -255,30 +255,41 @@ export default function Companion() {
         ...history.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       ];
 
-      // 4. Call LLM (stream)
+      // 4. Call LLM (stream) — cloud via edge proxy, local via Ollama directly
       const useCloud = settings.use_cloud || healthOk === false;
       const model = useCloud ? settings.cloud_model : settings.ollama_model;
       let acc = "";
 
+      let resp: Response;
       if (useCloud) {
-        toast({
-          title: "Cloud routing not wired yet",
-          description: "Phase 1 streams from local Ollama only. Toggle 'Use cloud' off, or wait for Phase 1.5.",
-          variant: "destructive",
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error("Not signed in — cannot use cloud model.");
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/companion-cloud-chat`;
+        resp = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ model, messages: llmMessages }),
         });
-        setSending(false);
-        return;
+      } else {
+        resp = await fetch(`${settings.ollama_base_url}/v1/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, messages: llmMessages, stream: true }),
+        });
       }
 
-      // Ollama streaming via OpenAI-compatible endpoint
-      const resp = await fetch(`${settings.ollama_base_url}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: llmMessages, stream: true }),
-      });
       if (!resp.ok || !resp.body) {
         const txt = await resp.text().catch(() => "");
-        throw new Error(`Ollama ${resp.status}: ${txt.slice(0, 200)}`);
+        if (useCloud && resp.status === 429) {
+          throw new Error("Cloud rate limit hit (429). Wait a moment or switch to local Ollama.");
+        }
+        if (useCloud && resp.status === 402) {
+          throw new Error("Cloud credits exhausted (402). Add credits in Workspace → Usage, or switch to local Ollama.");
+        }
+        throw new Error(`${useCloud ? "Cloud" : "Ollama"} ${resp.status}: ${txt.slice(0, 200)}`);
       }
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
