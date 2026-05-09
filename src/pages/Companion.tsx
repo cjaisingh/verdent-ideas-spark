@@ -16,11 +16,68 @@ import {
   ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
 } from "lucide-react";
 
-async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+// Build a list of loopback variants to probe. macOS Ollama often listens on
+// IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
+// may get ERR_CONNECTION_REFUSED while `127.0.0.1` works (or vice versa).
+function loopbackVariants(baseUrl: string): string[] {
+  const clean = baseUrl.replace(/\/$/, "");
+  try {
+    const u = new URL(clean);
+    const host = u.hostname;
+    const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+    if (!isLoopback) return [clean];
+    const port = u.port || "11434";
+    const proto = u.protocol || "http:";
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const h of ["localhost", "127.0.0.1", "[::1]"]) {
+      const v = `${proto}//${h}:${port}`;
+      if (!seen.has(v)) { seen.add(v); out.push(v); }
+    }
+    // Make the user's chosen variant first
+    const chosen = `${proto}//${host}:${port}`;
+    out.sort((a) => (a === chosen ? -1 : 0));
+    return out;
+  } catch { return [clean]; }
+}
+
+export type OllamaErrorKind = "refused" | "cors" | "timeout" | "http" | "unreachable" | "unknown";
+export function classifyOllamaError(e: unknown): { kind: OllamaErrorKind; message: string } {
+  const msg = (e as any)?.message ?? String(e);
+  const lower = String(msg).toLowerCase();
+  if (lower.includes("aborted") || lower.includes("timeout")) return { kind: "timeout", message: msg };
+  if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
+    // Browsers collapse refused/CORS/private-network into a generic "Failed to fetch".
+    return { kind: "unreachable", message: msg };
+  }
+  if (lower.startsWith("http ")) return { kind: "http", message: msg };
+  return { kind: "unknown", message: msg };
+}
+
+async function fetchOllamaModelsAt(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
   const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
   return (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+}
+
+// Resolve to the first reachable loopback variant. Returns models + working URL.
+export async function resolveAndFetchOllama(baseUrl: string, timeoutMs = 4000): Promise<{ models: string[]; baseUrl: string }> {
+  const variants = loopbackVariants(baseUrl);
+  let lastErr: unknown = new Error("no variants");
+  for (const v of variants) {
+    try {
+      const models = await fetchOllamaModelsAt(v, timeoutMs);
+      return { models, baseUrl: v };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+// Back-compat: existing callers expect just the model list.
+async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+  const { models } = await resolveAndFetchOllama(baseUrl, timeoutMs);
+  return models;
 }
 
 function useOllamaModels(baseUrl: string, enabled: boolean) {
