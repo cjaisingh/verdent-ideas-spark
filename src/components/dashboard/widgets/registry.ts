@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import { AiUsageWidget } from "./AiUsageWidget";
+import { AiVsHumanCostWidget } from "./AiVsHumanCostWidget";
 import { NightObservationsWidget } from "./NightObservationsWidget";
 import { OpenRisksWidget } from "./OpenRisksWidget";
 import { PendingApprovalsWidget } from "./PendingApprovalsWidget";
@@ -49,6 +50,13 @@ export const WIDGET_REGISTRY: Record<WidgetKind, WidgetEntry> = {
     description: "Per-job model, calls, tokens, and avg latency for scheduled AI calls.",
     defaultSize: "md",
     Component: AiUsageWidget,
+  },
+  "ai-vs-human-cost": {
+    kind: "ai-vs-human-cost",
+    label: "AI vs Human cost",
+    description: "Per-workstream comparison of AI build + 30d run cost vs equivalent human-hour cost (£).",
+    defaultSize: "lg",
+    Component: AiVsHumanCostWidget,
   },
 };
 

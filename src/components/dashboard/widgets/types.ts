@@ -3,7 +3,8 @@ export type WidgetKind =
   | "night-observations-24h"
   | "open-risks"
   | "recent-capability-events"
-  | "ai-usage-14d";
+  | "ai-usage-14d"
+  | "ai-vs-human-cost";
 
 export type WidgetSize = "sm" | "md" | "lg";
 
