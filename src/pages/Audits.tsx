@@ -188,6 +188,19 @@ export default function Audits() {
         </div>
       </div>
 
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Automated audit health
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <StatusTile cadence="weekly" label="W5 · Weekly deep audit" />
+          <StatusTile cadence="monthly" label="W6 · Monthly deep audit" />
+        </CardContent>
+      </Card>
+
       {loading && runs.length === 0 ? (
         <div className="flex items-center justify-center py-20 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading audit runs…
