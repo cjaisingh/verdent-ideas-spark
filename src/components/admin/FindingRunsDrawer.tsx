@@ -63,6 +63,8 @@ export function FindingRunsDrawer({
   onOpenChange,
   job,
   runIds,
+  runIds1h,
+  runIds24h,
   findingSummary,
   findingKind,
 }: FindingRunsDrawerProps) {
@@ -108,10 +110,23 @@ export function FindingRunsDrawer({
       return next;
     });
 
-  const focusParam = runIds.slice(0, 25).join(",");
-  const fullPageHref = job
-    ? `/admin/cron-health/${job}${focusParam ? `?focus=${focusParam}` : ""}`
-    : null;
+  const buildFullPageHref = (): string | null => {
+    if (!job) return null;
+    const params = new URLSearchParams();
+    if (runIds1h && runIds1h.length > 0) {
+      params.set("focus1h", runIds1h.slice(0, 25).join(","));
+    }
+    if (runIds24h && runIds24h.length > 0) {
+      params.set("focus24h", runIds24h.slice(0, 25).join(","));
+    }
+    if (params.toString() === "") {
+      const focusParam = runIds.slice(0, 25).join(",");
+      if (focusParam) params.set("focus", focusParam);
+    }
+    const qs = params.toString();
+    return `/admin/cron-health/${job}${qs ? `?${qs}` : ""}`;
+  };
+  const fullPageHref = buildFullPageHref();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
