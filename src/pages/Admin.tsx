@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import AppSecretsPanel from "@/components/admin/AppSecretsPanel";
 import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 import ManualOvernightTriggers from "@/components/admin/ManualOvernightTriggers";
+import OvernightBackfillPanel from "@/components/admin/OvernightBackfillPanel";
 
 type AppRole = "admin" | "operator";
 const ROLES: AppRole[] = ["admin", "operator"];
@@ -239,6 +240,8 @@ const Admin = () => {
       </section>
 
       <ManualOvernightTriggers />
+
+      <OvernightBackfillPanel />
 
       <TelegramBotPanel />
 
