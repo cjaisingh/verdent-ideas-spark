@@ -49,7 +49,19 @@ export const WIDGET_REGISTRY: Record<WidgetKind, WidgetEntry> = {
     label: "AI usage · 14d",
     description: "Per-job model, calls, tokens, and avg latency for scheduled AI calls.",
     defaultSize: "md",
+  "ai-usage-14d": {
+    kind: "ai-usage-14d",
+    label: "AI usage · 14d",
+    description: "Per-job model, calls, tokens, and avg latency for scheduled AI calls.",
+    defaultSize: "md",
     Component: AiUsageWidget,
+  },
+  "ai-vs-human-cost": {
+    kind: "ai-vs-human-cost",
+    label: "AI vs Human cost",
+    description: "Per-workstream comparison of AI build + 30d run cost vs equivalent human-hour cost (£).",
+    defaultSize: "lg",
+    Component: AiVsHumanCostWidget,
   },
 };
 
