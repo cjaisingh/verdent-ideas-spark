@@ -154,21 +154,26 @@ Voice always uses the **cloud brain** (Ollama unreachable from phone). Banner: *
 - Streaming Lovable's edit-by-edit activity — no public feed exists; closest proxy is `roadmap_task_activity` + `scheduled-code-review`.
 - Push notifications, background sync, native Capacitor wrapper, on-device speech, replacing the cloud-chat path or model selection.
 
-## Files touched (estimate)
+## Files touched (status)
 
-**New:**
-- `supabase/functions/companion-context/index.ts` (~180 LOC)
-- `supabase/functions/companion-context/snapshot.ts` + Deno test
-- `src/components/companion/IphoneInstallHelpCard.tsx`
-- `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC, lifted from `Copilot.tsx`)
-- `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png`
-- `docs/companion-pwa-ios.md`
+**New — shipped:**
+- ✅ `supabase/functions/companion-context/index.ts`
+- ✅ `src/lib/companion-live-state.ts` (fetcher + Markdown formatter + seed templates)
+- ✅ `src/components/companion/IphoneInstallHelpCard.tsx`
+- ✅ `src/components/companion/CompanionVoiceDock.tsx` (stub)
+- ✅ `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png`
 
-**Edited:**
-- `src/pages/Companion.tsx` (~120 LOC: fetch+inject, header pill, two seed buttons, prompt update, mount voice dock + help card)
-- `index.html`, `public/companion.webmanifest`
-- `scripts/ingest-awip-docs.ts` *(only if 1d included)*
-- `mem://features/companion` (Phase 1.6 + voice + PWA notes)
+**New — pending:**
+- ⬜ `supabase/functions/companion-context/snapshot.ts` + Deno test (extracted aggregator)
+- ⬜ `docs/companion-pwa-ios.md`
+
+**Edited — shipped:**
+- ✅ `index.html`, `public/companion.webmanifest`
+- 🟡 `src/pages/Companion.tsx` (imports + voice-dock mount done; live-state injection, header pill, seed buttons pending)
+
+**Edited — pending:**
+- ⬜ `scripts/ingest-awip-docs.ts` *(only if 1d included)*
+- ⬜ `mem://features/companion` (Phase 1.6 + voice + PWA notes)
 
 ## Acceptance
 - Ask the Companion *"what are you working on?"* → answers with actual current `roadmap_tasks` + last code-review summary, not paraphrased docs.
