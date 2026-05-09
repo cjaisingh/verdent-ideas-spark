@@ -2,11 +2,14 @@
 
 W1→W6 spine is shipped (`plan_tasks` 41/41 done). Roadmap backlog: **2 in_progress, 124 todo, 19 done**. Open `discussion_actions` includes two directly relevant items: *"Define process for operator to monitor Lovable AI's current activity"* and *"Define process for operator to view workstation work streams"* — exactly what this plan addresses.
 
-This plan merges three threads into one shippable unit:
+This plan is the **single source of truth** for the Companion-reachability work. It merges three threads into one shippable unit:
 
-1. **Hook the Companion into all of AWIP** (live state injection, not just docs)
-2. **Fix iPhone install** of the Companion PWA
-3. **Add two-way voice** to the Companion (parity with Copilot)
+1. **Hook the Companion into all of AWIP** (live state injection, not just docs) — *infra shipped, wiring in progress*
+2. **Fix iPhone install** of the Companion PWA — **shipped (pending publish)**
+3. **Add two-way voice** to the Companion (parity with Copilot) — *stub mounted, Deepgram loop pending*
+
+### Status legend
+- ✅ shipped  ·  🟡 in progress  ·  ⬜ not started  ·  🔵 optional
 
 ---
 
