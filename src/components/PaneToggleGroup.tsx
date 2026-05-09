@@ -55,6 +55,8 @@ export function PaneToggleGroup({ mode, onChange, disabled = false, indicators }
       >
         {MODES.map(({ mode: m, Icon, label, shortcut }) => {
           const active = m === mode;
+          const indicator = !active ? indicators?.[m] : undefined;
+          const hasIndicator = !!indicator && indicator.count > 0;
           return (
             <Tooltip key={m}>
               <TooltipTrigger asChild>
@@ -68,10 +70,16 @@ export function PaneToggleGroup({ mode, onChange, disabled = false, indicators }
                     }
                     onChange(m);
                   }}
-                  aria-label={disabled ? `${label} — locked while resizing panels` : label}
+                  aria-label={
+                    disabled
+                      ? `${label} — locked while resizing panels`
+                      : hasIndicator
+                        ? `${label} — ${indicator!.sourceLabel} has ${indicator!.count} item${indicator!.count === 1 ? "" : "s"}`
+                        : label
+                  }
                   aria-pressed={active}
                   className={cn(
-                    "inline-flex h-7 w-7 items-center justify-center rounded transition-colors",
+                    "relative inline-flex h-7 w-7 items-center justify-center rounded transition-colors",
                     active
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground hover:bg-background/50",
@@ -79,6 +87,12 @@ export function PaneToggleGroup({ mode, onChange, disabled = false, indicators }
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
+                  {hasIndicator && (
+                    <span
+                      aria-hidden
+                      className="absolute top-0.5 right-0.5 inline-flex h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-background"
+                    />
+                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
@@ -86,7 +100,14 @@ export function PaneToggleGroup({ mode, onChange, disabled = false, indicators }
                   <span>Pane switching locked while resizing panels</span>
                 ) : (
                   <>
-                    {label} <span className="ml-1 text-muted-foreground">{shortcut}</span>
+                    <div>
+                      {label} <span className="ml-1 text-muted-foreground">{shortcut}</span>
+                    </div>
+                    {hasIndicator && (
+                      <div className="mt-0.5 text-amber-600 dark:text-amber-400">
+                        {indicator!.sourceLabel}: {indicator!.count}
+                      </div>
+                    )}
                   </>
                 )}
               </TooltipContent>
