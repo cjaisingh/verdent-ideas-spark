@@ -50,6 +50,10 @@ export type FindingRunsDrawerProps = {
   onOpenChange: (open: boolean) => void;
   job: string | null;
   runIds: string[];
+  // Optional split by sentinel time-window so the drawer + cron-health page
+  // can toggle between the 1h and 24h triggering sets.
+  runIds1h?: string[];
+  runIds24h?: string[];
   findingSummary?: string;
   findingKind?: string;
 };
