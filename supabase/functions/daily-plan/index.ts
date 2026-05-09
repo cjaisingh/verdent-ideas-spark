@@ -42,10 +42,43 @@ Deno.serve(withLogger("daily-plan", async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
     const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
 
-    const provided = req.headers.get("x-service-token");
+    const providedX = req.headers.get("x-service-token");
+    const providedAwip = req.headers.get("x-awip-service-token");
     const auth = req.headers.get("authorization") ?? "";
-    const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+    const tokenMatch =
+      !!SERVICE_TOKEN &&
+      ((providedX && providedX === SERVICE_TOKEN) ||
+        (providedAwip && providedAwip === SERVICE_TOKEN));
+    const triggeredByCron = !!tokenMatch;
     const trigger = triggeredByCron ? "cron" : "manual";
+
+    // Smoke-check: report token wiring without doing any work.
+    // Trigger via GET, ?smoke=1, or path ending in /smoke.
+    const url = new URL(req.url);
+    const isSmoke =
+      req.method === "GET" ||
+      url.searchParams.get("smoke") === "1" ||
+      url.pathname.endsWith("/smoke");
+    if (isSmoke) {
+      return json({
+        ok: triggeredByCron || auth.startsWith("Bearer "),
+        function: "daily-plan",
+        env: {
+          AWIP_SERVICE_TOKEN: SERVICE_TOKEN ? "set" : "missing",
+          LOVABLE_API_KEY: Deno.env.get("LOVABLE_API_KEY") ? "set" : "missing",
+          SUPABASE_URL: SUPABASE_URL ? "set" : "missing",
+          SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE ? "set" : "missing",
+        },
+        headers_received: {
+          "x-service-token": providedX ? `present (len=${providedX.length})` : "absent",
+          "x-awip-service-token": providedAwip ? `present (len=${providedAwip.length})` : "absent",
+          authorization: auth ? (auth.startsWith("Bearer ") ? "bearer" : "other") : "absent",
+        },
+        token_match: triggeredByCron,
+        trigger,
+        ts: new Date().toISOString(),
+      });
+    }
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
     const startedAt = Date.now();
