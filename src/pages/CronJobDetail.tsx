@@ -259,15 +259,43 @@ export default function CronJobDetail() {
         </CardContent></Card>
       </div>
 
-      {focusIds.size > 0 && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3">
+      {(focusIds.size > 0 || hasWindowToggle) && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3 flex-wrap">
           <div>
             <strong>Focused on {focusIds.size} run{focusIds.size === 1 ? "" : "s"}</strong>{" "}
             from a sentinel finding. Matching rows are highlighted and expanded below.
           </div>
-          <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
-            <Link to={`/admin/cron-health/${job}`}>Clear focus</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasWindowToggle && (
+              <div className="inline-flex rounded border border-border overflow-hidden">
+                {(["1h", "24h"] as const).map((w) => {
+                  const count = w === "1h" ? focus1h.size : focus24h.size;
+                  const disabled = count === 0;
+                  return (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => !disabled && setFocusWindow(w)}
+                      disabled={disabled}
+                      className={[
+                        "px-2 py-1 text-[11px] font-mono",
+                        focusWindow === w
+                          ? "bg-amber-500 text-white"
+                          : "bg-background hover:bg-accent",
+                        disabled ? "opacity-40 cursor-not-allowed" : "",
+                      ].join(" ")}
+                      title={`${count} run${count === 1 ? "" : "s"} in ${w} window`}
+                    >
+                      {w} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+              <Link to={`/admin/cron-health/${job}`}>Clear focus</Link>
+            </Button>
+          </div>
         </div>
       )}
 
