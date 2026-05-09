@@ -21,6 +21,7 @@ import { evaluateOpenGates } from "./gates.ts";
 import { openShift } from "./open.ts";
 import { closeShift } from "./close.ts";
 import { smokeTest } from "./smoke.ts";
+import { dispatchAlert } from "../_shared/alerts.ts";
 
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
@@ -43,11 +44,12 @@ Deno.serve(async (req) => {
         ? "AWIP_SERVICE_TOKEN env var not set on edge function"
         : "service token mismatch";
     const job = path.startsWith("/close") ? "night-agent-close" : "night-agent-open";
+    const detail = { path, provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN };
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
-      message: reason,
-      detail: { path, provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN },
+      message: reason, detail,
     });
+    await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
   }
 
