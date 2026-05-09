@@ -102,6 +102,8 @@ ${finding.body ?? "(no body)"}`;
       { role: "user", content: userMessage },
     ];
 
+    const MODEL = "google/gemini-2.5-pro";
+    const aiStart = Date.now();
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -109,7 +111,7 @@ ${finding.body ?? "(no body)"}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: MODEL,
         messages,
         stream: true,
         reasoning: { effort: "medium" },
@@ -117,9 +119,14 @@ ${finding.body ?? "(no body)"}`;
     });
 
     if (!upstream.ok || !upstream.body) {
+      const text = await upstream.text();
+      await logAiUsage(admin, {
+        job: "finding-discuss-copilot", model: MODEL, trigger: "user",
+        status: "error", status_code: upstream.status, latency_ms: Date.now() - aiStart,
+        error: text.slice(0, 500), request_ref: { discussion_id: discussionId },
+      });
       if (upstream.status === 429) return json({ error: "Rate limit exceeded, please try again shortly." }, 429);
       if (upstream.status === 402) return json({ error: "AI credits exhausted. Add credits in workspace settings." }, 402);
-      const text = await upstream.text();
       console.error("upstream error", upstream.status, text);
       return json({ error: "AI gateway error" }, 502);
     }
