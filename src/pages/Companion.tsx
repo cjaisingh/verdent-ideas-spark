@@ -720,6 +720,11 @@ export default function Companion() {
                   <p className="text-xs text-muted-foreground">
                     On your Mac, allow this preview origin then restart Ollama:<br />
                     <code className="text-[10px] break-all">launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,https://*.lovableproject.com,http://localhost:*"</code>
+                    <br />
+                    Tip: if your Ollama listens on IPv6 only, prefer <code>http://127.0.0.1:11434</code> here — the app also auto-tries 127.0.0.1 / localhost / [::1] as fallbacks.
+                    {resolvedOllamaUrl && resolvedOllamaUrl !== settings.ollama_base_url.replace(/\/$/, "") && (
+                      <> <br />Reachable via <code>{resolvedOllamaUrl}</code> — using that for chat.</>
+                    )}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -730,6 +735,7 @@ export default function Companion() {
                       value={settings.ollama_model}
                       onChange={(v) => setSettings((s) => ({ ...s, ollama_model: v }))}
                       enabled={!settings.use_cloud}
+                      onResolved={setResolvedOllamaUrl}
                     />
                   </div>
                   <div className="space-y-1">
