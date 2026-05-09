@@ -97,6 +97,26 @@ export function IphoneInstallHelpCard() {
             the resulting <code>.lovable.app</code> URL on your iPhone.
           </p>
         )}
+        <div className="flex items-center gap-3 rounded-md border bg-background/60 p-3">
+          <div className="rounded bg-white p-1.5">
+            <QRCodeSVG
+              value={typeof window !== "undefined" ? window.location.href : ""}
+              size={88}
+              level="M"
+              includeMargin={false}
+            />
+          </div>
+          <div className="flex-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 font-medium text-foreground">
+              <QrCode className="h-3.5 w-3.5" /> Scan with your iPhone camera
+            </div>
+            <p className="mt-1">
+              Opens this exact URL in Safari. {isPreviewHost
+                ? "Note: this points at the preview origin — publish first for a real install."
+                : "Then tap Share → Add to Home Screen."}
+            </p>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={copyUrl}>
             <Copy className="h-3.5 w-3.5 mr-1" />
