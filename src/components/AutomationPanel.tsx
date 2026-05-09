@@ -712,6 +712,25 @@ const AlertsCard = () => {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="font-medium text-foreground">Auth-failure thresholds</span>
+        <label className="inline-flex items-center gap-1">
+          alert when ≥
+          <input type="number" min={1} max={100} value={s.auth_failed_threshold}
+            onChange={(e) => patch({ auth_failed_threshold: Math.max(1, parseInt(e.target.value || "1", 10)) })}
+            className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
+          401s
+        </label>
+        <label className="inline-flex items-center gap-1">
+          within
+          <input type="number" min={1} max={1440} value={s.auth_failed_window_minutes}
+            onChange={(e) => patch({ auth_failed_window_minutes: Math.max(1, parseInt(e.target.value || "1", 10)) })}
+            className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
+          min
+        </label>
+        <span className="text-[10px] opacity-70">scanned every 5 min by automation-auth-monitor</span>
+      </div>
+
       {logs.length > 0 && (
         <ul className="divide-y divide-border max-h-32 overflow-y-auto text-[11px]">
           {logs.map((l) => (
