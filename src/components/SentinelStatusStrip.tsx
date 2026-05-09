@@ -44,6 +44,7 @@ export function SentinelStatusStrip() {
   const [lastRun, setLastRun] = useState<Run | null>(null);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [drawerFinding, setDrawerFinding] = useState<Finding | null>(null);
 
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
