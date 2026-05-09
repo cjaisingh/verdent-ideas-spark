@@ -15,6 +15,7 @@ import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
   ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
 } from "lucide-react";
+import { VoiceDictateButton } from "@/components/companion/VoiceDictateButton";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
@@ -309,6 +310,7 @@ export default function Companion() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [voicePartial, setVoicePartial] = useState("");
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [settings, setSettings] = useState<CompanionSettings>(loadSettings);
@@ -948,6 +950,11 @@ export default function Companion() {
               </div>
 
               <div className="border-t p-3">
+                {voicePartial && (
+                  <div className="mb-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                    <span className="font-mono uppercase mr-2">listening</span>{voicePartial}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Textarea
                     value={input}
@@ -959,11 +966,18 @@ export default function Companion() {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendMessage(); }
                     }}
                   />
-                  <Button onClick={sendMessage} disabled={sending || !input.trim()}>
-                    <Send className="h-4 w-4" />
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={sendMessage} disabled={sending || !input.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                    <VoiceDictateButton
+                      disabled={sending}
+                      onPartial={setVoicePartial}
+                      onFinal={(text) => setInput((prev) => (prev ? `${prev} ${text}` : text))}
+                    />
+                  </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · RAG {settings.rag_enabled ? "on" : "off"} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · mic dictates into the box · RAG {settings.rag_enabled ? "on" : "off"} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
               </div>
             </>
           )}
