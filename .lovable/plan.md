@@ -18,7 +18,7 @@ This plan is the **single source of truth** for the Companion-reachability work.
 ### Problem
 Today the Companion only knows: (a) the static doc corpus via `awip-rag/search`, and (b) — for the Morning Review seed only — the latest `daily_plans` + `morning_reviews` row. It has no idea about live roadmap, open actions, overnight runs, recent automation failures, sentinel/audit findings, or what Lovable is currently coding. So "what are you working on?" only paraphrases docs.
 
-### 1a. New edge function `companion-context` (operator JWT)
+### 1a. ✅ New edge function `companion-context` (operator JWT) — *deployed*
 Returns a compact deterministic JSON snapshot, recomputed per turn (cached 30s in-memory):
 
 ```text
