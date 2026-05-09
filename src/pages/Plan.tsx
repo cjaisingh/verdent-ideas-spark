@@ -250,6 +250,25 @@ const Plan = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {(() => {
+                    const c = costByWs.get(ws.id);
+                    if (!c) return null;
+                    const est = Number(c.est_monthly_usd || 0);
+                    const actual = Number(c.actual_usd_30d || 0);
+                    const oneshot = Number(c.est_oneshot_usd || 0);
+                    const overrun = est > 0 && actual > est * 1.5;
+                    return (
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <DollarSign className="h-3 w-3" />
+                        <span className="tabular-nums">
+                          Est <span className="text-foreground">{fmtUsd(est)}</span>/mo
+                          {oneshot > 0 && <> · one-shot <span className="text-foreground">{fmtUsd(oneshot)}</span></>}
+                          {" · "}Actual <span className={overrun ? "text-destructive font-medium" : "text-foreground"}>{fmtUsd(actual)}</span> (30d)
+                        </span>
+                        {overrun && <Badge variant="destructive" className="text-[9px] py-0 px-1.5">over budget</Badge>}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
