@@ -85,3 +85,57 @@ Deno.test("dedupe keys are stable across repeated calls for same conditions", ()
   assertEquals(a, b);
   assert(a.startsWith("cron_silence:"));
 });
+
+import { checkJobErrorRate } from "./checks.ts";
+
+Deno.test("job_error_rate: medium when >=2 errors in last hour", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = [
+    { job: "morning-review", status: "error", created_at: t(10) },
+    { job: "morning-review", status: "error", created_at: t(40) },
+    { job: "morning-review", status: "ok",    created_at: t(120) },
+  ];
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].kind, "job_error_rate");
+  assertEquals(out[0].severity, "medium");
+  assertEquals(out[0].subject_ref.job, "morning-review");
+});
+
+Deno.test("job_error_rate: high when >=5 errors in 24h", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = Array.from({ length: 5 }, (_, i) => ({
+    job: "sentinel-tick", status: "error", created_at: t(60 * (i + 2)),
+  }));
+  runs.push({ job: "sentinel-tick", status: "ok", created_at: t(30) });
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].severity, "high");
+});
+
+Deno.test("job_error_rate: high when only errors and no successes in 24h", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = [{ job: "lessons-synthesize", status: "error", created_at: t(120) }];
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].severity, "high");
+});
+
+Deno.test("job_error_rate: silent when only successes", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = [
+    { job: "morning-review", status: "ok", created_at: t(60) },
+    { job: "morning-review", status: "ok", created_at: t(120) },
+  ];
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 0);
+});
+
+Deno.test("job_error_rate: ignores jobs not in allowlist", () => {
+  const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
+  const runs = Array.from({ length: 5 }, (_, i) => ({
+    job: "qa-validate", status: "error", created_at: t(60 * (i + 1)),
+  }));
+  const out = checkJobErrorRate(NOW, runs);
+  assertEquals(out.length, 0);
+});
