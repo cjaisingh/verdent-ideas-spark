@@ -41,6 +41,7 @@ import OvernightOverview from "./pages/OvernightOverview";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
 import AdminCronHealth from "./pages/AdminCronHealth";
+import AdminCronConfig from "./pages/AdminCronConfig";
 import AdminLogs from "./pages/AdminLogs";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
@@ -94,6 +95,7 @@ const App = () => (
             <Route path="/admin/capability-promotion" element={<CapabilityPromotion />} />
             <Route path="/admin/promotion-audits" element={<PromotionAudits />} />
             <Route path="/admin/cron-health" element={<AdminCronHealth />} />
+            <Route path="/admin/cron-config" element={<AdminCronConfig />} />
             <Route path="/admin/logs" element={<AdminLogs />} />
             <Route path="/morning-review" element={<MorningReview />} />
             <Route path="/admin/lessons" element={<LessonsLoop />} />
