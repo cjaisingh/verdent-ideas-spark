@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { withLogger } from "../_shared/logger.ts";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 async function deriveSecret(apiKey: string): Promise<string> {
   const data = new TextEncoder().encode(`telegram-webhook:${apiKey}`);
