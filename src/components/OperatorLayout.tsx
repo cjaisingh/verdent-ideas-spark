@@ -13,7 +13,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, getSlotSource, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { Monitor, RefreshCw, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PaneSlot } from "@/components/panes/PaneSlot";
@@ -21,6 +21,9 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
 import { PaneKeyboardHelp } from "@/components/PaneKeyboardHelp";
 import { useT, useRouteName, ROUTES } from "@/lib/i18n";
+import { usePaneDataSignals } from "@/hooks/use-pane-data-signals";
+import { PANE_SOURCES, isPaneSourceId, type PaneSourceId } from "@/components/panes/sources";
+import { defaultSourceForRoute } from "@/lib/pane-defaults";
 
 const toastedDecisions = new Set<string>();
 
