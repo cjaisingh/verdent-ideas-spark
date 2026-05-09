@@ -131,10 +131,68 @@ export default function Companion() {
       .order("updated_at", { ascending: false })
       .limit(50);
     if (error) { toast({ title: "Failed to load threads", description: error.message, variant: "destructive" }); return; }
-    setThreads((data ?? []) as Thread[]);
-    if (!activeId && data && data.length > 0) setActiveId(data[0].id);
+    const rows = (data ?? []) as Thread[];
+    setThreads(rows);
+    if (!activeId && rows.length > 0) setActiveId(rows[0].id);
+    // Per-thread stats: message + escalation counts (single query)
+    if (rows.length > 0) {
+      const ids = rows.map((t) => t.id);
+      const { data: msgRows } = await supabase
+        .from("companion_messages")
+        .select("thread_id, escalated_action_id")
+        .in("thread_id", ids);
+      const next: Record<string, { msgs: number; escalated: number }> = {};
+      for (const r of msgRows ?? []) {
+        const k = (r as any).thread_id as string;
+        if (!next[k]) next[k] = { msgs: 0, escalated: 0 };
+        next[k].msgs += 1;
+        if ((r as any).escalated_action_id) next[k].escalated += 1;
+      }
+      setThreadStats(next);
+    } else {
+      setThreadStats({});
+    }
   };
   useEffect(() => { loadThreads(); }, []);
+
+  // Debounced full-text search across user's own messages
+  useEffect(() => {
+    const q = search.trim();
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    if (!q) { setSearchHits(null); return; }
+    debounceRef.current = window.setTimeout(async () => {
+      const { data } = await supabase
+        .from("companion_messages")
+        .select("thread_id")
+        .ilike("content", `%${q}%`)
+        .limit(500);
+      setSearchHits(new Set((data ?? []).map((r: any) => r.thread_id as string)));
+    }, 250);
+  }, [search]);
+
+  const visibleThreads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const now = Date.now();
+    const cutoff =
+      filterRange === "today" ? new Date(new Date().setHours(0, 0, 0, 0)).getTime() :
+      filterRange === "7d" ? now - 7 * 86_400_000 :
+      filterRange === "30d" ? now - 30 * 86_400_000 : 0;
+    return threads.filter((t) => {
+      if (filterKind !== "all" && t.agent_kind !== filterKind) return false;
+      if (cutoff && new Date(t.updated_at).getTime() < cutoff) return false;
+      if (filterEscalated && (threadStats[t.id]?.escalated ?? 0) === 0) return false;
+      if (q) {
+        const titleHit = t.title.toLowerCase().includes(q);
+        const contentHit = searchHits?.has(t.id) ?? false;
+        if (!titleHit && !contentHit) return false;
+      }
+      return true;
+    });
+  }, [threads, filterKind, filterRange, filterEscalated, threadStats, search, searchHits]);
+
+  const filtersActive = filterKind !== "all" || filterRange !== "all" || filterEscalated || search.trim() !== "";
+  const clearFilters = () => { setSearch(""); setFilterKind("all"); setFilterRange("all"); setFilterEscalated(false); };
+
 
   // Load messages for active thread + realtime
   useEffect(() => {
