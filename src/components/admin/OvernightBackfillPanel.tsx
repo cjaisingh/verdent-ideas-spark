@@ -51,6 +51,7 @@ const OvernightBackfillPanel = () => {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
   const [lastResult, setLastResult] = useState<unknown>(null);
 
   const refresh = async () => {
