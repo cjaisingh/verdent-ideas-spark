@@ -69,8 +69,10 @@ export function FindingRunsDrawer({
   runIds,
   runIds1h,
   runIds24h,
+  findingId,
   findingSummary,
   findingKind,
+  backTo,
 }: FindingRunsDrawerProps) {
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(false);
