@@ -1,0 +1,26 @@
+{
+  "name": "AWIP Companion",
+  "short_name": "Companion",
+  "description": "Local LLM discussion layer for AWIP — morning reviews, planning, and chat.",
+  "start_url": "/companion",
+  "scope": "/companion",
+  "id": "/companion",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
+  "icons": [
+    {
+      "src": "/companion-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/companion-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
