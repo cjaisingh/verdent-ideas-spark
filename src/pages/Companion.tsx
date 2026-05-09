@@ -17,6 +17,41 @@ import {
 } from "lucide-react";
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
+function TestOllamaButton({ baseUrl, model }: { baseUrl: string; model: string }) {
+  const [status, setStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [detail, setDetail] = useState<string>("");
+  async function run() {
+    setStatus("testing"); setDetail("");
+    const t0 = performance.now();
+    try {
+      const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const models: string[] = (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+      const ms = Math.round(performance.now() - t0);
+      const has = models.includes(model);
+      setStatus("ok");
+      setDetail(`${models.length} model${models.length === 1 ? "" : "s"} in ${ms}ms · "${model}" ${has ? "✓ installed" : "✗ NOT installed"}${has ? "" : ` (have: ${models.slice(0, 4).join(", ")}${models.length > 4 ? "…" : ""})`}`);
+    } catch (e: any) {
+      setStatus("error");
+      setDetail(e?.message || String(e));
+    }
+  }
+  return (
+    <div className="space-y-1">
+      <Button type="button" variant="outline" size="sm" onClick={run} disabled={status === "testing"}>
+        <Zap className="h-3 w-3 mr-1" />
+        {status === "testing" ? "Testing…" : "Test Ollama connection"}
+      </Button>
+      {status !== "idle" && (
+        <p className={`text-xs ${status === "ok" ? "text-emerald-500" : status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          {status === "ok" ? "Connected · " : status === "error" ? "Failed · " : ""}{detail}
+        </p>
+      )}
+    </div>
+  );
+}
+
 type Thread = {
   id: string;
   title: string;
@@ -515,6 +550,7 @@ export default function Companion() {
                     </Select>
                   </div>
                 </div>
+                <TestOllamaButton baseUrl={settings.ollama_base_url} model={settings.ollama_model} />
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>RAG context</Label>
