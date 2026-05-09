@@ -1,0 +1,30 @@
+name: Doc Drift
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: doc-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Check docs and changelog parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'doc-drift-ok') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run doc-drift check
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bun run scripts/check-doc-drift.ts

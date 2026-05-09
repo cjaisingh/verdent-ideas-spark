@@ -1,0 +1,30 @@
+name: Logger Validation
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "supabase/functions/**"
+      - "scripts/check-logger-coverage.ts"
+      - ".github/workflows/logger-validation.yml"
+
+concurrency:
+  group: logger-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: All edge functions wrapped with withLogger
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Run logger coverage check
+        run: bun run scripts/check-logger-coverage.ts

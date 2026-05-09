@@ -1,0 +1,59 @@
+name: Changelog Generation
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: changelog-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  generate:
+    name: Suggest CHANGELOG entry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: ${{ github.event.pull_request.draft == false }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build changelog snippet
+        id: snip
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bun run scripts/generate-changelog-entry.ts > /tmp/snippet.md || true
+          if [ ! -s /tmp/snippet.md ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "body<<EOF"
+              echo "### Suggested CHANGELOG entry"
+              echo
+              echo "Copy into \`CHANGELOG.md\` before merging:"
+              echo
+              echo '```markdown'
+              cat /tmp/snippet.md
+              echo '```'
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR
+        if: steps.snip.outputs.skip != 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: changelog-suggestion
+          message: ${{ steps.snip.outputs.body }}
