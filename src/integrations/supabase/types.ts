@@ -2097,6 +2097,8 @@ export type Database = {
       plan_workstreams: {
         Row: {
           created_at: string
+          est_ai_build_usd: number
+          est_human_hours: number
           id: string
           slug: string
           sort_order: number
@@ -2108,6 +2110,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          est_ai_build_usd?: number
+          est_human_hours?: number
           id?: string
           slug: string
           sort_order?: number
@@ -2119,6 +2123,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          est_ai_build_usd?: number
+          est_human_hours?: number
           id?: string
           slug?: string
           sort_order?: number
