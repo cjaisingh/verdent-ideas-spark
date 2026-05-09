@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import AppSecretsPanel from "@/components/admin/AppSecretsPanel";
+import CronSecretsCheckPanel from "@/components/admin/CronSecretsCheckPanel";
 import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 import ManualOvernightTriggers from "@/components/admin/ManualOvernightTriggers";
 import OvernightBackfillPanel from "@/components/admin/OvernightBackfillPanel";
@@ -246,6 +247,8 @@ const Admin = () => {
       <TelegramBotPanel />
 
       <AppSecretsPanel />
+
+      <CronSecretsCheckPanel />
     </div>
   );
 };
