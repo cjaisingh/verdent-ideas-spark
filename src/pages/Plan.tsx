@@ -93,7 +93,7 @@ const Plan = () => {
     }
     setWorkstreams((ws.data ?? []) as Workstream[]);
     setTasks((ts.data ?? []) as Task[]);
-    if (!cs.error) setCosts((cs.data ?? []) as CostRow[]);
+    if (!cs.error) setCosts((cs.data ?? []) as unknown as CostRow[]);
   };
 
   useEffect(() => {
