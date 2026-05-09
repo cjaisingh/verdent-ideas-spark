@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Apple, Copy, Share2, X, ExternalLink } from "lucide-react";
+import { Apple, Copy, Share2, X, ExternalLink, QrCode } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const DISMISS_KEY = "awip.companion.iphone-install-dismissed.v1";
