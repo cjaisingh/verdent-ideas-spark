@@ -38,7 +38,7 @@ const OperatorLayout = () => {
   const brand = t("awipCore.brand");
   const tenantsTooltip = t("nav.tooltip", { name: tenantsName, path: tenantsPath });
   const tenantsAria = t("nav.ariaLabel", { brand, name: tenantsName, path: tenantsPath });
-  const [paneState, setPaneState] = usePaneState();
+  const [paneState, setPaneState, routeKey] = usePaneState();
   const viewport = useViewport();
   const isMobile = viewport === "mobile";
   // Force narrow viewports off dual/bottom (would crush main content); mobile forced to centre.
