@@ -598,7 +598,7 @@ export default function Companion() {
                     </Select>
                   </div>
                 </div>
-                <TestOllamaButton baseUrl={settings.ollama_base_url} model={settings.ollama_model} />
+                <TestOllamaButton baseUrl={settings.ollama_base_url} model={settings.ollama_model} onPickModel={(m) => setSettings((s) => ({ ...s, ollama_model: m }))} />
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>RAG context</Label>
