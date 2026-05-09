@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { pickModel } from "../_shared/model-policy.ts";
 import { withLogger } from "../_shared/logger.ts";
+import { logAiCall } from "../_shared/ai-usage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
