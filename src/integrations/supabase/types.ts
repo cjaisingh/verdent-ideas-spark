@@ -3498,6 +3498,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      list_managed_cron_jobs: {
+        Args: never
+        Returns: {
+          active: boolean
+          jobid: number
+          jobname: string
+          last_end: string
+          last_start: string
+          last_status: string
+          schedule: string
+        }[]
+      }
       list_users_with_roles: {
         Args: never
         Returns: {
@@ -3529,6 +3541,14 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _target: string
         }
+        Returns: undefined
+      }
+      set_managed_cron_active: {
+        Args: { _active: boolean; _jobname: string }
+        Returns: undefined
+      }
+      update_managed_cron_schedule: {
+        Args: { _jobname: string; _schedule: string }
         Returns: undefined
       }
     }
