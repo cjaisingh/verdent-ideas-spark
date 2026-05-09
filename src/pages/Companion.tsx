@@ -42,6 +42,46 @@ function useOllamaModels(baseUrl: string, enabled: boolean) {
   }, [baseUrl, enabled, tick]);
   return { models, loading, error, refetch: () => setTick((n) => n + 1) };
 }
+
+function LocalModelPicker({
+  baseUrl, value, onChange, enabled,
+}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean }) {
+  const { models, loading, error, refetch } = useOllamaModels(baseUrl, enabled);
+  const hasList = models.length > 0;
+  const inList = hasList && models.includes(value);
+  if (!hasList) {
+    return (
+      <div className="space-y-1">
+        <div className="flex gap-2">
+          <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="qwen2.5:14b-instruct" />
+          <Button type="button" variant="outline" size="icon" onClick={refetch} disabled={loading} title="Refresh">
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {loading ? "Detecting installed models…" : error ? `Couldn't reach Ollama (${error}) — type a model name` : "No models detected — type a name"}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {!inList && value && (
+            <SelectItem value={value} disabled>{value} (not installed)</SelectItem>
+          )}
+          {models.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+        </SelectContent>
+      </Select>
+      <Button type="button" variant="outline" size="icon" onClick={refetch} disabled={loading} title="Refresh installed models">
+        <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+      </Button>
+    </div>
+  );
+}
+
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
 function pickClosestModel(target: string, available: string[]): string | null {
