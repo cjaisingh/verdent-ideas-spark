@@ -35,6 +35,7 @@ import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
 import NightShifts from "./pages/NightShifts";
+import OvernightOverview from "./pages/OvernightOverview";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
 import NotFound from "./pages/NotFound";
