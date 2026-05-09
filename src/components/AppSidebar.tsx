@@ -69,6 +69,7 @@ const systemItems: NavItem[] = [
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
+  { url: "/admin/ai-usage", title: "AI usage", icon: Sparkles },
   { url: "/audits", title: "Deep audits", icon: ShieldCheck },
   { url: "/status", title: "Status", icon: Heart },
 ];
