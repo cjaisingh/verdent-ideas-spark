@@ -75,6 +75,7 @@ const App = () => (
             <Route path="/memory" element={<Memory />} />
             <Route path="/notebook" element={<Notebook />} />
             <Route path="/master-plan" element={<MasterPlan />} />
+            <Route path="/plan" element={<Plan />} />
             <Route path="/copilot" element={<Copilot />} />
             <Route path="/copilot/agents" element={<CopilotAgents />} />
             <Route path="/copilot/profile" element={<CopilotProfile />} />
