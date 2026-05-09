@@ -70,12 +70,19 @@ function statusBadge(r: Run) {
 
 export default function CronJobDetail() {
   const { job = "" } = useParams<{ job: string }>();
+  const [searchParams] = useSearchParams();
+  const focusIds = useMemo(() => {
+    const raw = searchParams.get("focus") ?? "";
+    return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
+  }, [searchParams]);
   const meta = KNOWN_JOBS[job];
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [filter, setFilter] = useState<"all" | "errors" | "ok">("all");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all" | "errors" | "ok">(focusIds.size > 0 ? "errors" : "all");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set(focusIds));
+  const focusRef = useRef<HTMLDivElement | null>(null);
+  const scrolledRef = useRef(false);
 
   const load = async () => {
     setLoading(true);
