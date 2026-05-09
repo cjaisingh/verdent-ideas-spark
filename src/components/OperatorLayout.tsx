@@ -13,7 +13,7 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { PaneToggleGroup } from "@/components/PaneToggleGroup";
-import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
+import { SIZE_BOUNDS, clearModeSizes, clearViewportSizes, getModeSizes, getSlotSource, hasModeSizeOverrides, hasViewportSizeOverrides, paneFlags, usePaneState, withModeSize } from "@/lib/pane-state";
 import { Monitor, RefreshCw, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { PaneSlot } from "@/components/panes/PaneSlot";
@@ -21,6 +21,9 @@ import { useViewport } from "@/hooks/use-viewport";
 import { ResizeHistoryPanel, type ResizeHistoryEntry } from "@/components/ResizeHistoryPanel";
 import { PaneKeyboardHelp } from "@/components/PaneKeyboardHelp";
 import { useT, useRouteName, ROUTES } from "@/lib/i18n";
+import { usePaneDataSignals } from "@/hooks/use-pane-data-signals";
+import { PANE_SOURCES, isPaneSourceId, type PaneSourceId } from "@/components/panes/sources";
+import { defaultSourceForRoute } from "@/lib/pane-defaults";
 
 const toastedDecisions = new Set<string>();
 
@@ -35,7 +38,7 @@ const OperatorLayout = () => {
   const brand = t("awipCore.brand");
   const tenantsTooltip = t("nav.tooltip", { name: tenantsName, path: tenantsPath });
   const tenantsAria = t("nav.ariaLabel", { brand, name: tenantsName, path: tenantsPath });
-  const [paneState, setPaneState] = usePaneState();
+  const [paneState, setPaneState, routeKey] = usePaneState();
   const viewport = useViewport();
   const isMobile = viewport === "mobile";
   // Force narrow viewports off dual/bottom (would crush main content); mobile forced to centre.
@@ -48,6 +51,48 @@ const OperatorLayout = () => {
   const flags = paneFlags(effectiveMode);
   const sizes = getModeSizes(paneState, effectiveMode, viewport);
   const bounds = SIZE_BOUNDS[viewport];
+
+  // Resolve which source is wired into each slot for THIS route+viewport, so
+  // the data-signal indicator + auto-open logic match what PaneSlot will render.
+  const resolveSlotSource = (slot: "right" | "bottom"): PaneSourceId => {
+    const raw = getSlotSource(paneState, slot, viewport);
+    return isPaneSourceId(raw) ? raw : defaultSourceForRoute(routeKey, slot);
+  };
+  const rightSourceId = resolveSlotSource("right");
+  const bottomSourceId = resolveSlotSource("bottom");
+  const paneSignals = usePaneDataSignals();
+  const rightSignal = paneSignals[rightSourceId];
+  const bottomSignal = paneSignals[bottomSourceId];
+  // Indicators only show on toggles for hidden panes that currently have data.
+  // "dual" reveals the right pane; "bottom" reveals the bottom pane.
+  const toggleIndicators = isMobile
+    ? undefined
+    : {
+        dual: !flags.right && rightSignal.hasData
+          ? { count: rightSignal.count, sourceLabel: PANE_SOURCES[rightSourceId].label }
+          : undefined,
+        bottom: !flags.bottom && bottomSignal.hasData
+          ? { count: bottomSignal.count, sourceLabel: PANE_SOURCES[bottomSourceId].label }
+          : undefined,
+      };
+
+  // Auto-open: once per route per browser session, if the user hasn't moved
+  // off the default "left" mode and a hidden pane has data, switch to the
+  // mode that reveals it. Manual changes set the session flag too, so we
+  // never override the user's explicit choice.
+  const autoOpenSessionKey = `awip.panes.autoOpened.${routeKey}`;
+  useEffect(() => {
+    if (isMobile) return;
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem(autoOpenSessionKey)) return;
+    if (paneState.mode !== "left") return;
+    // Wait until the signals hook has reported anything (counts loaded).
+    if (!rightSignal.hasData && !bottomSignal.hasData) return;
+    const next = rightSignal.hasData ? "dual" : "bottom";
+    sessionStorage.setItem(autoOpenSessionKey, "1");
+    setPaneState({ mode: next, lastNonCentre: next });
+  }, [isMobile, paneState.mode, rightSignal.hasData, bottomSignal.hasData, autoOpenSessionKey, setPaneState]);
+
   const [dragging, setDragging] = useState(false);
   // Keyboard-driven resizing flag — debounced off after the last arrow keystroke.
   const [kbResizing, setKbResizing] = useState(false);
@@ -260,11 +305,17 @@ const OperatorLayout = () => {
               <PaneToggleGroup
                 disabled={interacting}
                 mode={effectiveMode}
+                indicators={toggleIndicators}
                 onChange={(m) => {
                   // Toggles are disabled while dragging; ignore any change that
                   // still slips through and skip no-op selections.
                   if (interacting) return;
                   if (m === effectiveMode) return;
+                  // Any explicit mode change counts as the user expressing intent
+                  // for this route — disables auto-open for the rest of the session.
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(autoOpenSessionKey, "1");
+                  }
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
                       setPaneState({ mode: paneState.lastNonCentre });
