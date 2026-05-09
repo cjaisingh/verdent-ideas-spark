@@ -258,18 +258,6 @@ export default function Companion() {
       let acc = "";
 
       if (useCloud) {
-        // Cloud: Lovable AI Gateway (needs an edge function for the API key — we use copilot-noop-llm? no, we need real LLM)
-        // For now, route cloud through finding-discuss-copilot pattern: we'll call the gateway via a simple proxy.
-        // Use the existing awip-api or a tiny call? We'll fall back to a non-streaming call via the existing
-        // discussion-extract-actions style — but for simplicity, hit gateway via edge proxy:
-        const { data: { session } } = await supabase.auth.getSession();
-        const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/copilot-noop-llm`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ stream: false, messages: llmMessages, model }),
-        });
-        // copilot-noop-llm returns empty — we need a real cloud LLM endpoint.
-        // For now: if cloud requested, error out with a hint.
         toast({
           title: "Cloud routing not wired yet",
           description: "Phase 1 streams from local Ollama only. Toggle 'Use cloud' off, or wait for Phase 1.5.",
