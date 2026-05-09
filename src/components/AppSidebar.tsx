@@ -11,6 +11,7 @@ import {
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target, Bot,
+  ShieldCheck,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
@@ -68,6 +69,7 @@ const systemItems: NavItem[] = [
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
+  { url: "/audits", title: "Deep audits", icon: ShieldCheck },
   { url: "/status", title: "Status", icon: Heart },
 ];
 

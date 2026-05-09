@@ -45,6 +45,7 @@ import AdminCronConfig from "./pages/AdminCronConfig";
 import AdminLogs from "./pages/AdminLogs";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
+import Audits from "./pages/Audits";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="/admin/logs" element={<AdminLogs />} />
             <Route path="/morning-review" element={<MorningReview />} />
             <Route path="/admin/lessons" element={<LessonsLoop />} />
+            <Route path="/audits" element={<Audits />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>

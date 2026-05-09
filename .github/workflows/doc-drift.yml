@@ -3,6 +3,9 @@ name: Doc Drift
 on:
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: "29 4 * * 1" # Mondays 04:29 UTC — weekly drift sweep against main
+  workflow_dispatch:
 
 concurrency:
   group: doc-drift-${{ github.ref }}
@@ -13,7 +16,7 @@ jobs:
     name: Check docs and changelog parity
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'doc-drift-ok') }}
+    if: ${{ github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'doc-drift-ok') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,6 +28,6 @@ jobs:
 
       - name: Run doc-drift check
         env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_BASE_REF: ${{ github.base_ref || 'main' }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bun run scripts/check-doc-drift.ts

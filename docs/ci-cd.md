@@ -63,3 +63,36 @@ BASE_REF=main bun run scripts/check-doc-drift.ts
 bun run scripts/check-logger-coverage.ts
 BASE_REF=main bun run scripts/generate-changelog-entry.ts
 ```
+
+## WS6 hardening — additional gates (added 2026-05-09)
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `lint-and-typecheck.yml` | every push + PR | Fast feedback gate (lint + `tsc --noEmit`). Mark required in branch protection. |
+| `codeql.yml` | push, PR, weekly Mon 04:23 UTC | GitHub CodeQL static analysis (`security-and-quality` queries). Findings appear under **Security → Code scanning**. |
+| `gitleaks.yml` | push, PR, daily 05:13 UTC | Repo-wide secret scan via `gitleaks-action`. Uploads SARIF to **Security → Secret scanning**. |
+| `lighthouse.yml` | PR, weekly Mon 06:37 UTC | Lighthouse CI against built `dist/` using `.lighthouserc.json` (perf 0.7, a11y/best-practices/SEO 0.85, all `warn`). |
+| `axe.yml` | PR, weekly Mon 06:47 UTC | `@axe-core/cli` against served `dist/`, WCAG 2.0 A + AA tags. Report uploaded as artifact. |
+| `doc-drift.yml` | PR + weekly Mon 04:29 UTC | (extended) Now also runs weekly against `main` to surface drift accumulated outside PR flow. |
+
+`dependabot.yml` keeps npm + GitHub-Actions deps fresh: weekly Monday 06:00 UTC, minor/patch grouped, majors ignored (manual review).
+
+## Required branch protection on `main`
+
+Operator action — not enforceable from code. In **Settings → Branches → main**:
+
+1. **Require pull request reviews** (≥ 1 approver, dismiss stale reviews on new commits).
+2. **Require status checks to pass** before merging — mark these required:
+   - `Lint + Typecheck` (`lint-and-typecheck.yml`)
+   - `Lint · Typecheck · Test · Build` (`ci.yml`)
+   - `Linter + RLS matrix` (`security-audit.yml`)
+   - `Check docs and changelog parity` (`doc-drift.yml`)
+   - `Analyze (javascript-typescript)` (`codeql.yml`)
+   - `Secret scan` (`gitleaks.yml`)
+3. **Require branches to be up to date** before merging.
+4. **Require linear history** (squash-merge only).
+5. **Restrict pushes** — only allow merges via PR; block direct pushes (including admins where possible).
+6. **Require signed commits** (recommended, not required).
+7. **Lock force-pushes and deletions** on `main`.
+
+Mirror a relaxed version on `develop`: same checks but allow direct pushes from maintainers for fast-iteration spikes.

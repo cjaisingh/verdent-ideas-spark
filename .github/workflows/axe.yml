@@ -1,0 +1,56 @@
+name: Accessibility (axe)
+
+on:
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "47 6 * * 1" # Mondays 06:47 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: axe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  axe:
+    name: axe-core scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
+
+      - name: Serve & scan
+        run: |
+          bunx --bun serve -s dist -l 4173 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4173 > /dev/null && break || sleep 1
+          done
+          npx --yes @axe-core/cli http://localhost:4173 \
+            --exit \
+            --tags wcag2a,wcag2aa \
+            --save axe-report.json || EXIT=$?
+          kill $SERVER_PID || true
+          exit ${EXIT:-0}
+
+      - name: Upload axe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-report
+          path: axe-report.json
+          retention-days: 14
