@@ -75,6 +75,8 @@ Deno.serve(withLogger("companion-extract-actions", async (req) => {
       .join("\n\n")
       .slice(0, 16000);
 
+    const model = pickModel("google/gemini-2.5-flash");
+    const aiStart = Date.now();
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -82,7 +84,7 @@ Deno.serve(withLogger("companion-extract-actions", async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: pickModel("google/gemini-2.5-flash"),
+        model,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Subject: ${thread.title ?? "(untitled)"} (${thread.agent_kind})\n\nTranscript:\n${transcript}` },
@@ -92,14 +94,16 @@ Deno.serve(withLogger("companion-extract-actions", async (req) => {
     });
 
     if (!upstream.ok) {
+      const t = await upstream.text();
+      await logAiCall(admin, { job: "companion-extract-actions", model, trigger: "user", startedAt: aiStart, response: upstream, errorText: t, request_ref: { thread_id: threadId } });
       if (upstream.status === 429) return json({ error: "Rate limited" }, 429);
       if (upstream.status === 402) return json({ error: "AI credits exhausted" }, 402);
-      const t = await upstream.text();
       console.error("upstream", upstream.status, t);
       return json({ error: "AI gateway error" }, 502);
     }
 
     const out = await upstream.json();
+    await logAiCall(admin, { job: "companion-extract-actions", model, trigger: "user", startedAt: aiStart, response: upstream, json: out, request_ref: { thread_id: threadId } });
     const content = out?.choices?.[0]?.message?.content ?? "{}";
     let parsed: any = {};
     try { parsed = JSON.parse(content); } catch { parsed = { actions: [] }; }
