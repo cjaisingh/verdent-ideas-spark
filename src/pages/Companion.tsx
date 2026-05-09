@@ -17,11 +17,36 @@ import {
 } from "lucide-react";
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
-function TestOllamaButton({ baseUrl, model }: { baseUrl: string; model: string }) {
+function pickClosestModel(target: string, available: string[]): string | null {
+  if (!available.length) return null;
+  const t = target.toLowerCase();
+  const tBase = t.split(":")[0];
+  const tFamily = tBase.replace(/[^a-z]/g, "");
+  // 1) same base name (different tag) e.g. gemma4:27b vs gemma4:31b
+  const sameBase = available.filter((m) => m.toLowerCase().split(":")[0] === tBase);
+  if (sameBase.length) return sameBase[0];
+  // 2) same family (letters only) e.g. gemma4 vs gemma3
+  const sameFamily = available.filter((m) => m.toLowerCase().split(":")[0].replace(/[^a-z]/g, "") === tFamily);
+  if (sameFamily.length) return sameFamily[0];
+  // 3) longest common prefix length scoring
+  const score = (m: string) => {
+    const a = m.toLowerCase();
+    let i = 0;
+    while (i < a.length && i < t.length && a[i] === t[i]) i++;
+    return i;
+  };
+  return [...available].sort((a, b) => score(b) - score(a))[0];
+}
+
+function TestOllamaButton({
+  baseUrl, model, onPickModel,
+}: { baseUrl: string; model: string; onPickModel: (m: string) => void }) {
   const [status, setStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
   const [detail, setDetail] = useState<string>("");
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [available, setAvailable] = useState<string[]>([]);
   async function run() {
-    setStatus("testing"); setDetail("");
+    setStatus("testing"); setDetail(""); setSuggestion(null);
     const t0 = performance.now();
     try {
       const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(4000) });
@@ -30,8 +55,15 @@ function TestOllamaButton({ baseUrl, model }: { baseUrl: string; model: string }
       const models: string[] = (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
       const ms = Math.round(performance.now() - t0);
       const has = models.includes(model);
+      setAvailable(models);
       setStatus("ok");
-      setDetail(`${models.length} model${models.length === 1 ? "" : "s"} in ${ms}ms · "${model}" ${has ? "✓ installed" : "✗ NOT installed"}${has ? "" : ` (have: ${models.slice(0, 4).join(", ")}${models.length > 4 ? "…" : ""})`}`);
+      if (has) {
+        setDetail(`${models.length} model${models.length === 1 ? "" : "s"} in ${ms}ms · "${model}" ✓ installed`);
+      } else {
+        const closest = pickClosestModel(model, models);
+        setSuggestion(closest);
+        setDetail(`${models.length} model${models.length === 1 ? "" : "s"} in ${ms}ms · "${model}" ✗ not installed (have: ${models.slice(0, 4).join(", ")}${models.length > 4 ? "…" : ""})`);
+      }
     } catch (e: any) {
       setStatus("error");
       setDetail(e?.message || String(e));
@@ -44,9 +76,25 @@ function TestOllamaButton({ baseUrl, model }: { baseUrl: string; model: string }
         {status === "testing" ? "Testing…" : "Test Ollama connection"}
       </Button>
       {status !== "idle" && (
-        <p className={`text-xs ${status === "ok" ? "text-emerald-500" : status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
-          {status === "ok" ? "Connected · " : status === "error" ? "Failed · " : ""}{detail}
+        <p className={`text-xs ${status === "ok" ? (suggestion ? "text-amber-500" : "text-emerald-500") : status === "error" ? "text-destructive" : "text-muted-foreground"}`}>
+          {status === "ok" ? (suggestion ? "Mismatch · " : "Connected · ") : status === "error" ? "Failed · " : ""}{detail}
         </p>
+      )}
+      {suggestion && (
+        <div className="flex items-center gap-2 flex-wrap pt-1">
+          <span className="text-xs text-muted-foreground">Closest installed:</span>
+          <Button type="button" size="sm" variant="secondary" onClick={() => { onPickModel(suggestion); setSuggestion(null); setDetail(`Switched to "${suggestion}" ✓`); }}>
+            Use "{suggestion}"
+          </Button>
+          {available.length > 1 && (
+            <Select onValueChange={(v) => { onPickModel(v); setSuggestion(null); setDetail(`Switched to "${v}" ✓`); }}>
+              <SelectTrigger className="h-8 w-[200px] text-xs"><SelectValue placeholder="…or pick another" /></SelectTrigger>
+              <SelectContent>
+                {available.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
       )}
     </div>
   );
@@ -550,7 +598,7 @@ export default function Companion() {
                     </Select>
                   </div>
                 </div>
-                <TestOllamaButton baseUrl={settings.ollama_base_url} model={settings.ollama_model} />
+                <TestOllamaButton baseUrl={settings.ollama_base_url} model={settings.ollama_model} onPickModel={(m) => setSettings((s) => ({ ...s, ollama_model: m }))} />
                 <div className="flex items-center justify-between">
                   <div>
                     <Label>RAG context</Label>
