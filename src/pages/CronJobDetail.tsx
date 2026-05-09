@@ -68,18 +68,36 @@ function statusBadge(r: Run) {
   return <Badge variant="destructive">{r.status_code ?? r.status}</Badge>;
 }
 
+// Parse a comma-separated id list from a query param into a Set.
+function parseIdSet(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+  return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
+}
+
 export default function CronJobDetail() {
   const { job = "" } = useParams<{ job: string }>();
   const [searchParams] = useSearchParams();
+  // Three sources, in priority order:
+  //   ?focus1h=...  + ?focus24h=...  → from sentinel finding (toggleable)
+  //   ?focus=...                     → legacy single set
+  const focus1h = useMemo(() => parseIdSet(searchParams.get("focus1h")), [searchParams]);
+  const focus24h = useMemo(() => parseIdSet(searchParams.get("focus24h")), [searchParams]);
+  const focusLegacy = useMemo(() => parseIdSet(searchParams.get("focus")), [searchParams]);
+  const hasWindowToggle = focus1h.size > 0 || focus24h.size > 0;
+  const [focusWindow, setFocusWindow] = useState<"1h" | "24h">(
+    focus1h.size > 0 ? "1h" : "24h",
+  );
   const focusIds = useMemo(() => {
-    const raw = searchParams.get("focus") ?? "";
-    return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
-  }, [searchParams]);
+    if (hasWindowToggle) return focusWindow === "1h" ? focus1h : focus24h;
+    return focusLegacy;
+  }, [hasWindowToggle, focusWindow, focus1h, focus24h, focusLegacy]);
+  const anyFocus = focus1h.size + focus24h.size + focusLegacy.size > 0;
+
   const meta = KNOWN_JOBS[job];
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [filter, setFilter] = useState<"all" | "errors" | "ok">(focusIds.size > 0 ? "errors" : "all");
+  const [filter, setFilter] = useState<"all" | "errors" | "ok">(anyFocus ? "errors" : "all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set(focusIds));
   const focusRef = useRef<HTMLDivElement | null>(null);
   const scrolledRef = useRef(false);
@@ -111,6 +129,17 @@ export default function CronJobDetail() {
   }, [job]);
 
   // Scroll the first focused run into view once the rows are rendered.
+  // Re-runs when the toggle switches between 1h / 24h windows.
+  useEffect(() => {
+    if (focusIds.size === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      focusIds.forEach((id) => next.add(id));
+      return next;
+    });
+    scrolledRef.current = false;
+  }, [focusIds]);
+
   useEffect(() => {
     if (scrolledRef.current) return;
     if (focusIds.size === 0 || runs.length === 0) return;
@@ -230,15 +259,43 @@ export default function CronJobDetail() {
         </CardContent></Card>
       </div>
 
-      {focusIds.size > 0 && (
-        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3">
+      {(focusIds.size > 0 || hasWindowToggle) && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3 flex-wrap">
           <div>
             <strong>Focused on {focusIds.size} run{focusIds.size === 1 ? "" : "s"}</strong>{" "}
             from a sentinel finding. Matching rows are highlighted and expanded below.
           </div>
-          <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
-            <Link to={`/admin/cron-health/${job}`}>Clear focus</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasWindowToggle && (
+              <div className="inline-flex rounded border border-border overflow-hidden">
+                {(["1h", "24h"] as const).map((w) => {
+                  const count = w === "1h" ? focus1h.size : focus24h.size;
+                  const disabled = count === 0;
+                  return (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => !disabled && setFocusWindow(w)}
+                      disabled={disabled}
+                      className={[
+                        "px-2 py-1 text-[11px] font-mono",
+                        focusWindow === w
+                          ? "bg-amber-500 text-white"
+                          : "bg-background hover:bg-accent",
+                        disabled ? "opacity-40 cursor-not-allowed" : "",
+                      ].join(" ")}
+                      title={`${count} run${count === 1 ? "" : "s"} in ${w} window`}
+                    >
+                      {w} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+              <Link to={`/admin/cron-health/${job}`}>Clear focus</Link>
+            </Button>
+          </div>
         </div>
       )}
 

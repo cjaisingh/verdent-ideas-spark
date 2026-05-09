@@ -50,6 +50,10 @@ export type FindingRunsDrawerProps = {
   onOpenChange: (open: boolean) => void;
   job: string | null;
   runIds: string[];
+  // Optional split by sentinel time-window so the drawer + cron-health page
+  // can toggle between the 1h and 24h triggering sets.
+  runIds1h?: string[];
+  runIds24h?: string[];
   findingSummary?: string;
   findingKind?: string;
 };
@@ -59,6 +63,8 @@ export function FindingRunsDrawer({
   onOpenChange,
   job,
   runIds,
+  runIds1h,
+  runIds24h,
   findingSummary,
   findingKind,
 }: FindingRunsDrawerProps) {
@@ -104,10 +110,23 @@ export function FindingRunsDrawer({
       return next;
     });
 
-  const focusParam = runIds.slice(0, 25).join(",");
-  const fullPageHref = job
-    ? `/admin/cron-health/${job}${focusParam ? `?focus=${focusParam}` : ""}`
-    : null;
+  const buildFullPageHref = (): string | null => {
+    if (!job) return null;
+    const params = new URLSearchParams();
+    if (runIds1h && runIds1h.length > 0) {
+      params.set("focus1h", runIds1h.slice(0, 25).join(","));
+    }
+    if (runIds24h && runIds24h.length > 0) {
+      params.set("focus24h", runIds24h.slice(0, 25).join(","));
+    }
+    if (params.toString() === "") {
+      const focusParam = runIds.slice(0, 25).join(",");
+      if (focusParam) params.set("focus", focusParam);
+    }
+    const qs = params.toString();
+    return `/admin/cron-health/${job}${qs ? `?${qs}` : ""}`;
+  };
+  const fullPageHref = buildFullPageHref();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

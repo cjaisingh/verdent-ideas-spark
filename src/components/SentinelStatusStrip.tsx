@@ -21,13 +21,20 @@ type Finding = {
 type Run = { created_at: string; status: string; message: string | null };
 
 // Pull the (job, run_ids) tuple from a finding's payload/subject_ref so the UI
-// can cross-link from the finding back to the runs that caused it.
-function findingRunsRef(f: Finding): { job: string; runIds: string[] } | null {
+// can cross-link from the finding back to the runs that caused it. Returns
+// both the 1h and 24h windows when the payload exposes them.
+function findingRunsRef(
+  f: Finding,
+): { job: string; runIds: string[]; runIds1h: string[]; runIds24h: string[] } | null {
   const job = f.subject_ref?.job as string | undefined;
   if (!job) return null;
-  const ids: string[] = (f.subject_ref?.run_ids as string[]) ??
-    (f.payload?.error_run_ids_24h as string[]) ?? [];
-  return { job, runIds: ids };
+  const runIds24h: string[] = (f.payload?.error_run_ids_24h as string[]) ?? [];
+  const runIds1h: string[] = (f.payload?.error_run_ids_1h as string[]) ?? [];
+  const fallback: string[] =
+    (f.subject_ref?.run_ids as string[]) ?? runIds24h ?? runIds1h ?? [];
+  // Prefer 1h when present (most recent / actionable), else 24h, else fallback.
+  const runIds = runIds1h.length > 0 ? runIds1h : runIds24h.length > 0 ? runIds24h : fallback;
+  return { job, runIds, runIds1h, runIds24h };
 }
 
 const sevColor: Record<string, string> = {
@@ -170,14 +177,21 @@ export function SentinelStatusStrip() {
           </>
         )}
       </CardContent>
-      <FindingRunsDrawer
-        open={!!drawerFinding}
-        onOpenChange={(o) => { if (!o) setDrawerFinding(null); }}
-        job={drawerFinding ? (findingRunsRef(drawerFinding)?.job ?? null) : null}
-        runIds={drawerFinding ? (findingRunsRef(drawerFinding)?.runIds ?? []) : []}
-        findingSummary={drawerFinding?.summary}
-        findingKind={drawerFinding?.kind}
-      />
+      {(() => {
+        const ref = drawerFinding ? findingRunsRef(drawerFinding) : null;
+        return (
+          <FindingRunsDrawer
+            open={!!drawerFinding}
+            onOpenChange={(o) => { if (!o) setDrawerFinding(null); }}
+            job={ref?.job ?? null}
+            runIds={ref?.runIds ?? []}
+            runIds1h={ref?.runIds1h ?? []}
+            runIds24h={ref?.runIds24h ?? []}
+            findingSummary={drawerFinding?.summary}
+            findingKind={drawerFinding?.kind}
+          />
+        );
+      })()}
     </Card>
   );
 }
