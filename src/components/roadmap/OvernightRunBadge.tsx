@@ -59,7 +59,7 @@ export function OvernightRunBadge({ phaseId }: Props) {
     };
     load();
     const ch = supabase
-      .channel(`overnight-badge-${phaseId}`)
+      .channel(`overnight-badge-${phaseId}-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "roadmap_phase_overnight_runs", filter: `phase_id=eq.${phaseId}` },
