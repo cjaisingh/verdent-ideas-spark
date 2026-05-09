@@ -223,34 +223,18 @@ const AdminCronHealth = () => {
         </div>
       </Card>
 
-      {/* Errors */}
+      {/* Errors grouped by job + likely cause */}
       <Card>
         <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide mb-2">
-          <AlertTriangle className="h-3.5 w-3.5" /> Night job errors (48h)
+          <AlertTriangle className="h-3.5 w-3.5" /> Night job errors (48h) — grouped
           <span className={`ml-auto font-mono tabular-nums ${errors.length > 0 ? "text-destructive" : "text-muted-foreground"}`}>
             {errors.length}
           </span>
         </div>
-        {errors.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No errors in the last 48 hours.</div>
-        ) : (
-          <ul className="divide-y divide-border text-xs max-h-[480px] overflow-y-auto">
-            {errors.map((r) => (
-              <li key={r.id} className="py-1.5 flex items-start gap-2">
-                <XCircle className="h-3.5 w-3.5 text-destructive shrink-0 mt-0.5" />
-                <span className="font-mono text-muted-foreground shrink-0 w-20">{rel(r.created_at)}</span>
-                <span className="font-mono text-foreground shrink-0">{r.job}</span>
-                <span className="font-mono text-[10px] px-1.5 rounded border border-border text-muted-foreground shrink-0">
-                  {r.trigger}
-                </span>
-                <span className="font-mono text-destructive shrink-0">{r.status_code ?? r.status}</span>
-                <span className="text-foreground/90 truncate" title={r.message ?? ""}>
-                  {r.message ?? "(no message)"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <p className="text-[11px] text-muted-foreground mb-2">
+          Click a job to see distinct failure causes; click a cause for the diagnosis and matching runs.
+        </p>
+        <ErrorGroupsPanel errors={errors} />
       </Card>
 
       {/* Recent shifts */}
