@@ -122,6 +122,21 @@ const Plan = () => {
     return t;
   }, [tasks]);
 
+  const costByWs = useMemo(() => {
+    const m = new Map<string, CostRow>();
+    for (const c of costs) m.set(c.workstream_id, c);
+    return m;
+  }, [costs]);
+
+  const totalEstMonthly = useMemo(
+    () => costs.reduce((s, c) => s + Number(c.est_monthly_usd || 0), 0),
+    [costs],
+  );
+  const totalActual30d = useMemo(
+    () => costs.reduce((s, c) => s + Number(c.actual_usd_30d || 0), 0),
+    [costs],
+  );
+
   const wsProgress = (wsId: string): { pct: number; counts: Record<Status, number> } => {
     const list = tasksByWs.get(wsId) ?? [];
     const counts: Record<Status, number> = { todo: 0, in_progress: 0, blocked: 0, done: 0 };
