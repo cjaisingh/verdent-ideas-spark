@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Moon, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Clock, FileSearch } from "lucide-react";
 import PromotionAuditDrawer from "@/components/promotion/PromotionAuditDrawer";
+import NightBacklogTable from "@/components/night/NightBacklogTable";
 
 type Shift = {
   id: string;
