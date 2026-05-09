@@ -53,6 +53,12 @@ export function SentinelStatusStrip() {
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [drawerFinding, setDrawerFinding] = useState<Finding | null>(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const focusedFindingId = searchParams.get("finding");
+  const [showAll, setShowAll] = useState(false);
+  const findingRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const scrolledFindingRef = useRef<string | null>(null);
 
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
