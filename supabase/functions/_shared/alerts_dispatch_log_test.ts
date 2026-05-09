@@ -78,7 +78,7 @@ Deno.test("1. webhook off → logged only", async () => {
 
 Deno.test("2. webhook 200 → delivered=true", async () => {
   const { sb } = stubClient({ settings: { enabled: true, webhook_url: "https://hook.test/ok", dedupe_minutes: 0 } });
-  const { lines } = await withFetchCapture(async () => {
+  const lines = await withFetchCapture(async () => {
     const res = await captureLog(() => dispatchAlert(sb, "job-b", "auth_failed", "401"));
     return res.lines;
   }, () => new Response("ok", { status: 200 }));
@@ -90,7 +90,7 @@ Deno.test("2. webhook 200 → delivered=true", async () => {
 
 Deno.test("3. webhook 500 → delivered=false + error captured", async () => {
   const { sb } = stubClient({ settings: { enabled: true, webhook_url: "https://hook.test/fail", dedupe_minutes: 0 } });
-  const { lines } = await withFetchCapture(async () => {
+  const lines = await withFetchCapture(async () => {
     const res = await captureLog(() => dispatchAlert(sb, "job-c", "test_fail", "boom"));
     return res.lines;
   }, () => new Response("server exploded", { status: 500 }));
@@ -102,7 +102,7 @@ Deno.test("3. webhook 500 → delivered=false + error captured", async () => {
 
 Deno.test("4. webhook fetch throws → error message captured", async () => {
   const { sb } = stubClient({ settings: { enabled: true, webhook_url: "https://hook.test/down", dedupe_minutes: 0 } });
-  const { lines } = await withFetchCapture(async () => {
+  const lines = await withFetchCapture(async () => {
     const res = await captureLog(() => dispatchAlert(sb, "job-d", "review_error", "x"));
     return res.lines;
   }, () => { throw new Error("ECONNREFUSED"); });
