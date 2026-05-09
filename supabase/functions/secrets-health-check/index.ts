@@ -48,12 +48,14 @@ Deno.serve(async (req) => {
   }
 
   const { data: rows, error } = await sb
-    .from("app_secrets").select("key").in("key", REQUIRED_SECRETS as unknown as string[]);
+    .from("app_secrets").select("key, value").in("key", REQUIRED_SECRETS as unknown as string[]);
   if (error) {
     await recordRun("error", 500, `app_secrets query failed: ${error.message}`);
     return json({ error: error.message }, 500);
   }
-  const presentInDb = new Set((rows ?? []).map((r: any) => r.key));
+  const dbValues = new Map<string, string>(
+    (rows ?? []).map((r: any) => [r.key as string, r.value as string]),
+  );
   const missingInEnv = REQUIRED_SECRETS.filter((k) => !Deno.env.get(k));
 
   // Auto-sync: if a required secret exists in env but not in app_secrets,
@@ -62,38 +64,76 @@ Deno.serve(async (req) => {
   for (const key of REQUIRED_SECRETS) {
     const envVal = Deno.env.get(key);
     if (!envVal) continue;
-    if (presentInDb.has(key)) continue;
+    if (dbValues.has(key)) continue;
     const { error: upErr } = await sb.from("app_secrets").upsert({
       key, value: envVal,
       description: `Auto-synced from edge env by secrets-health-check`,
     }, { onConflict: "key" });
     if (!upErr) {
-      presentInDb.add(key);
+      dbValues.set(key, envVal);
       synced.push(key);
     } else {
       console.error(`failed to sync ${key}:`, upErr);
     }
   }
-  const missingInDb = REQUIRED_SECRETS.filter((k) => !presentInDb.has(k));
+  const missingInDb = REQUIRED_SECRETS.filter((k) => !dbValues.has(k));
 
-  const ok = missingInDb.length === 0 && missingInEnv.length === 0;
+  // Mismatch detection: row present in BOTH places but values differ.
+  // We never log raw values — only short fingerprints so operators can tell
+  // which side rotated without leaking the secret.
+  const mismatches: { key: string; env_fp: string; db_fp: string }[] = [];
+  for (const key of REQUIRED_SECRETS) {
+    const envVal = Deno.env.get(key);
+    const dbVal = dbValues.get(key);
+    if (!envVal || !dbVal) continue;
+    if (envVal === dbVal) continue;
+    mismatches.push({
+      key,
+      env_fp: await fingerprint(envVal),
+      db_fp: await fingerprint(dbVal),
+    });
+  }
+
+  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && mismatches.length === 0;
+  const messageParts: string[] = [];
+  if (missingInDb.length) messageParts.push(`missing in db: [${missingInDb.join(",")}]`);
+  if (missingInEnv.length) messageParts.push(`missing in env: [${missingInEnv.join(",")}]`);
+  if (mismatches.length) messageParts.push(`mismatched: [${mismatches.map((m) => m.key).join(",")}]`);
   const message = ok
-    ? `All ${REQUIRED_SECRETS.length} required secrets present`
-    : `Missing secrets — db:[${missingInDb.join(",") || "none"}] env:[${missingInEnv.join(",") || "none"}]`;
+    ? `All ${REQUIRED_SECRETS.length} required secrets present and matching`
+    : `Secret check failed — ${messageParts.join(" · ")}`;
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
-    synced_to_db: synced,
+    synced_to_db: synced, mismatches,
   });
 
-  if (!ok) {
+  if (mismatches.length > 0) {
+    await dispatchAlert(sb, "secrets-health-check", "secrets_mismatch",
+      `Edge env and app_secrets disagree for: ${mismatches.map((m) => m.key).join(", ")}. ` +
+      `Rotate one side or run the sync to align them.`,
+      { mismatches });
+  }
+  if (missingInDb.length > 0 || missingInEnv.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_missing", message, {
       missing_in_db: missingInDb, missing_in_env: missingInEnv,
     });
   }
 
-  return json({ ok, missing_in_db: missingInDb, missing_in_env: missingInEnv, synced_to_db: synced });
+  return json({
+    ok,
+    missing_in_db: missingInDb,
+    missing_in_env: missingInEnv,
+    synced_to_db: synced,
+    mismatches,
+  });
 });
+
+async function fingerprint(v: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
+  return Array.from(new Uint8Array(buf)).slice(0, 4)
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 function json(p: unknown, s = 200) {
   return new Response(JSON.stringify(p), {
