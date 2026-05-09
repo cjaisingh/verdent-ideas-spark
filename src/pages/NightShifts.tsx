@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Moon, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Clock, FileSearch } from "lucide-react";
 import PromotionAuditDrawer from "@/components/promotion/PromotionAuditDrawer";
+import NightBacklogTable from "@/components/night/NightBacklogTable";
 
 type Shift = {
   id: string;
@@ -161,6 +162,9 @@ export default function NightShifts() {
         </select>
       </header>
 
+      <NightBacklogTable />
+
+
       {filtered.length === 0 ? (
         <div className="rounded-md border border-border bg-card p-6 text-sm text-muted-foreground">
           No shifts recorded yet.
@@ -173,7 +177,7 @@ export default function NightShifts() {
             const isOpen = open.has(sh.id);
             const tz = sh.summary?.tz ?? "UTC";
             return (
-              <li key={sh.id} className="rounded-md border border-border bg-card">
+              <li key={sh.id} id={`shift-${sh.id}`} className="rounded-md border border-border bg-card scroll-mt-4">
                 <button
                   type="button"
                   onClick={() => toggle(sh.id)}
