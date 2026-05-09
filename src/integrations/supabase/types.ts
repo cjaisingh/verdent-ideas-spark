@@ -947,6 +947,70 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_estimates: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          estimated_usd: number
+          id: string
+          job: string | null
+          kind: string
+          model: string | null
+          notes: string | null
+          task_id: string | null
+          updated_at: string
+          workstream_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          estimated_usd: number
+          id?: string
+          job?: string | null
+          kind: string
+          model?: string | null
+          notes?: string | null
+          task_id?: string | null
+          updated_at?: string
+          workstream_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          estimated_usd?: number
+          id?: string
+          job?: string | null
+          kind?: string
+          model?: string | null
+          notes?: string | null
+          task_id?: string | null
+          updated_at?: string
+          workstream_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_estimates_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "plan_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_estimates_workstream_id_fkey"
+            columns: ["workstream_id"]
+            isOneToOne: false
+            referencedRelation: "cost_summary_by_workstream"
+            referencedColumns: ["workstream_id"]
+          },
+          {
+            foreignKeyName: "cost_estimates_workstream_id_fkey"
+            columns: ["workstream_id"]
+            isOneToOne: false
+            referencedRelation: "plan_workstreams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_plans: {
         Row: {
           created_at: string
@@ -2014,6 +2078,13 @@ export type Database = {
           workstream_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "plan_tasks_workstream_id_fkey"
+            columns: ["workstream_id"]
+            isOneToOne: false
+            referencedRelation: "cost_summary_by_workstream"
+            referencedColumns: ["workstream_id"]
+          },
           {
             foreignKeyName: "plan_tasks_workstream_id_fkey"
             columns: ["workstream_id"]
@@ -3165,6 +3236,29 @@ export type Database = {
       }
     }
     Views: {
+      cost_actuals_30d: {
+        Row: {
+          actual_usd_30d: number | null
+          completion_tokens_30d: number | null
+          job: string | null
+          last_run_at: string | null
+          prompt_tokens_30d: number | null
+          runs: number | null
+        }
+        Relationships: []
+      }
+      cost_summary_by_workstream: {
+        Row: {
+          actual_usd_30d: number | null
+          est_monthly_usd: number | null
+          est_oneshot_usd: number | null
+          jobs: string[] | null
+          slug: string | null
+          title: string | null
+          workstream_id: string | null
+        }
+        Relationships: []
+      }
       night_task_audit: {
         Row: {
           audit_complete: boolean | null
