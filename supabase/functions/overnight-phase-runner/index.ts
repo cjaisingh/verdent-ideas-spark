@@ -140,9 +140,26 @@ Deno.serve(async (req) => {
   const provided = req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";
   const triggeredBySvc = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  if (!triggeredBySvc && !auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
-
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+  if (!triggeredBySvc && !auth.startsWith("Bearer ")) {
+    // Make the auth failure visible — this is exactly what was silently swallowing
+    // every cron tick when the AWIP_SERVICE_TOKEN row in app_secrets was missing.
+    const reason = !provided
+      ? "missing x-service-token header (cron secret not populated?)"
+      : !SERVICE_TOKEN
+        ? "AWIP_SERVICE_TOKEN env var not set on edge function"
+        : "service token mismatch";
+    await sb.from("automation_runs").insert({
+      job: "overnight-phase-runner-15m",
+      trigger: "cron",
+      status: "error",
+      status_code: 401,
+      message: reason,
+      detail: { provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN },
+    });
+    return json({ error: "unauthorized", reason }, 401);
+  }
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
   const explicitRun = body?.run_id ? String(body.run_id) : null;
 

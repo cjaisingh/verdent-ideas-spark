@@ -34,9 +34,22 @@ Deno.serve(async (req) => {
   const provided = req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";
   const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
-
   const sb = createServiceClient();
+
+  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
+    const reason = !provided
+      ? "missing x-service-token header (cron secret not populated?)"
+      : !SERVICE_TOKEN
+        ? "AWIP_SERVICE_TOKEN env var not set on edge function"
+        : "service token mismatch";
+    const job = path.startsWith("/close") ? "night-agent-close" : "night-agent-open";
+    await sb.from("automation_runs").insert({
+      job, trigger: "cron", status: "error", status_code: 401,
+      message: reason,
+      detail: { path, provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN },
+    });
+    return json({ error: "unauthorized", reason }, 401);
+  }
 
   // Admin-only test mode: dry-run /open that returns gate evaluation
   // without writing a shift, observations, or proposals. Requires an
