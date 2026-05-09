@@ -84,28 +84,46 @@ function useOllamaModels(baseUrl: string, enabled: boolean) {
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<OllamaErrorKind | null>(null);
+  const [resolvedBaseUrl, setResolvedBaseUrl] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!enabled || !baseUrl) return;
     let cancelled = false;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setErrorKind(null);
     const t = setTimeout(() => {
-      fetchOllamaModels(baseUrl)
-        .then((m) => { if (!cancelled) setModels(m); })
-        .catch((e) => { if (!cancelled) { setError(e?.message || String(e)); setModels([]); } })
+      resolveAndFetchOllama(baseUrl)
+        .then(({ models, baseUrl: rb }) => { if (!cancelled) { setModels(models); setResolvedBaseUrl(rb); } })
+        .catch((e) => {
+          if (cancelled) return;
+          const c = classifyOllamaError(e);
+          setError(c.message); setErrorKind(c.kind); setModels([]); setResolvedBaseUrl(null);
+        })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 300);
     return () => { cancelled = true; clearTimeout(t); };
   }, [baseUrl, enabled, tick]);
-  return { models, loading, error, refetch: () => setTick((n) => n + 1) };
+  return { models, loading, error, errorKind, resolvedBaseUrl, refetch: () => setTick((n) => n + 1) };
 }
 
 function LocalModelPicker({
-  baseUrl, value, onChange, enabled,
-}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean }) {
-  const { models, loading, error, refetch } = useOllamaModels(baseUrl, enabled);
+  baseUrl, value, onChange, enabled, onResolved,
+}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean; onResolved?: (url: string | null) => void }) {
+  const { models, loading, error, errorKind, resolvedBaseUrl, refetch } = useOllamaModels(baseUrl, enabled);
+  useEffect(() => { onResolved?.(resolvedBaseUrl); }, [resolvedBaseUrl, onResolved]);
   const hasList = models.length > 0;
   const inList = hasList && models.includes(value);
+  const hint = (() => {
+    if (loading) return "Detecting installed models…";
+    if (!error) return hasList ? null : "No models detected — type a name";
+    if (errorKind === "unreachable") {
+      const tryAlt = baseUrl.includes("localhost") ? "127.0.0.1" : "localhost";
+      return `Browser can't reach Ollama at ${baseUrl}. Try http://${tryAlt}:11434, or check OLLAMA_ORIGINS allows this preview.`;
+    }
+    if (errorKind === "timeout") return "Ollama didn't respond in time — is it running?";
+    if (errorKind === "http") return `Ollama responded with ${error} — check the base URL path.`;
+    return `Couldn't reach Ollama (${error}) — type a model name`;
+  })();
   if (!hasList) {
     return (
       <div className="space-y-1">
@@ -115,9 +133,7 @@ function LocalModelPicker({
             <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          {loading ? "Detecting installed models…" : error ? `Couldn't reach Ollama (${error}) — type a model name` : "No models detected — type a name"}
-        </p>
+        {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
       </div>
     );
   }
