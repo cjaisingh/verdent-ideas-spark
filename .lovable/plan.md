@@ -76,20 +76,20 @@ Templates exist in `companion-live-state.ts`; UI buttons not yet mounted.
 
 ---
 
-## Part 2 — Fix iPhone install
+## Part 2 — ✅ Fix iPhone install — *shipped (pending publish)*
 
 ### Diagnosis (most likely → least)
-1. **Project isn't published.** iOS Safari only offers a real "Add to Home Screen" install when browsing the **published origin in Safari directly** — never inside the Lovable editor preview iframe and never on `id-preview--…lovable.app`. Until you publish + open the live URL in mobile Safari, you get a generic Safari shortcut, not the PWA. **This is the gating step.**
-2. **Wrong `apple-touch-icon` size.** `index.html` points at `companion-icon-512.png` (512×512). iOS expects **180×180** at `/apple-touch-icon.png`. Wrong size → iOS uses a screenshot of the page as the icon.
+1. **Project isn't published.** iOS Safari only offers a real "Add to Home Screen" install when browsing the **published origin in Safari directly** — never inside the Lovable editor preview iframe and never on `id-preview--…lovable.app`. Until you publish + open the live URL in mobile Safari, you get a generic Safari shortcut, not the PWA. **This is the gating step and is the only remaining action.**
+2. **Wrong `apple-touch-icon` size.** Was 512×512; iOS expects 180×180. ✅ Fixed.
 3. **Manifest scope is `/companion` only** (correct), so install must be triggered from `/companion` — never from `/`.
-4. **iOS Safari has no `beforeinstallprompt`.** Expected; `InstallPwaButton` already shows the right Share-sheet toast on iOS, so the button isn't the bug.
+4. **iOS Safari has no `beforeinstallprompt`.** Expected; `InstallPwaButton` already shows the right Share-sheet toast on iOS.
 
-### Fixes (mechanical)
-- Generate `public/apple-touch-icon.png` (180×180) from existing 512 source.
-- Add `public/companion-icon-192.png` and `companion-icon-256.png` to the manifest icons array.
-- Update `index.html`: `<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />` (keep the 512 link as fallback); add `<meta name="format-detection" content="telephone=no" />` and `viewport-fit=cover`.
-- New **`IphoneInstallHelpCard`** on `/companion`: detects iOS Safari, shows step-by-step (Share → Add to Home Screen), copy-published-URL button, and a one-time toast when `window.location.hostname` looks like the editor preview.
-- One-time guidance toast: *"To install on iPhone, publish the project, then open the published URL in Safari (not Chrome iOS — it can't install PWAs)."*
+### Fixes (all shipped)
+- ✅ `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png` generated.
+- ✅ `index.html` updated: 180×180 `apple-touch-icon` link, `viewport-fit=cover`.
+- ✅ `public/companion.webmanifest` updated with all icon sizes; scope `/companion`.
+- ✅ `src/components/companion/IphoneInstallHelpCard.tsx` — iOS Safari detection, Share→Add-to-Home-Screen steps, copy-published-URL button, editor-preview-origin warning.
+- ⬜ Operator action: **publish the project** and open the published URL in iPhone Safari to validate.
 
 ---
 
