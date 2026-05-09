@@ -88,7 +88,7 @@ const OvernightOverview = () => {
 
   const load = async () => {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const overnightJobs = ["night-agent-open", "night-agent-close", "overnight-phase-runner"];
+    const overnightJobs = ["night-agent-open", "night-agent-close", "overnight-phase-runner", "overnight-prequeue"];
     const [{ data: s }, { data: ms }, { data: ph }, { data: r }, { data: al }] = await Promise.all([
       supabase
         .from("night_shifts" as any)
