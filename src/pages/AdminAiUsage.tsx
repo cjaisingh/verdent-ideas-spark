@@ -54,7 +54,7 @@ function csvEscape(v: unknown): string {
   return s;
 }
 
-function downloadCsv(filename: string, header: string[], rows: (string | number | null | undefined)[][]) {
+function downloadCsv(filename: string, header: string[], rows: unknown[][]) {
   const lines = [header.map(csvEscape).join(",")];
   for (const r of rows) lines.push(r.map(csvEscape).join(","));
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
