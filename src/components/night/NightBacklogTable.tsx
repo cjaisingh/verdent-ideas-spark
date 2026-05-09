@@ -24,6 +24,7 @@ type PhaseRow = {
   requested_at: string;
   scheduled_for: string | null;
   model: string | null;
+  requested_by: string | null;
 };
 
 type ProposalRow = {
@@ -85,10 +86,12 @@ const NightBacklogTable = () => {
   const [phases, setPhases] = useState<PhaseRow[]>([]);
   const [proposals, setProposals] = useState<ProposalRow[]>([]);
   const [settings, setSettings] = useState<SettingsRow | null>(null);
+  const [promotedNightCount, setPromotedNightCount] = useState(0);
+  const [nightlyPhases, setNightlyPhases] = useState(0);
   const [running, setRunning] = useState(false);
 
   const load = async () => {
-    const [{ data: a }, { data: p }, { data: pr }, { data: s }] = await Promise.all([
+    const [{ data: a }, { data: p }, { data: pr }, { data: s }, { count: promotedCount }, { count: nightlyCount }] = await Promise.all([
       supabase
         .from("discussion_actions" as any)
         .select("id, short_num, title, priority, status, discussion_id, updated_at")
@@ -97,7 +100,7 @@ const NightBacklogTable = () => {
         .order("updated_at", { ascending: false }),
       supabase
         .from("roadmap_phase_overnight_runs" as any)
-        .select("id, phase_id, phase_key, status, requested_at, scheduled_for, model")
+        .select("id, phase_id, phase_key, status, requested_at, scheduled_for, model, requested_by")
         .in("status", ["queued", "running"])
         .order("requested_at", { ascending: false }),
       supabase
@@ -109,11 +112,22 @@ const NightBacklogTable = () => {
         .from("memory_settings" as any)
         .select("night_agent_enabled, night_window_start, night_window_end, night_timezone, night_blackout_dates, night_allowed_kinds")
         .maybeSingle(),
+      supabase
+        .from("discussion_actions" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("night_eligible", true)
+        .neq("status", "open"),
+      supabase
+        .from("roadmap_phases" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("run_overnight", true),
     ]);
     setAudits((a as any) ?? []);
     setPhases((p as any) ?? []);
     setProposals((pr as any) ?? []);
     setSettings((s as any) ?? null);
+    setPromotedNightCount(promotedCount ?? 0);
+    setNightlyPhases(nightlyCount ?? 0);
   };
 
   useEffect(() => {
@@ -156,7 +170,7 @@ const NightBacklogTable = () => {
         source: "phase",
         ref: p.phase_key ?? p.phase_id.slice(0, 8),
         title: p.phase_key ? `Overnight phase ${p.phase_key}` : "Overnight phase run",
-        meta: `${p.status}${p.model ? ` · ${p.model}` : ""}`,
+        meta: `${p.status}${p.requested_by === null ? " · auto" : ""}${p.model ? ` · ${p.model}` : ""}`,
         queuedAt: p.requested_at,
         href: p.phase_key ? `/roadmap?phase=${encodeURIComponent(p.phase_key)}` : "/roadmap",
         badgeTone: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
@@ -246,19 +260,29 @@ const NightBacklogTable = () => {
       {totalCount === 0 ? (
         <div className="p-6 text-sm text-muted-foreground space-y-3">
           <div className="font-medium text-foreground">Backlog is empty.</div>
-          <div>Opening a shift right now would do nothing. Add work from any of these surfaces:</div>
-          <ul className="space-y-1 text-xs">
+          <div>The night agent only <em>audits open</em> discussion-actions; it does not execute promoted roadmap tasks.</div>
+          {promotedNightCount > 0 && (
+            <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-foreground">
+              You have <strong>{promotedNightCount}</strong> night-eligible action{promotedNightCount === 1 ? "" : "s"} that {promotedNightCount === 1 ? "is" : "are"} already promoted (status ≠ open). They won't be re-audited. To have a roadmap phase actually <em>generated</em> overnight, toggle <strong>"nightly"</strong> on its phase row in <Link to="/roadmap" className="underline">/roadmap</Link>.
+            </div>
+          )}
+          {nightlyPhases > 0 && (
+            <div className="text-xs">
+              <strong>{nightlyPhases}</strong> roadmap phase{nightlyPhases === 1 ? " is" : "s are"} flagged <code className="font-mono">nightly</code> — they'll be auto-queued at 21:55 UTC.
+            </div>
+          )}
+          <ul className="space-y-1 text-xs pt-1">
             <li className="flex items-center gap-2">
               <MessageSquare className="h-3 w-3" />
-              <Link to="/discussions" className="underline">Mark a discussion action <code className="font-mono">night_eligible</code></Link>
+              <Link to="/discussions" className="underline">Mark a discussion action <code className="font-mono">night_eligible</code></Link> (audit only)
             </li>
             <li className="flex items-center gap-2">
               <Layers className="h-3 w-3" />
-              <Link to="/roadmap" className="underline">Queue a roadmap phase ("Run overnight")</Link>
+              <Link to="/roadmap" className="underline">Queue a roadmap phase</Link> — "Run overnight" once, or "nightly" toggle for every night
             </li>
             <li className="flex items-center gap-2">
               <ListTodo className="h-3 w-3" />
-              <span>Pending proposals from prior shifts will appear here automatically.</span>
+              <span>Pending proposals from prior shifts appear here automatically.</span>
             </li>
           </ul>
         </div>

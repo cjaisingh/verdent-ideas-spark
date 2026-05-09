@@ -1,57 +1,57 @@
-## Goal
+## Why the night agent had nothing to do
 
-Make `/night-shifts` answer the question *"if a shift opens right now, what would it actually do?"* — independent of whether a shift is currently running. A unified, linked backlog table at the top of the page, fed from every source that can hand work to the night agent.
+Two distinct things both look like "night work" and got conflated:
 
-## What gets added
+1. **Discussion-action audits** — both `night_eligible=true` items (JOB-1, JOB-2) had already been **promoted** to roadmap tasks, so their `status` flipped to `in_progress`. The night agent only audits `status='open'`. That's why the backlog was 0 even though `night` chips are still visible on `/jobs`.
+2. **Roadmap "Run overnight"** — `roadmap_phase_overnight_runs` is empty. Marking a discussion-action night-eligible never queues the resulting roadmap phase. Each phase has its own opt-in "Run overnight" button that nobody clicked.
 
-A new **`NightBacklogTable`** section rendered above the existing shifts list on `src/pages/NightShifts.tsx`. It shows one row per pending work item, regardless of source.
+The night agent's job is to *audit and propose* — it does not execute promoted roadmap tasks. That's by design (substrate, not a brain). The fix is to (a) make that obvious in the UI, and (b) give you a way to say "always run this phase overnight" without clicking it every evening.
 
-### Columns
+## Plan
 
-| Source | Subject | Title / summary | Eligible window | Queued | Link |
-|---|---|---|---|---|---|
-| badge | e.g. `#42` discussion_action | first 80 chars | "tonight 22:00–06:00 UTC" or "next window" | relative time | opens detail |
+### Part 1 — UI clarity (no behaviour change)
 
-### Sources unified into one backlog
+- **`/jobs`**: when an item is promoted (`status` ≠ `open`), keep the `night` chip but render it muted with tooltip *"audit complete · promoted on {date} — night agent will not re-audit"*. Stops it looking like work-in-progress for the night agent.
+- **`/night-shifts` backlog empty state**: add an explicit line *"You have N night-eligible actions but they're already promoted — the night agent only audits open actions."* with a link to `/jobs?night=1` filtered to promoted items.
+- **`/overnight` overview**: split the "queued" tile into `audits queued | phases queued | auto-queued tonight` so the difference between the two pipelines is visible at a glance.
 
-1. **Discussion audits** — `discussion_actions` where `night_eligible = true AND status = 'open'`. Source badge: `audit`. Link → `/discussions/{discussion_id}#action-{short_num}` (existing route used by `DiscussionActionsPanel`).
-2. **Overnight phase runs** — `roadmap_phase_overnight_runs` where `status IN ('queued','running')`. Source badge: `phase`. Link → `/roadmap?phase={phase_key}`.
-3. **Pending proposals from prior shifts** — `night_proposals` where `status = 'pending'` (operator hasn't accepted/rejected yet — they'll roll into the next shift's review). Source badge: `proposal`. Link scrolls to that shift in the list below.
+### Part 2 — Per-phase "queue every night" flag
 
-Each row also shows whether the item is *gated out* by current `memory_settings`:
-- `night_agent_enabled = false` → all rows show "agent disabled" badge
-- item kind not in `night_allowed_kinds` → row shows "kind blocked" badge
-- today is in `night_blackout_dates` → "blackout" badge
+Adds a persistent opt-in so a roadmap phase gets queued automatically each evening until it ships.
 
-### Header summary strip
+**DB migration**
+- Add `roadmap_phases.run_overnight boolean NOT NULL DEFAULT false`.
+- Add `roadmap_phases.run_overnight_until date NULL` (optional auto-stop; defaults to NULL = forever).
 
-Above the table:
-- `N items queued · X audits · Y phases · Z proposals`
-- Current window state from `memory_settings` (`22:00–06:00 UTC`, in/out of window now)
-- Link "Run now" that calls the existing `night-agent/open` manual trigger (reuses the fetch pattern from `ManualOvernightTriggers`) — only enabled when in window or operator confirms
+**UI**
+- In `OvernightRunControl.tsx` (next to "Run overnight" button), add a small toggle: **"Queue every night"**. When on, shows a hint *"will be queued automatically at 21:55 UTC if not shipped"*. When the phase status reaches `shipped`/`done`, the flag is auto-cleared by a trigger.
 
-### Empty state
+**New edge function `overnight-prequeue`**
+- Cron at `55 21 * * *` UTC.
+- Auths via `AWIP_SERVICE_TOKEN` (same pattern as other overnight crons).
+- For each `roadmap_phases` where `run_overnight=true AND status NOT IN ('shipped','done','cancelled') AND (run_overnight_until IS NULL OR run_overnight_until >= today)`, insert one `roadmap_phase_overnight_runs` row with `status='queued'`, `requested_by=NULL` (system), `scheduled_for=today+1`, **only if no queued/running run already exists for that phase today**.
+- Logs to `automation_runs` with `job='overnight-prequeue'` (success/partial/error) and dispatches `auth_failed` alerts via the existing shared `dispatchAlert` helper.
 
-If everything is empty: a clear "Backlog is empty — opening a shift now would do nothing" panel with three short CTAs:
-- "Mark a discussion action night-eligible" → `/discussions`
-- "Queue a roadmap phase" → `/roadmap`
-- "Review past proposals" → scroll to first shift below
+**Operator visibility**
+- Add `overnight-prequeue` to the `/overnight` "recent errors" filter list and to `ManualOvernightTriggers` on `/admin` so you can fire it on demand.
+- The `/night-shifts` backlog already lists `roadmap_phase_overnight_runs` with `status IN ('queued','running')` — auto-queued rows show up there with a small "auto" badge if `requested_by IS NULL`.
 
-This is exactly the situation we hit tonight (shift opened, 0 candidates) — the panel will make that obvious without needing to read `automation_runs`.
+### Part 3 — Backfill tonight
 
-## Realtime
+Once Part 2 ships and you flip the toggle on the phases you actually want done overnight, the next 21:55 UTC tick queues them. To not wait until tomorrow, the new flag's UI also has a one-click **"Queue now too"** that inserts a single row immediately (same insert as the existing manual button).
 
-Extend the existing `night_shifts_page` channel with subscriptions to `discussion_actions`, `roadmap_phase_overnight_runs`, and `memory_settings` so the backlog updates live as items become eligible.
+## Out of scope
 
-## Files touched
+- Auto-executing audited & promoted roadmap tasks the same night. Substrate philosophy says no — the operator decides when execution happens. (`roadmap_phase_overnight_runs` is the explicit opt-in surface for that.)
+- Loosening the audit filter to include `in_progress` — would create duplicate audits and noisy observations.
 
-- **Create** `src/components/night/NightBacklogTable.tsx` — the unified table + header strip + empty state.
-- **Edit** `src/pages/NightShifts.tsx` — load the three sources in the existing `load()`, render `<NightBacklogTable />` above the shifts list, extend realtime channel.
+## Files
 
-No DB migrations, no edge function changes — everything we need is already in the schema and RLS.
-
-## Out of scope (call out, don't build)
-
-- Changing eligibility rules themselves (still `night_eligible=true AND status=open`).
-- Editing items inline from the backlog (links go to their existing edit surfaces).
-- Adding new "sources" of night work beyond the three above — if more emerge later, the table is structured so adding a 4th source is one query + one row mapper.
+- **Migration**: add `run_overnight`, `run_overnight_until` to `roadmap_phases` + trigger to clear the flag on ship/done/cancelled.
+- **New** `supabase/functions/overnight-prequeue/index.ts`.
+- **New** cron schedule for `overnight-prequeue` at `55 21 * * *`.
+- **Edit** `src/components/roadmap/OvernightRunControl.tsx` — add toggle + "Queue now too".
+- **Edit** `src/pages/Jobs.tsx` — muted `night` chip on promoted items.
+- **Edit** `src/components/night/NightBacklogTable.tsx` — empty-state copy + auto-queued badge.
+- **Edit** `src/pages/OvernightOverview.tsx` — split queued tile into audits/phases/auto.
+- **Edit** `src/components/admin/ManualOvernightTriggers.tsx` — add prequeue trigger.

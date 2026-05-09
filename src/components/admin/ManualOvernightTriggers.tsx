@@ -29,6 +29,12 @@ const JOBS: Job[] = [
     path: "/close",
   },
   {
+    key: "prequeue",
+    label: "Pre-queue nightly phases",
+    description: "Manually fires overnight-prequeue. Same as the 21:55 UTC cron. Inserts queued runs for all phases flagged 'nightly'.",
+    fn: "overnight-prequeue",
+  },
+  {
     key: "phase-runner",
     label: "Run queued phases",
     description: "Manually fires the 15-minute overnight phase runner against any queued runs.",
