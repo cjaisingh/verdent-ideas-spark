@@ -241,6 +241,7 @@ export default function AdminLogs() {
         <TabsList>
           <TabsTrigger value="edge">Edge requests ({filteredEdge.length})</TabsTrigger>
           <TabsTrigger value="frontend">Frontend errors ({filteredFront.length})</TabsTrigger>
+          <TabsTrigger value="alerts">Alerts ({filteredAlerts.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="edge" className="space-y-4">
