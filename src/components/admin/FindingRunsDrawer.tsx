@@ -84,9 +84,9 @@ export function FindingRunsDrawer({
       if (error) {
         setRuns([]);
       } else {
-        setRuns(((data ?? []) as unknown) as Run[]);
-        // Auto-expand first error so users see the message immediately.
-        const firstErr = ((data ?? []) as Run[]).find((r) => !isOk(r));
+        const rows = ((data ?? []) as unknown) as Run[];
+        setRuns(rows);
+        const firstErr = rows.find((r) => !isOk(r));
         if (firstErr) setExpanded(new Set([firstErr.id]));
       }
       setLoading(false);
