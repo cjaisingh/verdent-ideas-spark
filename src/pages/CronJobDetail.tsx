@@ -68,18 +68,36 @@ function statusBadge(r: Run) {
   return <Badge variant="destructive">{r.status_code ?? r.status}</Badge>;
 }
 
+// Parse a comma-separated id list from a query param into a Set.
+function parseIdSet(raw: string | null): Set<string> {
+  if (!raw) return new Set();
+  return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
+}
+
 export default function CronJobDetail() {
   const { job = "" } = useParams<{ job: string }>();
   const [searchParams] = useSearchParams();
+  // Three sources, in priority order:
+  //   ?focus1h=...  + ?focus24h=...  → from sentinel finding (toggleable)
+  //   ?focus=...                     → legacy single set
+  const focus1h = useMemo(() => parseIdSet(searchParams.get("focus1h")), [searchParams]);
+  const focus24h = useMemo(() => parseIdSet(searchParams.get("focus24h")), [searchParams]);
+  const focusLegacy = useMemo(() => parseIdSet(searchParams.get("focus")), [searchParams]);
+  const hasWindowToggle = focus1h.size > 0 || focus24h.size > 0;
+  const [focusWindow, setFocusWindow] = useState<"1h" | "24h">(
+    focus1h.size > 0 ? "1h" : "24h",
+  );
   const focusIds = useMemo(() => {
-    const raw = searchParams.get("focus") ?? "";
-    return new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
-  }, [searchParams]);
+    if (hasWindowToggle) return focusWindow === "1h" ? focus1h : focus24h;
+    return focusLegacy;
+  }, [hasWindowToggle, focusWindow, focus1h, focus24h, focusLegacy]);
+  const anyFocus = focus1h.size + focus24h.size + focusLegacy.size > 0;
+
   const meta = KNOWN_JOBS[job];
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
-  const [filter, setFilter] = useState<"all" | "errors" | "ok">(focusIds.size > 0 ? "errors" : "all");
+  const [filter, setFilter] = useState<"all" | "errors" | "ok">(anyFocus ? "errors" : "all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set(focusIds));
   const focusRef = useRef<HTMLDivElement | null>(null);
   const scrolledRef = useRef(false);
