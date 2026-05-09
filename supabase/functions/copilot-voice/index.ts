@@ -555,6 +555,8 @@ async function think(history: any[], session: Session, userText: string): Promis
   const messages = [{ role: "system", content: SYSTEM_PROMPT + lessonBlock }, ...history];
   // Up to 3 tool-call rounds.
   for (let round = 0; round < 3; round++) {
+    const model = session.model || "openai/gpt-5-mini";
+    const aiStart = Date.now();
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -562,7 +564,7 @@ async function think(history: any[], session: Session, userText: string): Promis
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: session.model || "openai/gpt-5-mini",
+        model,
         messages,
         tools: TOOLS,
         tool_choice: "auto",
@@ -571,9 +573,11 @@ async function think(history: any[], session: Session, userText: string): Promis
     if (!res.ok) {
       const t = await res.text();
       console.error("LLM error", res.status, t);
+      await logAiCall(supa, { job: "copilot-voice", model, trigger: "user", startedAt: aiStart, response: res, errorText: t, request_ref: { round } });
       return "Sorry, I'm having trouble reaching the brain right now.";
     }
     const data = await res.json();
+    await logAiCall(supa, { job: "copilot-voice", model, trigger: "user", startedAt: aiStart, response: res, json: data, request_ref: { round } });
     const msg = data.choices?.[0]?.message;
     if (!msg) return "I didn't get a response.";
     if (msg.tool_calls?.length) {
