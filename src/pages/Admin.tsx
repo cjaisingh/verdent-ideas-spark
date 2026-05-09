@@ -238,6 +238,8 @@ const Admin = () => {
         </div>
       </section>
 
+      <ManualOvernightTriggers />
+
       <TelegramBotPanel />
 
       <AppSecretsPanel />
