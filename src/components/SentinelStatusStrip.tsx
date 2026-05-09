@@ -200,6 +200,24 @@ export function SentinelStatusStrip() {
                             <ArrowUpRight className="h-3 w-3" />
                           </button>
                         )}
+                        {ref && runCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(ref.runIds.join("\n"));
+                                toast.success(`Copied ${runCount} run id${runCount === 1 ? "" : "s"}`);
+                              } catch {
+                                toast.error("Clipboard blocked");
+                              }
+                            }}
+                            className="inline-flex items-center gap-0.5 hover:text-foreground hover:underline"
+                            title={`Copy ${runCount} automation_runs.id value(s)`}
+                          >
+                            <Copy className="h-3 w-3" />
+                            copy ids
+                          </button>
+                        )}
                       </div>
                     </div>
                     <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
