@@ -40,6 +40,7 @@ import OvernightOverview from "./pages/OvernightOverview";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
 import AdminCronHealth from "./pages/AdminCronHealth";
+import AdminLogs from "./pages/AdminLogs";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -89,6 +90,7 @@ const App = () => (
             <Route path="/admin/capability-promotion" element={<CapabilityPromotion />} />
             <Route path="/admin/promotion-audits" element={<PromotionAudits />} />
             <Route path="/admin/cron-health" element={<AdminCronHealth />} />
+            <Route path="/admin/logs" element={<AdminLogs />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
