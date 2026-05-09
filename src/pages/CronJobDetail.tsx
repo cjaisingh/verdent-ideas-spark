@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Activity, AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight,
-  Loader2, Play, RefreshCw,
+  Loader2, Play, RefreshCw, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -101,6 +101,26 @@ export default function CronJobDetail() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(focusIds));
   const focusRef = useRef<HTMLDivElement | null>(null);
   const scrolledRef = useRef(false);
+
+  // When ?finding=<id> is present, fetch its summary + severity so we can
+  // show a context banner explaining where this focus came from.
+  const findingIdParam = searchParams.get("finding");
+  const [finding, setFinding] = useState<{
+    id: string; summary: string; severity: string; kind: string; last_seen_at: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!findingIdParam) { setFinding(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("sentinel_findings" as any)
+        .select("id,summary,severity,kind,last_seen_at")
+        .eq("id", findingIdParam)
+        .maybeSingle();
+      if (!cancelled) setFinding((data as any) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [findingIdParam]);
 
   const load = async () => {
     setLoading(true);
@@ -277,6 +297,32 @@ export default function CronJobDetail() {
           </div>
         </CardContent></Card>
       </div>
+
+      {finding && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-3">
+          <ShieldAlert className="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">From sentinel finding</span>
+              <Badge
+                className={
+                  finding.severity === "critical" ? "bg-destructive text-destructive-foreground" :
+                  finding.severity === "high" ? "bg-destructive/80 text-destructive-foreground" :
+                  finding.severity === "medium" ? "bg-amber-500 text-white" :
+                  "bg-muted text-muted-foreground"
+                }
+              >
+                {finding.severity}
+              </Badge>
+              <code className="text-[10px] font-mono text-muted-foreground">{finding.kind}</code>
+              <span className="text-[10px] text-muted-foreground">
+                seen {new Date(finding.last_seen_at).toLocaleString()}
+              </span>
+            </div>
+            <div className="break-words">{finding.summary}</div>
+          </div>
+        </div>
+      )}
 
       {(focusIds.size > 0 || hasWindowToggle) && (
         <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3 flex-wrap">
