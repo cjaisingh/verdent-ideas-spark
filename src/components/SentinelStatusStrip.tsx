@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 type Finding = {
@@ -14,8 +15,21 @@ type Finding = {
   status: string;
   first_seen_at: string;
   last_seen_at: string;
+  subject_ref: Record<string, any> | null;
+  payload: Record<string, any> | null;
 };
 type Run = { created_at: string; status: string; message: string | null };
+
+// Extract a /admin/cron-health/:job?focus=... link from a finding when its
+// payload identifies the specific automation_runs ids that triggered it.
+function findingRunsLink(f: Finding): string | null {
+  const job = f.subject_ref?.job as string | undefined;
+  if (!job) return null;
+  const ids: string[] = (f.subject_ref?.run_ids as string[]) ??
+    (f.payload?.error_run_ids_24h as string[]) ?? [];
+  const focus = ids.slice(0, 25).join(",");
+  return `/admin/cron-health/${job}${focus ? `?focus=${focus}` : ""}`;
+}
 
 const sevColor: Record<string, string> = {
   critical: "bg-destructive text-destructive-foreground",
