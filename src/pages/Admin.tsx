@@ -247,6 +247,8 @@ const Admin = () => {
       <TelegramBotPanel />
 
       <AppSecretsPanel />
+
+      <CronSecretsCheckPanel />
     </div>
   );
 };
