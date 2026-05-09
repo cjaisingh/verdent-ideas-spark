@@ -179,3 +179,50 @@ Voice always uses the **cloud brain** (Ollama unreachable from phone). Banner: *
 - Ask the Companion *"what are you working on?"* → answers with actual current `roadmap_tasks` + last code-review summary, not paraphrased docs.
 - On iPhone Safari at the **published** URL: Share → Add to Home Screen produces a real Companion icon (not a screenshot) and launches standalone.
 - In standalone PWA on iPhone: hold-to-talk produces a transcribed user turn, an assistant text reply in the thread, and spoken Aura TTS playback — all written into `companion_messages`.
+
+---
+
+## QA checklist (operator-runnable)
+
+Run top-to-bottom after each shipped slice. Tick each box; if any step fails, file a `discussion_actions` entry and stop before promoting to "done".
+
+### A. Live-state injection (Part 1 acceptance)
+Pre-req: at least one `roadmap_tasks` row with `status='in_progress'` and one `scheduled-code-review` run in the last 24h.
+
+- [ ] **A1.** Open `/companion` in desktop browser (logged in as operator).
+- [ ] **A2.** In header, confirm pill reads **"Live state ✓ · age <60s"** (not "—" or "stale"). Click manual refresh → age resets to 0–2s.
+- [ ] **A3.** DevTools → Network → filter `companion-context` → confirm 200 response, JSON has non-empty `lovable_focus.active_tasks` and `health.last_morning_review`.
+- [ ] **A4.** New thread → type *"What are you working on right now?"* → assistant reply must name **at least one real `roadmap_tasks.title`** currently `in_progress` (cross-check against `/roadmap`).
+- [ ] **A5.** Reply must reference the **last code-review** (timestamp or finding count) — not a generic "I reviewed the docs…".
+- [ ] **A6.** Click **"What is Lovable doing?"** seed button → thread opens pre-populated, first assistant turn cites `roadmap_task_activity` items from the last 24h.
+- [ ] **A7.** Click **"Operator queue review"** seed button → assistant lists current open `discussion_actions` with priorities; counts match `/roadmap` Discussion Actions panel.
+- [ ] **A8.** Wait 60s without interacting → pill age auto-refreshes back to 0–5s (no manual click needed).
+
+### B. iPhone install (Part 2 acceptance)
+Pre-req: project **published** (Publish → Update). Note the `*.lovable.app` URL.
+
+- [ ] **B1.** On iPhone (iOS 16.4+), open the **published** URL in **Safari** (not Chrome, not in-app browser).
+- [ ] **B2.** Navigate to `/companion`. `IphoneInstallHelpCard` appears with the 4-step instructions; **no amber "preview origin" warning** is shown.
+- [ ] **B3.** Tap Share → scroll → **Add to Home Screen** → confirm the preview thumbnail shows the **Companion icon** (orb/glyph), not a Safari screenshot or letter-on-grey.
+- [ ] **B4.** Tap **Add** → home screen shows "Companion" with the correct 180×180 icon (sharp, not pixelated).
+- [ ] **B5.** Launch from home screen → app opens **standalone** (no Safari URL bar, no bottom tab bar). Status bar respects `viewport-fit=cover` (content extends under notch correctly).
+- [ ] **B6.** In standalone mode, send a text message → cloud reply streams back; RAG citations appear; live-state pill still reads ✓.
+
+### C. Two-way voice (Part 3 acceptance)
+Pre-req: B complete (running in standalone PWA on iPhone), `LOVABLE_API_KEY` + `DEEPGRAM_API_KEY` set, daily voice cap not exceeded.
+
+- [ ] **C1.** Voice dock visible at bottom of `/companion`. First tap on mic → iOS permission prompt appears → grant.
+- [ ] **C2.** **Push-to-talk:** hold mic, say *"What are you working on?"*, release. Within ~2s a **user message** appears in the thread with your transcribed text (not empty, not "[inaudible]").
+- [ ] **C3.** Assistant text reply appears in the thread (same content rules as A4 — names a real in-progress task).
+- [ ] **C4.** Aura TTS audio plays through speaker/earpiece automatically (after first-tap unlock). Audio is intelligible, no clipping.
+- [ ] **C5.** In `/admin/ai-usage`, confirm a new `ai_usage_log` row for `copilot-voice` with non-zero cost and the operator's user_id.
+- [ ] **C6.** **DB check:** `select role, length(content), model from companion_messages where thread_id = '<thread>' order by created_at desc limit 4;` → returns the user (voice) + assistant turns just spoken, with `model` set to the brain in use.
+- [ ] **C7.** **Daily cap:** in settings, set cap to $0.01 → next voice attempt is blocked with a clear toast pointing to `/admin/ai-usage`.
+- [ ] **C8.** **Lock screen behaviour:** lock phone mid-hold → release after unlock → no crash; transcription either completes or fails gracefully (no silent hang).
+- [ ] **C9.** **Hands-free toggle:** enable, speak a short turn, pause → VAD ends turn within ~1.5s and assistant responds without you tapping anything.
+
+### D. Regression sanity (run once after C)
+- [ ] **D1.** `/copilot` voice loop still works (we reused, didn't fork).
+- [ ] **D2.** `/companion` text-only mode still works with mic permission denied.
+- [ ] **D3.** Local Ollama mode (Mac, `use_cloud=false`) still streams — live-state injection should be **skipped** (no JWT to call `companion-context` with from local-only path) or gracefully degraded.
+- [ ] **D4.** No new errors in `/admin/logs` in the 10 minutes after the QA run.
