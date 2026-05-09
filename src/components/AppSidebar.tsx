@@ -10,7 +10,7 @@ import {
   Building2, Boxes, Activity, ScrollText, Settings2, Map as MapIcon, BookOpen, Brain,
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
-  FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles,
+  FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
@@ -41,6 +41,7 @@ const copilotChildren: NavItem[] = [
 ];
 
 const planItems: NavItem[] = [
+  { url: "/plan", title: "Plan (workstreams)", icon: Target },
   { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
