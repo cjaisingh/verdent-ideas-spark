@@ -162,6 +162,9 @@ export default function NightShifts() {
         </select>
       </header>
 
+      <NightBacklogTable />
+
+
       {filtered.length === 0 ? (
         <div className="rounded-md border border-border bg-card p-6 text-sm text-muted-foreground">
           No shifts recorded yet.
