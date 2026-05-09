@@ -52,7 +52,7 @@ export function OvernightRunControl({ phaseId, phaseKey }: Props) {
     };
     load();
     const ch = supabase
-      .channel(`overnight-${phaseId}`)
+      .channel(`overnight-${phaseId}-${Math.random().toString(36).slice(2, 10)}`)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "roadmap_phase_overnight_runs", filter: `phase_id=eq.${phaseId}` },
         load)
