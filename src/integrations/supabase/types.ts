@@ -1159,6 +1159,99 @@ export type Database = {
           },
         ]
       }
+      edge_request_logs: {
+        Row: {
+          classified_error: string | null
+          created_at: string
+          error_message: string | null
+          function_name: string
+          id: string
+          latency_ms: number | null
+          meta: Json
+          method: string | null
+          path: string | null
+          request_id: string
+          status: number | null
+          user_id_hash: string | null
+        }
+        Insert: {
+          classified_error?: string | null
+          created_at?: string
+          error_message?: string | null
+          function_name: string
+          id?: string
+          latency_ms?: number | null
+          meta?: Json
+          method?: string | null
+          path?: string | null
+          request_id: string
+          status?: number | null
+          user_id_hash?: string | null
+        }
+        Update: {
+          classified_error?: string | null
+          created_at?: string
+          error_message?: string | null
+          function_name?: string
+          id?: string
+          latency_ms?: number | null
+          meta?: Json
+          method?: string | null
+          path?: string | null
+          request_id?: string
+          status?: number | null
+          user_id_hash?: string | null
+        }
+        Relationships: []
+      }
+      frontend_error_logs: {
+        Row: {
+          colno: number | null
+          created_at: string
+          id: string
+          kind: string
+          lineno: number | null
+          message: string
+          meta: Json
+          request_id: string | null
+          source: string | null
+          stack: string | null
+          url: string | null
+          user_agent: string | null
+          user_id_hash: string | null
+        }
+        Insert: {
+          colno?: number | null
+          created_at?: string
+          id?: string
+          kind?: string
+          lineno?: number | null
+          message: string
+          meta?: Json
+          request_id?: string | null
+          source?: string | null
+          stack?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id_hash?: string | null
+        }
+        Update: {
+          colno?: number | null
+          created_at?: string
+          id?: string
+          kind?: string
+          lineno?: number | null
+          message?: string
+          meta?: Json
+          request_id?: string | null
+          source?: string | null
+          stack?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id_hash?: string | null
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           created_at: string
