@@ -54,8 +54,27 @@ Deno.serve(async (req) => {
     return json({ error: error.message }, 500);
   }
   const presentInDb = new Set((rows ?? []).map((r: any) => r.key));
-  const missingInDb = REQUIRED_SECRETS.filter((k) => !presentInDb.has(k));
   const missingInEnv = REQUIRED_SECRETS.filter((k) => !Deno.env.get(k));
+
+  // Auto-sync: if a required secret exists in env but not in app_secrets,
+  // upsert it so cron jobs (which read from app_secrets) can authenticate.
+  const synced: string[] = [];
+  for (const key of REQUIRED_SECRETS) {
+    const envVal = Deno.env.get(key);
+    if (!envVal) continue;
+    if (presentInDb.has(key)) continue;
+    const { error: upErr } = await sb.from("app_secrets").upsert({
+      key, value: envVal,
+      description: `Auto-synced from edge env by secrets-health-check`,
+    }, { onConflict: "key" });
+    if (!upErr) {
+      presentInDb.add(key);
+      synced.push(key);
+    } else {
+      console.error(`failed to sync ${key}:`, upErr);
+    }
+  }
+  const missingInDb = REQUIRED_SECRETS.filter((k) => !presentInDb.has(k));
 
   const ok = missingInDb.length === 0 && missingInEnv.length === 0;
   const message = ok
@@ -64,6 +83,7 @@ Deno.serve(async (req) => {
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
+    synced_to_db: synced,
   });
 
   if (!ok) {
@@ -72,7 +92,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  return json({ ok, missing_in_db: missingInDb, missing_in_env: missingInEnv });
+  return json({ ok, missing_in_db: missingInDb, missing_in_env: missingInEnv, synced_to_db: synced });
 });
 
 function json(p: unknown, s = 200) {
