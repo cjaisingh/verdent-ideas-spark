@@ -161,7 +161,7 @@ function LocalModelPicker({
   );
 }
 
-import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
+// (InstallPwaButton imported at top)
 
 function pickClosestModel(target: string, available: string[]): string | null {
   if (!available.length) return null;
