@@ -16,39 +16,114 @@ import {
   ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
 } from "lucide-react";
 
-async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+// Build a list of loopback variants to probe. macOS Ollama often listens on
+// IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
+// may get ERR_CONNECTION_REFUSED while `127.0.0.1` works (or vice versa).
+function loopbackVariants(baseUrl: string): string[] {
+  const clean = baseUrl.replace(/\/$/, "");
+  try {
+    const u = new URL(clean);
+    const host = u.hostname;
+    const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host === "::1";
+    if (!isLoopback) return [clean];
+    const port = u.port || "11434";
+    const proto = u.protocol || "http:";
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const h of ["localhost", "127.0.0.1", "[::1]"]) {
+      const v = `${proto}//${h}:${port}`;
+      if (!seen.has(v)) { seen.add(v); out.push(v); }
+    }
+    // Make the user's chosen variant first
+    const chosen = `${proto}//${host}:${port}`;
+    out.sort((a) => (a === chosen ? -1 : 0));
+    return out;
+  } catch { return [clean]; }
+}
+
+export type OllamaErrorKind = "refused" | "cors" | "timeout" | "http" | "unreachable" | "unknown";
+export function classifyOllamaError(e: unknown): { kind: OllamaErrorKind; message: string } {
+  const msg = (e as any)?.message ?? String(e);
+  const lower = String(msg).toLowerCase();
+  if (lower.includes("aborted") || lower.includes("timeout")) return { kind: "timeout", message: msg };
+  if (lower.includes("failed to fetch") || lower.includes("networkerror")) {
+    // Browsers collapse refused/CORS/private-network into a generic "Failed to fetch".
+    return { kind: "unreachable", message: msg };
+  }
+  if (lower.startsWith("http ")) return { kind: "http", message: msg };
+  return { kind: "unknown", message: msg };
+}
+
+async function fetchOllamaModelsAt(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
   const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   const j = await r.json();
   return (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
 }
 
+// Resolve to the first reachable loopback variant. Returns models + working URL.
+export async function resolveAndFetchOllama(baseUrl: string, timeoutMs = 4000): Promise<{ models: string[]; baseUrl: string }> {
+  const variants = loopbackVariants(baseUrl);
+  let lastErr: unknown = new Error("no variants");
+  for (const v of variants) {
+    try {
+      const models = await fetchOllamaModelsAt(v, timeoutMs);
+      return { models, baseUrl: v };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+// Back-compat: existing callers expect just the model list.
+async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+  const { models } = await resolveAndFetchOllama(baseUrl, timeoutMs);
+  return models;
+}
+
 function useOllamaModels(baseUrl: string, enabled: boolean) {
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<OllamaErrorKind | null>(null);
+  const [resolvedBaseUrl, setResolvedBaseUrl] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!enabled || !baseUrl) return;
     let cancelled = false;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setErrorKind(null);
     const t = setTimeout(() => {
-      fetchOllamaModels(baseUrl)
-        .then((m) => { if (!cancelled) setModels(m); })
-        .catch((e) => { if (!cancelled) { setError(e?.message || String(e)); setModels([]); } })
+      resolveAndFetchOllama(baseUrl)
+        .then(({ models, baseUrl: rb }) => { if (!cancelled) { setModels(models); setResolvedBaseUrl(rb); } })
+        .catch((e) => {
+          if (cancelled) return;
+          const c = classifyOllamaError(e);
+          setError(c.message); setErrorKind(c.kind); setModels([]); setResolvedBaseUrl(null);
+        })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 300);
     return () => { cancelled = true; clearTimeout(t); };
   }, [baseUrl, enabled, tick]);
-  return { models, loading, error, refetch: () => setTick((n) => n + 1) };
+  return { models, loading, error, errorKind, resolvedBaseUrl, refetch: () => setTick((n) => n + 1) };
 }
 
 function LocalModelPicker({
-  baseUrl, value, onChange, enabled,
-}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean }) {
-  const { models, loading, error, refetch } = useOllamaModels(baseUrl, enabled);
+  baseUrl, value, onChange, enabled, onResolved,
+}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean; onResolved?: (url: string | null) => void }) {
+  const { models, loading, error, errorKind, resolvedBaseUrl, refetch } = useOllamaModels(baseUrl, enabled);
+  useEffect(() => { onResolved?.(resolvedBaseUrl); }, [resolvedBaseUrl, onResolved]);
   const hasList = models.length > 0;
   const inList = hasList && models.includes(value);
+  const hint = (() => {
+    if (loading) return "Detecting installed models…";
+    if (!error) return hasList ? null : "No models detected — type a name";
+    if (errorKind === "unreachable") {
+      const tryAlt = baseUrl.includes("localhost") ? "127.0.0.1" : "localhost";
+      return `Browser can't reach Ollama at ${baseUrl}. Try http://${tryAlt}:11434, or check OLLAMA_ORIGINS allows this preview.`;
+    }
+    if (errorKind === "timeout") return "Ollama didn't respond in time — is it running?";
+    if (errorKind === "http") return `Ollama responded with ${error} — check the base URL path.`;
+    return `Couldn't reach Ollama (${error}) — type a model name`;
+  })();
   if (!hasList) {
     return (
       <div className="space-y-1">
@@ -58,9 +133,7 @@ function LocalModelPicker({
             <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          {loading ? "Detecting installed models…" : error ? `Couldn't reach Ollama (${error}) — type a model name` : "No models detected — type a name"}
-        </p>
+        {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
       </div>
     );
   }
@@ -241,6 +314,7 @@ export default function Companion() {
   const [settings, setSettings] = useState<CompanionSettings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
+  const [resolvedOllamaUrl, setResolvedOllamaUrl] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Filters / search
@@ -257,15 +331,15 @@ export default function Companion() {
   // Persist settings
   useEffect(() => { saveSettings(settings); }, [settings]);
 
-  // Probe Ollama health
+  // Probe Ollama health (uses loopback variant resolution)
   useEffect(() => {
     let cancelled = false;
-    if (settings.use_cloud) { setHealthOk(null); return; }
+    if (settings.use_cloud) { setHealthOk(null); setResolvedOllamaUrl(null); return; }
     (async () => {
       try {
-        const r = await fetch(`${settings.ollama_base_url}/api/tags`, { signal: AbortSignal.timeout(2000) });
-        if (!cancelled) setHealthOk(r.ok);
-      } catch { if (!cancelled) setHealthOk(false); }
+        const { baseUrl } = await resolveAndFetchOllama(settings.ollama_base_url, 2500);
+        if (!cancelled) { setHealthOk(true); setResolvedOllamaUrl(baseUrl); }
+      } catch { if (!cancelled) { setHealthOk(false); setResolvedOllamaUrl(null); } }
     })();
     return () => { cancelled = true; };
   }, [settings.ollama_base_url, settings.use_cloud]);
@@ -489,7 +563,8 @@ export default function Companion() {
           body: JSON.stringify({ model, messages: llmMessages }),
         });
       } else {
-        resp = await fetch(`${settings.ollama_base_url}/v1/chat/completions`, {
+        const localBase = resolvedOllamaUrl ?? settings.ollama_base_url;
+        resp = await fetch(`${localBase}/v1/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model, messages: llmMessages, stream: true }),
@@ -645,6 +720,11 @@ export default function Companion() {
                   <p className="text-xs text-muted-foreground">
                     On your Mac, allow this preview origin then restart Ollama:<br />
                     <code className="text-[10px] break-all">launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,https://*.lovableproject.com,http://localhost:*"</code>
+                    <br />
+                    Tip: if your Ollama listens on IPv6 only, prefer <code>http://127.0.0.1:11434</code> here — the app also auto-tries 127.0.0.1 / localhost / [::1] as fallbacks.
+                    {resolvedOllamaUrl && resolvedOllamaUrl !== settings.ollama_base_url.replace(/\/$/, "") && (
+                      <> <br />Reachable via <code>{resolvedOllamaUrl}</code> — using that for chat.</>
+                    )}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -655,6 +735,7 @@ export default function Companion() {
                       value={settings.ollama_model}
                       onChange={(v) => setSettings((s) => ({ ...s, ollama_model: v }))}
                       enabled={!settings.use_cloud}
+                      onResolved={setResolvedOllamaUrl}
                     />
                   </div>
                   <div className="space-y-1">

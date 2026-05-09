@@ -1,26 +1,38 @@
 ## Goal
-In Companion → Settings, replace the free-text "Local model" input with a dropdown populated from Ollama's `/api/tags`, so you can pick any installed model directly.
+Make Companion’s local Ollama mode work reliably from the hosted preview, and make failures self-explanatory when the local machine setup is the blocker.
 
-## Changes (single file: `src/pages/Companion.tsx`)
+## Plan
+1. **Harden local endpoint detection**
+   - Update Companion’s Ollama checks to try safe local variants in order: `http://localhost:11434`, `http://127.0.0.1:11434`, and optionally `[::1]` formatting when needed.
+   - Normalize the chosen working base URL before using it for model discovery, health status, test connection, and local chat.
 
-1. **New hook `useOllamaModels(baseUrl)`** — fetches `${baseUrl}/api/tags` on mount and whenever `baseUrl` changes (debounced ~300ms), with 4s timeout. Returns `{ models: string[], loading, error, refetch }`. No-op when cloud mode is on.
+2. **Improve diagnostics in the settings dialog**
+   - Replace the current generic `Failed to fetch` messaging with actionable states, such as:
+     - connection refused
+     - CORS/origin blocked
+     - browser cannot reach your local machine from this preview
+     - no models installed
+   - Show a specific hint when `localhost` fails but `127.0.0.1` is the likely fix, since your Ollama appears to be listening on IPv6 while the preview/browser path may be attempting IPv4.
 
-2. **Replace the Local model `<Input>` (line 588–589)** with:
-   - A `<Select>` listing detected models when fetch succeeds and at least one model exists.
-   - The currently configured `ollama_model` is preselected. If it isn't in the list, show it as a disabled "(not installed)" item at the top so the user sees the mismatch.
-   - A small refresh icon button next to the select to re-run the fetch.
-   - **Fallback:** if the fetch errors or returns zero models, render the existing `<Input>` plus an inline hint ("Couldn't reach Ollama — type a model name"). This keeps the field usable when Ollama is offline.
+3. **Keep local mode from silently degrading**
+   - Ensure the same resolved local URL is used everywhere local Ollama is called:
+     - model dropdown fetch (`/api/tags`)
+     - health badge
+     - “Test Ollama connection”
+     - actual local chat streaming (`/v1/chat/completions`)
+   - Prevent the UI from implying local mode is available if the browser cannot actually reach the selected base URL.
 
-3. **Reuse, don't duplicate:** `TestOllamaButton` already fetches `/api/tags` on click. Extract a tiny shared `fetchOllamaModels(baseUrl)` helper at module top so both the new hook and the test button use the same code path.
+4. **Add an explicit fallback UX**
+   - If no browser-reachable local endpoint is found, keep the manual model input but pair it with a clear explanation and a one-line recommendation to switch the base URL to `http://127.0.0.1:11434`.
+   - Preserve cloud mode as the fallback rather than failing mid-chat.
 
-4. **No behaviour change** to: cloud model select, RAG toggle, chat send path, message storage, or the "closest model" suggestion flow — the suggestion picker keeps working when the user manually types a non-installed name (e.g. via the fallback input).
+## Technical details
+- Main file: `src/pages/Companion.tsx`
+- Refactor the shared Ollama fetch helper so it can classify network failures and probe alternative local loopback addresses.
+- Reuse that helper for health check + send path so behavior stays consistent.
+- No backend/schema changes are needed unless we later decide to add a backend relay/proxy for local development.
 
-## Out of scope
-- No changes to Ollama CORS handling, edge functions, or DB schema.
-- No new memory file (existing `mem://features/companion.md` already covers settings).
-
-## Verification
-- Open Settings: dropdown lists installed models from `curl localhost:11434/api/tags`.
-- Pick one → reflected in `settings.ollama_model`, persisted to localStorage `awip.companion.settings.v1`, and shown in the footer "model …" label.
-- Stop Ollama → reopen Settings: dropdown falls back to text input with hint.
-- Change base URL → list refetches.
+## Expected result
+After implementation, Companion should either:
+- successfully discover and use the local Ollama instance from the preview, or
+- tell you exactly why it cannot and what to change next, instead of only showing `Failed to fetch`.
