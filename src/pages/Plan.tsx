@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { fmtUsd } from "@/lib/aiPricing";
+import { W1StatusPanel } from "@/components/W1StatusPanel";
 
 type Status = "todo" | "in_progress" | "blocked" | "done";
 
