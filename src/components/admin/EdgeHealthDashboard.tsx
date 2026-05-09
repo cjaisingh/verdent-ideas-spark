@@ -6,11 +6,12 @@
 //   - last-N errors list with message + status code
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Activity, AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 
 const JOBS = [
   { name: "morning-review", label: "Morning Review (W2)" },
@@ -184,7 +185,13 @@ export default function EdgeHealthDashboard() {
             }>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center justify-between">
-                  <span>{j.label}</span>
+                  <Link
+                    to={`/admin/cron-health/${j.name}`}
+                    className="hover:underline flex items-center gap-1 group"
+                  >
+                    {j.label}
+                    <ArrowUpRight className="h-3 w-3 opacity-50 group-hover:opacity-100" />
+                  </Link>
                   {tone === "ok" && <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
                   {tone === "warn" && <AlertTriangle className="h-4 w-4 text-amber-600" />}
                   {tone === "bad" && <AlertTriangle className="h-4 w-4 text-destructive" />}
