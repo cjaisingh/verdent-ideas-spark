@@ -44,6 +44,7 @@ import AdminCronHealth from "./pages/AdminCronHealth";
 import AdminCronConfig from "./pages/AdminCronConfig";
 import CronJobDetail from "./pages/CronJobDetail";
 import AdminLogs from "./pages/AdminLogs";
+import AdminAiUsage from "./pages/AdminAiUsage";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
