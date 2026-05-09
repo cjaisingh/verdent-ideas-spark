@@ -79,7 +79,7 @@ export function formatLiveStateBlock(s: LiveState): string {
     `- Overnight: ${lf.overnight.queued} queued, ${lf.overnight.running} running${lf.overnight.last_run ? ` · last: ${lf.overnight.last_run.phase_key} (${lf.overnight.last_run.status})` : ""}`,
     `**Operator queue:** ${oq.open_actions.length} open actions · ${oq.deferred_due_today.length} deferred due today · ${oq.pending_approvals} pending approvals`,
     oq.open_actions.length ? `- Top: ${actions}` : "",
-    `**Health:** Sentinel ${sentinel} · Deep audit ${audit} · Automation 24h ${h.automation_24h.runs - h.automation_24h.failures}/${h.automation_24h.runs} ok · AI spend 24h $${h.health_cost_24h_usd ?? h.ai_cost_24h_usd} / 7d $${h.ai_cost_7d_usd}`.replace("undefined", ""),
+    `**Health:** Sentinel ${sentinel} · Deep audit ${audit} · Automation 24h ${h.automation_24h.runs - h.automation_24h.failures}/${h.automation_24h.runs} ok · AI spend 24h $${h.ai_cost_24h_usd} / 7d $${h.ai_cost_7d_usd}`,
     `**Roadmap:** ${s.roadmap_summary.in_progress} in-progress / ${s.roadmap_summary.todo} todo / ${s.roadmap_summary.done} done`,
     `_Snapshot at ${new Date(s.generated_at).toLocaleTimeString()}${s.cached ? " (cached)" : ""}._`,
   ].filter(Boolean).join("\n");
