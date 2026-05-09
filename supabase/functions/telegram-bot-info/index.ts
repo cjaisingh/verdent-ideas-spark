@@ -1,3 +1,4 @@
+import { withLogger } from "../_shared/logger.ts";
 // Returns Telegram bot identity + webhook info via the Lovable connector gateway.
 // Used by the Admin TelegramBotPanel and ControlPlane page.
 const corsHeaders = {
@@ -21,7 +22,7 @@ async function tg(path: string, lovableKey: string, telegramKey: string) {
   return { ok: r.ok, status: r.status, data };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("telegram-bot-info", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -53,4 +54,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

@@ -7,6 +7,7 @@
 // Auth: requires x-awip-service-token = AWIP_SERVICE_TOKEN (cron-only).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { dispatchAlert } from "../_shared/alerts.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ async function recordRun(
   } catch (e) { console.error("automation_runs insert failed", e); }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("automation-auth-monitor", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const started = Date.now();
@@ -111,4 +112,4 @@ Deno.serve(async (req) => {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
-});
+}));

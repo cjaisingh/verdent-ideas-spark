@@ -8,6 +8,7 @@
 //   GET  /okr/tree?tenant_id=...           -> fetch full tree (incl. superseded)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { scanLesson, describeIssues } from "./lessonSafety.ts";
+import { withLogger } from "../_shared/logger.ts";
 import {
   evaluateCapability,
   refineConnectorsGate,
@@ -1752,7 +1753,7 @@ ${lessonBlock}`;
   return json({ ok: true, analysis });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("awip-api", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
@@ -1879,4 +1880,4 @@ Deno.serve(async (req) => {
   }
 
   return response;
-});
+}));

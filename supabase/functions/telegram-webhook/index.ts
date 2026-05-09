@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { withLogger } from "../_shared/logger.ts";
 
 async function deriveSecret(apiKey: string): Promise<string> {
   const data = new TextEncoder().encode(`telegram-webhook:${apiKey}`);
@@ -146,7 +147,7 @@ async function transcribeAudio(base64: string, mime: string): Promise<string | n
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("telegram-webhook", async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
@@ -286,4 +287,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, transcribed: !!voiceMeta?.transcribed }), {
     headers: { 'Content-Type': 'application/json' },
   });
-});
+}));

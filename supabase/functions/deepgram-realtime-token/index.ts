@@ -13,6 +13,7 @@
 //   DG_BAD_RESPONSE         - Deepgram returned 200 but no token in body
 //   INTERNAL                - unhandled exception in the function
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -41,7 +42,7 @@ function classifyDeepgram(status: number, body: string): ErrCode {
   return "DG_UPSTREAM_ERROR";
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("deepgram-realtime-token", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const reqId = crypto.randomUUID();
@@ -139,7 +140,7 @@ Deno.serve(async (req) => {
       stack: e instanceof Error ? e.stack?.split("\n").slice(0, 5) : undefined,
     });
   }
-});
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

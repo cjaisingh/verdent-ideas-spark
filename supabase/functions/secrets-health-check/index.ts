@@ -3,6 +3,7 @@
 // the edge-function env (which the edge functions themselves read).
 // Logs every run to automation_runs and dispatches an alert if anything is missing.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +15,7 @@ const corsHeaders = {
 // edge-function env (for the functions that validate the incoming token).
 const REQUIRED_SECRETS = ["AWIP_SERVICE_TOKEN"] as const;
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("secrets-health-check", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
@@ -127,7 +128,7 @@ Deno.serve(async (req) => {
     synced_to_db: synced,
     mismatches,
   });
-});
+}));
 
 async function fingerprint(v: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));

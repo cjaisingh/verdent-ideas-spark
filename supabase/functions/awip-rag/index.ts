@@ -2,6 +2,7 @@
 // POST /ingest  { docs: [{ path, title, content, sha? }] }   (service token only)
 // POST /search  { q, limit?, agent? }                         (operator JWT or service token)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withLogger } from "../_shared/logger.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -55,7 +56,7 @@ async function authorize(req: Request): Promise<{ kind: "service" } | { kind: "o
   return { kind: "operator", uid: data.user.id };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("awip-rag", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*\/awip-rag/, "") || "/";
@@ -160,4 +161,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
   }
-});
+}));

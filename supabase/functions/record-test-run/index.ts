@@ -1,6 +1,7 @@
 // Records a test-run summary. Called by GitHub Actions nightly workflow.
 // Auth: requires x-service-token header (cron / CI use only).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +9,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-service-token",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("record-test-run", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
   }
 
   return json({ ok: true });
-});
+}));
 
 function int(v: unknown): number | null {
   if (v === null || v === undefined) return null;

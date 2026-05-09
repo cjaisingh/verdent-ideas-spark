@@ -1,6 +1,7 @@
 // SSE streaming chat with Gemini 2.5 Pro for a discussion thread on a code-review finding.
 // Auth: operator JWT. Persists assistant turns into roadmap_finding_discussion_messages.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,7 +13,7 @@ const SYSTEM_PROMPT = `You are Copilot, a senior staff engineer triaging a code-
 Be concise, concrete, and push toward a recordable decision: accept_risk, mitigate, convert_to_task, or dismiss.
 When useful, ask one focused question. When you have enough context, propose a decision and a one-line rationale.`;
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("finding-discuss-copilot", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -179,7 +180,7 @@ ${finding.body ?? "(no body)"}`;
     console.error("finding-discuss-copilot error", e);
     return json({ error: e instanceof Error ? e.message : "unknown error" }, 500);
   }
-});
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

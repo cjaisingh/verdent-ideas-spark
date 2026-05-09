@@ -5,6 +5,7 @@
 // Auth: operator JWT or x-service-token (cron/internal).
 // Body: { approval_id: string }
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +23,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("roadmap-phase-signoff", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const provided = req.headers.get("x-service-token");
@@ -92,4 +93,4 @@ Deno.serve(async (req) => {
   });
 
   return json({ ok: true, phase_id: phaseId, phase_key: phaseRow.key });
-});
+}));

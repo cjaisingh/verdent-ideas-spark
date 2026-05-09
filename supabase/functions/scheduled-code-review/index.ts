@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +36,7 @@ function costUsd(model: string, promptTok: number, completionTok: number) {
   return (promptTok / 1_000_000) * p.in + (completionTok / 1_000_000) * p.out;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("scheduled-code-review", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -232,7 +233,7 @@ Deno.serve(async (req) => {
     console.error(e);
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   }
-});
+}));
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {

@@ -112,6 +112,7 @@ const json = (status: number, body: unknown, requestId?: string) =>
 // duration, request id, and any error code. Designed to be greppable in the
 // Supabase logs UI when investigating suspicious access patterns.
 import { buildAuditEntry, resultCount, type AuditEntry } from "./audit.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 // Module-scope service client used only to persist audit rows. The console
 // line is kept too — DB inserts are best-effort and never block the response.
@@ -172,7 +173,7 @@ async function assertValidTable(
   return { ok: true, name: table };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("db-explorer", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const startedAt = Date.now();
@@ -368,4 +369,4 @@ Deno.serve(async (req) => {
   }
 
   return finish(400, { error: "unknown_action" }, "unknown_action", null);
-});
+}));
