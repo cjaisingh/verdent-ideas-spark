@@ -174,9 +174,18 @@ ${finding.body ?? "(no body)"}`;
               role: "copilot",
               source: "text",
               body: assistantText,
-              model: "google/gemini-2.5-pro",
+              model: MODEL,
             });
           }
+          // Approximate token counts from chars (no usage object on streaming).
+          const promptChars = messages.reduce((s, m) => s + (m.content?.length ?? 0), 0);
+          await logAiUsage(admin, {
+            job: "finding-discuss-copilot", model: MODEL, trigger: "user",
+            status: "ok", status_code: 200, latency_ms: Date.now() - aiStart,
+            prompt_tokens: Math.ceil(promptChars / 4),
+            completion_tokens: Math.ceil(assistantText.length / 4),
+            request_ref: { discussion_id: discussionId, streamed: true, approx: true },
+          });
         }
       },
     });
