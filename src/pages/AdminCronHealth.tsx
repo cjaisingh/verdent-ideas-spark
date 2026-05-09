@@ -138,6 +138,11 @@ const AdminCronHealth = () => {
         </button>
       </header>
 
+      {/* W2/W3/W4 edge function health & error-rate dashboard */}
+      <Card>
+        <EdgeHealthDashboard />
+      </Card>
+
       {/* Last shift open / close */}
       <Card>
         <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wide mb-2">
