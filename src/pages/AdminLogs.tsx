@@ -39,6 +39,18 @@ type FrontRow = {
   created_at: string;
 };
 
+type AlertRow = {
+  id: string;
+  created_at: string;
+  job: string;
+  reason: string;
+  message: string | null;
+  delivered: boolean;
+  status_code: number | null;
+  error: string | null;
+  payload: Record<string, unknown> | null;
+};
+
 const WINDOWS = [
   { id: "1h", label: "1h", hours: 1 },
   { id: "24h", label: "24h", hours: 24 },
