@@ -15,7 +15,9 @@
     "test:security": "vitest run --config vitest.e2e.config.ts e2e/security-audit.test.ts e2e/rls-matrix.test.ts e2e/rls-role-matrix.test.ts",
     "test:rls-coverage": "bun run scripts/rls-coverage-report.ts",
     "rls:generate": "bun run scripts/generate-rls-map.ts",
-    "rls:verify": "bun run scripts/generate-rls-map.ts && git diff --exit-code -- e2e/rls-policy-map.generated.ts"
+    "rls:verify": "bun run scripts/generate-rls-map.ts && git diff --exit-code -- e2e/rls-policy-map.generated.ts",
+    "test:pw": "playwright test",
+    "test:pw:headed": "playwright test --headed"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -74,6 +76,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",

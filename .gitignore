@@ -26,3 +26,6 @@ dist-ssr
 # RLS coverage report output
 reports/
 .vitest-rls-coverage.json
+
+playwright-report/
+test-results/
