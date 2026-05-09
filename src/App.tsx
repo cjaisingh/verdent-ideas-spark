@@ -38,6 +38,7 @@ import NightShifts from "./pages/NightShifts";
 import OvernightOverview from "./pages/OvernightOverview";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
+import AdminCronHealth from "./pages/AdminCronHealth";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
