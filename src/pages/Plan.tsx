@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { fmtUsd } from "@/lib/aiPricing";
+import { W1StatusPanel } from "@/components/W1StatusPanel";
 
 type Status = "todo" | "in_progress" | "blocked" | "done";
 
@@ -220,6 +221,8 @@ const Plan = () => {
         <KpiCard label="Est /mo" valueText={fmtUsd(totalEstMonthly)} />
         <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
+
+      <W1StatusPanel />
 
       <Card className="p-4">
         <div className="flex items-baseline justify-between flex-wrap gap-2">
