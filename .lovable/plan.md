@@ -1,35 +1,57 @@
-## Add dry-run to Overnight Backfill panel
+## Goal
 
-Augment `src/components/admin/OvernightBackfillPanel.tsx` so an operator can preview a backfill without side effects: no inserts into `roadmap_phase_overnight_runs`, no calls to `overnight-phase-runner`.
+When the operator clicks **Preview re-queue**, the panel currently shows raw `planned_inserts` JSON. It does not warn that one of those inserts will collide with an existing row — e.g. there's already a `queued` run for the same `phase_id` today, or a `running` row started 5 minutes ago. Add a diff view that highlights duplicates *before* the operator flips off dry-run.
 
-### UX
+## What "duplicate" means
 
-- Add a **"Dry run"** checkbox in the action row, next to the existing buttons. Default: **on** (safe by default — explicit opt-in to mutate).
-- The primary action button label switches based on mode:
-  - Dry run on → `Preview re-queue (N)`
-  - Dry run off → `Re-queue & run N` (existing behavior)
-- When dry-run is on, the button is styled as `variant="outline"` to visually distinguish from the destructive/mutating action.
-- Add a small inline hint under the heading: "Dry run is on — nothing will be written" / "Dry run is off — selected phases will be re-queued and the runner will be invoked".
+For each planned insert (`phase_id`, `scheduled_for = today`):
 
-### Behavior
+1. **Hard duplicate** — an existing row with the same `phase_id` AND same `scheduled_for`, in any non-terminal status (`queued`, `running`). Re-queueing would create a second active run for the same phase on the same day.
+2. **Active elsewhere** — an existing row for the same `phase_id` in `queued` or `running` for *any* `scheduled_for` (covers stale rows from yesterday that never finished).
+3. **Recently done** — same `phase_id` finished `done` within the last 6 hours. Probably wasted work.
+4. **Clean** — no collision. Safe to insert.
 
-- Split the current `backfillAndRun` into two paths driven by a `dryRun` state flag:
-  - **Dry run path** (no DB writes, no fetch):
-    - Build the same `inserts` payload the real path would build (`phase_id`, `phase_key`, `requested_by`, `scheduled_for = today`, `status: "queued"`).
-    - Build the same per-row "runner invocation plan" (target URL, run_id placeholder `<would-be-generated>`, body shape).
-    - Set `lastResult` to `{ dry_run: true, would_requeue: inserts.length, planned_inserts: [...], planned_runner_calls: [...] }`.
-    - Toast: `Dry run: would re-queue N phase(s)` (default variant, not destructive).
-    - Do **not** call `refresh()` (nothing changed).
-  - **Real path**: unchanged — keep current insert + runner invocation logic.
+Severity ordering (worst wins): hard > active > recent > clean.
 
-### Technical notes
+## Behaviour
 
-- New state: `const [dryRun, setDryRun] = useState(true);`
-- Reuse `selectableByPhase.filter(r => selected.has(r.id))` for both paths so the preview is byte-for-byte what would be inserted.
-- Keep the existing `lastResult` `<pre>` block — it already pretty-prints arbitrary JSON, so the dry-run output renders for free.
-- No backend, edge function, or schema changes. Pure frontend.
-- No new dependencies; `Checkbox` from `@/components/ui/checkbox` is already imported.
+- Dry-run query is extended: in addition to building `planned_inserts`, fetch existing `roadmap_phase_overnight_runs` for the selected `phase_id`s scoped to the relevant window (today + last 24h). One round-trip via `.in('phase_id', [...])`.
+- Each planned insert is annotated with `{ collision: 'hard'|'active'|'recent'|'clean', existing: [{id, status, scheduled_for, requested_at, started_at}] }`.
+- The result panel renders a **diff table** above the raw JSON:
+  - Columns: phase_key · planned status · collision badge · existing rows (compact: `queued@today`, `running@2026-05-08 (started 14m ago)`, etc.) · per-row checkbox to *exclude* this phase from the actual run.
+  - Badge colors: hard → destructive, active → secondary, recent → outline, clean → default.
+- Summary chip strip at the top: `3 clean · 1 recent · 2 active · 1 hard`.
+- The **Re-queue & run** button (when dry-run is off) also runs the same collision check first; if any `hard` collisions remain in the selection it requires a second click on a confirm dialog ("X hard duplicates will be created — proceed anyway?"). `active` and `recent` only warn.
+- Excluded phases are tracked in a `Set<string>` of `phase_id` and stripped from `inserts` at execution time.
 
-### Files touched
+## Technical changes (single file)
 
-- `src/components/admin/OvernightBackfillPanel.tsx` (only file changed)
+`src/components/admin/OvernightBackfillPanel.tsx`:
+
+- Add types `Collision = 'hard' | 'active' | 'recent' | 'clean'` and `AnnotatedInsert = { phase_id, phase_key, scheduled_for, collision, existing: ExistingRef[] }`.
+- New state: `excluded: Set<string>` (phase_id), `confirmOpen: boolean`.
+- Refactor `backfillAndRun` into:
+  - `buildPlan()` — builds `inserts`, queries existing rows, returns `AnnotatedInsert[]` and summary counts.
+  - `previewPlan()` — calls `buildPlan`, sets `lastResult` with the annotated structure.
+  - `executePlan()` — calls `buildPlan`, filters out `excluded`, opens AlertDialog if any `hard` remain, otherwise inserts + invokes runner (existing logic).
+- Render a new `<Table>` for the annotated diff between the summary chips and the raw JSON `<pre>`. Keep the raw JSON behind a `<details>` toggle so it doesn't dominate the panel.
+- Use existing `STATUS_VARIANT` for existing-row badges; add a small `COLLISION_VARIANT` map.
+- Confirm dialog uses shadcn `AlertDialog`.
+
+No schema changes, no edge function changes, no new tables.
+
+## Out of scope
+
+- Server-side uniqueness constraint on `(phase_id, scheduled_for)` — would be the proper fix but is a behavior change for cron and out of this request's scope. Mention in a follow-up note.
+- Auto-cancelling the colliding existing rows — operator decides via the exclude checkbox.
+
+## Files
+
+- edited: `src/components/admin/OvernightBackfillPanel.tsx`
+
+## Verification
+
+- With dry-run on, select a phase that already has a `queued` row today → expect `hard` badge + summary `1 hard`.
+- Select a phase with no recent runs → `clean`.
+- With dry-run off and one `hard` selected → confirm dialog appears.
+- Existing dry-run JSON output still present under the toggle.
