@@ -24,6 +24,7 @@ type PhaseRow = {
   requested_at: string;
   scheduled_for: string | null;
   model: string | null;
+  requested_by: string | null;
 };
 
 type ProposalRow = {
