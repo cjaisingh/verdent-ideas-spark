@@ -162,6 +162,8 @@ const Plan = () => {
         <p className="text-sm text-muted-foreground">
           Six workstreams that close the operational loops in the AWIP ecosystem. Status updates persist
           and stream live across sessions. Source of truth lives in <code className="font-mono">.lovable/plan.md</code>.
+          {" "}Objective definitions of "done" and "healthy" per workstream live in{" "}
+          <code className="font-mono">docs/workstream-success-metrics.md</code>.
         </p>
       </header>
 
