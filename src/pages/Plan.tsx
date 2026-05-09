@@ -221,6 +221,28 @@ const Plan = () => {
         <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
 
+      <Card className="p-4">
+        <div className="flex items-baseline justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Build cost: AI vs human</h2>
+            <p className="text-xs text-muted-foreground">
+              Human baseline £{HUMAN_ANNUAL_GBP.toLocaleString()}/yr fully-loaded ({HUMAN_HOURLY_GBP.toFixed(2)}/h, {HUMAN_ANNUAL_HOURS}h/yr).
+              AI converted at ${USD_TO_GBP.toFixed(2)}/£.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs tabular-nums">
+            <span>Human <span className="text-foreground font-semibold text-base">{fmtGbp(totalHumanGbp)}</span></span>
+            <span>AI build <span className="text-foreground font-semibold text-base">{fmtGbp(totalAiBuildGbp)}</span></span>
+            {totalAiBuildGbp > 0 && (
+              <Badge variant="default">{(totalHumanGbp / totalAiBuildGbp).toFixed(0)}× cheaper</Badge>
+            )}
+            {totalHumanGbp > 0 && (
+              <span className="text-muted-foreground">saves {fmtGbp(totalHumanGbp - totalAiBuildGbp)}</span>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {loading && workstreams.length === 0 && (
         <p className="text-sm text-muted-foreground">Loading…</p>
       )}
