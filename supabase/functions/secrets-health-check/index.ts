@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
+    synced_to_db: synced,
   });
 
   if (!ok) {
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  return json({ ok, missing_in_db: missingInDb, missing_in_env: missingInEnv });
+  return json({ ok, missing_in_db: missingInDb, missing_in_env: missingInEnv, synced_to_db: synced });
 });
 
 function json(p: unknown, s = 200) {
