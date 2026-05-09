@@ -15,6 +15,7 @@ import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
   ArrowUpRightSquare, MessageSquareText, Sun, Wand2,
 } from "lucide-react";
+import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
 type Thread = {
   id: string;
@@ -391,6 +392,7 @@ export default function Companion() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <InstallPwaButton />
           <Badge variant={settings.use_cloud ? "secondary" : healthOk === true ? "default" : healthOk === false ? "destructive" : "outline"} className="gap-1">
             {settings.use_cloud ? <Cloud className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
             {settings.use_cloud ? `Cloud · ${settings.cloud_model}` : `Ollama · ${healthOk === true ? "online" : healthOk === false ? "offline" : "checking…"}`}
