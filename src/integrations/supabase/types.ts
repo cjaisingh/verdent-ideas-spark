@@ -2079,6 +2079,8 @@ export type Database = {
           manual_override_by: string | null
           manual_override_rationale: string | null
           order: number
+          run_overnight: boolean
+          run_overnight_until: string | null
           status: Database["public"]["Enums"]["roadmap_status"]
           summary: string | null
           title: string
@@ -2092,6 +2094,8 @@ export type Database = {
           manual_override_by?: string | null
           manual_override_rationale?: string | null
           order?: number
+          run_overnight?: boolean
+          run_overnight_until?: string | null
           status?: Database["public"]["Enums"]["roadmap_status"]
           summary?: string | null
           title: string
@@ -2105,6 +2109,8 @@ export type Database = {
           manual_override_by?: string | null
           manual_override_rationale?: string | null
           order?: number
+          run_overnight?: boolean
+          run_overnight_until?: string | null
           status?: Database["public"]["Enums"]["roadmap_status"]
           summary?: string | null
           title?: string
