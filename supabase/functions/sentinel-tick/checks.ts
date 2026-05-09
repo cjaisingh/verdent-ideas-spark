@@ -11,7 +11,7 @@ export type FindingCandidate = {
   payload: Record<string, unknown>;
 };
 
-export type AutomationRunRow = { job: string; created_at: string; status?: string | null };
+export type AutomationRunRow = { id?: string; job: string; created_at: string; status?: string | null };
 export type EdgeLogRow = { status: number | null; created_at: string; function_name: string };
 export type SecretRow = { key: string; updated_at: string };
 export type RoleAuditRow = { id: string; role: string; action: string; target_user_id: string; created_at: string };
