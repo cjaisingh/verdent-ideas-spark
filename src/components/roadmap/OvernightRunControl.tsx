@@ -134,10 +134,26 @@ export function OvernightRunControl({ phaseId, phaseKey }: Props) {
 
   return (
     <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => !recurringSaving && toggleRecurring(!recurring)}
+        title={recurring
+          ? "Auto-queue every night at 21:55 UTC. Click to turn off."
+          : "Auto-queue this phase every night at 21:55 UTC until shipped."}
+        className={`inline-flex items-center gap-1 h-7 px-2 rounded border text-[10px] font-mono uppercase transition-colors ${
+          recurring
+            ? "border-primary/40 bg-primary/10 text-primary"
+            : "border-border text-muted-foreground hover:text-foreground"
+        }`}
+        disabled={recurringSaving}
+      >
+        <Repeat className="h-3 w-3" />
+        {recurring ? "nightly" : "off"}
+      </button>
       {!active && (
         <Button size="sm" variant="outline" onClick={queue} disabled={busy} className="h-7 gap-1.5 text-xs">
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Moon className="h-3 w-3" />}
-          Run overnight
+          {recurring ? "Queue now too" : "Run overnight"}
         </Button>
       )}
       {active && (
