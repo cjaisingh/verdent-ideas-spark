@@ -673,6 +673,7 @@ const AlertsCard = () => {
         <Toggle k="alert_on_test_fail" label="test failures" />
         <Toggle k="alert_on_qa_fail" label="QA probe failures" />
         <Toggle k="alert_on_cost" label="cost overruns" />
+        <Toggle k="alert_on_auth_failed" label="repeated 401s on cron" />
         <label className="inline-flex items-center gap-1 text-[11px] ml-auto">
           dedupe
           <input type="number" min={0} max={1440} value={s.dedupe_minutes}
