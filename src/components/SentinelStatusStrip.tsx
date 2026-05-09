@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 type Finding = {
@@ -14,8 +15,21 @@ type Finding = {
   status: string;
   first_seen_at: string;
   last_seen_at: string;
+  subject_ref: Record<string, any> | null;
+  payload: Record<string, any> | null;
 };
 type Run = { created_at: string; status: string; message: string | null };
+
+// Extract a /admin/cron-health/:job?focus=... link from a finding when its
+// payload identifies the specific automation_runs ids that triggered it.
+function findingRunsLink(f: Finding): string | null {
+  const job = f.subject_ref?.job as string | undefined;
+  if (!job) return null;
+  const ids: string[] = (f.subject_ref?.run_ids as string[]) ??
+    (f.payload?.error_run_ids_24h as string[]) ?? [];
+  const focus = ids.slice(0, 25).join(",");
+  return `/admin/cron-health/${job}${focus ? `?focus=${focus}` : ""}`;
+}
 
 const sevColor: Record<string, string> = {
   critical: "bg-destructive text-destructive-foreground",
@@ -35,7 +49,7 @@ export function SentinelStatusStrip() {
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
       supabase.from("sentinel_findings")
-        .select("id,kind,severity,summary,status,first_seen_at,last_seen_at")
+        .select("id,kind,severity,summary,status,first_seen_at,last_seen_at,subject_ref,payload")
         .eq("status", "open").order("last_seen_at", { ascending: false }).limit(50),
       supabase.from("automation_runs")
         .select("created_at,status,message")
@@ -122,15 +136,33 @@ export function SentinelStatusStrip() {
               <p className="text-sm text-muted-foreground">No open findings.</p>
             ) : (
               <ul className="text-sm space-y-2">
-                {findings.slice(0, 3).map((f) => (
+                {findings.slice(0, 3).map((f) => {
+                  const link = findingRunsLink(f);
+                  const runCount = (f.subject_ref?.run_ids as string[] | undefined)?.length
+                    ?? (f.payload?.error_run_ids_24h as string[] | undefined)?.length
+                    ?? 0;
+                  return (
                   <li key={f.id} className="flex items-start justify-between gap-2 border-b border-border/40 pb-2 last:border-0">
                     <div className="flex-1 min-w-0">
                       <div className="line-clamp-2">{f.summary}</div>
-                      <div className="text-xs text-muted-foreground">{f.kind} · seen {new Date(f.last_seen_at).toLocaleTimeString()}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span>{f.kind} · seen {new Date(f.last_seen_at).toLocaleTimeString()}</span>
+                        {link && (
+                          <Link
+                            to={link}
+                            className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                            title={runCount ? `${runCount} run(s) caused this` : "View runs"}
+                          >
+                            view {runCount > 0 ? `${runCount} run${runCount === 1 ? "" : "s"}` : "runs"}
+                            <ArrowUpRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </div>
                     </div>
                     <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
             {findings.length > 3 && (

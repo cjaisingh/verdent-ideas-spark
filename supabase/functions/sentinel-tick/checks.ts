@@ -11,7 +11,7 @@ export type FindingCandidate = {
   payload: Record<string, unknown>;
 };
 
-export type AutomationRunRow = { job: string; created_at: string; status?: string | null };
+export type AutomationRunRow = { id?: string; job: string; created_at: string; status?: string | null };
 export type EdgeLogRow = { status: number | null; created_at: string; function_name: string };
 export type SecretRow = { key: string; updated_at: string };
 export type RoleAuditRow = { id: string; role: string; action: string; target_user_id: string; created_at: string };
@@ -144,16 +144,31 @@ export function checkJobErrorRate(
     if (!sev) continue;
 
     const rate24 = last24.length ? err24.length / last24.length : 0;
+    // Capture the specific automation_runs ids that triggered this finding so the
+    // UI can cross-link from the finding back to the runs that caused it.
+    const errSorted = [...err24].sort(
+      (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
+    );
+    const errIds24 = errSorted.map((r) => r.id).filter((x): x is string => !!x).slice(0, 25);
+    const errIds1h = errSorted
+      .filter((r) => +new Date(r.created_at) >= since1h)
+      .map((r) => r.id).filter((x): x is string => !!x).slice(0, 25);
     out.push({
       kind: "job_error_rate",
       severity: sev,
       summary: `${job}: ${reason} (rate ${(rate24 * 100).toFixed(0)}%).`,
       dedupe_key: `job_error_rate:${job}:${hourBucket}`,
-      subject_ref: { job },
+      subject_ref: {
+        job,
+        run_ids: errIds24,
+        latest_error_run_id: errIds24[0] ?? null,
+      },
       payload: {
         runs_24h: last24.length, errors_24h: err24.length,
         successes_24h: ok24.length, errors_1h: err1h.length,
         error_rate_24h: rate24,
+        error_run_ids_24h: errIds24,
+        error_run_ids_1h: errIds1h,
       },
     });
   }
