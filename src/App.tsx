@@ -86,6 +86,7 @@ const App = () => (
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/capability-promotion" element={<CapabilityPromotion />} />
             <Route path="/admin/promotion-audits" element={<PromotionAudits />} />
+            <Route path="/admin/cron-health" element={<AdminCronHealth />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
