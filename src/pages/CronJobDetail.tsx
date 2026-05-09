@@ -102,6 +102,26 @@ export default function CronJobDetail() {
   const focusRef = useRef<HTMLDivElement | null>(null);
   const scrolledRef = useRef(false);
 
+  // When ?finding=<id> is present, fetch its summary + severity so we can
+  // show a context banner explaining where this focus came from.
+  const findingIdParam = searchParams.get("finding");
+  const [finding, setFinding] = useState<{
+    id: string; summary: string; severity: string; kind: string; last_seen_at: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!findingIdParam) { setFinding(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("sentinel_findings" as any)
+        .select("id,summary,severity,kind,last_seen_at")
+        .eq("id", findingIdParam)
+        .maybeSingle();
+      if (!cancelled) setFinding((data as any) ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [findingIdParam]);
+
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase
