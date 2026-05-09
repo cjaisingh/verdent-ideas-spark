@@ -220,6 +220,18 @@ export default function CronJobDetail() {
         </CardContent></Card>
       </div>
 
+      {focusIds.size > 0 && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3">
+          <div>
+            <strong>Focused on {focusIds.size} run{focusIds.size === 1 ? "" : "s"}</strong>{" "}
+            from a sentinel finding. Matching rows are highlighted and expanded below.
+          </div>
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+            <Link to={`/admin/cron-health/${job}`}>Clear focus</Link>
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -251,8 +263,16 @@ export default function CronJobDetail() {
               {filtered.map((r) => {
                 const isExpanded = expanded.has(r.id);
                 const ok = isOk(r);
+                const isFocused = focusIds.has(r.id);
                 return (
-                  <div key={r.id} className={ok ? "" : "bg-destructive/5"}>
+                  <div
+                    key={r.id}
+                    ref={isFocused && !scrolledRef.current ? focusRef : undefined}
+                    className={[
+                      ok ? "" : "bg-destructive/5",
+                      isFocused ? "ring-2 ring-amber-500/60 ring-inset" : "",
+                    ].join(" ")}
+                  >
                     <button
                       onClick={() => toggle(r.id)}
                       className="w-full text-left p-3 hover:bg-accent/50 flex items-start gap-3"
