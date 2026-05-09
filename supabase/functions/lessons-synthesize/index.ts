@@ -86,6 +86,7 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
     }
 
     const model = pickModel("google/gemini-2.5-flash");
+    const aiStart = Date.now();
     const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
@@ -100,12 +101,14 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
     });
     if (!aiRes.ok) {
       const t = await aiRes.text();
+      await logAiCall(sb, { job: "lessons-synthesize", model, trigger, startedAt: aiStart, response: aiRes, errorText: t, request_ref: { signals: totalSignals } });
       await recordRun("error", aiRes.status, "ai gateway error", { body: t.slice(0, 500) });
       await dispatchAlert(sb, "lessons-synthesize", "review_error",
         `ai gateway ${aiRes.status}: ${t.slice(0, 200)}`, { status: aiRes.status });
       return json({ error: "ai_error", status: aiRes.status }, 502);
     }
     const aiJson = await aiRes.json();
+    await logAiCall(sb, { job: "lessons-synthesize", model, trigger, startedAt: aiStart, response: aiRes, json: aiJson, request_ref: { signals: totalSignals } });
     const content: string = aiJson?.choices?.[0]?.message?.content ?? "{}";
     let parsed: { lessons?: unknown[] } = {};
     try { parsed = JSON.parse(content); } catch { /* keep empty */ }
