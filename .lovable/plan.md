@@ -70,6 +70,22 @@ Owner roles below are roles, not people. **Operator** = you (final authority on 
 
 ---
 
+## Cost Tracking (cross-cutting, slotted between W2 and W4)
+
+**Goal:** Estimated vs actual AI/automation spend per workstream so silent budget drift surfaces immediately, not in the monthly bill.
+
+**Deliverables**
+- `cost_estimates` table (workstream/task → kind monthly|oneshot, estimated_usd, model, job, notes; operator-only RLS, realtime).
+- `cost_actuals_30d` view: rolls up `automation_runs.detail.cost_usd` per job over 30d.
+- `cost_summary_by_workstream` view: joins estimates ⇄ actuals via the `job` link.
+- `_shared/cost.ts` (deno) helper: `costDetail(model, usage)` produces the standard `{model, prompt_tokens, completion_tokens, cost_usd}` payload to merge into `automation_runs.detail`. Adopt incrementally as we touch each AI-calling function.
+- `/plan` UI: per-workstream "Est $X/mo · one-shot $Y · Actual $Z (30d)" row + global KPI strip; red `over budget` badge when actual > 1.5× estimate.
+- Seeded with the six workstream estimates (W1/W3/W5/W6: $0; W2 lessons: $0.70/mo + $0.03 one-shot backfill; deep-audit: ~$2.50/mo).
+
+**Owner:** Lovable agent builds + maintains estimates as scope changes; Operator watches `/plan` for overrun badges.
+
+---
+
 ## Workstream 4 — Logger Agent (structured edge logging + retention)
 
 **Goal:** Every edge function emits structured logs with a request-id. Frontend errors are captured. Retention policies are explicit.

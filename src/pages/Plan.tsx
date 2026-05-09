@@ -9,9 +9,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { fmtUsd } from "@/lib/aiPricing";
 
 type Status = "todo" | "in_progress" | "blocked" | "done";
+
+type CostRow = {
+  workstream_id: string;
+  est_monthly_usd: number;
+  est_oneshot_usd: number;
+  actual_usd_30d: number;
+  jobs: string[] | null;
+};
 
 type Workstream = {
   id: string;
@@ -61,15 +70,17 @@ const STATUS_ICON: Record<Status, typeof Circle> = {
 const Plan = () => {
   const [workstreams, setWorkstreams] = useState<Workstream[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [costs, setCosts] = useState<CostRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openWs, setOpenWs] = useState<Set<string>>(new Set());
   const [editingNotes, setEditingNotes] = useState<Record<string, string>>({});
 
   const refresh = async () => {
     setLoading(true);
-    const [ws, ts] = await Promise.all([
+    const [ws, ts, cs] = await Promise.all([
       supabase.from("plan_workstreams").select("*").order("sort_order"),
       supabase.from("plan_tasks").select("*").order("sort_order"),
+      supabase.from("cost_summary_by_workstream" as any).select("*"),
     ]);
     setLoading(false);
     if (ws.error) {
@@ -82,6 +93,7 @@ const Plan = () => {
     }
     setWorkstreams((ws.data ?? []) as Workstream[]);
     setTasks((ts.data ?? []) as Task[]);
+    if (!cs.error) setCosts((cs.data ?? []) as unknown as CostRow[]);
   };
 
   useEffect(() => {
@@ -109,6 +121,21 @@ const Plan = () => {
     for (const x of tasks) t[x.status]++;
     return t;
   }, [tasks]);
+
+  const costByWs = useMemo(() => {
+    const m = new Map<string, CostRow>();
+    for (const c of costs) m.set(c.workstream_id, c);
+    return m;
+  }, [costs]);
+
+  const totalEstMonthly = useMemo(
+    () => costs.reduce((s, c) => s + Number(c.est_monthly_usd || 0), 0),
+    [costs],
+  );
+  const totalActual30d = useMemo(
+    () => costs.reduce((s, c) => s + Number(c.actual_usd_30d || 0), 0),
+    [costs],
+  );
 
   const wsProgress = (wsId: string): { pct: number; counts: Record<Status, number> } => {
     const list = tasksByWs.get(wsId) ?? [];
@@ -167,11 +194,13 @@ const Plan = () => {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <KpiCard label="Total tasks" value={totals.total} />
         <KpiCard label="Done" value={totals.done} tone="default" />
         <KpiCard label="In progress" value={totals.in_progress} tone="secondary" />
         <KpiCard label="Blocked" value={totals.blocked} tone="destructive" />
+        <KpiCard label="Est /mo" valueText={fmtUsd(totalEstMonthly)} />
+        <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
 
       {loading && workstreams.length === 0 && (
@@ -221,6 +250,25 @@ const Plan = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {(() => {
+                    const c = costByWs.get(ws.id);
+                    if (!c) return null;
+                    const est = Number(c.est_monthly_usd || 0);
+                    const actual = Number(c.actual_usd_30d || 0);
+                    const oneshot = Number(c.est_oneshot_usd || 0);
+                    const overrun = est > 0 && actual > est * 1.5;
+                    return (
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <DollarSign className="h-3 w-3" />
+                        <span className="tabular-nums">
+                          Est <span className="text-foreground">{fmtUsd(est)}</span>/mo
+                          {oneshot > 0 && <> · one-shot <span className="text-foreground">{fmtUsd(oneshot)}</span></>}
+                          {" · "}Actual <span className={overrun ? "text-destructive font-medium" : "text-foreground"}>{fmtUsd(actual)}</span> (30d)
+                        </span>
+                        {overrun && <Badge variant="destructive" className="text-[9px] py-0 px-1.5">over budget</Badge>}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -316,11 +364,11 @@ const Plan = () => {
   );
 };
 
-const KpiCard = ({ label, value, tone }: { label: string; value: number; tone?: "default" | "secondary" | "destructive" }) => (
+const KpiCard = ({ label, value, valueText, tone }: { label: string; value?: number; valueText?: string; tone?: "default" | "secondary" | "destructive" }) => (
   <Card className="p-3">
     <div className="text-xs text-muted-foreground">{label}</div>
     <div className="mt-1 flex items-center gap-2">
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-2xl font-semibold tabular-nums">{valueText ?? value ?? 0}</span>
       {tone && <Badge variant={tone} className="text-[10px]">{tone === "default" ? "✓" : tone === "secondary" ? "…" : "!"}</Badge>}
     </div>
   </Card>
