@@ -100,6 +100,8 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
     if (!aiRes.ok) {
       const t = await aiRes.text();
       await recordRun("error", aiRes.status, "ai gateway error", { body: t.slice(0, 500) });
+      await dispatchAlert(sb, "lessons-synthesize", "review_error",
+        `ai gateway ${aiRes.status}: ${t.slice(0, 200)}`, { status: aiRes.status });
       return json({ error: "ai_error", status: aiRes.status }, 502);
     }
     const aiJson = await aiRes.json();
