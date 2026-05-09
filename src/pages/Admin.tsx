@@ -241,6 +241,8 @@ const Admin = () => {
 
       <ManualOvernightTriggers />
 
+      <OvernightBackfillPanel />
+
       <TelegramBotPanel />
 
       <AppSecretsPanel />
