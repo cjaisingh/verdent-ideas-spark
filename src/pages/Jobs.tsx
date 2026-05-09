@@ -239,7 +239,21 @@ export default function Jobs() {
               </Badge>
             )}
             {(j as any).night_eligible && (
-              <Badge variant="outline" className="text-[9px] gap-0.5"><Moon className="h-2.5 w-2.5" /> night</Badge>
+              <Badge
+                variant="outline"
+                className={`text-[9px] gap-0.5 ${
+                  j.status !== "open"
+                    ? "opacity-50 line-through decoration-1"
+                    : ""
+                }`}
+                title={
+                  j.status !== "open"
+                    ? "Audit complete · already promoted — night agent will not re-audit."
+                    : "Will be picked up by the night agent (audit only) on the next shift."
+                }
+              >
+                <Moon className="h-2.5 w-2.5" /> night
+              </Badge>
             )}
           </div>
           <div className="text-sm font-medium leading-snug">{j.title}</div>
