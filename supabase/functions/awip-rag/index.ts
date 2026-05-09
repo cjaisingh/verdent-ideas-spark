@@ -95,8 +95,16 @@ Deno.serve(withLogger("awip-rag", async (req) => {
       if (!q || typeof q !== "string") return json({ error: "q required" }, 400);
       const lim = Math.min(Math.max(Number(limit ?? 6), 1), 20);
 
-      // websearch_to_tsquery handles natural-language queries; rank with ts_rank.
-      const { data, error } = await admin.rpc("awip_rag_search", { _q: q, _limit: lim });
+      // awip_rag_search is SECURITY DEFINER + checks has_role(auth.uid(),...).
+      // The shared `admin` client runs as service-role where auth.uid() is null,
+      // which trips the role gate. Build a per-user client so auth.uid() resolves.
+      const rpcClient = who.kind === "operator"
+        ? createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+            global: { headers: { Authorization: req.headers.get("authorization")! } },
+            auth: { persistSession: false },
+          })
+        : admin;
+      const { data, error } = await rpcClient.rpc("awip_rag_search", { _q: q, _limit: lim });
       if (error) return json({ error: error.message }, 500);
       return json({ ok: true, results: data ?? [] });
     }
