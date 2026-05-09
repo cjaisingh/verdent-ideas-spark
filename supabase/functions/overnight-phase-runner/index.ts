@@ -151,14 +151,13 @@ Deno.serve(async (req) => {
       : !SERVICE_TOKEN
         ? "AWIP_SERVICE_TOKEN env var not set on edge function"
         : "service token mismatch";
+    const job = "overnight-phase-runner-15m";
+    const detail = { provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN };
     await sb.from("automation_runs").insert({
-      job: "overnight-phase-runner-15m",
-      trigger: "cron",
-      status: "error",
-      status_code: 401,
-      message: reason,
-      detail: { provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN },
+      job, trigger: "cron", status: "error", status_code: 401,
+      message: reason, detail,
     });
+    await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
   }
   const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
