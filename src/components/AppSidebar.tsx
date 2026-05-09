@@ -41,6 +41,7 @@ const copilotChildren: NavItem[] = [
 ];
 
 const planItems: NavItem[] = [
+  { url: "/plan", title: "Plan (workstreams)", icon: Target },
   { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
