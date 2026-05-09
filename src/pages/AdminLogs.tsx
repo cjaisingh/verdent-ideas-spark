@@ -85,6 +85,11 @@ export default function AdminLogs() {
   const [errFilter, setErrFilter] = useState<string>("__all__");
   const [search, setSearch] = useState("");
 
+  const [alertRows, setAlertRows] = useState<AlertRow[]>([]);
+  const [alertJobFilter, setAlertJobFilter] = useState<string>("__all__");
+  const [alertReasonFilter, setAlertReasonFilter] = useState<string>("__all__");
+  const [alertDelivery, setAlertDelivery] = useState<string>("__all__");
+
   const since = useMemo(() => {
     const w = WINDOWS.find((x) => x.id === windowId) ?? WINDOWS[1];
     return new Date(Date.now() - w.hours * 60 * 60 * 1000).toISOString();
@@ -92,7 +97,7 @@ export default function AdminLogs() {
 
   const load = async () => {
     setLoading(true);
-    const [edge, front] = await Promise.all([
+    const [edge, front, alerts] = await Promise.all([
       supabase
         .from("edge_request_logs")
         .select("id, request_id, function_name, method, path, status, latency_ms, classified_error, error_message, user_id_hash, created_at")
@@ -105,9 +110,16 @@ export default function AdminLogs() {
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(500),
+      supabase
+        .from("alert_log")
+        .select("id, created_at, job, reason, message, delivered, status_code, error, payload")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(500),
     ]);
     setEdgeRows((edge.data ?? []) as EdgeRow[]);
     setFrontRows((front.data ?? []) as FrontRow[]);
+    setAlertRows((alerts.data ?? []) as AlertRow[]);
     setLoading(false);
   };
 
@@ -120,6 +132,14 @@ export default function AdminLogs() {
   const errOptions = useMemo(
     () => Array.from(new Set(edgeRows.map((r) => r.classified_error).filter(Boolean) as string[])).sort(),
     [edgeRows],
+  );
+  const alertJobOptions = useMemo(
+    () => Array.from(new Set(alertRows.map((r) => r.job))).sort(),
+    [alertRows],
+  );
+  const alertReasonOptions = useMemo(
+    () => Array.from(new Set(alertRows.map((r) => r.reason))).sort(),
+    [alertRows],
   );
 
   const filteredEdge = useMemo(() => {
