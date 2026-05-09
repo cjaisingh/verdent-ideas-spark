@@ -51,6 +51,7 @@ const OvernightBackfillPanel = () => {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [dryRun, setDryRun] = useState(true);
   const [lastResult, setLastResult] = useState<unknown>(null);
 
   const refresh = async () => {
@@ -106,6 +107,31 @@ const OvernightBackfillPanel = () => {
         scheduled_for: today,
         status: "queued",
       }));
+      const runnerUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overnight-phase-runner`;
+
+      if (dryRun) {
+        const planned_runner_calls = picks.map((r) => ({
+          for_phase_key: r.phase_key,
+          for_phase_id: r.phase_id,
+          original_run_id: r.id,
+          run_id: "<would-be-generated>",
+          method: "POST",
+          url: runnerUrl,
+          body: { run_id: "<would-be-generated>" },
+        }));
+        setLastResult({
+          dry_run: true,
+          would_requeue: inserts.length,
+          planned_inserts: inserts,
+          planned_runner_calls,
+        });
+        toast({
+          title: `Dry run: would re-queue ${inserts.length} phase${inserts.length === 1 ? "" : "s"}`,
+          description: "No rows inserted, runner not invoked.",
+        });
+        return;
+      }
+
       const { data: inserted, error: insErr } = await supabase
         .from("roadmap_phase_overnight_runs")
         .insert(inserts)
@@ -117,10 +143,9 @@ const OvernightBackfillPanel = () => {
       // the next 15-min cron tick. The function processes one explicit run_id
       // per call (cron sweeps the whole queue when no body is given).
       const { data: { session } } = await supabase.auth.getSession();
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/overnight-phase-runner`;
       const results: unknown[] = [];
       for (const id of newIds) {
-        const resp = await fetch(url, {
+        const resp = await fetch(runnerUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -142,7 +167,7 @@ const OvernightBackfillPanel = () => {
       await refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast({ title: "Backfill failed", description: msg, variant: "destructive" });
+      toast({ title: dryRun ? "Dry run failed" : "Backfill failed", description: msg, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -158,6 +183,11 @@ const OvernightBackfillPanel = () => {
             failed, were cancelled, or got stuck during the auth outage, then invokes the runner immediately.
             Original rows are kept for audit.
           </p>
+          <p className="text-xs mt-1 text-muted-foreground">
+            {dryRun
+              ? "Dry run is on — nothing will be written."
+              : "Dry run is off — selected phases will be re-queued and the runner will be invoked."}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
@@ -168,6 +198,14 @@ const OvernightBackfillPanel = () => {
         <span className="text-muted-foreground">
           {selectableByPhase.length} candidate phase{selectableByPhase.length === 1 ? "" : "s"} · {selected.size} selected
         </span>
+        <label className="ml-3 inline-flex items-center gap-1.5 cursor-pointer">
+          <Checkbox
+            checked={dryRun}
+            onCheckedChange={(v) => setDryRun(v === true)}
+            aria-label="Dry run"
+          />
+          <span>Dry run</span>
+        </label>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={selectAll} disabled={selectableByPhase.length === 0}>
             Select all
@@ -175,8 +213,17 @@ const OvernightBackfillPanel = () => {
           <Button variant="outline" size="sm" onClick={clearAll} disabled={selected.size === 0}>
             Clear
           </Button>
-          <Button size="sm" onClick={backfillAndRun} disabled={busy || selected.size === 0}>
-            {busy ? "Re-queueing…" : `Re-queue & run ${selected.size || ""}`}
+          <Button
+            size="sm"
+            variant={dryRun ? "outline" : "default"}
+            onClick={backfillAndRun}
+            disabled={busy || selected.size === 0}
+          >
+            {busy
+              ? (dryRun ? "Previewing…" : "Re-queueing…")
+              : dryRun
+                ? `Preview re-queue (${selected.size})`
+                : `Re-queue & run ${selected.size || ""}`}
           </Button>
         </div>
       </div>
