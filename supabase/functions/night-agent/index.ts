@@ -22,11 +22,12 @@ import { openShift } from "./open.ts";
 import { closeShift } from "./close.ts";
 import { smokeTest } from "./smoke.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("night-agent", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
@@ -115,4 +116,4 @@ Deno.serve(async (req) => {
     } catch {}
     return json({ error: msg }, 500);
   }
-});
+}));

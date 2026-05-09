@@ -5,6 +5,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,7 +122,7 @@ async function inferNextUpTaskId(supabase: ReturnType<typeof createClient>): Pro
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("roadmap-log-work", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: corsHeaders });
@@ -275,4 +276,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, log_id: data.id, task_id: data.task_id }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-});
+}));

@@ -22,19 +22,34 @@ Owner roles below are roles, not people. **Operator** = you (final authority on 
 
 ---
 
-## Workstream 2 — Lessons-Learned Loop (weekly synthesis → durable rules)
+## Workstream 2 — Lessons-Learned Loop + Deferrals Registry (weekly synthesis → durable rules; nothing parked forever)
 
-**Goal:** Recurring observations become rules (memory entries, cron tweaks, roadmap findings) instead of repeating noise.
+**Goal:** Recurring observations become rules instead of repeating noise. Every "out of scope for now" decision is tracked with a `defer_until` date and resurfaced for review — no item gets parked indefinitely.
 
-**Deliverables**
-- `lessons` table (`category`, `severity`, `evidence jsonb`, `recommendation`, `status`, `applied_as`).
-- Edge function `lessons-synthesize` (clusters last N days from `night_observations`, `roadmap_review_findings`, `automation_runs`, `discussion_action_events`).
+**Deliverables — Lessons**
+- `lessons` table (`category`, `severity`, `evidence jsonb`, `recommendation`, `status`, `applied_as`, `dedupe_key`).
+- `lesson_events` table (status transitions, actor, payload).
+- Edge function `lessons-synthesize` (clusters last 7 days from `night_observations`, `roadmap_review_findings`, `automation_runs`, `discussion_action_events`; uses `pickModel()` so overnight runs hit `gemini-2.5-flash-lite`).
 - Cron `scheduled-lessons-weekly` Sunday 05:00 UTC.
-- Page `/lessons` (or extend existing): cards per lesson, evidence chips (deep-link), Apply / Defer / Reject. Apply writes a `mem://` entry or files a roadmap finding.
-- Cross-link from `/morning-review` ("Applied lessons this week").
-- `docs/lessons-loop.md`, `mem://features/lessons-loop.md`.
+- One-shot **14-day backfill button** on `/lessons` (operator-only, idempotent via `dedupe_key`, ~$0.03 estimated cost; disabled after first successful run via `lessons_backfill_runs` table).
+- Page `/lessons`: cards per lesson, evidence chips (deep-link), Apply / Defer / Reject / Reopen. Apply writes a `mem://` entry or files a roadmap finding. Defer opens the deferral dialog (see below).
+- Stub `Watchers` column on lesson cards (renders empty until W3 / Sentinel ships, no functional dependency).
 
-**Owner:** Lovable agent drafts lessons; Operator applies/defers/rejects.
+**Deliverables — Deferrals Registry**
+- `deferred_items` table (operator-only RLS, realtime): `title`, `reason`, `originating_context jsonb` (chat msg id / plan section / lesson id / finding id), `defer_until date NOT NULL DEFAULT now()+90d`, `severity`, `status` (`deferred` | `revisit_now` | `accepted` | `rejected`), `revisited_at`. Trigger enforces `defer_until > created_at`.
+- Two ingestion paths: (1) "Defer" action on `/lessons` writes here in addition to flipping lesson status; (2) one-shot seed migration loads current `.lovable/plan.md` "Out of scope" list + auto-apply-high-sev-lessons + any chat-thread deferrals.
+- Cron `scheduled-deferred-review` Mondays 06:15 UTC: flips rows whose `defer_until <= today` to `revisit_now`.
+- Surface on `/morning-review` as a "Revisit this week" card; badge count on `/lessons` and on the sidebar `/morning-review` link.
+
+**Cross-links**
+- "Applied lessons this week" + "Items to revisit" sections on `/morning-review`.
+- `docs/lessons-loop.md`, `docs/deferrals.md`, `mem://features/lessons-loop.md`.
+
+**Owner:** Lovable agent drafts lessons + seeds deferrals; Operator applies / defers / rejects / revisits.
+
+**Out of scope (deferred into the registry on first run):**
+- Auto-applying high-severity lessons (operator-gated by design; revisit when Sentinel watcher precision is measurable).
+- 90-day historical lesson backfill (14-day backfill is shipped instead; revisit if value of older signal proven).
 
 ---
 

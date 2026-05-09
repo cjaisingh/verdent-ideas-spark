@@ -1,3 +1,4 @@
+import { withLogger } from "../_shared/logger.ts";
 // No-op OpenAI-compatible chat completions endpoint.
 // Used as Deepgram Voice Agent's `think` provider so its built-in brain stays
 // silent. The real reply is generated server-side in copilot-voice and spoken
@@ -8,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("copilot-noop-llm", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   let stream = false;
@@ -53,4 +54,4 @@ Deno.serve(async (req) => {
     choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "stop" }],
     usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-});
+}));

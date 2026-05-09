@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +8,7 @@ const corsHeaders = {
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("telegram-test", async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   const authHeader = req.headers.get('Authorization');
@@ -100,4 +101,4 @@ Deno.serve(async (req) => {
   return new Response(JSON.stringify({ ok: true, chat_id: chatId, message_id: tgData.result?.message_id }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-});
+}));

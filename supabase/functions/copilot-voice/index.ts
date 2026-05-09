@@ -9,6 +9,7 @@
 // First message from client must be JSON: { type: "auth", jwt: "<supabase access token>" }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withLogger } from "../_shared/logger.ts";
 
 const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -616,7 +617,7 @@ async function loadOperatorContext(user_id: string): Promise<{ lessons: Lesson[]
 }
 
 // ---------- WebSocket bridge ----------
-Deno.serve(async (req) => {
+Deno.serve(withLogger("copilot-voice", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const upgrade = req.headers.get("upgrade") || "";
   if (upgrade.toLowerCase() !== "websocket") {
@@ -844,4 +845,4 @@ Deno.serve(async (req) => {
   client.onerror = () => { try { dg?.close(); } catch {} };
 
   return response;
-});
+}));

@@ -1,6 +1,7 @@
 // Weekly QA validation: walks qa_checks, runs probes for mechanical ones,
 // leaves judgement-type checks for the operator (status='unknown' until ticked).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +35,7 @@ const PROBES: Record<string, Probe> = {
   },
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("qa-validate", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
@@ -106,7 +107,7 @@ Deno.serve(async (req) => {
   }
 
   return json({ ok: true, probes_run: updated, checked: updated, count: updated });
-});
+}));
 
 function json(p: unknown, s = 200) {
   return new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });

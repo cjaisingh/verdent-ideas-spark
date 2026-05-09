@@ -2,6 +2,7 @@
 // Auth: operator JWT. Returns {proposals: [...]}; client decides what to persist.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { pickModel } from "../_shared/model-policy.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,7 +20,7 @@ Rules:
 - priority: high = blocks release/security, med = should do soon, low = nice-to-have.
 - confidence: 0.0-1.0 — your certainty this is a real, distinct action.`;
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("discussion-extract-actions", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -108,7 +109,7 @@ Deno.serve(async (req) => {
     console.error("extract-actions error", e);
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   }
-});
+}));
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

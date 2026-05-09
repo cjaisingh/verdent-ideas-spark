@@ -8,6 +8,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { dispatchAlert } from "../_shared/alerts.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,7 +29,7 @@ const json = (payload: unknown, status = 200) =>
 const JOB = "overnight-prequeue";
 const TERMINAL = ["shipped", "done", "cancelled"];
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("overnight-prequeue", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   const startedAt = Date.now();
 
@@ -139,4 +140,4 @@ Deno.serve(async (req) => {
     });
     return json({ error: msg }, 500);
   }
-});
+}));

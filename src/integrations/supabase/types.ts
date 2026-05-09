@@ -1040,6 +1040,51 @@ export type Database = {
         }
         Relationships: []
       }
+      deferred_items: {
+        Row: {
+          created_at: string
+          defer_until: string
+          id: string
+          originating_context: Json
+          reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          revisited_at: string | null
+          severity: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          defer_until?: string
+          id?: string
+          originating_context?: Json
+          reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          revisited_at?: string | null
+          severity?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          defer_until?: string
+          id?: string
+          originating_context?: Json
+          reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          revisited_at?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       discussion_action_events: {
         Row: {
           action_id: string | null
@@ -1279,6 +1324,134 @@ export type Database = {
         }
         Relationships: []
       }
+      lesson_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          created_at: string
+          event_type: string
+          id: string
+          lesson_id: string
+          payload: Json
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          lesson_id: string
+          payload?: Json
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          lesson_id?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_events_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          applied_as: Json | null
+          applied_at: string | null
+          applied_by: string | null
+          category: string
+          created_at: string
+          dedupe_key: string
+          evidence: Json
+          id: string
+          recommendation: string
+          severity: string
+          source_window_end: string | null
+          source_window_start: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          applied_as?: Json | null
+          applied_at?: string | null
+          applied_by?: string | null
+          category: string
+          created_at?: string
+          dedupe_key: string
+          evidence?: Json
+          id?: string
+          recommendation: string
+          severity: string
+          source_window_end?: string | null
+          source_window_start?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          applied_as?: Json | null
+          applied_at?: string | null
+          applied_by?: string | null
+          category?: string
+          created_at?: string
+          dedupe_key?: string
+          evidence?: Json
+          id?: string
+          recommendation?: string
+          severity?: string
+          source_window_end?: string | null
+          source_window_start?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      lessons_backfill_runs: {
+        Row: {
+          cost_usd: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          lessons_created: number | null
+          started_at: string
+          status: string
+          triggered_by: string | null
+          window_days: number
+        }
+        Insert: {
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          lessons_created?: number | null
+          started_at?: string
+          status: string
+          triggered_by?: string | null
+          window_days: number
+        }
+        Update: {
+          cost_usd?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          lessons_created?: number | null
+          started_at?: string
+          status?: string
+          triggered_by?: string | null
+          window_days?: number
+        }
+        Relationships: []
+      }
       memory_audit_log: {
         Row: {
           action: string
@@ -1348,6 +1521,54 @@ export type Database = {
           night_window_end?: string
           night_window_start?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      morning_reviews: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          created_at: string
+          generated_by: string
+          id: string
+          kpis: Json
+          night_throughput: Json
+          open_findings: Json
+          promotion_drift: Json
+          review_date: string
+          revisit_items: Json
+          stuck_jobs: Json
+          top_actions: Json
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          created_at?: string
+          generated_by?: string
+          id?: string
+          kpis?: Json
+          night_throughput?: Json
+          open_findings?: Json
+          promotion_drift?: Json
+          review_date: string
+          revisit_items?: Json
+          stuck_jobs?: Json
+          top_actions?: Json
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          created_at?: string
+          generated_by?: string
+          id?: string
+          kpis?: Json
+          night_throughput?: Json
+          open_findings?: Json
+          promotion_drift?: Json
+          review_date?: string
+          revisit_items?: Json
+          stuck_jobs?: Json
+          top_actions?: Json
         }
         Relationships: []
       }

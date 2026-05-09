@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,7 +136,7 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("overnight-phase-runner", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const provided = req.headers.get("x-service-token");
@@ -211,4 +212,4 @@ Deno.serve(async (req) => {
     { processed: results.length, failed, run_ids: runIds, explicit: !!explicitRun },
   );
   return json({ processed: results.length, results });
-});
+}));
