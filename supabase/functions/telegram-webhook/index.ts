@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { withLogger } from "../_shared/logger.ts";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 async function deriveSecret(apiKey: string): Promise<string> {
   const data = new TextEncoder().encode(`telegram-webhook:${apiKey}`);
@@ -112,12 +113,34 @@ async function transcribeAudio(base64: string, mime: string): Promise<string | n
     if (!res.ok) {
       const err = await res.text();
       console.error('transcribe failed', res.status, err.slice(0, 300));
+      try {
+        const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+        await logAiUsage(sb, {
+          job: 'telegram-webhook:transcribe', model, trigger: 'service',
+          status: 'error', status_code: res.status, latency_ms: Date.now() - startedAt,
+          error: err.slice(0, 500),
+          request_ref: { mime, audio_bytes: Math.round((base64.length * 3) / 4) },
+        });
+      } catch (e) { console.error('ai_usage_log mirror failed', e); }
       return null;
     }
     const data = await res.json();
     const text = (data?.choices?.[0]?.message?.content ?? '').toString().trim();
 
-    // Best-effort autoLog
+    // Mirror to ai_usage_log for the cost dashboard.
+    try {
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      await logAiUsage(sb, {
+        job: 'telegram-webhook:transcribe', model, trigger: 'service',
+        status: 'ok', status_code: 200, latency_ms: Date.now() - startedAt,
+        prompt_tokens: data?.usage?.prompt_tokens ?? null,
+        completion_tokens: data?.usage?.completion_tokens ?? null,
+        total_tokens: data?.usage?.total_tokens ?? null,
+        request_ref: { mime, audio_bytes: Math.round((base64.length * 3) / 4), chars: text.length },
+      });
+    } catch (e) { console.error('ai_usage_log mirror failed', e); }
+
+    // Best-effort autoLog (legacy roadmap-log-work mirror)
     const serviceToken = Deno.env.get('AWIP_SERVICE_TOKEN');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (serviceToken && supabaseUrl) {

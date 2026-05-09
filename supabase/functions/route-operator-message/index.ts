@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { withLogger } from "../_shared/logger.ts";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -135,6 +136,20 @@ async function classify(text: string) {
         tool_call: toolCallName,
       },
     }).catch((e) => console.error('autoLog failed', e));
+    // Mirror to ai_usage_log for the cost dashboard.
+    try {
+      const adminSb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      await logAiUsage(adminSb, {
+        job: 'route-operator-message:classify', model, trigger: 'service',
+        status: issues ? 'error' : 'ok',
+        status_code: httpStatus,
+        latency_ms: endedAt.getTime() - startedAt.getTime(),
+        prompt_tokens: tokens_in,
+        completion_tokens: tokens_out,
+        error: issues,
+        request_ref: { activity: result?.activity ?? null, finish_reason: finishReason },
+      });
+    } catch (e) { console.error('ai_usage_log mirror failed', e); }
   }
 }
 
@@ -269,18 +284,29 @@ Deno.serve(withLogger("route-operator-message", async (req) => {
         now: new Date().toISOString(),
       };
 
+      const replyModel = 'openai/gpt-5-mini';
+      const replyStart = Date.now();
       const aiRes = await fetch(AI_URL, {
         method: 'POST',
         headers: { Authorization: `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-5-mini',
+          model: replyModel,
           messages: [
             { role: 'system', content: 'You are AWIP, the operator\'s automation copilot. Reply briefly and naturally — under 40 words, British English, conversational tone suitable for a voice note while driving. Never read JSON aloud; summarise. If asked about status, use the provided context.' },
             { role: 'user', content: `Operator said: "${text}"\n\nContext:\n${JSON.stringify(ctx)}` },
           ],
         }),
       });
-      const aiData = await aiRes.json();
+      const aiData = await aiRes.json().catch(() => ({}));
+      await logAiUsage(supabase, {
+        job: 'route-operator-message:reply', model: replyModel, trigger: 'service',
+        status: aiRes.ok ? 'ok' : 'error', status_code: aiRes.status, latency_ms: Date.now() - replyStart,
+        prompt_tokens: aiData?.usage?.prompt_tokens ?? null,
+        completion_tokens: aiData?.usage?.completion_tokens ?? null,
+        total_tokens: aiData?.usage?.total_tokens ?? null,
+        error: aiRes.ok ? null : `HTTP ${aiRes.status}`,
+        request_ref: { activity: classification.activity },
+      });
       const reply = aiData?.choices?.[0]?.message?.content?.trim();
       if (reply) {
         const voiceUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/telegram-send-voice`;

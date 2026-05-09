@@ -9,6 +9,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { scanLesson, describeIssues } from "./lessonSafety.ts";
 import { withLogger } from "../_shared/logger.ts";
+import { logAiCall } from "../_shared/ai-usage.ts";
 import {
   evaluateCapability,
   refineConnectorsGate,
@@ -1725,11 +1726,13 @@ async function analyzeTranscript(id: string) {
 Active lessons (these were already in force):
 ${lessonBlock}`;
 
+  const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+  const aiStart = Date.now();
   const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}` },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+      model: ANALYSIS_MODEL,
       messages: [
         { role: "system", content: sys },
         { role: "user", content: `Transcript (model=${tr.model ?? "?"}, agent=${tr.agent_slug ?? "?"}):\n\n${transcriptText}` },
@@ -1739,9 +1742,11 @@ ${lessonBlock}`;
   });
   if (!aiRes.ok) {
     const t = await aiRes.text();
+    await logAiCall(supabase, { job: "awip-api:analyze-transcript", model: ANALYSIS_MODEL, trigger: "user", startedAt: aiStart, response: aiRes, errorText: t, request_ref: { transcript_id: id } });
     return json({ error: "ai gateway failed", detail: t.slice(0, 300) }, aiRes.status);
   }
   const aiBody = await aiRes.json();
+  await logAiCall(supabase, { job: "awip-api:analyze-transcript", model: ANALYSIS_MODEL, trigger: "user", startedAt: aiStart, response: aiRes, json: aiBody, request_ref: { transcript_id: id } });
   let analysis: any = {};
   try { analysis = JSON.parse(aiBody.choices?.[0]?.message?.content ?? "{}"); } catch {}
 
