@@ -136,6 +136,20 @@ async function classify(text: string) {
         tool_call: toolCallName,
       },
     }).catch((e) => console.error('autoLog failed', e));
+    // Mirror to ai_usage_log for the cost dashboard.
+    try {
+      const adminSb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      await logAiUsage(adminSb, {
+        job: 'route-operator-message:classify', model, trigger: 'service',
+        status: issues ? 'error' : 'ok',
+        status_code: httpStatus,
+        latency_ms: endedAt.getTime() - startedAt.getTime(),
+        prompt_tokens: tokens_in,
+        completion_tokens: tokens_out,
+        error: issues,
+        request_ref: { activity: result?.activity ?? null, finish_reason: finishReason },
+      });
+    } catch (e) { console.error('ai_usage_log mirror failed', e); }
   }
 }
 
