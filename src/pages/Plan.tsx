@@ -31,7 +31,17 @@ type Workstream = {
   sort_order: number;
   status: Status;
   updated_at: string;
+  est_human_hours: number;
+  est_ai_build_usd: number;
 };
+
+// Human cost baseline: £70k/yr fully-loaded → 52 weeks × 37.5 h = 1,950 h → £35.90/h
+const HUMAN_ANNUAL_GBP = 70_000;
+const HUMAN_ANNUAL_HOURS = 52 * 37.5;
+const HUMAN_HOURLY_GBP = HUMAN_ANNUAL_GBP / HUMAN_ANNUAL_HOURS;
+const USD_TO_GBP = 0.79;
+const fmtGbp = (n: number) =>
+  n >= 1000 ? `£${(n / 1000).toFixed(1)}k` : n >= 10 ? `£${n.toFixed(0)}` : `£${n.toFixed(2)}`;
 
 type Task = {
   id: string;
