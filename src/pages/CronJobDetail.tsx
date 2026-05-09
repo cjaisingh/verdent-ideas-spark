@@ -129,6 +129,17 @@ export default function CronJobDetail() {
   }, [job]);
 
   // Scroll the first focused run into view once the rows are rendered.
+  // Re-runs when the toggle switches between 1h / 24h windows.
+  useEffect(() => {
+    if (focusIds.size === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      focusIds.forEach((id) => next.add(id));
+      return next;
+    });
+    scrolledRef.current = false;
+  }, [focusIds]);
+
   useEffect(() => {
     if (scrolledRef.current) return;
     if (focusIds.size === 0 || runs.length === 0) return;
