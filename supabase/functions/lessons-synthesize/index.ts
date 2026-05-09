@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withLogger } from "../_shared/logger.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import { pickModel } from "../_shared/model-policy.ts";
+import { logAiCall } from "../_shared/ai-usage.ts";
 import { dedupeLessons } from "./dedupe.ts";
 
 const corsHeaders = {
