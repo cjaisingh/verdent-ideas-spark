@@ -13,8 +13,35 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "@/hooks/use-toast";
 import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
-  ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree,
+  ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
 } from "lucide-react";
+
+async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+  const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+}
+
+function useOllamaModels(baseUrl: string, enabled: boolean) {
+  const [models, setModels] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!enabled || !baseUrl) return;
+    let cancelled = false;
+    setLoading(true); setError(null);
+    const t = setTimeout(() => {
+      fetchOllamaModels(baseUrl)
+        .then((m) => { if (!cancelled) setModels(m); })
+        .catch((e) => { if (!cancelled) { setError(e?.message || String(e)); setModels([]); } })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [baseUrl, enabled, tick]);
+  return { models, loading, error, refetch: () => setTick((n) => n + 1) };
+}
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
 function pickClosestModel(target: string, available: string[]): string | null {
