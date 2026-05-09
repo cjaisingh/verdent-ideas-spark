@@ -146,6 +146,14 @@ const Plan = () => {
     () => costs.reduce((s, c) => s + Number(c.actual_usd_30d || 0), 0),
     [costs],
   );
+  const totalHumanGbp = useMemo(
+    () => workstreams.reduce((s, w) => s + Number(w.est_human_hours || 0) * HUMAN_HOURLY_GBP, 0),
+    [workstreams],
+  );
+  const totalAiBuildGbp = useMemo(
+    () => workstreams.reduce((s, w) => s + Number(w.est_ai_build_usd || 0) * USD_TO_GBP, 0),
+    [workstreams],
+  );
 
   const wsProgress = (wsId: string): { pct: number; counts: Record<Status, number> } => {
     const list = tasksByWs.get(wsId) ?? [];
