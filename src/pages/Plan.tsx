@@ -194,11 +194,13 @@ const Plan = () => {
         </p>
       </header>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <KpiCard label="Total tasks" value={totals.total} />
         <KpiCard label="Done" value={totals.done} tone="default" />
         <KpiCard label="In progress" value={totals.in_progress} tone="secondary" />
         <KpiCard label="Blocked" value={totals.blocked} tone="destructive" />
+        <KpiCard label="Est /mo" valueText={fmtUsd(totalEstMonthly)} />
+        <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
 
       {loading && workstreams.length === 0 && (
