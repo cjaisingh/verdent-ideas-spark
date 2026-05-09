@@ -222,6 +222,8 @@ const Plan = () => {
         <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
 
+      <W1StatusPanel />
+
       <Card className="p-4">
         <div className="flex items-baseline justify-between flex-wrap gap-2">
           <div>
