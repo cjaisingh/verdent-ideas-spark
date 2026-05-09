@@ -101,6 +101,73 @@ export default function Audits() {
 
   const selected = runs.find((r) => r.id === selectedId) ?? runs[0];
 
+  const latestByCadence = (cadence: "weekly" | "monthly"): Run | undefined =>
+    runs.find((r) => r.cadence === cadence);
+
+  const cadenceMaxAgeMs: Record<"weekly" | "monthly", number> = {
+    weekly: 8 * 24 * 60 * 60 * 1000,
+    monthly: 32 * 24 * 60 * 60 * 1000,
+  };
+
+  type Health = "pass" | "fail" | "stale" | "running" | "missing";
+  const healthOf = (cadence: "weekly" | "monthly"): { run?: Run; health: Health } => {
+    const run = latestByCadence(cadence);
+    if (!run) return { health: "missing" };
+    if (run.status === "running" || !run.finished_at) return { run, health: "running" };
+    if (run.status === "fail") return { run, health: "fail" };
+    const age = Date.now() - new Date(run.started_at).getTime();
+    if (age > cadenceMaxAgeMs[cadence]) return { run, health: "stale" };
+    return { run, health: "pass" };
+  };
+
+  const healthBadge = (h: Health) => {
+    const map: Record<Health, { label: string; cls: string }> = {
+      pass: { label: "Pass", cls: "bg-green-500 text-white" },
+      fail: { label: "Fail", cls: "bg-destructive text-destructive-foreground" },
+      stale: { label: "Stale", cls: "bg-amber-500 text-white" },
+      running: { label: "Running", cls: "bg-muted text-muted-foreground" },
+      missing: { label: "No runs", cls: "bg-muted text-muted-foreground" },
+    };
+    const m = map[h];
+    return <Badge className={m.cls}>{m.label}</Badge>;
+  };
+
+  const StatusTile = ({ cadence, label }: { cadence: "weekly" | "monthly"; label: string }) => {
+    const { run, health } = healthOf(cadence);
+    const high = run?.summary?.high ?? 0;
+    const crit = run?.summary?.critical ?? 0;
+    return (
+      <button
+        type="button"
+        onClick={() => run && setSelectedId(run.id)}
+        className="text-left border rounded-md p-3 hover:bg-accent transition w-full"
+        disabled={!run}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{label}</span>
+            {healthBadge(health)}
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            {run ? statusIcon(run.status) : null}
+            <span>
+              {crit > 0 || high > 0 ? `${crit}c · ${high}h` : run ? "clean" : "—"}
+            </span>
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground mt-1">
+          {run
+            ? `Last run ${formatDistanceToNow(new Date(run.started_at), { addSuffix: true })}${
+                run.finished_at
+                  ? ` · ${((new Date(run.finished_at).getTime() - new Date(run.started_at).getTime()) / 1000).toFixed(1)}s`
+                  : ""
+              }`
+            : "Never run"}
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
