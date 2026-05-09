@@ -3,7 +3,7 @@
 // `FindingCandidate` objects ready to upsert into public.sentinel_findings.
 
 export type FindingCandidate = {
-  kind: "cron_silence" | "five_xx_spike" | "secret_age" | "role_grant";
+  kind: "cron_silence" | "five_xx_spike" | "secret_age" | "role_grant" | "job_error_rate";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -11,7 +11,7 @@ export type FindingCandidate = {
   payload: Record<string, unknown>;
 };
 
-export type AutomationRunRow = { job: string; created_at: string };
+export type AutomationRunRow = { job: string; created_at: string; status?: string | null };
 export type EdgeLogRow = { status: number | null; created_at: string; function_name: string };
 export type SecretRow = { key: string; updated_at: string };
 export type RoleAuditRow = { id: string; role: string; action: string; target_user_id: string; created_at: string };
@@ -104,9 +104,67 @@ export function checkAdminGrants(now: Date, windowMin: number, audit: RoleAuditR
     }));
 }
 
+/**
+ * Job error-rate watcher — fires when one of the W2/W3/W4 jobs trips a
+ * rolling error threshold. Buckets dedupe by hour so a sustained outage
+ * re-flags once per hour rather than silently piling on a stale finding.
+ *
+ * Thresholds (per job):
+ *   - >= 2 errors in last 60 minutes        → medium
+ *   - >= 5 errors in last 24 hours          → high
+ *   - >= 1 error AND no successes in 24h    → high
+ */
+export const ERROR_RATE_JOBS = ["morning-review", "sentinel-tick", "lessons-synthesize"] as const;
+
+export function checkJobErrorRate(
+  now: Date,
+  runs: AutomationRunRow[],
+): FindingCandidate[] {
+  const out: FindingCandidate[] = [];
+  const since1h = now.getTime() - 60 * 60_000;
+  const since24h = now.getTime() - 24 * 3600 * 1000;
+  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+  for (const job of ERROR_RATE_JOBS) {
+    const jobRuns = runs.filter((r) => r.job === job);
+    const last24 = jobRuns.filter((r) => +new Date(r.created_at) >= since24h);
+    if (last24.length === 0) continue;
+    const err24 = last24.filter((r) => r.status === "error");
+    const ok24 = last24.filter((r) => r.status === "ok");
+    const err1h = err24.filter((r) => +new Date(r.created_at) >= since1h);
+
+    let sev: FindingCandidate["severity"] | null = null;
+    let reason = "";
+    if (err24.length >= 1 && ok24.length === 0) {
+      sev = "high"; reason = `${err24.length} error(s) and 0 successes in last 24h`;
+    } else if (err24.length >= 5) {
+      sev = "high"; reason = `${err24.length} errors in last 24h`;
+    } else if (err1h.length >= 2) {
+      sev = "medium"; reason = `${err1h.length} errors in last hour`;
+    }
+    if (!sev) continue;
+
+    const rate24 = last24.length ? err24.length / last24.length : 0;
+    out.push({
+      kind: "job_error_rate",
+      severity: sev,
+      summary: `${job}: ${reason} (rate ${(rate24 * 100).toFixed(0)}%).`,
+      dedupe_key: `job_error_rate:${job}:${hourBucket}`,
+      subject_ref: { job },
+      payload: {
+        runs_24h: last24.length, errors_24h: err24.length,
+        successes_24h: ok24.length, errors_1h: err1h.length,
+        error_rate_24h: rate24,
+      },
+    });
+  }
+  return out;
+}
+
 export const SENTINEL_CADENCES: Record<string, number> = {
   "qa-validate": 60,
   "overnight-phase-runner-15m": 15,
   "morning-review": 24 * 60,
   "sentinel-tick": 15,
+  "lessons-synthesize": 7 * 24 * 60,
 };
+

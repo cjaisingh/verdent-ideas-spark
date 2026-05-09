@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withLogger } from "../_shared/logger.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import {
-  checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants,
+  checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -40,6 +40,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
 
   if (!triggeredByCron && !auth.startsWith("Bearer ")) {
     await recordRun("error", 401, "Missing auth.");
+    await dispatchAlert(sb, "sentinel-tick", "auth_failed", "sentinel-tick unauthorized");
     return json({ error: "unauthorized" }, 401);
   }
 
@@ -49,7 +50,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since24h = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
     const [runsRes, edgeRes, secretsRes, auditRes] = await Promise.all([
-      sb.from("automation_runs").select("job,created_at").gte("created_at", since24h),
+      sb.from("automation_runs").select("job,status,created_at").gte("created_at", since24h),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
         .gte("created_at", since30m).limit(1000),
@@ -57,11 +58,13 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
     ]);
 
+    const runs = runsRes.data ?? [];
     const candidates: FindingCandidate[] = [
-      ...checkCronSilence(now, SENTINEL_CADENCES, runsRes.data ?? []),
+      ...checkCronSilence(now, SENTINEL_CADENCES, runs),
       ...checkFiveXxSpike(now, 15, edgeRes.data ?? []),
       ...checkSecretAge(now, secretsRes.data ?? []),
       ...checkAdminGrants(now, 15, auditRes.data ?? []),
+      ...checkJobErrorRate(now, runs),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;
