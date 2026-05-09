@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { FindingRunsDrawer } from "@/components/admin/FindingRunsDrawer";
 
 type Finding = {
   id: string;
@@ -20,15 +20,14 @@ type Finding = {
 };
 type Run = { created_at: string; status: string; message: string | null };
 
-// Extract a /admin/cron-health/:job?focus=... link from a finding when its
-// payload identifies the specific automation_runs ids that triggered it.
-function findingRunsLink(f: Finding): string | null {
+// Pull the (job, run_ids) tuple from a finding's payload/subject_ref so the UI
+// can cross-link from the finding back to the runs that caused it.
+function findingRunsRef(f: Finding): { job: string; runIds: string[] } | null {
   const job = f.subject_ref?.job as string | undefined;
   if (!job) return null;
   const ids: string[] = (f.subject_ref?.run_ids as string[]) ??
     (f.payload?.error_run_ids_24h as string[]) ?? [];
-  const focus = ids.slice(0, 25).join(",");
-  return `/admin/cron-health/${job}${focus ? `?focus=${focus}` : ""}`;
+  return { job, runIds: ids };
 }
 
 const sevColor: Record<string, string> = {
@@ -45,6 +44,7 @@ export function SentinelStatusStrip() {
   const [lastRun, setLastRun] = useState<Run | null>(null);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [drawerFinding, setDrawerFinding] = useState<Finding | null>(null);
 
   const load = async () => {
     const [{ data: f }, { data: r }] = await Promise.all([
@@ -137,25 +137,24 @@ export function SentinelStatusStrip() {
             ) : (
               <ul className="text-sm space-y-2">
                 {findings.slice(0, 3).map((f) => {
-                  const link = findingRunsLink(f);
-                  const runCount = (f.subject_ref?.run_ids as string[] | undefined)?.length
-                    ?? (f.payload?.error_run_ids_24h as string[] | undefined)?.length
-                    ?? 0;
+                  const ref = findingRunsRef(f);
+                  const runCount = ref?.runIds.length ?? 0;
                   return (
                   <li key={f.id} className="flex items-start justify-between gap-2 border-b border-border/40 pb-2 last:border-0">
                     <div className="flex-1 min-w-0">
                       <div className="line-clamp-2">{f.summary}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
                         <span>{f.kind} · seen {new Date(f.last_seen_at).toLocaleTimeString()}</span>
-                        {link && (
-                          <Link
-                            to={link}
+                        {ref && (
+                          <button
+                            type="button"
+                            onClick={() => setDrawerFinding(f)}
                             className="inline-flex items-center gap-0.5 text-primary hover:underline"
                             title={runCount ? `${runCount} run(s) caused this` : "View runs"}
                           >
                             view {runCount > 0 ? `${runCount} run${runCount === 1 ? "" : "s"}` : "runs"}
                             <ArrowUpRight className="h-3 w-3" />
-                          </Link>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -171,6 +170,14 @@ export function SentinelStatusStrip() {
           </>
         )}
       </CardContent>
+      <FindingRunsDrawer
+        open={!!drawerFinding}
+        onOpenChange={(o) => { if (!o) setDrawerFinding(null); }}
+        job={drawerFinding ? (findingRunsRef(drawerFinding)?.job ?? null) : null}
+        runIds={drawerFinding ? (findingRunsRef(drawerFinding)?.runIds ?? []) : []}
+        findingSummary={drawerFinding?.summary}
+        findingKind={drawerFinding?.kind}
+      />
     </Card>
   );
 }
