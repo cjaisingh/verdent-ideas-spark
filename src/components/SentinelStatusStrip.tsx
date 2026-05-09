@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Copy, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { FindingRunsDrawer } from "@/components/admin/FindingRunsDrawer";
 
@@ -198,6 +198,24 @@ export function SentinelStatusStrip() {
                           >
                             view {runCount > 0 ? `${runCount} run${runCount === 1 ? "" : "s"}` : "runs"}
                             <ArrowUpRight className="h-3 w-3" />
+                          </button>
+                        )}
+                        {ref && runCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(ref.runIds.join("\n"));
+                                toast.success(`Copied ${runCount} run id${runCount === 1 ? "" : "s"}`);
+                              } catch {
+                                toast.error("Clipboard blocked");
+                              }
+                            }}
+                            className="inline-flex items-center gap-0.5 hover:text-foreground hover:underline"
+                            title={`Copy ${runCount} automation_runs.id value(s)`}
+                          >
+                            <Copy className="h-3 w-3" />
+                            copy ids
                           </button>
                         )}
                       </div>
