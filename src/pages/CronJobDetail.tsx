@@ -201,12 +201,31 @@ export default function CronJobDetail() {
     );
   }
 
+  const findingId = searchParams.get("finding");
+  const backLabel = searchParams.get("backLabel");
+  const backHref = searchParams.get("backHref");
+  // If we arrived from a sentinel finding, build a back-link that scrolls
+  // the strip to that finding (anchor + ?finding=<id> for highlight).
+  const sentinelBackHref = findingId
+    ? `${backHref ?? "/roadmap"}?finding=${encodeURIComponent(findingId)}#sentinel-finding-${encodeURIComponent(findingId)}`
+    : null;
+  const sentinelBackLabel = findingId
+    ? `Back to ${backLabel ?? "Sentinel"} finding`
+    : null;
+
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div>
+      <div className="flex items-center gap-2 flex-wrap">
         <Button asChild variant="ghost" size="sm">
           <Link to="/admin/cron-health"><ArrowLeft className="h-4 w-4 mr-1" /> Cron health</Link>
         </Button>
+        {sentinelBackHref && (
+          <Button asChild variant="outline" size="sm">
+            <Link to={sentinelBackHref}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> {sentinelBackLabel}
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="flex items-start justify-between gap-4">
