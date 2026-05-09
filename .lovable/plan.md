@@ -2,11 +2,14 @@
 
 W1→W6 spine is shipped (`plan_tasks` 41/41 done). Roadmap backlog: **2 in_progress, 124 todo, 19 done**. Open `discussion_actions` includes two directly relevant items: *"Define process for operator to monitor Lovable AI's current activity"* and *"Define process for operator to view workstation work streams"* — exactly what this plan addresses.
 
-This plan merges three threads into one shippable unit:
+This plan is the **single source of truth** for the Companion-reachability work. It merges three threads into one shippable unit:
 
-1. **Hook the Companion into all of AWIP** (live state injection, not just docs)
-2. **Fix iPhone install** of the Companion PWA
-3. **Add two-way voice** to the Companion (parity with Copilot)
+1. **Hook the Companion into all of AWIP** (live state injection, not just docs) — *infra shipped, wiring in progress*
+2. **Fix iPhone install** of the Companion PWA — **shipped (pending publish)**
+3. **Add two-way voice** to the Companion (parity with Copilot) — *stub mounted, Deepgram loop pending*
+
+### Status legend
+- ✅ shipped  ·  🟡 in progress  ·  ⬜ not started  ·  🔵 optional
 
 ---
 
@@ -15,7 +18,7 @@ This plan merges three threads into one shippable unit:
 ### Problem
 Today the Companion only knows: (a) the static doc corpus via `awip-rag/search`, and (b) — for the Morning Review seed only — the latest `daily_plans` + `morning_reviews` row. It has no idea about live roadmap, open actions, overnight runs, recent automation failures, sentinel/audit findings, or what Lovable is currently coding. So "what are you working on?" only paraphrases docs.
 
-### 1a. New edge function `companion-context` (operator JWT)
+### 1a. ✅ New edge function `companion-context` (operator JWT) — *deployed*
 Returns a compact deterministic JSON snapshot, recomputed per turn (cached 30s in-memory):
 
 ```text
@@ -45,7 +48,7 @@ Returns a compact deterministic JSON snapshot, recomputed per turn (cached 30s i
 
 Read-only. No writes. ~2–4 KB JSON. One indexed query per section.
 
-### 1b. Wire into Companion as a third system message
+### 1b. 🟡 Wire into Companion as a third system message
 In `src/pages/Companion.tsx → sendMessage()`, alongside RAG, fetch `/companion-context` and inject as a Markdown system block between `SYSTEM_PROMPT` and the RAG blob:
 
 ```text
@@ -60,33 +63,37 @@ In `src/pages/Companion.tsx → sendMessage()`, alongside RAG, fetch `/companion
 
 Update `SYSTEM_PROMPT` so the model treats this block as authoritative live state and prefers it over the doc corpus when answering "what are you working on / what's blocked / what's next". Header pill shows **"Live state ✓ · age 4s"**; 60s auto-refresh; manual refresh button.
 
-### 1c. Two new quick-seed thread buttons (alongside Morning Review)
+**Status:** `src/lib/companion-live-state.ts` (fetcher + Markdown formatter + seed templates) shipped. Injection into `sendMessage`, header pill, and auto-refresh still pending.
+
+### 1c. ⬜ Two new quick-seed thread buttons (alongside Morning Review)
 - **"What is Lovable doing?"** — seeds with `lovable_focus` + last 10 `roadmap_task_activity` + last `scheduled-code-review` summary. Prompt: *"Walk me through what's actively being built and what I should sanity-check."*
 - **"Operator queue review"** — seeds with `operator_queue` + open sentinel/audit findings. Prompt: *"Help me triage these — which are blocking, which can wait, which should be promoted?"*
 
-### 1d. Optional RAG extension (same PR)
+Templates exist in `companion-live-state.ts`; UI buttons not yet mounted.
+
+### 1d. 🔵 Optional RAG extension (same PR)
 `scheduled-morning-review` writes three synthetic "live" docs nightly via `awip-rag/ingest` so older threads can still recall context: `live/roadmap-state.md`, `live/automation-health.md`, `live/lessons-recent.md`. Primary fix is per-turn injection above.
 
 ---
 
-## Part 2 — Fix iPhone install
+## Part 2 — ✅ Fix iPhone install — *shipped (pending publish)*
 
 ### Diagnosis (most likely → least)
-1. **Project isn't published.** iOS Safari only offers a real "Add to Home Screen" install when browsing the **published origin in Safari directly** — never inside the Lovable editor preview iframe and never on `id-preview--…lovable.app`. Until you publish + open the live URL in mobile Safari, you get a generic Safari shortcut, not the PWA. **This is the gating step.**
-2. **Wrong `apple-touch-icon` size.** `index.html` points at `companion-icon-512.png` (512×512). iOS expects **180×180** at `/apple-touch-icon.png`. Wrong size → iOS uses a screenshot of the page as the icon.
+1. **Project isn't published.** iOS Safari only offers a real "Add to Home Screen" install when browsing the **published origin in Safari directly** — never inside the Lovable editor preview iframe and never on `id-preview--…lovable.app`. Until you publish + open the live URL in mobile Safari, you get a generic Safari shortcut, not the PWA. **This is the gating step and is the only remaining action.**
+2. **Wrong `apple-touch-icon` size.** Was 512×512; iOS expects 180×180. ✅ Fixed.
 3. **Manifest scope is `/companion` only** (correct), so install must be triggered from `/companion` — never from `/`.
-4. **iOS Safari has no `beforeinstallprompt`.** Expected; `InstallPwaButton` already shows the right Share-sheet toast on iOS, so the button isn't the bug.
+4. **iOS Safari has no `beforeinstallprompt`.** Expected; `InstallPwaButton` already shows the right Share-sheet toast on iOS.
 
-### Fixes (mechanical)
-- Generate `public/apple-touch-icon.png` (180×180) from existing 512 source.
-- Add `public/companion-icon-192.png` and `companion-icon-256.png` to the manifest icons array.
-- Update `index.html`: `<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />` (keep the 512 link as fallback); add `<meta name="format-detection" content="telephone=no" />` and `viewport-fit=cover`.
-- New **`IphoneInstallHelpCard`** on `/companion`: detects iOS Safari, shows step-by-step (Share → Add to Home Screen), copy-published-URL button, and a one-time toast when `window.location.hostname` looks like the editor preview.
-- One-time guidance toast: *"To install on iPhone, publish the project, then open the published URL in Safari (not Chrome iOS — it can't install PWAs)."*
+### Fixes (all shipped)
+- ✅ `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png` generated.
+- ✅ `index.html` updated: 180×180 `apple-touch-icon` link, `viewport-fit=cover`.
+- ✅ `public/companion.webmanifest` updated with all icon sizes; scope `/companion`.
+- ✅ `src/components/companion/IphoneInstallHelpCard.tsx` — iOS Safari detection, Share→Add-to-Home-Screen steps, copy-published-URL button, editor-preview-origin warning.
+- ⬜ Operator action: **publish the project** and open the published URL in iPhone Safari to validate.
 
 ---
 
-## Part 3 — Two-way voice on the Companion (parity with Copilot)
+## Part 3 — 🟡 Two-way voice on the Companion (parity with Copilot)
 
 `/copilot` already has the full Deepgram realtime loop:
 - `supabase/functions/copilot-voice` — WebSocket: mic → Deepgram STT → AI Gateway → Aura TTS → audio back
@@ -95,7 +102,9 @@ Update `SYSTEM_PROMPT` so the model treats this block as authoritative live stat
 
 We reuse it as-is — **no new edge function**.
 
-### 3a. New `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC)
+### 3a. 🟡 New `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC)
+**Status:** stub component shipped + mounted on `/companion` to keep the build green. Full Deepgram loop port pending.
+
 Lifts the mic loop from `Copilot.tsx`:
 - Push-to-talk + hands-free toggle (VAD turn-end)
 - WebSocket to existing `copilot-voice`
@@ -131,35 +140,40 @@ Voice always uses the **cloud brain** (Ollama unreachable from phone). Banner: *
 
 ---
 
-## Execution order
+## Execution order (current state)
 
-1. **iPhone install fix** *(~15 min)* — icons + manifest + `IphoneInstallHelpCard` + publish-reminder toast.
-2. **`companion-context` edge fn** + per-turn injection in `Companion.tsx` + header pill + auto-refresh.
-3. **Two seed buttons** ("What is Lovable doing?", "Operator queue review").
-4. **`CompanionVoiceDock`** lifted from `Copilot.tsx`, mounted at the bottom of `/companion`, persisting turns into the active thread.
-5. **Daily voice cost cap** setting + `AdminAiUsage` surfacing.
-6. *(optional)* Live-doc nightly RAG ingest from `scheduled-morning-review`.
+1. ✅ **iPhone install fix** — icons + manifest + `IphoneInstallHelpCard` shipped. ⬜ Operator: publish project to validate end-to-end.
+2. ✅ **`companion-context` edge fn** deployed; ✅ `companion-live-state.ts` helper shipped; 🟡 per-turn injection in `Companion.sendMessage()`, header pill, 60s auto-refresh + manual refresh button still pending.
+3. ⬜ **Two seed buttons** ("What is Lovable doing?", "Operator queue review") — templates ready, UI not mounted.
+4. 🟡 **`CompanionVoiceDock`** — stub mounted; full Deepgram loop lift from `Copilot.tsx` pending.
+5. ⬜ **Daily voice cost cap** ($2/day default) setting + `AdminAiUsage` surfacing.
+6. 🔵 *(optional)* Live-doc nightly RAG ingest from `scheduled-morning-review`.
 
 ## Out of scope (call out, don't ship)
 - Letting the Companion *act* — discussion-only stays; escalation via Promote remains the only write path.
 - Streaming Lovable's edit-by-edit activity — no public feed exists; closest proxy is `roadmap_task_activity` + `scheduled-code-review`.
 - Push notifications, background sync, native Capacitor wrapper, on-device speech, replacing the cloud-chat path or model selection.
 
-## Files touched (estimate)
+## Files touched (status)
 
-**New:**
-- `supabase/functions/companion-context/index.ts` (~180 LOC)
-- `supabase/functions/companion-context/snapshot.ts` + Deno test
-- `src/components/companion/IphoneInstallHelpCard.tsx`
-- `src/components/companion/CompanionVoiceDock.tsx` (~250 LOC, lifted from `Copilot.tsx`)
-- `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png`
-- `docs/companion-pwa-ios.md`
+**New — shipped:**
+- ✅ `supabase/functions/companion-context/index.ts`
+- ✅ `src/lib/companion-live-state.ts` (fetcher + Markdown formatter + seed templates)
+- ✅ `src/components/companion/IphoneInstallHelpCard.tsx`
+- ✅ `src/components/companion/CompanionVoiceDock.tsx` (stub)
+- ✅ `public/apple-touch-icon.png` (180×180), `companion-icon-192.png`, `companion-icon-256.png`
 
-**Edited:**
-- `src/pages/Companion.tsx` (~120 LOC: fetch+inject, header pill, two seed buttons, prompt update, mount voice dock + help card)
-- `index.html`, `public/companion.webmanifest`
-- `scripts/ingest-awip-docs.ts` *(only if 1d included)*
-- `mem://features/companion` (Phase 1.6 + voice + PWA notes)
+**New — pending:**
+- ⬜ `supabase/functions/companion-context/snapshot.ts` + Deno test (extracted aggregator)
+- ⬜ `docs/companion-pwa-ios.md`
+
+**Edited — shipped:**
+- ✅ `index.html`, `public/companion.webmanifest`
+- 🟡 `src/pages/Companion.tsx` (imports + voice-dock mount done; live-state injection, header pill, seed buttons pending)
+
+**Edited — pending:**
+- ⬜ `scripts/ingest-awip-docs.ts` *(only if 1d included)*
+- ⬜ `mem://features/companion` (Phase 1.6 + voice + PWA notes)
 
 ## Acceptance
 - Ask the Companion *"what are you working on?"* → answers with actual current `roadmap_tasks` + last code-review summary, not paraphrased docs.
