@@ -183,6 +183,11 @@ const OvernightBackfillPanel = () => {
             failed, were cancelled, or got stuck during the auth outage, then invokes the runner immediately.
             Original rows are kept for audit.
           </p>
+          <p className="text-xs mt-1 text-muted-foreground">
+            {dryRun
+              ? "Dry run is on — nothing will be written."
+              : "Dry run is off — selected phases will be re-queued and the runner will be invoked."}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
@@ -193,6 +198,14 @@ const OvernightBackfillPanel = () => {
         <span className="text-muted-foreground">
           {selectableByPhase.length} candidate phase{selectableByPhase.length === 1 ? "" : "s"} · {selected.size} selected
         </span>
+        <label className="ml-3 inline-flex items-center gap-1.5 cursor-pointer">
+          <Checkbox
+            checked={dryRun}
+            onCheckedChange={(v) => setDryRun(v === true)}
+            aria-label="Dry run"
+          />
+          <span>Dry run</span>
+        </label>
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={selectAll} disabled={selectableByPhase.length === 0}>
             Select all
@@ -200,8 +213,17 @@ const OvernightBackfillPanel = () => {
           <Button variant="outline" size="sm" onClick={clearAll} disabled={selected.size === 0}>
             Clear
           </Button>
-          <Button size="sm" onClick={backfillAndRun} disabled={busy || selected.size === 0}>
-            {busy ? "Re-queueing…" : `Re-queue & run ${selected.size || ""}`}
+          <Button
+            size="sm"
+            variant={dryRun ? "outline" : "default"}
+            onClick={backfillAndRun}
+            disabled={busy || selected.size === 0}
+          >
+            {busy
+              ? (dryRun ? "Previewing…" : "Re-queueing…")
+              : dryRun
+                ? `Preview re-queue (${selected.size})`
+                : `Re-queue & run ${selected.size || ""}`}
           </Button>
         </div>
       </div>
