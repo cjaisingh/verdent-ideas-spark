@@ -583,8 +583,6 @@ export default function Companion() {
                     <code className="text-[10px] break-all">launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,https://*.lovableproject.com,http://localhost:*"</code>
                   </p>
                 </div>
-                  <p className="text-xs text-muted-foreground">Run on your Mac: <code className="text-[10px]">launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,http://localhost:*"</code> then restart Ollama.</p>
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Local model</Label>
