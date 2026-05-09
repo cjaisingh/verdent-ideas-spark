@@ -606,6 +606,92 @@ export type Database = {
         }
         Relationships: []
       }
+      companion_messages: {
+        Row: {
+          content: string
+          created_at: string
+          escalated_action_id: string | null
+          id: string
+          latency_ms: number | null
+          model: string | null
+          parts: Json
+          rag_chunk_ids: Json
+          role: string
+          thread_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          escalated_action_id?: string | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          parts?: Json
+          rag_chunk_ids?: Json
+          role: string
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          escalated_action_id?: string | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          parts?: Json
+          rag_chunk_ids?: Json
+          role?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companion_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "companion_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companion_threads: {
+        Row: {
+          agent_kind: string
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          id: string
+          model: string | null
+          ollama_base_url: string | null
+          seed_payload: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_kind?: string
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          id?: string
+          model?: string | null
+          ollama_base_url?: string | null
+          seed_payload?: Json
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_kind?: string
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          id?: string
+          model?: string | null
+          ollama_base_url?: string | null
+          seed_payload?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       copilot_agent_overrides: {
         Row: {
           agent_id: string
