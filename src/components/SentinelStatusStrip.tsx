@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,12 +46,26 @@ export function SentinelStatusStrip() {
     setLoading(false);
   };
 
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleReload = () => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => { load(); }, 250);
+  };
+
   useEffect(() => {
     load();
     const ch = supabase.channel("sentinel-strip")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sentinel_findings" }, load)
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "sentinel_findings" },
+        scheduleReload)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "automation_runs", filter: "job=eq.sentinel-tick" },
+        scheduleReload)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   const runNow = async () => {
