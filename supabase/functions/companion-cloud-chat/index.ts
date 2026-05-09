@@ -79,6 +79,10 @@ Deno.serve(async (req) => {
     });
   }
 
+  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_ROLE, { auth: { persistSession: false } });
+
+  const aiStart = Date.now();
   const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -90,6 +94,11 @@ Deno.serve(async (req) => {
 
   if (!upstream.ok || !upstream.body) {
     const txt = await upstream.text().catch(() => "");
+    await logAiUsage(admin, {
+      job: "companion-cloud-chat", model, trigger: "user",
+      status: "error", status_code: upstream.status, latency_ms: Date.now() - aiStart,
+      error: txt.slice(0, 500), request_ref: { user_id: userData.user.id, streamed: true },
+    });
     const status = upstream.status === 429 || upstream.status === 402 ? upstream.status : 502;
     return new Response(JSON.stringify({
       error: "gateway_error",
@@ -99,8 +108,40 @@ Deno.serve(async (req) => {
     }), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // Pass the SSE stream straight through (already OpenAI-compatible).
-  return new Response(upstream.body, {
+  // Tee the SSE stream so we can count assistant chars for approx usage logging.
+  const promptChars = messages.reduce((s, m) => s + (m.content?.length ?? 0), 0);
+  let completionChars = 0;
+  const decoder = new TextDecoder();
+  const transform = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      try {
+        const text = decoder.decode(chunk, { stream: true });
+        for (const line of text.split("\n")) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const j = JSON.parse(data);
+            const delta = j?.choices?.[0]?.delta?.content;
+            if (typeof delta === "string") completionChars += delta.length;
+          } catch { /* partial */ }
+        }
+      } catch { /* ignore */ }
+      controller.enqueue(chunk);
+    },
+    flush() {
+      // Fire-and-forget: log approximate usage when stream ends.
+      logAiUsage(admin, {
+        job: "companion-cloud-chat", model, trigger: "user",
+        status: "ok", status_code: 200, latency_ms: Date.now() - aiStart,
+        prompt_tokens: Math.ceil(promptChars / 4),
+        completion_tokens: Math.ceil(completionChars / 4),
+        request_ref: { user_id: userData.user.id, streamed: true, approx: true },
+      });
+    },
+  });
+
+  return new Response(upstream.body.pipeThrough(transform), {
     headers: {
       ...corsHeaders,
       "Content-Type": "text/event-stream",
