@@ -48,7 +48,7 @@ Returns a compact deterministic JSON snapshot, recomputed per turn (cached 30s i
 
 Read-only. No writes. ~2–4 KB JSON. One indexed query per section.
 
-### 1b. Wire into Companion as a third system message
+### 1b. 🟡 Wire into Companion as a third system message
 In `src/pages/Companion.tsx → sendMessage()`, alongside RAG, fetch `/companion-context` and inject as a Markdown system block between `SYSTEM_PROMPT` and the RAG blob:
 
 ```text
@@ -63,11 +63,15 @@ In `src/pages/Companion.tsx → sendMessage()`, alongside RAG, fetch `/companion
 
 Update `SYSTEM_PROMPT` so the model treats this block as authoritative live state and prefers it over the doc corpus when answering "what are you working on / what's blocked / what's next". Header pill shows **"Live state ✓ · age 4s"**; 60s auto-refresh; manual refresh button.
 
-### 1c. Two new quick-seed thread buttons (alongside Morning Review)
+**Status:** `src/lib/companion-live-state.ts` (fetcher + Markdown formatter + seed templates) shipped. Injection into `sendMessage`, header pill, and auto-refresh still pending.
+
+### 1c. ⬜ Two new quick-seed thread buttons (alongside Morning Review)
 - **"What is Lovable doing?"** — seeds with `lovable_focus` + last 10 `roadmap_task_activity` + last `scheduled-code-review` summary. Prompt: *"Walk me through what's actively being built and what I should sanity-check."*
 - **"Operator queue review"** — seeds with `operator_queue` + open sentinel/audit findings. Prompt: *"Help me triage these — which are blocking, which can wait, which should be promoted?"*
 
-### 1d. Optional RAG extension (same PR)
+Templates exist in `companion-live-state.ts`; UI buttons not yet mounted.
+
+### 1d. 🔵 Optional RAG extension (same PR)
 `scheduled-morning-review` writes three synthetic "live" docs nightly via `awip-rag/ingest` so older threads can still recall context: `live/roadmap-state.md`, `live/automation-health.md`, `live/lessons-recent.md`. Primary fix is per-turn injection above.
 
 ---
