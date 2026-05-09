@@ -21,9 +21,15 @@ interface Props {
   mode: PaneMode;
   onChange: (mode: PaneMode) => void;
   disabled?: boolean;
+  /**
+   * Subtle indicator dot per mode — used when the corresponding pane
+   * (right or bottom) is currently hidden but has data worth opening.
+   * Tooltip is augmented to explain why the dot is present.
+   */
+  indicators?: Partial<Record<PaneMode, { count: number; sourceLabel: string } | undefined>>;
 }
 
-export function PaneToggleGroup({ mode, onChange, disabled = false }: Props) {
+export function PaneToggleGroup({ mode, onChange, disabled = false, indicators }: Props) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (disabled) return;
