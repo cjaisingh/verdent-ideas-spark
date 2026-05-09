@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Switch } from "@/components/ui/switch";
+// Switch removed — using custom toggle button instead
 import { Moon, Loader2, X, Sparkles, Repeat } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
