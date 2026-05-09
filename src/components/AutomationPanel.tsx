@@ -511,6 +511,9 @@ type AlertSettings = {
   alert_on_review_error: boolean; alert_on_high_finding: boolean;
   alert_on_test_fail: boolean; alert_on_qa_fail: boolean;
   alert_on_cost: boolean;
+  alert_on_auth_failed: boolean;
+  auth_failed_threshold: number;
+  auth_failed_window_minutes: number;
   cost_per_run_usd: number | null;
   cost_per_day_usd: number | null;
   dedupe_minutes: number;
@@ -670,6 +673,7 @@ const AlertsCard = () => {
         <Toggle k="alert_on_test_fail" label="test failures" />
         <Toggle k="alert_on_qa_fail" label="QA probe failures" />
         <Toggle k="alert_on_cost" label="cost overruns" />
+        <Toggle k="alert_on_auth_failed" label="repeated 401s on cron" />
         <label className="inline-flex items-center gap-1 text-[11px] ml-auto">
           dedupe
           <input type="number" min={0} max={1440} value={s.dedupe_minutes}
@@ -706,6 +710,25 @@ const AlertsCard = () => {
           className="ml-auto text-[11px] px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-50">
           {costTesting ? "Sending…" : "Test cost alert"}
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+        <span className="font-medium text-foreground">Auth-failure thresholds</span>
+        <label className="inline-flex items-center gap-1">
+          alert when ≥
+          <input type="number" min={1} max={100} value={s.auth_failed_threshold}
+            onChange={(e) => patch({ auth_failed_threshold: Math.max(1, parseInt(e.target.value || "1", 10)) })}
+            className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
+          401s
+        </label>
+        <label className="inline-flex items-center gap-1">
+          within
+          <input type="number" min={1} max={1440} value={s.auth_failed_window_minutes}
+            onChange={(e) => patch({ auth_failed_window_minutes: Math.max(1, parseInt(e.target.value || "1", 10)) })}
+            className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
+          min
+        </label>
+        <span className="text-[10px] opacity-70">scanned every 5 min by automation-auth-monitor</span>
       </div>
 
       {logs.length > 0 && (

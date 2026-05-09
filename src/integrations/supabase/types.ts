@@ -226,11 +226,14 @@ export type Database = {
       }
       alert_settings: {
         Row: {
+          alert_on_auth_failed: boolean
           alert_on_cost: boolean
           alert_on_high_finding: boolean
           alert_on_qa_fail: boolean
           alert_on_review_error: boolean
           alert_on_test_fail: boolean
+          auth_failed_threshold: number
+          auth_failed_window_minutes: number
           cost_per_day_usd: number | null
           cost_per_run_usd: number | null
           dedupe_minutes: number
@@ -240,11 +243,14 @@ export type Database = {
           webhook_url: string | null
         }
         Insert: {
+          alert_on_auth_failed?: boolean
           alert_on_cost?: boolean
           alert_on_high_finding?: boolean
           alert_on_qa_fail?: boolean
           alert_on_review_error?: boolean
           alert_on_test_fail?: boolean
+          auth_failed_threshold?: number
+          auth_failed_window_minutes?: number
           cost_per_day_usd?: number | null
           cost_per_run_usd?: number | null
           dedupe_minutes?: number
@@ -254,11 +260,14 @@ export type Database = {
           webhook_url?: string | null
         }
         Update: {
+          alert_on_auth_failed?: boolean
           alert_on_cost?: boolean
           alert_on_high_finding?: boolean
           alert_on_qa_fail?: boolean
           alert_on_review_error?: boolean
           alert_on_test_fail?: boolean
+          auth_failed_threshold?: number
+          auth_failed_window_minutes?: number
           cost_per_day_usd?: number | null
           cost_per_run_usd?: number | null
           dedupe_minutes?: number
