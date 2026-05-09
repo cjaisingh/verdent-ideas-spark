@@ -54,8 +54,12 @@ export type FindingRunsDrawerProps = {
   // can toggle between the 1h and 24h triggering sets.
   runIds1h?: string[];
   runIds24h?: string[];
+  findingId?: string;
   findingSummary?: string;
   findingKind?: string;
+  // Where the drawer was opened from, used to render a "back to X" link on
+  // the cron-health drill-down. Defaults to "sentinel".
+  backTo?: { label: string; href: string };
 };
 
 export function FindingRunsDrawer({
