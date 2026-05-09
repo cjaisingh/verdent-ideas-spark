@@ -9,9 +9,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { CheckCircle2, Circle, AlertCircle, Loader2, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import { fmtUsd } from "@/lib/aiPricing";
 
 type Status = "todo" | "in_progress" | "blocked" | "done";
+
+type CostRow = {
+  workstream_id: string;
+  est_monthly_usd: number;
+  est_oneshot_usd: number;
+  actual_usd_30d: number;
+  jobs: string[] | null;
+};
 
 type Workstream = {
   id: string;
