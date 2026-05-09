@@ -70,15 +70,17 @@ const STATUS_ICON: Record<Status, typeof Circle> = {
 const Plan = () => {
   const [workstreams, setWorkstreams] = useState<Workstream[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [costs, setCosts] = useState<CostRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [openWs, setOpenWs] = useState<Set<string>>(new Set());
   const [editingNotes, setEditingNotes] = useState<Record<string, string>>({});
 
   const refresh = async () => {
     setLoading(true);
-    const [ws, ts] = await Promise.all([
+    const [ws, ts, cs] = await Promise.all([
       supabase.from("plan_workstreams").select("*").order("sort_order"),
       supabase.from("plan_tasks").select("*").order("sort_order"),
+      supabase.from("cost_summary_by_workstream" as any).select("*"),
     ]);
     setLoading(false);
     if (ws.error) {
@@ -91,6 +93,7 @@ const Plan = () => {
     }
     setWorkstreams((ws.data ?? []) as Workstream[]);
     setTasks((ts.data ?? []) as Task[]);
+    if (!cs.error) setCosts((cs.data ?? []) as CostRow[]);
   };
 
   useEffect(() => {
