@@ -17,6 +17,7 @@ const FLAG_MAP: Record<string, string> = {
   high_finding: "alert_on_high_finding",
   test_fail: "alert_on_test_fail",
   qa_fail: "alert_on_qa_fail",
+  auth_failed: "alert_on_auth_failed",
 };
 
 export async function dispatchAlert(
