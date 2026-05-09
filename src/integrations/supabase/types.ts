@@ -1190,6 +1190,45 @@ export type Database = {
         }
         Relationships: []
       }
+      deep_audit_runs: {
+        Row: {
+          cadence: string
+          created_at: string
+          findings: Json
+          finished_at: string | null
+          id: string
+          modules: Json
+          started_at: string
+          status: string
+          summary: Json
+          triggered_by: string
+        }
+        Insert: {
+          cadence: string
+          created_at?: string
+          findings?: Json
+          finished_at?: string | null
+          id?: string
+          modules?: Json
+          started_at?: string
+          status?: string
+          summary?: Json
+          triggered_by?: string
+        }
+        Update: {
+          cadence?: string
+          created_at?: string
+          findings?: Json
+          finished_at?: string | null
+          id?: string
+          modules?: Json
+          started_at?: string
+          status?: string
+          summary?: Json
+          triggered_by?: string
+        }
+        Relationships: []
+      }
       deferred_items: {
         Row: {
           created_at: string
