@@ -37,18 +37,28 @@ export function OvernightRunControl({ phaseId, phaseKey }: Props) {
   const [latest, setLatest] = useState<RunRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [recurring, setRecurring] = useState(false);
+  const [recurringSaving, setRecurringSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
-      const { data } = await supabase
-        .from("roadmap_phase_overnight_runs")
-        .select("id, status, requested_at, started_at, finished_at, scheduled_for, model, result, error")
-        .eq("phase_id", phaseId)
-        .order("requested_at", { ascending: false })
-        .limit(1);
+      const [{ data: runs }, { data: phase }] = await Promise.all([
+        supabase
+          .from("roadmap_phase_overnight_runs")
+          .select("id, status, requested_at, started_at, finished_at, scheduled_for, model, result, error")
+          .eq("phase_id", phaseId)
+          .order("requested_at", { ascending: false })
+          .limit(1),
+        supabase
+          .from("roadmap_phases")
+          .select("run_overnight")
+          .eq("id", phaseId)
+          .maybeSingle(),
+      ]);
       if (!active) return;
-      setLatest((data?.[0] as RunRow | undefined) ?? null);
+      setLatest((runs?.[0] as RunRow | undefined) ?? null);
+      setRecurring(!!(phase as any)?.run_overnight);
       setLoading(false);
     };
     load();
@@ -57,9 +67,34 @@ export function OvernightRunControl({ phaseId, phaseKey }: Props) {
       .on("postgres_changes",
         { event: "*", schema: "public", table: "roadmap_phase_overnight_runs", filter: `phase_id=eq.${phaseId}` },
         load)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "roadmap_phases", filter: `id=eq.${phaseId}` },
+        load)
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };
   }, [phaseId]);
+
+  const toggleRecurring = async (next: boolean) => {
+    setRecurringSaving(true);
+    const prev = recurring;
+    setRecurring(next);
+    try {
+      const { error } = await supabase
+        .from("roadmap_phases")
+        .update({ run_overnight: next } as never)
+        .eq("id", phaseId);
+      if (error) throw error;
+      toast({
+        title: next ? "Will be queued every night" : "Auto-queue off",
+        description: next
+          ? "Auto-queued at 21:55 UTC each evening until shipped."
+          : "Phase will no longer be queued automatically.",
+      });
+    } catch (e) {
+      setRecurring(prev);
+      toast({ title: "Update failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally { setRecurringSaving(false); }
+  };
 
   const queue = async () => {
     setBusy(true);
