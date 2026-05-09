@@ -140,14 +140,14 @@ Voice always uses the **cloud brain** (Ollama unreachable from phone). Banner: *
 
 ---
 
-## Execution order
+## Execution order (current state)
 
-1. **iPhone install fix** *(~15 min)* — icons + manifest + `IphoneInstallHelpCard` + publish-reminder toast.
-2. **`companion-context` edge fn** + per-turn injection in `Companion.tsx` + header pill + auto-refresh.
-3. **Two seed buttons** ("What is Lovable doing?", "Operator queue review").
-4. **`CompanionVoiceDock`** lifted from `Copilot.tsx`, mounted at the bottom of `/companion`, persisting turns into the active thread.
-5. **Daily voice cost cap** setting + `AdminAiUsage` surfacing.
-6. *(optional)* Live-doc nightly RAG ingest from `scheduled-morning-review`.
+1. ✅ **iPhone install fix** — icons + manifest + `IphoneInstallHelpCard` shipped. ⬜ Operator: publish project to validate end-to-end.
+2. ✅ **`companion-context` edge fn** deployed; ✅ `companion-live-state.ts` helper shipped; 🟡 per-turn injection in `Companion.sendMessage()`, header pill, 60s auto-refresh + manual refresh button still pending.
+3. ⬜ **Two seed buttons** ("What is Lovable doing?", "Operator queue review") — templates ready, UI not mounted.
+4. 🟡 **`CompanionVoiceDock`** — stub mounted; full Deepgram loop lift from `Copilot.tsx` pending.
+5. ⬜ **Daily voice cost cap** ($2/day default) setting + `AdminAiUsage` surfacing.
+6. 🔵 *(optional)* Live-doc nightly RAG ingest from `scheduled-morning-review`.
 
 ## Out of scope (call out, don't ship)
 - Letting the Companion *act* — discussion-only stays; escalation via Promote remains the only write path.
