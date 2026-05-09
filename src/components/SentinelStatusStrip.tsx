@@ -177,14 +177,21 @@ export function SentinelStatusStrip() {
           </>
         )}
       </CardContent>
-      <FindingRunsDrawer
-        open={!!drawerFinding}
-        onOpenChange={(o) => { if (!o) setDrawerFinding(null); }}
-        job={drawerFinding ? (findingRunsRef(drawerFinding)?.job ?? null) : null}
-        runIds={drawerFinding ? (findingRunsRef(drawerFinding)?.runIds ?? []) : []}
-        findingSummary={drawerFinding?.summary}
-        findingKind={drawerFinding?.kind}
-      />
+      {(() => {
+        const ref = drawerFinding ? findingRunsRef(drawerFinding) : null;
+        return (
+          <FindingRunsDrawer
+            open={!!drawerFinding}
+            onOpenChange={(o) => { if (!o) setDrawerFinding(null); }}
+            job={ref?.job ?? null}
+            runIds={ref?.runIds ?? []}
+            runIds1h={ref?.runIds1h ?? []}
+            runIds24h={ref?.runIds24h ?? []}
+            findingSummary={drawerFinding?.summary}
+            findingKind={drawerFinding?.kind}
+          />
+        );
+      })()}
     </Card>
   );
 }
