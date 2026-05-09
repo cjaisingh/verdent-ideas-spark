@@ -610,7 +610,12 @@ export default function Companion() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Local model</Label>
-                    <Input value={settings.ollama_model} onChange={(e) => setSettings((s) => ({ ...s, ollama_model: e.target.value }))} placeholder="qwen2.5:14b-instruct" />
+                    <LocalModelPicker
+                      baseUrl={settings.ollama_base_url}
+                      value={settings.ollama_model}
+                      onChange={(v) => setSettings((s) => ({ ...s, ollama_model: v }))}
+                      enabled={!settings.use_cloud}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Cloud model</Label>
