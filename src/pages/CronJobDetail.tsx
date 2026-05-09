@@ -298,6 +298,32 @@ export default function CronJobDetail() {
         </CardContent></Card>
       </div>
 
+      {finding && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 flex items-start gap-3">
+          <ShieldAlert className="h-4 w-4 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0 text-sm">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">From sentinel finding</span>
+              <Badge
+                className={
+                  finding.severity === "critical" ? "bg-destructive text-destructive-foreground" :
+                  finding.severity === "high" ? "bg-destructive/80 text-destructive-foreground" :
+                  finding.severity === "medium" ? "bg-amber-500 text-white" :
+                  "bg-muted text-muted-foreground"
+                }
+              >
+                {finding.severity}
+              </Badge>
+              <code className="text-[10px] font-mono text-muted-foreground">{finding.kind}</code>
+              <span className="text-[10px] text-muted-foreground">
+                seen {new Date(finding.last_seen_at).toLocaleString()}
+              </span>
+            </div>
+            <div className="break-words">{finding.summary}</div>
+          </div>
+        </div>
+      )}
+
       {(focusIds.size > 0 || hasWindowToggle) && (
         <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex items-center justify-between gap-3 flex-wrap">
           <div>
