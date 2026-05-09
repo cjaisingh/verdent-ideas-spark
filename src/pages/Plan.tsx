@@ -345,11 +345,11 @@ const Plan = () => {
   );
 };
 
-const KpiCard = ({ label, value, tone }: { label: string; value: number; tone?: "default" | "secondary" | "destructive" }) => (
+const KpiCard = ({ label, value, valueText, tone }: { label: string; value?: number; valueText?: string; tone?: "default" | "secondary" | "destructive" }) => (
   <Card className="p-3">
     <div className="text-xs text-muted-foreground">{label}</div>
     <div className="mt-1 flex items-center gap-2">
-      <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      <span className="text-2xl font-semibold tabular-nums">{valueText ?? value ?? 0}</span>
       {tone && <Badge variant={tone} className="text-[10px]">{tone === "default" ? "✓" : tone === "secondary" ? "…" : "!"}</Badge>}
     </div>
   </Card>
