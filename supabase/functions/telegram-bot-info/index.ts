@@ -1,127 +1,56 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
+// Returns Telegram bot identity + webhook info via the Lovable connector gateway.
+// Used by the Admin TelegramBotPanel and ControlPlane page.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/telegram";
-const ENDPOINT = "getMe";
+const GATEWAY = "https://connector-gateway.lovable.dev/telegram";
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-async function logAttempt(row: {
-  attempt: number;
-  status_code: number | null;
-  latency_ms: number;
-  ok: boolean;
-  error?: string | null;
-  detail?: unknown;
-}) {
-  try {
-    await admin.from("telegram_gateway_logs").insert({
-      endpoint: ENDPOINT,
-      attempt: row.attempt,
-      status_code: row.status_code,
-      latency_ms: row.latency_ms,
-      ok: row.ok,
-      error: row.error ?? null,
-      detail: row.detail ?? null,
-    });
-  } catch (e) {
-    console.error("telegram_gateway_logs insert failed", e);
-  }
-}
-
-async function callGetMe(lovableKey: string, tgKey: string) {
-  return await fetch(`${GATEWAY_URL}/getMe`, {
+async function tg(path: string, lovableKey: string, telegramKey: string) {
+  const r = await fetch(`${GATEWAY}/${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": tgKey,
+      "X-Connection-Api-Key": telegramKey,
       "Content-Type": "application/json",
     },
     body: "{}",
   });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, data };
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
-  const json = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   const TELEGRAM_API_KEY = Deno.env.get("TELEGRAM_API_KEY");
-  if (!LOVABLE_API_KEY) return json({ error: "LOVABLE_API_KEY is not configured" }, 200);
-  if (!TELEGRAM_API_KEY) return json({ error: "TELEGRAM_API_KEY is not configured" }, 200);
-
-  let lastStatus = 0;
-  let lastBody: any = null;
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const t0 = performance.now();
-    let status: number | null = null;
-    let ok = false;
-    let data: any = null;
-    let errMsg: string | null = null;
-
-    try {
-      const r = await callGetMe(LOVABLE_API_KEY, TELEGRAM_API_KEY);
-      status = r.status;
-      data = await r.json().catch(() => null);
-      ok = r.ok && !!data?.ok;
-    } catch (e) {
-      errMsg = (e as Error).message;
-    }
-
-    const latency_ms = Math.round(performance.now() - t0);
-
-    // Fire-and-forget log
-    logAttempt({
-      attempt,
-      status_code: status,
-      latency_ms,
-      ok,
-      error: ok ? null : errMsg ?? (data ? JSON.stringify(data).slice(0, 500) : null),
-      detail: ok ? null : data,
-    });
-
-    if (ok) {
-      const { id, username, first_name } = data.result;
-      const expectedRaw = Deno.env.get("TELEGRAM_EXPECTED_BOT_USERNAME") ?? null;
-      const expected = expectedRaw?.trim().replace(/^@/, "").toLowerCase() || null;
-      const mismatch = expected ? expected !== (username ?? "").toLowerCase() : false;
-      return json({
-        id,
-        username,
-        first_name,
-        url: username ? `https://t.me/${username}` : null,
-        expected_username: expected,
-        mismatch,
-      });
-    }
-
-    lastStatus = status ?? 0;
-    lastBody = data ?? (errMsg ? { message: errMsg } : null);
-
-    if (status !== null && status < 500) break;
-    if (attempt < 3) await new Promise((res) => setTimeout(res, 400 * attempt));
+  if (!LOVABLE_API_KEY || !TELEGRAM_API_KEY) {
+    return new Response(JSON.stringify({
+      error: "Telegram connector not configured",
+      missing: { LOVABLE_API_KEY: !LOVABLE_API_KEY, TELEGRAM_API_KEY: !TELEGRAM_API_KEY },
+    }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  console.error("getMe failed", lastStatus, lastBody);
-  return json(
-    {
-      error: "Telegram gateway unavailable",
-      detail: lastBody,
-      status: lastStatus,
-      fallback: true,
-    },
-    200,
-  );
+  try {
+    const [me, webhook] = await Promise.all([
+      tg("getMe", LOVABLE_API_KEY, TELEGRAM_API_KEY),
+      tg("getWebhookInfo", LOVABLE_API_KEY, TELEGRAM_API_KEY),
+    ]);
+    return new Response(JSON.stringify({
+      ok: me.ok && webhook.ok,
+      bot: me.data?.result ?? null,
+      webhook: webhook.data?.result ?? null,
+      errors: {
+        getMe: me.ok ? null : me.data,
+        getWebhookInfo: webhook.ok ? null : webhook.data,
+      },
+    }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 });
