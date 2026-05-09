@@ -305,11 +305,17 @@ const OperatorLayout = () => {
               <PaneToggleGroup
                 disabled={interacting}
                 mode={effectiveMode}
+                indicators={toggleIndicators}
                 onChange={(m) => {
                   // Toggles are disabled while dragging; ignore any change that
                   // still slips through and skip no-op selections.
                   if (interacting) return;
                   if (m === effectiveMode) return;
+                  // Any explicit mode change counts as the user expressing intent
+                  // for this route — disables auto-open for the rest of the session.
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(autoOpenSessionKey, "1");
+                  }
                   if (m === "centre") {
                     if (paneState.mode === "centre") {
                       setPaneState({ mode: paneState.lastNonCentre });
