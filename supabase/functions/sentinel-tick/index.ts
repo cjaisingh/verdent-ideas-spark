@@ -50,7 +50,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since24h = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
     const [runsRes, edgeRes, secretsRes, auditRes] = await Promise.all([
-      sb.from("automation_runs").select("job,status,created_at").gte("created_at", since24h),
+      sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since24h),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
         .gte("created_at", since30m).limit(1000),
