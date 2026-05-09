@@ -80,13 +80,37 @@ Deno.serve(async (req) => {
     return json({ skipped: true, reason: "night_agent_disabled" });
   }
 
+  const job = path.startsWith("/close") ? "night-agent-close"
+            : path.startsWith("/smoke") ? "night-agent-smoke"
+            : "night-agent-open";
+  const trigger = triggeredByCron ? "cron" : "manual";
+  const startedAt = Date.now();
   try {
-    if (path.startsWith("/open")) return await openShift(sb, settings ?? null);
-    if (path.startsWith("/close")) return await closeShift(sb);
-    if (path.startsWith("/smoke")) return await smokeTest(sb, settings ?? null, url);
-    return json({ error: "not_found", path }, 404);
+    let res: Response;
+    if (path.startsWith("/open")) res = await openShift(sb, settings ?? null);
+    else if (path.startsWith("/close")) res = await closeShift(sb);
+    else if (path.startsWith("/smoke")) res = await smokeTest(sb, settings ?? null, url);
+    else return json({ error: "not_found", path }, 404);
+    try {
+      const cloned = res.clone();
+      const detail = await cloned.json().catch(() => ({}));
+      await sb.from("automation_runs").insert({
+        job, trigger, status: res.ok ? "ok" : "error", status_code: res.status,
+        duration_ms: Date.now() - startedAt,
+        message: res.ok ? `${job} completed` : `${job} returned ${res.status}`,
+        detail,
+      });
+    } catch (e) { console.error("automation_runs insert failed", e); }
+    return res;
   } catch (e) {
     console.error("night-agent", e);
-    return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
+    const msg = e instanceof Error ? e.message : "unknown";
+    try {
+      await sb.from("automation_runs").insert({
+        job, trigger, status: "error", status_code: 500,
+        duration_ms: Date.now() - startedAt, message: msg, detail: { path },
+      });
+    } catch {}
+    return json({ error: msg }, 500);
   }
 });
