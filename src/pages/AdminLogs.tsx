@@ -168,6 +168,27 @@ export default function AdminLogs() {
     );
   }, [frontRows, search]);
 
+  const filteredAlerts = useMemo(() => {
+    return alertRows.filter((r) => {
+      if (alertJobFilter !== "__all__" && r.job !== alertJobFilter) return false;
+      if (alertReasonFilter !== "__all__" && r.reason !== alertReasonFilter) return false;
+      if (alertDelivery === "delivered" && !r.delivered) return false;
+      if (alertDelivery === "logged_only" && r.delivered) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        const payloadStr = r.payload ? JSON.stringify(r.payload).toLowerCase() : "";
+        if (!(
+          r.job.toLowerCase().includes(s) ||
+          r.reason.toLowerCase().includes(s) ||
+          (r.message ?? "").toLowerCase().includes(s) ||
+          (r.error ?? "").toLowerCase().includes(s) ||
+          payloadStr.includes(s)
+        )) return false;
+      }
+      return true;
+    });
+  }, [alertRows, alertJobFilter, alertReasonFilter, alertDelivery, search]);
+
   // KPIs from raw window (not user filters)
   const kpis = useMemo(() => {
     const total = edgeRows.length;
