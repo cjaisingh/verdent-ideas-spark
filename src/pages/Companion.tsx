@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "@/hooks/use-toast";
 import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
-  ArrowUpRightSquare, MessageSquareText, Sun, Wand2,
+  ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree,
 } from "lucide-react";
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
