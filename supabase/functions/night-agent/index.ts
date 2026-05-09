@@ -44,11 +44,12 @@ Deno.serve(async (req) => {
         ? "AWIP_SERVICE_TOKEN env var not set on edge function"
         : "service token mismatch";
     const job = path.startsWith("/close") ? "night-agent-close" : "night-agent-open";
+    const detail = { path, provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN };
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
-      message: reason,
-      detail: { path, provided_present: !!provided, service_token_env_present: !!SERVICE_TOKEN },
+      message: reason, detail,
     });
+    await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
   }
 
