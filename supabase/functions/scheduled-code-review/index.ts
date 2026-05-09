@@ -154,19 +154,61 @@ Deno.serve(withLogger("scheduled-code-review", async (req) => {
     });
     const aiLatency = Date.now() - aiStart;
 
+    // Helper: insert into ai_usage_log with detailed logging so we can prove
+    // whether the row was actually persisted (and why not, if it failed).
+    const writeUsageLog = async (
+      row: Record<string, unknown>,
+      context: "ok" | "error",
+    ): Promise<{ inserted: boolean; usage_log_id: string | null; error: string | null }> => {
+      const t0 = Date.now();
+      try {
+        const { data, error } = await sb
+          .from("ai_usage_log")
+          .insert(row)
+          .select("id")
+          .single();
+        const ms = Date.now() - t0;
+        if (error) {
+          console.error(
+            `[ai_usage_log:${context}] INSERT FAILED in ${ms}ms`,
+            JSON.stringify({
+              code: error.code, message: error.message,
+              details: error.details, hint: error.hint,
+              row_keys: Object.keys(row),
+            }),
+          );
+          return { inserted: false, usage_log_id: null, error: error.message };
+        }
+        console.log(
+          `[ai_usage_log:${context}] inserted id=${data?.id} in ${ms}ms ` +
+            `(model=${row.model} status=${row.status} status_code=${row.status_code})`,
+        );
+        return { inserted: true, usage_log_id: data?.id ?? null, error: null };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[ai_usage_log:${context}] threw after ${Date.now() - t0}ms: ${msg}`);
+        return { inserted: false, usage_log_id: null, error: msg };
+      }
+    };
+
     if (!aiResp.ok) {
       const t = await aiResp.text();
       console.error("AI gateway error", aiResp.status, t);
       const msg = `AI gateway returned ${aiResp.status}: ${t.slice(0, 200)}`;
       const code = aiResp.status === 429 ? 429 : aiResp.status === 402 ? 402 : 500;
-      await recordRun("error", code, msg);
-      await sb.from("ai_usage_log").insert({
+      const usageWrite = await writeUsageLog({
         job: "scheduled-code-review", model: REVIEWER_MODEL, trigger,
         status: "error", status_code: aiResp.status, latency_ms: aiLatency,
         error: msg.slice(0, 500),
         request_ref: { window_start: sinceISO, window_end: untilISO, night_mode: NIGHT_MODE },
         price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
         price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
+      }, "error");
+      await recordRun("error", code, msg, {
+        ai_status: aiResp.status,
+        usage_log_inserted: usageWrite.inserted,
+        usage_log_id: usageWrite.usage_log_id,
+        usage_log_error: usageWrite.error,
       });
       await maybeAlert("review_error", msg, { status: aiResp.status });
       return json({ error: code === 429 ? "rate_limited" : code === 402 ? "credits_exhausted" : "ai_gateway_error" }, code);
@@ -181,7 +223,14 @@ Deno.serve(withLogger("scheduled-code-review", async (req) => {
     const promptTok = usage.prompt_tokens ?? 0;
     const completionTok = usage.completion_tokens ?? 0;
     const cost = costUsd(REVIEWER_MODEL, promptTok, completionTok);
-    await sb.from("ai_usage_log").insert({
+    const usageMissing = !usage || (promptTok === 0 && completionTok === 0);
+    if (usageMissing) {
+      console.warn(
+        `[ai_usage_log:ok] gateway returned no usage object — inserting zero-token row anyway. ` +
+          `aiJson keys=${Object.keys(aiJson ?? {}).join(",")}`,
+      );
+    }
+    const usageWrite = await writeUsageLog({
       job: "scheduled-code-review", model: REVIEWER_MODEL, trigger,
       status: "ok", status_code: 200, latency_ms: aiLatency,
       prompt_tokens: usage.prompt_tokens ?? null,
@@ -190,8 +239,12 @@ Deno.serve(withLogger("scheduled-code-review", async (req) => {
       cost_usd: Number(cost.toFixed(6)),
       price_in_per_mtok: priceFor(REVIEWER_MODEL).in,
       price_out_per_mtok: priceFor(REVIEWER_MODEL).out,
-      request_ref: { window_start: sinceISO, window_end: untilISO, findings_count: findings.length, night_mode: NIGHT_MODE },
-    });
+      request_ref: {
+        window_start: sinceISO, window_end: untilISO,
+        findings_count: findings.length, night_mode: NIGHT_MODE,
+        usage_present: !usageMissing,
+      },
+    }, "ok");
     const totalTok = usage.total_tokens ?? (promptTok + completionTok);
     const prices = priceFor(REVIEWER_MODEL);
     await checkCostThresholds(sb, "scheduled-code-review", cost, maybeAlert, {
@@ -205,6 +258,8 @@ Deno.serve(withLogger("scheduled-code-review", async (req) => {
     });
 
     let highCount = 0;
+    let findingsInserted = 0;
+    let findingsError: string | null = null;
     if (findings.length > 0) {
       const rows = findings.map((f: any) => {
         if (f.severity === "high") highCount++;
@@ -219,16 +274,48 @@ Deno.serve(withLogger("scheduled-code-review", async (req) => {
           diff_window_end: untilISO,
         };
       });
-      const { error } = await sb.from("roadmap_review_findings").insert(rows);
-      if (error) console.error("insert failed", error);
+      const t0 = Date.now();
+      const { data, error } = await sb.from("roadmap_review_findings").insert(rows).select("id");
+      if (error) {
+        findingsError = error.message;
+        console.error(
+          `[roadmap_review_findings] INSERT FAILED in ${Date.now() - t0}ms`,
+          JSON.stringify({ code: error.code, message: error.message, details: error.details, hint: error.hint, attempted: rows.length }),
+        );
+      } else {
+        findingsInserted = data?.length ?? 0;
+        console.log(`[roadmap_review_findings] inserted ${findingsInserted}/${rows.length} in ${Date.now() - t0}ms`);
+      }
     }
 
     if (highCount > 0) {
       await maybeAlert("high_finding", `${highCount} new high-severity finding(s) from code review`, { high_count: highCount, total: findings.length });
     }
 
-    await recordRun("ok", 200, `${findings.length} findings recorded`, { findings_count: findings.length });
-    return json({ ok: true, count: findings.length, findings_count: findings.length, window: { sinceISO, untilISO } });
+    await recordRun("ok", 200, `${findings.length} findings recorded`, {
+      findings_count: findings.length,
+      findings_inserted: findingsInserted,
+      findings_error: findingsError,
+      usage_log_inserted: usageWrite.inserted,
+      usage_log_id: usageWrite.usage_log_id,
+      usage_log_error: usageWrite.error,
+      usage_present: !usageMissing,
+      prompt_tokens: promptTok,
+      completion_tokens: completionTok,
+      cost_usd: Number(cost.toFixed(6)),
+      ai_latency_ms: aiLatency,
+      model: REVIEWER_MODEL,
+    });
+    return json({
+      ok: true,
+      count: findings.length,
+      findings_count: findings.length,
+      findings_inserted: findingsInserted,
+      usage_log_inserted: usageWrite.inserted,
+      usage_log_id: usageWrite.usage_log_id,
+      usage_log_error: usageWrite.error,
+      window: { sinceISO, untilISO },
+    });
   } catch (e) {
     console.error(e);
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
