@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Activity, AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, ChevronRight,
-  Loader2, Play, RefreshCw,
+  Loader2, Play, RefreshCw, ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
