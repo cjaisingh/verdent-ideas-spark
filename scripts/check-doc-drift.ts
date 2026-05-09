@@ -49,7 +49,24 @@ if (files.length === 0) {
 
 const touched = (re: RegExp) => files.some((f) => re.test(f));
 
-const violations: string[] = [];
+type Annotation = {
+  file: string;
+  title: string;
+  message: string;
+};
+
+const annotations: Annotation[] = [];
+const summary: string[] = [];
+
+// Escape per GitHub workflow-command spec: %, \r, \n must be encoded.
+const enc = (s: string) =>
+  s.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+
+function emit(level: "error" | "warning", a: Annotation) {
+  console.log(
+    `::${level} file=${a.file},title=${enc(a.title)}::${enc(a.message)}`,
+  );
+}
 
 // Rule 1 — edge functions need automation/api/mem doc touch
 const fnChanged = files.filter((f) =>
@@ -60,12 +77,20 @@ if (fnChanged.length > 0) {
     touched(/^docs\/(automation|api)\.md$/) ||
     touched(/^mem\/features\/.+\.md$/);
   if (!docsTouched) {
-    violations.push(
-      `Edge functions changed but no docs updated:\n  ${fnChanged
-        .map((f) => f.split("/").slice(0, 3).join("/"))
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .join("\n  ")}\n  → update docs/automation.md, docs/api.md, or mem/features/<topic>.md`,
+    const fns = [
+      ...new Set(fnChanged.map((f) => f.split("/").slice(0, 3).join("/"))),
+    ];
+    summary.push(
+      `Edge functions changed without docs update:\n  ${fns.join("\n  ")}\n  → update docs/automation.md, docs/api.md, or mem/features/<topic>.md`,
     );
+    for (const fn of fnChanged) {
+      annotations.push({
+        file: fn,
+        title: "Doc-drift: edge function changed without doc update",
+        message:
+          "This edge function changed but no matching doc was updated. Update docs/automation.md, docs/api.md, or mem/features/<topic>.md (or apply label `doc-drift-ok` to bypass).",
+      });
+    }
   }
 }
 
@@ -74,9 +99,17 @@ const migrationsAdded = files.filter((f) =>
   /^supabase\/migrations\/.+\.sql$/.test(f),
 );
 if (migrationsAdded.length > 0 && !touched(/^CHANGELOG\.md$/)) {
-  violations.push(
+  summary.push(
     `New SQL migrations without CHANGELOG entry:\n  ${migrationsAdded.join("\n  ")}\n  → add a CHANGELOG.md line under the next release`,
   );
+  for (const mig of migrationsAdded) {
+    annotations.push({
+      file: mig,
+      title: "Doc-drift: migration without CHANGELOG entry",
+      message:
+        "New SQL migration shipped without a CHANGELOG.md entry. Add a line under the next [Unreleased] section.",
+    });
+  }
 }
 
 // Rule 3 — new pages require operator/README touch
@@ -85,19 +118,46 @@ if (pagesChanged.length > 0) {
   const opTouched =
     touched(/^docs\/operator-.+\.md$/) || touched(/^README\.md$/);
   if (!opTouched) {
-    violations.push(
-      `Page files changed but no operator doc / README updated:\n  ${pagesChanged.join("\n  ")}\n  → update docs/operator-*.md or README.md`,
+    summary.push(
+      `Page files changed without operator doc / README update:\n  ${pagesChanged.join("\n  ")}\n  → update docs/operator-*.md or README.md`,
     );
+    for (const p of pagesChanged) {
+      annotations.push({
+        file: p,
+        title: "Doc-drift: page changed without operator doc update",
+        message:
+          "This page was added or modified but no operator doc / README was updated. Update docs/operator-*.md or README.md.",
+      });
+    }
   }
 }
 
-if (violations.length === 0) {
+// Emit GitHub annotations + Job Summary
+for (const a of annotations) emit("error", a);
+
+const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+if (stepSummary) {
+  const lines: string[] = [];
+  lines.push("# Doc-drift report\n");
+  if (summary.length === 0) {
+    lines.push(`Clean — ${files.length} files inspected.`);
+  } else {
+    lines.push(`Inspected **${files.length}** files, **${annotations.length}** violations across **${summary.length}** rule(s).\n`);
+    for (const s of summary) lines.push("- " + s.replace(/\n/g, "\n  ") + "\n");
+    lines.push(
+      "\n_Apply the `doc-drift-ok` label to bypass when the omission is intentional._",
+    );
+  }
+  await Bun.write(stepSummary, lines.join("\n"));
+}
+
+if (summary.length === 0) {
   console.log(`doc-drift: clean (${files.length} files inspected)`);
   process.exit(0);
 }
 
 console.error("\n❌ Doc-drift detected:\n");
-for (const v of violations) console.error("• " + v + "\n");
+for (const v of summary) console.error("• " + v + "\n");
 console.error(
   "Fix the docs in this PR, or apply the `doc-drift-ok` label to bypass.",
 );

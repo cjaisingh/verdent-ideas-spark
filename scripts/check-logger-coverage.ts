@@ -55,10 +55,48 @@ for (const fn of fns) {
   }
 }
 
+const wrappedCount = fns.length - missing.length - exempt.length;
 console.log(
-  `logger-coverage: ${fns.length - missing.length - exempt.length}/${fns.length} wrapped (${exempt.length} exempt)`,
+  `logger-coverage: ${wrappedCount}/${fns.length} wrapped (${exempt.length} exempt)`,
 );
 if (exempt.length) console.log(`  exempt: ${exempt.join(", ")}`);
+
+// GitHub workflow-command escaping
+const enc = (s: string) =>
+  s.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+
+// Per-file annotations on the offending index.ts so they show up inline in the
+// PR Files-changed view.
+for (const fn of missing) {
+  const file = `supabase/functions/${fn}/index.ts`;
+  const title = "Logger coverage: missing withLogger wrapper";
+  const message = `Edge function "${fn}" is not wrapped with withLogger from _shared/logger.ts. Wrap the handler, or add \`// @logger-exempt: <reason>\` at the top of this file.`;
+  console.log(
+    `::error file=${file},line=1,col=1,title=${enc(title)}::${enc(message)}`,
+  );
+}
+
+const stepSummary = process.env.GITHUB_STEP_SUMMARY;
+if (stepSummary) {
+  const lines: string[] = [];
+  lines.push("# Logger coverage report\n");
+  lines.push(
+    `**${wrappedCount}/${fns.length}** edge functions wrapped (${exempt.length} exempt, ${missing.length} missing).\n`,
+  );
+  if (missing.length > 0) {
+    lines.push("## Missing wrapper\n");
+    for (const fn of missing)
+      lines.push(`- \`supabase/functions/${fn}/index.ts\``);
+    lines.push(
+      "\nWrap the handler with `withLogger` from `../_shared/logger.ts`, or add `// @logger-exempt: <reason>` at the top of the file.",
+    );
+  }
+  if (exempt.length > 0) {
+    lines.push("\n## Exempt\n");
+    for (const fn of exempt) lines.push(`- \`${fn}\``);
+  }
+  await Bun.write(stepSummary, lines.join("\n"));
+}
 
 if (missing.length === 0) process.exit(0);
 
