@@ -118,7 +118,7 @@ export default function EdgeHealthDashboard() {
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(2000);
-    setRuns((data as Run[]) ?? []);
+    setRuns(((data ?? []) as unknown) as Run[]);
     setRefreshedAt(new Date());
     setLoading(false);
   };
