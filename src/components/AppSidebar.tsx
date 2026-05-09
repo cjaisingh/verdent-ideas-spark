@@ -63,6 +63,7 @@ const systemItems: NavItem[] = [
   { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
   { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
+  { url: "/admin/logs", title: "Logs", icon: ScrollText },
   { url: "/status", title: "Status", icon: Heart },
 ];
 
