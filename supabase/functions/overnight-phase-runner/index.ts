@@ -183,11 +183,32 @@ Deno.serve(async (req) => {
     runIds = (rows ?? []).map((r: any) => r.id);
   }
 
-  if (runIds.length === 0) return json({ processed: 0, results: [] });
+  const startedAt = Date.now();
+  const trigger = triggeredBySvc ? "cron" : "manual";
+  const recordRun = async (status: string, status_code: number, message: string, detail: Record<string, unknown>) => {
+    try {
+      await sb.from("automation_runs").insert({
+        job: "overnight-phase-runner-15m", trigger, status, status_code,
+        duration_ms: Date.now() - startedAt, message, detail,
+      });
+    } catch (e) { console.error("automation_runs insert failed", e); }
+  };
+
+  if (runIds.length === 0) {
+    await recordRun("ok", 200, "no queued runs", { processed: 0 });
+    return json({ processed: 0, results: [] });
+  }
 
   const results = [];
   for (const id of runIds) {
     results.push(await processRun(sb, id));
   }
+  const failed = results.filter((r: any) => r.status === "failed").length;
+  await recordRun(
+    failed === 0 ? "ok" : "partial",
+    failed === 0 ? 200 : 207,
+    `${results.length} run(s) processed${failed ? ` · ${failed} failed` : ""}`,
+    { processed: results.length, failed, run_ids: runIds, explicit: !!explicitRun },
+  );
   return json({ processed: results.length, results });
 });
