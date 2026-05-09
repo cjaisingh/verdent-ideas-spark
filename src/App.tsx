@@ -44,6 +44,7 @@ import AdminCronHealth from "./pages/AdminCronHealth";
 import AdminCronConfig from "./pages/AdminCronConfig";
 import CronJobDetail from "./pages/CronJobDetail";
 import AdminLogs from "./pages/AdminLogs";
+import AdminAiUsage from "./pages/AdminAiUsage";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
@@ -100,6 +101,7 @@ const App = () => (
             <Route path="/admin/cron-health/:job" element={<CronJobDetail />} />
             <Route path="/admin/cron-config" element={<AdminCronConfig />} />
             <Route path="/admin/logs" element={<AdminLogs />} />
+            <Route path="/admin/ai-usage" element={<AdminAiUsage />} />
             <Route path="/morning-review" element={<MorningReview />} />
             <Route path="/admin/lessons" element={<LessonsLoop />} />
             <Route path="/audits" element={<Audits />} />
