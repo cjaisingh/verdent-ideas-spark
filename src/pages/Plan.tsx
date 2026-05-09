@@ -31,7 +31,17 @@ type Workstream = {
   sort_order: number;
   status: Status;
   updated_at: string;
+  est_human_hours: number;
+  est_ai_build_usd: number;
 };
+
+// Human cost baseline: £70k/yr fully-loaded → 52 weeks × 37.5 h = 1,950 h → £35.90/h
+const HUMAN_ANNUAL_GBP = 70_000;
+const HUMAN_ANNUAL_HOURS = 52 * 37.5;
+const HUMAN_HOURLY_GBP = HUMAN_ANNUAL_GBP / HUMAN_ANNUAL_HOURS;
+const USD_TO_GBP = 0.79;
+const fmtGbp = (n: number) =>
+  n >= 1000 ? `£${(n / 1000).toFixed(1)}k` : n >= 10 ? `£${n.toFixed(0)}` : `£${n.toFixed(2)}`;
 
 type Task = {
   id: string;
@@ -136,6 +146,14 @@ const Plan = () => {
     () => costs.reduce((s, c) => s + Number(c.actual_usd_30d || 0), 0),
     [costs],
   );
+  const totalHumanGbp = useMemo(
+    () => workstreams.reduce((s, w) => s + Number(w.est_human_hours || 0) * HUMAN_HOURLY_GBP, 0),
+    [workstreams],
+  );
+  const totalAiBuildGbp = useMemo(
+    () => workstreams.reduce((s, w) => s + Number(w.est_ai_build_usd || 0) * USD_TO_GBP, 0),
+    [workstreams],
+  );
 
   const wsProgress = (wsId: string): { pct: number; counts: Record<Status, number> } => {
     const list = tasksByWs.get(wsId) ?? [];
@@ -203,6 +221,28 @@ const Plan = () => {
         <KpiCard label="Actual 30d" valueText={fmtUsd(totalActual30d)} />
       </div>
 
+      <Card className="p-4">
+        <div className="flex items-baseline justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Build cost: AI vs human</h2>
+            <p className="text-xs text-muted-foreground">
+              Human baseline £{HUMAN_ANNUAL_GBP.toLocaleString()}/yr fully-loaded ({HUMAN_HOURLY_GBP.toFixed(2)}/h, {HUMAN_ANNUAL_HOURS}h/yr).
+              AI converted at ${USD_TO_GBP.toFixed(2)}/£.
+            </p>
+          </div>
+          <div className="flex items-center gap-4 text-xs tabular-nums">
+            <span>Human <span className="text-foreground font-semibold text-base">{fmtGbp(totalHumanGbp)}</span></span>
+            <span>AI build <span className="text-foreground font-semibold text-base">{fmtGbp(totalAiBuildGbp)}</span></span>
+            {totalAiBuildGbp > 0 && (
+              <Badge variant="default">{(totalHumanGbp / totalAiBuildGbp).toFixed(0)}× cheaper</Badge>
+            )}
+            {totalHumanGbp > 0 && (
+              <span className="text-muted-foreground">saves {fmtGbp(totalHumanGbp - totalAiBuildGbp)}</span>
+            )}
+          </div>
+        </div>
+      </Card>
+
       {loading && workstreams.length === 0 && (
         <p className="text-sm text-muted-foreground">Loading…</p>
       )}
@@ -266,6 +306,21 @@ const Plan = () => {
                           {" · "}Actual <span className={overrun ? "text-destructive font-medium" : "text-foreground"}>{fmtUsd(actual)}</span> (30d)
                         </span>
                         {overrun && <Badge variant="destructive" className="text-[9px] py-0 px-1.5">over budget</Badge>}
+                      </div>
+                    );
+                  })()}
+                  {(Number(ws.est_human_hours) > 0 || Number(ws.est_ai_build_usd) > 0) && (() => {
+                    const human = Number(ws.est_human_hours || 0) * HUMAN_HOURLY_GBP;
+                    const ai = Number(ws.est_ai_build_usd || 0) * USD_TO_GBP;
+                    const ratio = ai > 0 ? human / ai : 0;
+                    return (
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="tabular-nums">
+                          Build: AI <span className="text-foreground">{fmtGbp(ai)}</span>
+                          {" vs "}Human <span className="text-foreground">{fmtGbp(human)}</span>
+                          {Number(ws.est_human_hours) > 0 && <> ({ws.est_human_hours}h)</>}
+                        </span>
+                        {ratio > 0 && <Badge variant="outline" className="text-[9px] py-0 px-1.5">{ratio.toFixed(0)}× cheaper</Badge>}
                       </div>
                     );
                   })()}
