@@ -59,9 +59,10 @@ function loadSettings(): CompanionSettings {
 function defaults(): CompanionSettings {
   return {
     ollama_base_url: "http://localhost:11434",
-    // Gemma 3 4B runs comfortably on M4 24GB and is fast for chat + morning review.
-    // Override in Settings (e.g. gemma2:9b, qwen2.5:14b-instruct) if you want more depth.
-    ollama_model: "gemma3:4b",
+    // Gemma 4 31B (~20 GB on disk) fits the M4 Mac mini 24 GB and is the best
+    // local model available. iPhone/iPad can't reach Ollama directly — use the
+    // 'Use cloud' toggle on those devices, or a Tailscale URL to the Mac.
+    ollama_model: "gemma4:31b",
     cloud_model: "google/gemini-2.5-flash",
     use_cloud: false,
     rag_enabled: true,
