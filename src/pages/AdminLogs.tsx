@@ -39,6 +39,18 @@ type FrontRow = {
   created_at: string;
 };
 
+type AlertRow = {
+  id: string;
+  created_at: string;
+  job: string;
+  reason: string;
+  message: string | null;
+  delivered: boolean;
+  status_code: number | null;
+  error: string | null;
+  payload: Record<string, unknown> | null;
+};
+
 const WINDOWS = [
   { id: "1h", label: "1h", hours: 1 },
   { id: "24h", label: "24h", hours: 24 },
@@ -73,6 +85,11 @@ export default function AdminLogs() {
   const [errFilter, setErrFilter] = useState<string>("__all__");
   const [search, setSearch] = useState("");
 
+  const [alertRows, setAlertRows] = useState<AlertRow[]>([]);
+  const [alertJobFilter, setAlertJobFilter] = useState<string>("__all__");
+  const [alertReasonFilter, setAlertReasonFilter] = useState<string>("__all__");
+  const [alertDelivery, setAlertDelivery] = useState<string>("__all__");
+
   const since = useMemo(() => {
     const w = WINDOWS.find((x) => x.id === windowId) ?? WINDOWS[1];
     return new Date(Date.now() - w.hours * 60 * 60 * 1000).toISOString();
@@ -80,7 +97,7 @@ export default function AdminLogs() {
 
   const load = async () => {
     setLoading(true);
-    const [edge, front] = await Promise.all([
+    const [edge, front, alerts] = await Promise.all([
       supabase
         .from("edge_request_logs")
         .select("id, request_id, function_name, method, path, status, latency_ms, classified_error, error_message, user_id_hash, created_at")
@@ -93,9 +110,16 @@ export default function AdminLogs() {
         .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(500),
+      supabase
+        .from("alert_log")
+        .select("id, created_at, job, reason, message, delivered, status_code, error, payload")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(500),
     ]);
     setEdgeRows((edge.data ?? []) as EdgeRow[]);
     setFrontRows((front.data ?? []) as FrontRow[]);
+    setAlertRows((alerts.data ?? []) as AlertRow[]);
     setLoading(false);
   };
 
@@ -108,6 +132,14 @@ export default function AdminLogs() {
   const errOptions = useMemo(
     () => Array.from(new Set(edgeRows.map((r) => r.classified_error).filter(Boolean) as string[])).sort(),
     [edgeRows],
+  );
+  const alertJobOptions = useMemo(
+    () => Array.from(new Set(alertRows.map((r) => r.job))).sort(),
+    [alertRows],
+  );
+  const alertReasonOptions = useMemo(
+    () => Array.from(new Set(alertRows.map((r) => r.reason))).sort(),
+    [alertRows],
   );
 
   const filteredEdge = useMemo(() => {
@@ -135,6 +167,27 @@ export default function AdminLogs() {
       (r.request_id ?? "").toLowerCase().includes(s),
     );
   }, [frontRows, search]);
+
+  const filteredAlerts = useMemo(() => {
+    return alertRows.filter((r) => {
+      if (alertJobFilter !== "__all__" && r.job !== alertJobFilter) return false;
+      if (alertReasonFilter !== "__all__" && r.reason !== alertReasonFilter) return false;
+      if (alertDelivery === "delivered" && !r.delivered) return false;
+      if (alertDelivery === "logged_only" && r.delivered) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        const payloadStr = r.payload ? JSON.stringify(r.payload).toLowerCase() : "";
+        if (!(
+          r.job.toLowerCase().includes(s) ||
+          r.reason.toLowerCase().includes(s) ||
+          (r.message ?? "").toLowerCase().includes(s) ||
+          (r.error ?? "").toLowerCase().includes(s) ||
+          payloadStr.includes(s)
+        )) return false;
+      }
+      return true;
+    });
+  }, [alertRows, alertJobFilter, alertReasonFilter, alertDelivery, search]);
 
   // KPIs from raw window (not user filters)
   const kpis = useMemo(() => {
@@ -188,6 +241,7 @@ export default function AdminLogs() {
         <TabsList>
           <TabsTrigger value="edge">Edge requests ({filteredEdge.length})</TabsTrigger>
           <TabsTrigger value="frontend">Frontend errors ({filteredFront.length})</TabsTrigger>
+          <TabsTrigger value="alerts">Alerts ({filteredAlerts.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="edge" className="space-y-4">
@@ -298,6 +352,86 @@ export default function AdminLogs() {
                         <TableCell className="font-mono text-xs">{r.request_id?.slice(0, 12) ?? "-"}</TableCell>
                       </TableRow>
                     ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="alerts" className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap gap-2 items-center">
+                <Select value={alertJobFilter} onValueChange={setAlertJobFilter}>
+                  <SelectTrigger className="w-[200px]"><SelectValue placeholder="Agent / job" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All agents</SelectItem>
+                    {alertJobOptions.map((j) => <SelectItem key={j} value={j}>{j}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={alertReasonFilter} onValueChange={setAlertReasonFilter}>
+                  <SelectTrigger className="w-[180px]"><SelectValue placeholder="Reason" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All reasons</SelectItem>
+                    {alertReasonOptions.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={alertDelivery} onValueChange={setAlertDelivery}>
+                  <SelectTrigger className="w-[160px]"><SelectValue placeholder="Delivery" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All deliveries</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="logged_only">Logged only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Search request_id / message / payload"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-[280px]"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-4 space-y-2">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[80px]">Age</TableHead>
+                      <TableHead>Agent</TableHead>
+                      <TableHead className="w-[120px]">Reason</TableHead>
+                      <TableHead className="w-[120px]">Delivery</TableHead>
+                      <TableHead>Message</TableHead>
+                      <TableHead className="w-[140px]">Request ID</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAlerts.length === 0 && (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No alert dispatcher events in this window.</TableCell></TableRow>
+                    )}
+                    {filteredAlerts.map((r) => {
+                      const reqId = (r.payload && typeof r.payload === "object" && (r.payload as any).request_id) || null;
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell className="text-xs text-muted-foreground">{timeAgo(r.created_at)}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.job}</TableCell>
+                          <TableCell><Badge variant="outline">{r.reason}</Badge></TableCell>
+                          <TableCell>
+                            {r.delivered
+                              ? <Badge variant="default">delivered{r.status_code ? ` ${r.status_code}` : ""}</Badge>
+                              : <Badge variant="secondary">logged only</Badge>}
+                          </TableCell>
+                          <TableCell className="text-xs max-w-[420px] truncate" title={r.message ?? ""}>
+                            {r.message ?? "-"}
+                            {r.error && <span className="text-destructive ml-2">· {r.error.slice(0, 80)}</span>}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{reqId ? String(reqId).slice(0, 12) : "-"}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
