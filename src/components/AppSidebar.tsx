@@ -45,6 +45,7 @@ const planItems: NavItem[] = [
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
   { url: "/jobs", title: "Jobs board", icon: ListChecks },
+  { url: "/overnight", title: "Overnight overview", icon: Activity },
   { url: "/night-shifts", title: "Night shifts", icon: Moon },
   { url: "/ai-usage", title: "AI usage & cost", icon: Sparkles },
   { url: "/notebook", title: "Notebook", icon: NotebookIcon },
