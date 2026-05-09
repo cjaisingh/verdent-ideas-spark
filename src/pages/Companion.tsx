@@ -76,10 +76,7 @@ function TestOllamaButton({
     setStatus("testing"); setDetail(""); setSuggestion(null);
     const t0 = performance.now();
     try {
-      const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(4000) });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      const models: string[] = (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+      const models = await fetchOllamaModels(baseUrl);
       const ms = Math.round(performance.now() - t0);
       const has = models.includes(model);
       setAvailable(models);
