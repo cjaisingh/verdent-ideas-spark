@@ -10,6 +10,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { withLogger } from "../_shared/logger.ts";
+import { logAiCall } from "../_shared/ai-usage.ts";
 
 const DEEPGRAM_API_KEY = Deno.env.get("DEEPGRAM_API_KEY");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
