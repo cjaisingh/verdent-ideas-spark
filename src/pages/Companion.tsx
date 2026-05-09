@@ -541,29 +541,109 @@ export default function Companion() {
               <Sun className="h-3.5 w-3.5" />
             </Button>
           </div>
-          {threads.length === 0 && (
-            <p className="text-xs text-muted-foreground px-2 py-4 text-center">No conversations yet. Start one above.</p>
-          )}
-          {threads.map((t) => (
-            <div
-              key={t.id}
-              onClick={() => setActiveId(t.id)}
-              className={`group flex items-start gap-1 rounded px-2 py-1.5 cursor-pointer text-sm hover:bg-muted ${activeId === t.id ? "bg-muted" : ""}`}
-            >
-              {t.agent_kind === "morning_review" ? <Sun className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" /> : <MessageSquareText className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <div className="truncate">{t.title}</div>
-                <div className="text-[10px] text-muted-foreground">{new Date(t.updated_at).toLocaleString()}</div>
-              </div>
+
+          {/* Search */}
+          <div className="relative mb-1">
+            <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search title or messages…"
+              className="h-8 pl-7 pr-7 text-xs"
+            />
+            {search && (
               <button
-                onClick={(e) => { e.stopPropagation(); deleteThread(t.id); }}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                aria-label="Delete"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear search"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" />
               </button>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-2 gap-1 mb-1">
+            <Select value={filterKind} onValueChange={(v) => setFilterKind(v as typeof filterKind)}>
+              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All kinds</SelectItem>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="morning_review">Morning review</SelectItem>
+                <SelectItem value="planning">Planning</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterRange} onValueChange={(v) => setFilterRange(v as typeof filterRange)}>
+              <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between px-1 mb-2">
+            <button
+              onClick={() => setFilterEscalated((v) => !v)}
+              className={`flex items-center gap-1 text-[11px] rounded px-1.5 py-0.5 border ${filterEscalated ? "bg-primary/10 border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+              title="Show only threads with promoted actions"
+            >
+              <ArrowUpRightSquare className="h-3 w-3" />
+              Escalated only
+            </button>
+            {filtersActive && (
+              <button onClick={clearFilters} className="text-[11px] text-muted-foreground hover:text-foreground">Clear</button>
+            )}
+          </div>
+
+          {threads.length === 0 ? (
+            <p className="text-xs text-muted-foreground px-2 py-4 text-center">No conversations yet. Start one above.</p>
+          ) : visibleThreads.length === 0 ? (
+            <p className="text-xs text-muted-foreground px-2 py-4 text-center">
+              No matches.{" "}
+              <button onClick={clearFilters} className="underline">Clear filters</button>
+            </p>
+          ) : (
+            <div className="text-[10px] text-muted-foreground px-2 pb-1">
+              {visibleThreads.length} of {threads.length}
             </div>
-          ))}
+          )}
+          {visibleThreads.map((t) => {
+            const stats = threadStats[t.id];
+            return (
+              <div
+                key={t.id}
+                onClick={() => setActiveId(t.id)}
+                className={`group flex items-start gap-1 rounded px-2 py-1.5 cursor-pointer text-sm hover:bg-muted ${activeId === t.id ? "bg-muted" : ""}`}
+              >
+                {t.agent_kind === "morning_review"
+                  ? <Sun className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" />
+                  : t.agent_kind === "planning"
+                    ? <ListTree className="h-3.5 w-3.5 mt-0.5 text-blue-500 shrink-0" />
+                    : <MessageSquareText className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <div className="truncate">{t.title}</div>
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                    <span>{new Date(t.updated_at).toLocaleDateString()}</span>
+                    {stats?.msgs ? <span>· {stats.msgs} msg</span> : null}
+                    {stats?.escalated ? (
+                      <span className="inline-flex items-center gap-0.5 text-primary">
+                        · <ArrowUpRightSquare className="h-2.5 w-2.5" />{stats.escalated}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); deleteThread(t.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </aside>
 
         {/* Chat */}
