@@ -314,6 +314,7 @@ export default function Companion() {
   const [settings, setSettings] = useState<CompanionSettings>(loadSettings);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
+  const [resolvedOllamaUrl, setResolvedOllamaUrl] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Filters / search
