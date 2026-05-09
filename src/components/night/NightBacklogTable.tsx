@@ -98,7 +98,7 @@ const NightBacklogTable = () => {
         .order("updated_at", { ascending: false }),
       supabase
         .from("roadmap_phase_overnight_runs" as any)
-        .select("id, phase_id, phase_key, status, requested_at, scheduled_for, model")
+        .select("id, phase_id, phase_key, status, requested_at, scheduled_for, model, requested_by")
         .in("status", ["queued", "running"])
         .order("requested_at", { ascending: false }),
       supabase
