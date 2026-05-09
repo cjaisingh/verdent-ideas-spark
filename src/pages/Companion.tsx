@@ -563,7 +563,8 @@ export default function Companion() {
           body: JSON.stringify({ model, messages: llmMessages }),
         });
       } else {
-        resp = await fetch(`${settings.ollama_base_url}/v1/chat/completions`, {
+        const localBase = resolvedOllamaUrl ?? settings.ollama_base_url;
+        resp = await fetch(`${localBase}/v1/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ model, messages: llmMessages, stream: true }),
