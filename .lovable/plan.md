@@ -1,38 +1,26 @@
-The Settings test still shows **Failed · Failed to fetch** even though `curl http://localhost:11434/api/tags` returns 200 from your Mac. That means the browser request is being blocked before Ollama ever sees it. Two likely causes — we need to figure out which one before changing code.
+## Goal
+In Companion → Settings, replace the free-text "Local model" input with a dropdown populated from Ollama's `/api/tags`, so you can pick any installed model directly.
 
-## Likely causes
+## Changes (single file: `src/pages/Companion.tsx`)
 
-1. **CORS preflight rejected by Ollama.** `launchctl setenv` only affects apps launched *after* the setenv from a shell-launched process. The Ollama menu-bar app started by macOS at login does not inherit it. Quitting/reopening from the menu bar is often not enough — it has to be relaunched from a shell that has the var, or set via `launchctl` + a full logout, or via the Ollama app's own `OLLAMA_ORIGINS` setting.
-2. **Mixed-content block.** The preview is `https://*.lovableproject.com` calling `http://localhost:11434`. Chrome treats `localhost` as a secure context and allows it; Safari and Firefox often do not, and even Chrome blocks it inside some iframes. The Lovable preview renders inside an iframe, which is exactly where this fails.
+1. **New hook `useOllamaModels(baseUrl)`** — fetches `${baseUrl}/api/tags` on mount and whenever `baseUrl` changes (debounced ~300ms), with 4s timeout. Returns `{ models: string[], loading, error, refetch }`. No-op when cloud mode is on.
 
-## Diagnostic steps (you run, no code changes yet)
+2. **Replace the Local model `<Input>` (line 588–589)** with:
+   - A `<Select>` listing detected models when fetch succeeds and at least one model exists.
+   - The currently configured `ollama_model` is preselected. If it isn't in the list, show it as a disabled "(not installed)" item at the top so the user sees the mismatch.
+   - A small refresh icon button next to the select to re-run the fetch.
+   - **Fallback:** if the fetch errors or returns zero models, render the existing `<Input>` plus an inline hint ("Couldn't reach Ollama — type a model name"). This keeps the field usable when Ollama is offline.
 
-1. In the Mac terminal:
-   ```
-   launchctl getenv OLLAMA_ORIGINS
-   ```
-   - If this prints empty → the setenv didn't stick. Re-run the setenv, then **fully quit Ollama** (menu bar → Quit, then `pkill -f Ollama` to be sure) and relaunch.
-   - If it prints the origins → CORS env is set; cause is likely #2 (mixed content).
+3. **Reuse, don't duplicate:** `TestOllamaButton` already fetches `/api/tags` on click. Extract a tiny shared `fetchOllamaModels(baseUrl)` helper at module top so both the new hook and the test button use the same code path.
 
-2. From the Mac terminal, simulate the browser preflight:
-   ```
-   curl -i -X OPTIONS http://localhost:11434/api/tags \
-     -H "Origin: https://c58aeaea-93be-4b64-bb57-aeef50ab6dcd.lovableproject.com" \
-     -H "Access-Control-Request-Method: GET"
-   ```
-   Look for `Access-Control-Allow-Origin` in the response.
-   - Missing → Ollama doesn't know about the origin (cause #1).
-   - Present → cause is #2 (browser mixed-content / iframe block).
+4. **No behaviour change** to: cloud model select, RAG toggle, chat send path, message storage, or the "closest model" suggestion flow — the suggestion picker keeps working when the user manually types a non-installed name (e.g. via the fallback input).
 
-3. Tell me which browser you're using (Chrome / Safari / Arc / Firefox) and paste the output of step 2.
+## Out of scope
+- No changes to Ollama CORS handling, edge functions, or DB schema.
+- No new memory file (existing `mem://features/companion.md` already covers settings).
 
-## Fix paths (chosen after diagnosis)
-
-- **If cause #1 (CORS):** Switch from `launchctl setenv` to launching Ollama from a shell that exports `OLLAMA_ORIGINS`, or set it in `~/Library/LaunchAgents/com.ollama.plist`. No app code change needed.
-- **If cause #2 (mixed content):** Code change in `src/pages/Companion.tsx` — when the page is served over `https:` and the configured base URL is `http://localhost:*`, detect the fetch failure and surface a clearer error plus a one-click "Open Companion in a new tab" using the Lovable Cloud HTTPS tunnel, or instruct the user to open the preview in its own tab (outside the iframe) where Chrome permits localhost. Optionally add a small helper that auto-tries `127.0.0.1` as a fallback.
-
-## Why not just change code now
-
-The current "Failed to fetch" is generic — it covers both CORS rejection and mixed-content block, and they need opposite fixes (env vs UX). Running the two curl checks above takes ~30 seconds and tells us which one to ship.
-
-Reply with the output of the two commands and your browser, and I'll execute the matching fix.
+## Verification
+- Open Settings: dropdown lists installed models from `curl localhost:11434/api/tags`.
+- Pick one → reflected in `settings.ollama_model`, persisted to localStorage `awip.companion.settings.v1`, and shown in the footer "model …" label.
+- Stop Ollama → reopen Settings: dropdown falls back to text input with hint.
+- Change base URL → list refetches.

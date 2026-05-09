@@ -13,8 +13,75 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { toast } from "@/hooks/use-toast";
 import {
   Plus, Send, Trash2, Settings as SettingsIcon, Sparkles, Cloud, Cpu, Zap,
-  ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree,
+  ArrowUpRightSquare, MessageSquareText, Sun, Wand2, Search, X, ListTree, RefreshCw,
 } from "lucide-react";
+
+async function fetchOllamaModels(baseUrl: string, timeoutMs = 4000): Promise<string[]> {
+  const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+}
+
+function useOllamaModels(baseUrl: string, enabled: boolean) {
+  const [models, setModels] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!enabled || !baseUrl) return;
+    let cancelled = false;
+    setLoading(true); setError(null);
+    const t = setTimeout(() => {
+      fetchOllamaModels(baseUrl)
+        .then((m) => { if (!cancelled) setModels(m); })
+        .catch((e) => { if (!cancelled) { setError(e?.message || String(e)); setModels([]); } })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [baseUrl, enabled, tick]);
+  return { models, loading, error, refetch: () => setTick((n) => n + 1) };
+}
+
+function LocalModelPicker({
+  baseUrl, value, onChange, enabled,
+}: { baseUrl: string; value: string; onChange: (v: string) => void; enabled: boolean }) {
+  const { models, loading, error, refetch } = useOllamaModels(baseUrl, enabled);
+  const hasList = models.length > 0;
+  const inList = hasList && models.includes(value);
+  if (!hasList) {
+    return (
+      <div className="space-y-1">
+        <div className="flex gap-2">
+          <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="qwen2.5:14b-instruct" />
+          <Button type="button" variant="outline" size="icon" onClick={refetch} disabled={loading} title="Refresh">
+            <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {loading ? "Detecting installed models…" : error ? `Couldn't reach Ollama (${error}) — type a model name` : "No models detected — type a name"}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {!inList && value && (
+            <SelectItem value={value} disabled>{value} (not installed)</SelectItem>
+          )}
+          {models.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+        </SelectContent>
+      </Select>
+      <Button type="button" variant="outline" size="icon" onClick={refetch} disabled={loading} title="Refresh installed models">
+        <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+      </Button>
+    </div>
+  );
+}
+
 import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 
 function pickClosestModel(target: string, available: string[]): string | null {
@@ -49,10 +116,7 @@ function TestOllamaButton({
     setStatus("testing"); setDetail(""); setSuggestion(null);
     const t0 = performance.now();
     try {
-      const r = await fetch(`${baseUrl.replace(/\/$/, "")}/api/tags`, { signal: AbortSignal.timeout(4000) });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      const models: string[] = (j?.models ?? []).map((m: any) => m?.name).filter(Boolean);
+      const models = await fetchOllamaModels(baseUrl);
       const ms = Math.round(performance.now() - t0);
       const has = models.includes(model);
       setAvailable(models);
@@ -586,7 +650,12 @@ export default function Companion() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Local model</Label>
-                    <Input value={settings.ollama_model} onChange={(e) => setSettings((s) => ({ ...s, ollama_model: e.target.value }))} placeholder="qwen2.5:14b-instruct" />
+                    <LocalModelPicker
+                      baseUrl={settings.ollama_base_url}
+                      value={settings.ollama_model}
+                      onChange={(v) => setSettings((s) => ({ ...s, ollama_model: v }))}
+                      enabled={!settings.use_cloud}
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Cloud model</Label>
