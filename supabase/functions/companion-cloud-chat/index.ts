@@ -2,6 +2,7 @@
 // Auth: operator JWT. Returns OpenAI-compatible SSE chunks (data: {...}\n\n + [DONE]).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { pickModel } from "../_shared/model-policy.ts";
+import { logAiUsage } from "../_shared/ai-usage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
