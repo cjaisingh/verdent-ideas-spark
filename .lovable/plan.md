@@ -70,3 +70,29 @@ Deliverable after Phase 3: morning review, file imports, and overnight chat work
 Build Phase 1 end-to-end first (≈1 session). Use it for a few days. Then Phase 2 (≈half session, mostly manifest + cloud-fallback toggle). Phase 3 (≈1–2 sessions) only after Phase 1 proves the workflow.
 
 Want me to start with **Phase 1** as soon as you approve, or split it into smaller approval steps (chat tab → RAG → escalation → morning-review seed)?
+---
+
+## Build progress
+
+### Phase 1 — In-app Companion tab — **shipped 2026-05-09**
+- `companion_threads` + `companion_messages` tables (operator-owner RLS, realtime, 30-day retention on messages).
+- `/companion` route + sidebar entry under **Plan**.
+- Streaming chat from local Ollama via OpenAI-compatible `/v1/chat/completions`.
+- RAG context per turn via existing `awip-rag/search` (top-k from `awip_doc_chunks`).
+- Per-message **Promote → action** (writes `discussion_actions` row, `night_eligible=true`, owner `lovable`, subject_type `companion_thread`).
+- **Extract actions** button on a thread (new `companion-extract-actions` edge fn, mirrors `discussion-extract-actions`).
+- Morning-review seeded thread button (pulls latest `daily_plans` + `morning_reviews`).
+- Settings dialog: Ollama base URL, local model, RAG toggle, cloud-fallback toggle (cloud routing **not wired yet** — toast warns).
+
+**Operator setup (one-time on the Mac):**
+```
+launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,http://localhost:*"
+ollama serve   # or restart Ollama.app
+ollama pull qwen2.5:14b-instruct
+```
+
+### Phase 1.5 — Cloud fallback (small, next)
+Wire a real cloud LLM proxy edge fn (`companion-chat`) so the "Use cloud" toggle actually streams from Lovable AI Gateway. Needed for phone/tablet use when off-LAN.
+
+### Phase 2 — PWA manifest
+### Phase 3 — Headless Mac daemon + `local_ai_jobs`
