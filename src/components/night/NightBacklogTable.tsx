@@ -260,19 +260,29 @@ const NightBacklogTable = () => {
       {totalCount === 0 ? (
         <div className="p-6 text-sm text-muted-foreground space-y-3">
           <div className="font-medium text-foreground">Backlog is empty.</div>
-          <div>Opening a shift right now would do nothing. Add work from any of these surfaces:</div>
-          <ul className="space-y-1 text-xs">
+          <div>The night agent only <em>audits open</em> discussion-actions; it does not execute promoted roadmap tasks.</div>
+          {promotedNightCount > 0 && (
+            <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-xs text-foreground">
+              You have <strong>{promotedNightCount}</strong> night-eligible action{promotedNightCount === 1 ? "" : "s"} that {promotedNightCount === 1 ? "is" : "are"} already promoted (status ≠ open). They won't be re-audited. To have a roadmap phase actually <em>generated</em> overnight, toggle <strong>"nightly"</strong> on its phase row in <Link to="/roadmap" className="underline">/roadmap</Link>.
+            </div>
+          )}
+          {nightlyPhases > 0 && (
+            <div className="text-xs">
+              <strong>{nightlyPhases}</strong> roadmap phase{nightlyPhases === 1 ? " is" : "s are"} flagged <code className="font-mono">nightly</code> — they'll be auto-queued at 21:55 UTC.
+            </div>
+          )}
+          <ul className="space-y-1 text-xs pt-1">
             <li className="flex items-center gap-2">
               <MessageSquare className="h-3 w-3" />
-              <Link to="/discussions" className="underline">Mark a discussion action <code className="font-mono">night_eligible</code></Link>
+              <Link to="/discussions" className="underline">Mark a discussion action <code className="font-mono">night_eligible</code></Link> (audit only)
             </li>
             <li className="flex items-center gap-2">
               <Layers className="h-3 w-3" />
-              <Link to="/roadmap" className="underline">Queue a roadmap phase ("Run overnight")</Link>
+              <Link to="/roadmap" className="underline">Queue a roadmap phase</Link> — "Run overnight" once, or "nightly" toggle for every night
             </li>
             <li className="flex items-center gap-2">
               <ListTodo className="h-3 w-3" />
-              <span>Pending proposals from prior shifts will appear here automatically.</span>
+              <span>Pending proposals from prior shifts appear here automatically.</span>
             </li>
           </ul>
         </div>
