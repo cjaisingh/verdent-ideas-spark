@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.copilot-noop-llm]
 verify_jwt = false
+
+[functions.frontend-errors]
+verify_jwt = false
