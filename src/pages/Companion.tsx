@@ -95,6 +95,15 @@ export default function Companion() {
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
+  // Filters / search
+  const [search, setSearch] = useState("");
+  const [filterKind, setFilterKind] = useState<"all" | Thread["agent_kind"]>("all");
+  const [filterRange, setFilterRange] = useState<"all" | "today" | "7d" | "30d">("all");
+  const [filterEscalated, setFilterEscalated] = useState(false);
+  const [threadStats, setThreadStats] = useState<Record<string, { msgs: number; escalated: number }>>({});
+  const [searchHits, setSearchHits] = useState<Set<string> | null>(null);
+  const debounceRef = useRef<number | null>(null);
+
   const active = useMemo(() => threads.find((t) => t.id === activeId) ?? null, [threads, activeId]);
 
   // Persist settings
