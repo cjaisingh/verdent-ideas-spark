@@ -310,6 +310,7 @@ export default function Companion() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [voicePartial, setVoicePartial] = useState("");
   const [sending, setSending] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [settings, setSettings] = useState<CompanionSettings>(loadSettings);
