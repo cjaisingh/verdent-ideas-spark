@@ -1,74 +1,101 @@
-# Give the Companion full read access to the environment + a learning loop
-
 ## Goal
 
-Make `/companion` a true operator co-pilot: it reads from the whole environment, not just docs, and it captures lessons it learns so they persist across sessions. Browser-only surface, read-only writes are scoped to the lessons store. No new permissions model — RLS already restricts everything to operators.
+Make "is this safe to let the Night Agent touch?" an explicit, structured decision instead of an operator hunch. Today `priority` is the only signal and it conflates "do soon" with "would hurt if wrong" — which is exactly the wrong knob to gate autonomy on.
 
-## What's missing today
+## Proposal: add `risk`, gate night eligibility on it
 
-`Companion.tsx` only feeds the model two things:
-- A small "morning review" seed (counts only).
-- `awip-rag` doc search.
+### 1. New field: `discussion_actions.risk`
 
-It never reads `discussion_actions` (jobs), `roadmap_tasks`, `sentinel_findings`, `audit_runs`, `ai_usage_log`, `automation_runs`, `capability_events`, `okr_node_events`, `morning_reviews`, `daily_plans`, `lessons`, `copilot_lessons`, etc. So it can't answer "what's on the jobs board?", "what failed last night?", "what did we ship this week?", or "what have I taught you before?".
+- Enum: `low | med | high | critical` (mirrors priority for muscle memory).
+- Default `med` on insert (safe-ish middle).
+- Separate from `priority`. Priority = when, risk = blast radius if wrong.
+- Backfill: every existing row → `med`. Operator can re-tier from the drawer.
 
-## Two-layer access (read-only)
+Rubric (shipped as tooltip + `docs/jobs-board.md`):
 
-### Layer 1 — Per-turn environment snapshot (auto-injected)
+- **critical** — touches auth, billing, RLS, prod data migrations, or anything irreversible. Day shift, two-pair-of-eyes.
+- **high** — schema changes, edge-function contracts, cross-project surfaces, customer-visible UX. Day shift.
+- **med** — internal pages, copy, non-destructive refactors, doc updates with code touches. Night-shift OK.
+- **low** — pure docs, comments, lint fixes, dependency bumps inside semver-patch. Night-shift OK.
 
-New edge function `awip-companion-context` (operator JWT, `verify_jwt = false` + in-code `has_role` check) returns a compact JSON snapshot the chat injects as a system message before each turn. Sources:
+### 2. Night-eligibility gate
 
-- **Jobs board** — `discussion_actions` open + in-progress, top 25 by priority, with handles.
-- **Roadmap** — `roadmap_tasks` in active phases, status counts + top 10 at-risk.
-- **Last night** — most recent `automation_runs`, `sentinel_findings` (last 24h, severity≥med), `audit_runs` summary.
-- **Today** — newest `daily_plans` row + newest `morning_reviews` row.
-- **Health** — last 24h `ai_usage_log` totals (calls, tokens, cost, model mix), failed cron jobs from `list_all_nightly_jobs()`.
-- **OKRs / capabilities** — last 10 `okr_node_events` + last 10 `capability_events`.
-- **Active lessons** — all `copilot_lessons` for the current user + global `lessons` (capped, ordered by recency).
+- DB-level guard via trigger on `discussion_actions`:
+  - If `risk in ('high','critical')` then force `night_eligible = false` on insert/update.
+  - Operator can still flip the moon toggle, but the trigger reverts it and surfaces a toast: *"Risk = high — day shift only. Lower risk first."*
+- Hard override path: a new column `night_override_reason text`. If set (non-empty), the trigger respects `night_eligible = true` even at high/critical and writes a `discussion_action_events` row of type `night_override`. Critical risk **never** overrides — that one is a hard no.
+- Night Agent query stays `night_eligible = true` — the gate is enforced at write-time, so no edge-function changes needed.
 
-The function returns markdown ready to drop in as system context, capped at ~6 KB so it doesn't blow the prompt budget. Each section has a one-line header so the model can cite it (e.g. `[Jobs] J-123 …`).
+### 3. Auto-classification on intake
 
-### Layer 2 — On-demand RAG (already exists, broaden corpus)
+- The proposal extractor (`ProposalReviewSheet` / `awip-reviews-pull` / quarterly opener) already picks `priority`. Extend the same prompt to also pick `risk` with the rubric above. Default to `med` if unsure.
+- AWIP Reviews findings tagged severity `high`/`critical` map straight to `risk = high`/`critical` (severity ↔ risk is a clean mapping; severity ↔ priority is not).
 
-Keep the existing `awip-rag/search` for docs. Add a second search path `awip-rag/search-data` that accepts a free-text query and routes to whichever table matches keywords (`jobs:`, `audit:`, `sentinel:`, `roadmap:`, `lesson:`) — pure pass-through, no new index. The Companion calls this only when the user's message contains a search-shaped question. Cheap, optional.
+### 4. UI surface
 
-## Learning loop
+- **Job drawer** (`JobDetailsDrawer`): second badge next to priority, same select pattern. Tooltip shows the rubric.
+- **Discussion Actions pane**: small colored dot before the priority chip — gray (low) → blue (med) → amber (high) → red (critical). Moon button greys out + tooltip "blocked by risk" when high/critical and no override.
+- **Jobs page** (`/jobs`): risk column + filter, plus a "Night queue" pill showing how many of today's open jobs are night-eligible.
+- **Audit log**: `risk_changed` and `night_override` events join the existing event stream.
 
-The model already proposes "discussion actions" today. Extend that to a parallel "lesson capture" path:
+### 5. Morning Review tie-in
 
-- Reuse `public.copilot_lessons` (table already exists, validated by `validate_copilot_lesson` trigger — scopes: `global`, `notebook`, `approvals`, `voice_style`; ≤500 chars; sources: `voice`, `manual`).
-- After every assistant turn, the Companion runs a small extraction prompt against the user+assistant pair: "Is there a durable preference, fact, or correction here? If yes, propose 0–3 lessons." Proposals appear in a new "Pending lessons" tray under the chat with **Save / Edit / Discard** controls; saved rows go to `copilot_lessons` with `source='voice'`.
-- The per-turn snapshot (Layer 1) always includes the active lessons, so future turns reflect what's been learned.
+Aggregate "high/critical risk jobs still open" into the morning brief so day shift sees the queue they own. No new cron — just one extra section in `morning-review`.
 
-## Settings (Companion settings sheet)
+### Out of scope
 
-Three new toggles, persisted in the existing `SETTINGS_KEY` localStorage blob:
-- **Environment context** (default on) — Layer 1.
-- **Data search** (default on) — Layer 2.
-- **Auto-extract lessons** (default on) — proposes; never auto-saves without click.
+- Touching `sentinel_findings.severity` or `/risk-dashboard` — those are platform-health risk, different concept, keep separate.
+- Renaming `priority` (would churn 30+ files for no behavioral win).
+- Auto-promoting risk based on file paths or diff size — too clever, save for later.
 
-Footer status line gains `· env {on|off} · lessons {N}`.
+## Technical detail
 
-## Files
+Schema (one migration):
 
-- **New** `supabase/functions/awip-companion-context/index.ts` — Layer 1 aggregator.
-- **New** `supabase/functions/awip-rag/search-data` route inside the existing `awip-rag` function (no new function).
-- **Edited** `src/pages/Companion.tsx` — call context fn per send, render Pending lessons tray, settings switches, system-prompt addendum.
-- **New** `src/components/companion/PendingLessonsTray.tsx` — small list with Save/Edit/Discard.
-- **CHANGELOG.md** — one line.
-- **`mem://features/companion.md`** — append: "Per-turn env snapshot + auto lesson capture into `copilot_lessons`."
+```sql
+alter type job_risk add value if not exists ...  -- new enum
+-- or text + check, matching how priority is stored today
+alter table public.discussion_actions
+  add column risk text not null default 'med',
+  add column night_override_reason text;
 
-## Out of scope (call out, do not build)
+alter table public.discussion_actions
+  add constraint discussion_actions_risk_chk
+  check (risk in ('low','med','high','critical'));
 
-- **Write/CRUD tools** for the Companion (creating jobs, closing tasks, etc.) — separate PR after we trust the read path.
-- **Rork iPhone** — same edge function will be reusable, but no Rork changes here.
-- **New tables** — uses existing `copilot_lessons`, `lessons`, `discussion_actions`, etc.
-- **Embeddings on data tables** — Layer 2 is keyword routing, not vector search.
+-- Trigger: enforce gate
+create or replace function public.enforce_night_eligibility_by_risk()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.risk = 'critical' then
+    new.night_eligible := false;          -- never overridable
+    new.night_override_reason := null;
+  elsif new.risk = 'high' and coalesce(new.night_override_reason,'') = '' then
+    new.night_eligible := false;
+  end if;
+  return new;
+end $$;
 
-## Verification
+create trigger trg_enforce_night_eligibility
+before insert or update on public.discussion_actions
+for each row execute function public.enforce_night_eligibility_by_risk();
+```
 
-1. Open `/companion`, ask "what's on the jobs board?" → response cites real handles from `discussion_actions`.
-2. Ask "what failed last night?" → cites real rows from `sentinel_findings` / `automation_runs`.
-3. Tell it "always refer to me as 'Chief'" → a pending lesson appears; click Save; refresh; next turn it uses 'Chief'.
-4. Toggle "Environment context" off → snapshot disappears from the next request payload (visible in Network tab).
-5. Confirm context payload stays under ~6 KB on a busy day (log size in dev).
+Files touched:
+
+- `supabase/migrations/<new>.sql` — column, check, trigger, backfill (all rows → `med`).
+- `src/components/discussions/JobDetailsDrawer.tsx` — risk select + tooltip + override input (when high).
+- `src/components/discussions/ProposalReviewSheet.tsx` — risk on each proposal row.
+- `src/components/panes/bodies/DiscussionActionsBody.tsx` — risk dot + disabled moon state.
+- `src/pages/Jobs.tsx` — column + filter + night-queue pill.
+- `supabase/functions/awip-reviews-pull/index.ts` — map severity → risk.
+- `supabase/functions/awip-api/...` (extractor prompt) — add risk to schema.
+- `docs/jobs-board.md` (new) — the rubric.
+- `mem/features/night-agent.md` — note the new gate.
+- `CHANGELOG.md`.
+
+## Open questions
+
+1. **Hard cap on critical** — agree critical is *never* night-shift, even with override?
+2. **Default for new rows** — `med` (my recommendation) or `low`?
+3. **Backfill** — bulk-set everything to `med`, or run a one-off AI pass over open jobs to guess risk from title/details? (I'd skip the AI pass — it'll mislabel and you'll spend more time correcting than just re-tiering as you encounter them.)
