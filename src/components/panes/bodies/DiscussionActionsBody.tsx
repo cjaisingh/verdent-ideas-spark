@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Moon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 interface ActionRow {
   id: string;
@@ -13,6 +15,7 @@ interface ActionRow {
   due_at: string | null;
   source: string;
   created_at: string;
+  night_eligible: boolean | null;
 }
 
 function timeAgo(iso: string): string {
@@ -36,6 +39,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 export function DiscussionActionsBody() {
   const [rows, setRows] = useState<ActionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +47,7 @@ export function DiscussionActionsBody() {
     const load = async () => {
       const { data } = await supabase
         .from("discussion_actions")
-        .select("id, short_num, title, status, priority, owner, due_at, source, created_at")
+        .select("id, short_num, title, status, priority, owner, due_at, source, created_at, night_eligible")
         .in("status", ["open", "in_progress"])
         .order("created_at", { ascending: false })
         .limit(30);
@@ -69,6 +73,31 @@ export function DiscussionActionsBody() {
     };
   }, []);
 
+  const toggleNight = async (row: ActionRow) => {
+    const next = !row.night_eligible;
+    setBusy(row.id);
+    // Optimistic
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, night_eligible: next } : r)));
+    const { error } = await supabase
+      .from("discussion_actions")
+      .update({ night_eligible: next })
+      .eq("id", row.id);
+    setBusy(null);
+    if (error) {
+      // Revert
+      setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, night_eligible: !next } : r)));
+      toast({
+        title: "Could not update night-shift status",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: next ? `#${row.short_num} added to night shift` : `#${row.short_num} removed from night shift`,
+      });
+    }
+  };
+
   if (loading) return <div className="p-3 text-xs text-muted-foreground">Loading…</div>;
   if (rows.length === 0)
     return (
@@ -81,10 +110,10 @@ export function DiscussionActionsBody() {
     <div className="h-full overflow-y-auto">
       <ul className="divide-y divide-border">
         {rows.map((r) => (
-          <li key={r.id}>
+          <li key={r.id} className="relative group">
             <Link
               to={`/jobs?action=${r.id}`}
-              className="block px-3 py-2 text-xs hover:bg-muted/50 transition-colors"
+              className="block px-3 py-2 pr-10 text-xs hover:bg-muted/50 transition-colors"
             >
               <div className="flex items-center gap-2 mb-1">
                 <span
@@ -110,6 +139,26 @@ export function DiscussionActionsBody() {
                 </p>
               )}
             </Link>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (busy !== r.id) toggleNight(r);
+              }}
+              disabled={busy === r.id}
+              aria-label={r.night_eligible ? "Remove from night shift" : "Add to night shift"}
+              title={r.night_eligible ? "On night shift — click to remove" : "Off night shift — click to add"}
+              className={cn(
+                "absolute top-1.5 right-1.5 inline-flex h-6 w-6 items-center justify-center rounded transition-colors",
+                r.night_eligible
+                  ? "bg-tint-night/20 text-tint-night hover:bg-tint-night/30"
+                  : "text-muted-foreground/50 hover:text-foreground hover:bg-muted",
+                busy === r.id && "opacity-50",
+              )}
+            >
+              <Moon className="h-3.5 w-3.5" />
+            </button>
           </li>
         ))}
       </ul>
