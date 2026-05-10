@@ -529,6 +529,75 @@ export default function Companion() {
     } catch { return { blob: "", ids: [] }; }
   };
 
+  // Live environment snapshot (jobs, sentinel, automation, lessons, …)
+  const fetchEnvContext = async (): Promise<string> => {
+    if (!settings.env_context_enabled) return "";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return "";
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/awip-companion-context`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: "{}",
+      });
+      if (!r.ok) return "";
+      const j = await r.json();
+      setEnvSize(j?.size ?? null);
+      return j?.markdown ?? "";
+    } catch { return ""; }
+  };
+
+  // Extract durable lessons from a single user/assistant exchange.
+  const extractLessons = async (userText: string, assistantText: string) => {
+    if (!settings.auto_extract_lessons) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const sys = `Read one user/assistant exchange. If it states a DURABLE preference, fact, or correction worth remembering across sessions, output STRICT JSON: {"lessons":[{"scope":"global|notebook|approvals|voice_style","lesson":"..."}]} (max 3, each ≤500 chars, imperative). Otherwise {"lessons":[]}. JSON ONLY.`;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/companion-cloud-chat`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [
+            { role: "system", content: sys },
+            { role: "user", content: `USER: ${userText}\n\nASSISTANT: ${assistantText}` },
+          ],
+        }),
+      });
+      if (!r.ok || !r.body) return;
+      const reader = r.body.getReader();
+      const dec = new TextDecoder(); let buf = ""; let acc = "";
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const d = line.slice(6).trim();
+          if (d === "[DONE]") continue;
+          try { const p = JSON.parse(d); const x = p?.choices?.[0]?.delta?.content; if (typeof x === "string") acc += x; } catch { /* */ }
+        }
+      }
+      const m = acc.match(/\{[\s\S]*\}/); if (!m) return;
+      const parsed = JSON.parse(m[0]);
+      const arr = Array.isArray(parsed?.lessons) ? parsed.lessons : [];
+      const next: PendingLesson[] = arr
+        .filter((l: any) => typeof l?.lesson === "string" && l.lesson.trim().length > 0)
+        .slice(0, 3)
+        .map((l: any) => ({
+          id: crypto.randomUUID(),
+          scope: ["global","notebook","approvals","voice_style"].includes(l?.scope) ? l.scope : "global",
+          lesson: String(l.lesson).slice(0, 500),
+        }));
+      if (next.length) setPendingLessons((prev) => [...prev, ...next]);
+    } catch { /* silent */ }
+  };
+
   // Send a message — streams from Ollama (local) or AI Gateway (cloud)
   const sendMessage = async () => {
     if (!input.trim() || !active || sending) return;
