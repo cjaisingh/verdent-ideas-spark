@@ -49,6 +49,7 @@ import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
 import Walkthrough from "./pages/Walkthrough";
+import Reviews from "./pages/Reviews";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
