@@ -1651,9 +1651,11 @@ export type Database = {
           extracted_confidence: number | null
           id: string
           night_eligible: boolean
+          night_override_reason: string | null
           owner: string | null
           priority: string
           promoted_task_id: string | null
+          risk: string
           short_num: number
           source: string
           status: string
@@ -1671,9 +1673,11 @@ export type Database = {
           extracted_confidence?: number | null
           id?: string
           night_eligible?: boolean
+          night_override_reason?: string | null
           owner?: string | null
           priority?: string
           promoted_task_id?: string | null
+          risk?: string
           short_num?: number
           source?: string
           status?: string
@@ -1691,9 +1695,11 @@ export type Database = {
           extracted_confidence?: number | null
           id?: string
           night_eligible?: boolean
+          night_override_reason?: string | null
           owner?: string | null
           priority?: string
           promoted_task_id?: string | null
+          risk?: string
           short_num?: number
           source?: string
           status?: string
