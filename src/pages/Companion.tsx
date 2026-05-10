@@ -21,6 +21,7 @@ import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 import { IphoneInstallHelpCard } from "@/components/companion/IphoneInstallHelpCard";
 import { CompanionVoiceDock } from "@/components/companion/CompanionVoiceDock";
 import { fetchLiveState, formatLiveStateBlock, liveStateAge, seedLovableFocus, seedOperatorQueue, type LiveState } from "@/lib/companion-live-state";
+import { PendingLessonsTray, type PendingLesson } from "@/components/companion/PendingLessonsTray";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
@@ -271,6 +272,8 @@ type CompanionSettings = {
   use_cloud: boolean;
   rag_enabled: boolean;
   rag_top_k: number;
+  env_context_enabled: boolean;
+  auto_extract_lessons: boolean;
 };
 
 const SETTINGS_KEY = "awip.companion.settings.v1";
@@ -293,6 +296,8 @@ function defaults(): CompanionSettings {
     use_cloud: false,
     rag_enabled: true,
     rag_top_k: 6,
+    env_context_enabled: true,
+    auto_extract_lessons: true,
   };
 }
 function saveSettings(s: CompanionSettings) {
@@ -307,6 +312,8 @@ Your job:
 - When the operator decides on action items, suggest they "Promote → action" so Lovable picks them up.
 - Be concise. Use markdown. Ask one focused follow-up question at a time.
 - If RAG context is provided below, ground your answers in it; cite paths/headings inline.
+- A live AWIP environment snapshot may be injected each turn (jobs board, sentinel, automation, audits, daily plan, lessons). Treat it as the current state and reference jobs by handle (J-NN). If a section is missing, say so — don't invent.
+- Active lessons reflect the operator's standing preferences; honor them.
 
 You do NOT execute code, edit files, or run migrations. You discuss and propose.`;
 
