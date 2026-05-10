@@ -144,7 +144,10 @@ async function runCapabilityVerify(
   const url = isEdge ? buildUrl("/" + cfg.target.replace(/^\//, "")) : buildUrl(cfg.target);
   const method = (cfg.method ?? (isEdge ? "POST" : "GET")).toUpperCase();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.auth !== "none" && SERVICE_TOKEN) headers["x-service-token"] = SERVICE_TOKEN;
+  if (cfg.auth !== "none" && SERVICE_TOKEN) {
+    headers["x-service-token"] = SERVICE_TOKEN;
+    headers["x-awip-service-token"] = SERVICE_TOKEN;
+  }
   if (ANON) headers["apikey"] = ANON;
 
   try {
