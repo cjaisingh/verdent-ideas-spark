@@ -4,6 +4,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+- **Quarterly Review System** — new `quarterly-review-open` edge function + cron `scheduled-quarterly-review-open` (Jan/Apr/Jul/Oct 1 @ 09:00 UTC) opens an idempotent `discussion_action` per quarter linking to the new `docs/quarterly-review.md` checklist (scaffold configs, Tailwind drift, Dependabot majors, edge-function & cron inventory, mem:// sweep, ADRs, secrets rotation, sidebar IA, RLS coverage). Owner: operator, due 14 days. Memory: `mem://preferences/review-cadence` codifies the full per-PR/daily/weekly/quarterly map so future sessions stop guessing.
+
+### Documented
+- **Edge-function sweep — 10 May** — `docs/edge-function-sweep-2026-05-10.md` audits all 38 edge functions (caller counts: frontend / edge-to-edge / cron / docs / `withLogger` coverage). 34 keep, 3 need operator decision (`automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`), 3 missing `withLogger` (`companion-cloud-chat`, `companion-context`, `gemini-tts`). No deletions in this pass.
+- **Scaffold-config audit — 10 May** — `docs/scaffold-config-audit-2026-05-10.md` reads `vite.config.ts`, `tsconfig.*`, `eslint.config.js`, `postcss.config.js` against the starter template. No actionable drift; deferred to next quarterly review when the operator can produce a fresh-template diff source.
+
 ### Documented
 - **Plan execution — 10 May review** — landed CI-secrets-at-a-glance table + nightly POST verification snippet in `docs/ci-cd.md`; `mem/` secret scrub came back clean (`docs/mem-audit-2026-05-10.md`); migration naming convention + auto-generated chronological index (`docs/migrations.md`, `docs/migration-index.md`, `scripts/index-migrations.ts` — 86 migrations, 28 documented, 58 missing top-of-file summary); full `awip-rag` reference (`docs/awip-rag.md`) and 35-function inventory with cron/UI/server callers and two flagged candidates `copilot-noop-llm` + `telegram-send-voice` (`docs/edge-function-audit.md`); Phase 2 closeout report (`docs/phase-2-closeout.md`) — gate snapshot, 7-task triage, and a flagged drift between `roadmap_phases` in DB (phase-3 + phase-4 already `done`, phase-4 titled "Voice") and `docs/master-plan.md` (which still treats Phase 4 "OKR-Driven Execution" as planned). README docs index updated to surface the four new docs.
 
