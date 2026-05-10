@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
+import { WalkthroughCard } from "@/components/WalkthroughCard";
 
 type Finding = {
   id: string; created_at: string; severity: string; category: string | null;
@@ -258,6 +259,7 @@ export const AutomationPanel = () => {
     <NightAgentScheduleCard />
     <NightAgentCard />
     <NightAgentTestModeCard />
+    <WalkthroughCard />
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
       {/* Code review */}
       <section className="rounded-md border border-border bg-card p-3 space-y-2">
