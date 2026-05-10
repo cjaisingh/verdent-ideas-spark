@@ -11,11 +11,11 @@ import {
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target, Bot,
-  ShieldCheck,
+  ShieldCheck, FileSpreadsheet, Footprints, Newspaper,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
-  useCopilotOpen, useFavorites, useStatusDots,
+  useCopilotOpen, useFavorites, useGroupOpen, useStatusDots,
 } from "@/lib/sidebar-state";
 
 type NavItem = {
