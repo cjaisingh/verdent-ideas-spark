@@ -1,53 +1,44 @@
-## Goal
-Bring docs in sync with the Gemini TTS work and the Rork iPhone companion spec, then update README + CHANGELOG + memory per the project's doc rules.
+## Lessons learned from this exchange
 
-## Files to create
+1. **Memory is not ground truth.** The Core line `GitHub repo (not GitLab)` was treated as current state. It described intent, not reality — no repo was actually connected. I repeated the claim three times before your screenshot forced a correction.
+2. **"Auto-sync to GitHub" requires a connected provider.** Lovable does not push anywhere until Project Settings → Git is wired up. Edge functions and runtime secrets deploy to Lovable Cloud independently of git, which made the mistake easy to miss.
+3. **CI workflows in `.github/workflows/*.yml` are inert without a remote.** Every assumption in `mem/preferences/ci-cd-hardening.md` about "checks green on `main`" is unverified until the repo exists.
+4. **When observable reality (your screenshot) and project memory disagree, reality wins** — and the memory must be corrected immediately so the next session doesn't repeat the error.
+5. **Never assert deploy / sync / CI status I can't directly verify** from the sandbox. Default phrasing should be "I can't see this from here — please confirm" instead of confident claims.
 
-1. **`docs/gemini-tts.md`** — reference doc for the new edge function
-   - Endpoint: `POST /functions/v1/gemini-tts`
-   - Auth: operator JWT (same as `companion-cloud-chat`)
-   - Request body: `{ text, voice?, model? }` with the 8 supported prebuilt voices (Kore default, Puck, Charon, Aoede, Fenrir, Leda, Orus, Zephyr)
-   - Response: `audio/wav` (24 kHz PCM, server-wrapped WAV header)
-   - Logging: `ai_usage_log` rows with `job='gemini-tts'`, char count, latency
-   - Cost ballpark (~$0.0001/sec) and night-window note (TTS bypasses `pickModel()`)
-   - Browser test surface: `/admin → Gemini TTS preview`
-   - Secret required: `GOOGLE_AI_API_KEY`
+## Plan to update learning
 
-2. **`docs/rork-companion-spec.md`** — the iPhone companion spec we agreed
-   - Scope: voice capture, approvals inbox, morning + night digest, discussion actions, all with voice + text
-   - Auth: email/password (Supabase JS direct from the Expo app)
-   - Push: APNs
-   - Conversation mode: Gemini TTS online (default), `expo-speech` offline fallback, voice picker
-   - Endpoints the app calls (read-only list with link to `docs/api.md` + `gemini-tts.md`)
-   - What lives in the separate Rork Expo project vs this repo
+### A. Fix the stale Core rule in `mem://index.md`
+Replace the line:
+> `GitHub repo (not GitLab). Nightly + weekly automation surfaced…`
 
-## Files to update
+with:
+> `Git provider: not yet connected — verify in Project Settings → Git before claiming anything is "in GitHub" or that CI ran. Nightly + weekly automation surfaced on /roadmap via AutomationPanel + SentinelStatusStrip; overview lives at /overnight; daily hygiene at /morning-review.`
 
-3. **`mem/features/companion.md`**
-   - Add Gemini TTS as default voice for both `/companion` (browser) and the iPhone surface
-   - Note the 8 prebuilt voices + offline `expo-speech` fallback
-   - Add a short "iPhone (Rork)" subsection pointing at `docs/rork-companion-spec.md`
+### B. Add a new Core rule (one line)
+> `Never claim deploy / git-sync / CI status from memory alone. If it cannot be verified from the sandbox, say "unverified" and ask the operator.`
 
-4. **`README.md`**
-   - Add `docs/gemini-tts.md` and `docs/rork-companion-spec.md` to the docs index section
-   - Mention `gemini-tts` in the edge-function list if one exists there
+### C. New memory file `mem/preferences/verification-discipline.md`
+One-screen rule sheet covering:
+- What is verifiable from the sandbox (files in tree, edge function code, runtime secrets list, Cloud DB via tools)
+- What is NOT verifiable (GitHub remote, CI run status, branch protection, published frontend version, custom domain DNS)
+- Required phrasing for the unverifiable category
+- Add reference under `## Memories` in `mem://index.md`
 
-5. **`CHANGELOG.md`** — new "Unreleased" entry:
-   - Added: `gemini-tts` edge function (Gemini 2.5 Flash TTS, 8 voices, WAV output, `ai_usage_log` integration)
-   - Added: `GeminiTtsTestPanel` on `/admin`
-   - Added: `GOOGLE_AI_API_KEY` secret requirement
-   - Added: docs `gemini-tts.md`, `rork-companion-spec.md`
+### D. Append a row to `public.lessons` (the Lessons Loop table)
+Title: "Verify external state before asserting it"  
+Body: condensed version of points 1–5 above  
+Severity: `medium`  
+Source: `manual` (operator-recorded, not from weekly synthesis)  
+This puts the lesson on `/admin/lessons` so it surfaces in normal review, not just in agent memory.
 
-6. **`mem://index.md`** — add a one-line memory reference:
-   - `[Gemini TTS](mem://features/gemini-tts)` — endpoint, voices, cost, where it's wired
-
-7. **`mem/features/gemini-tts.md`** (new memory file)
-   - One-screen rule sheet: endpoint, default voice, secret name, log shape, "TTS skips night-cheap policy"
+### E. Add an `[Unreleased]` CHANGELOG entry under `Changed`
+> `Memory: corrected stale "GitHub repo connected" assumption; added verification-discipline rule and a manual lesson to public.lessons.`
 
 ## Out of scope
-- No code changes to `gemini-tts/index.ts` or `GeminiTtsTestPanel.tsx`
-- No new tables, no cron, no edits to `companion-cloud-chat`
-- The Rork Expo project itself (separate repo) — this only documents the contract
+- No code changes.
+- No connecting the repo (you do that in the Lovable UI).
+- No edits to the doc files created earlier — they're fine, just not yet pushed anywhere.
 
-## GitHub
-All of the above land in this Lovable project and auto-sync to the connected GitHub repo on save. Nothing manual needed on the git side.
+## After this lands
+Once you connect GitHub via Project Settings → Git, I'll re-verify the doc set landed on the default branch and update the Core rule again to reflect the connected state.
