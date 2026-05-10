@@ -11,11 +11,11 @@ import {
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target, Bot,
-  ShieldCheck,
+  ShieldCheck, FileSpreadsheet, Footprints, Newspaper,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
-  useCopilotOpen, useFavorites, useStatusDots,
+  useCopilotOpen, useFavorites, useGroupOpen, useStatusDots,
 } from "@/lib/sidebar-state";
 
 type NavItem = {
@@ -24,13 +24,39 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
+// ----- Top-level groups (visible by default) -----
+
 const operateTopItems: NavItem[] = [
   { url: "/dashboard", title: "Dashboard", icon: LayoutDashboard },
   { url: "/tenants", title: "Tenants", icon: Building2 },
   { url: "/capabilities", title: "Capabilities", icon: Boxes },
   { url: "/events", title: "Events", icon: Activity },
-  { url: "/api-logs", title: "API logs", icon: ScrollText },
   { url: "/control-plane", title: "Control plane", icon: Settings2 },
+];
+
+const operateLogsItems: NavItem[] = [
+  { url: "/api-logs", title: "API logs", icon: ScrollText },
+  { url: "/api-explorer", title: "API explorer", icon: Code2 },
+  { url: "/db-explorer", title: "DB explorer", icon: Database },
+  { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
+];
+
+const planTopItems: NavItem[] = [
+  { url: "/morning-review", title: "Morning Review", icon: Sparkles },
+  { url: "/roadmap", title: "Roadmap", icon: MapIcon },
+  { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
+  { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
+  { url: "/jobs", title: "Jobs board", icon: ListChecks },
+  { url: "/plan", title: "Plan (workstreams)", icon: Target },
+  { url: "/master-plan", title: "Master plan", icon: FileSpreadsheet },
+];
+
+const knowledgeItems: NavItem[] = [
+  { url: "/notebook", title: "Notebook", icon: NotebookIcon },
+  { url: "/runbook", title: "Runbook (active)", icon: BookOpen },
+  { url: "/runbooks", title: "Runbook library", icon: Library },
+  { url: "/memory", title: "Memory", icon: Brain },
+  { url: "/admin/lessons", title: "Lessons Loop (weekly)", icon: GraduationCap },
 ];
 
 const copilotParent = { url: "/copilot", title: "Copilot", icon: Mic };
@@ -41,45 +67,36 @@ const copilotChildren: NavItem[] = [
   { url: "/copilot/transcripts", title: "Transcripts", icon: MessageSquareText },
 ];
 
-const planItems: NavItem[] = [
-  { url: "/companion", title: "Companion (local LLM)", icon: Bot },
-  { url: "/plan", title: "Plan (workstreams)", icon: Target },
-  { url: "/morning-review", title: "Morning Review", icon: Sparkles },
-  { url: "/admin/lessons", title: "Lessons Loop", icon: GraduationCap },
-  { url: "/roadmap", title: "Roadmap", icon: MapIcon },
-  { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
-  { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
-  { url: "/jobs", title: "Jobs board", icon: ListChecks },
+const automationItems: NavItem[] = [
+  { url: "/companion", title: "Companion", icon: Bot },
   { url: "/overnight", title: "Overnight overview", icon: Activity },
   { url: "/night-shifts", title: "Night shifts", icon: Moon },
+  { url: "/walkthrough", title: "App walkthrough", icon: Footprints },
+  { url: "/reviews", title: "External weekly reviews", icon: Newspaper },
+  { url: "/audits", title: "Deep audits", icon: ShieldCheck },
   { url: "/ai-usage", title: "AI usage & cost", icon: Sparkles },
-  { url: "/notebook", title: "Notebook", icon: NotebookIcon },
-  { url: "/runbook", title: "Runbook", icon: BookOpen },
-  { url: "/memory", title: "Memory", icon: Brain },
 ];
 
-const systemItems: NavItem[] = [
-  { url: "/api-explorer", title: "API explorer", icon: Code2 },
-  { url: "/db-explorer", title: "DB explorer", icon: Database },
-  { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
-  { url: "/runbooks", title: "Runbooks", icon: Library },
+const adminItems: NavItem[] = [
   { url: "/admin", title: "Admin", icon: Shield },
+  { url: "/status", title: "Status", icon: Heart },
   { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
   { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
-  { url: "/admin/ai-usage", title: "AI usage", icon: Sparkles },
-  { url: "/audits", title: "Deep audits", icon: ShieldCheck },
-  { url: "/status", title: "Status", icon: Heart },
+  { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
 ];
 
 const allItems: NavItem[] = [
   ...operateTopItems,
+  ...operateLogsItems,
+  ...planTopItems,
+  ...knowledgeItems,
   copilotParent,
   ...copilotChildren,
-  ...planItems,
-  ...systemItems,
+  ...automationItems,
+  ...adminItems,
 ];
 
 function StatusDot({ color, label }: { color?: string; label?: string }) {
@@ -267,25 +284,70 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
           <SidebarGroupContent>
             <SidebarMenu>
               {operateTopItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="operate-logs"
+                title="Logs & data"
+                icon={ScrollText}
+                items={operateLogsItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Plan & roadmap</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {planTopItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="knowledge"
+                title="Knowledge"
+                icon={BookOpen}
+                items={knowledgeItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Copilot & automation</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
               {renderCopilotGroup()}
+              {automationItems.map((it) => renderRow(it, { showPin: true }))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Plan</SidebarGroupLabel>}
+          {!collapsed && <SidebarGroupLabel>System & admin</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
-              {planItems.map((it) => renderRow(it, { showPin: true }))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>System</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {systemItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="system-admin"
+                title="Show admin tools"
+                icon={Shield}
+                items={adminItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+                defaultOpen={false}
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -293,5 +355,96 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
     </Sidebar>
   );
 };
+
+type CollapsibleSubgroupProps = {
+  groupKey: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: NavItem[];
+  collapsed: boolean;
+  pathname: string;
+  isActive: (p: string) => boolean;
+  dots: Record<string, import("@/lib/sidebar-state").DotColor>;
+  isFavorite: (url: string) => boolean;
+  toggleFavorite: (url: string) => void;
+  defaultOpen?: boolean;
+};
+
+function CollapsibleSubgroup({
+  groupKey, title, icon: Icon, items, collapsed,
+  isActive, dots, isFavorite, toggleFavorite, defaultOpen = false,
+}: CollapsibleSubgroupProps) {
+  const childActive = items.some((c) => isActive(c.url));
+  const [open, setOpen] = useGroupOpen(groupKey, defaultOpen, childActive);
+
+  // When collapsed (icon-only rail), render children as plain rows so they remain reachable.
+  if (collapsed) {
+    return (
+      <>
+        {items.map((it) => (
+          <SidebarMenuItem key={it.url}>
+            <SidebarMenuButton asChild isActive={isActive(it.url)}>
+              <NavLink to={it.url} className="flex items-center gap-2">
+                <it.icon className="h-4 w-4 text-sidebar-foreground/70" />
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <SidebarMenuItem className="group/row">
+      <SidebarMenuButton
+        onClick={() => setOpen(!open)}
+        className={childActive ? "border-l-2 border-sidebar-primary/40" : ""}
+        aria-expanded={open}
+      >
+        <Icon className={`h-4 w-4 ${childActive ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+        <span className="flex-1 truncate text-sidebar-foreground/80">{title}</span>
+        <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
+      </SidebarMenuButton>
+      {open && (
+        <SidebarMenuSub>
+          {items.map((c) => {
+            const active = isActive(c.url);
+            const dot = dots[c.url];
+            const pinned = isFavorite(c.url);
+            return (
+              <SidebarMenuSubItem key={c.url} className="group/subrow">
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={active}
+                  className={active ? "border-l-2 border-sidebar-primary" : ""}
+                >
+                  <NavLink to={c.url} className="flex items-center gap-2">
+                    <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+                    <span className="flex-1 truncate">{c.title}</span>
+                    {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
+                  </NavLink>
+                </SidebarMenuSubButton>
+                {!pinned && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFavorite(c.url);
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/subrow:opacity-100 focus:opacity-100"
+                    aria-label={`Add ${c.title} to Favorites`}
+                  >
+                    <Star className="h-3 w-3" />
+                  </button>
+                )}
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuItem>
+  );
+}
 
 export default AppSidebar;
