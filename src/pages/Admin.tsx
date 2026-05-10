@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import AppSecretsPanel from "@/components/admin/AppSecretsPanel";
+import GeminiTtsTestPanel from "@/components/admin/GeminiTtsTestPanel";
 import CronSecretsCheckPanel from "@/components/admin/CronSecretsCheckPanel";
 import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 import ManualOvernightTriggers from "@/components/admin/ManualOvernightTriggers";
@@ -247,6 +248,8 @@ const Admin = () => {
       <TelegramBotPanel />
 
       <AppSecretsPanel />
+
+      <GeminiTtsTestPanel />
 
       <CronSecretsCheckPanel />
     </div>
