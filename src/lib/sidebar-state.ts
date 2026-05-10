@@ -99,6 +99,39 @@ export function useCopilotOpen(initialOpenIfActive: boolean) {
   return [open, setAndPersist] as const;
 }
 
+// Generic collapsible subgroup state (Logs & data, Knowledge, System & admin, ...).
+const GROUP_OPEN_PREFIX = "awip.sidebar.group.";
+
+export function useGroupOpen(key: string, defaultOpen: boolean, forceOpenIfActive = false) {
+  const storageKey = GROUP_OPEN_PREFIX + key;
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw === "1") return true;
+      if (raw === "0") return false;
+    } catch {
+      // ignore
+    }
+    return forceOpenIfActive || defaultOpen;
+  });
+
+  useEffect(() => {
+    if (forceOpenIfActive && !open) setOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceOpenIfActive]);
+
+  const setAndPersist = useCallback((next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(storageKey, next ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [storageKey]);
+
+  return [open, setAndPersist] as const;
+}
+
 export function rememberCopilotChild(url: string) {
   try {
     localStorage.setItem(COPILOT_LAST_CHILD_KEY, url);
