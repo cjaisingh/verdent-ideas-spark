@@ -13,11 +13,12 @@ export type Proposal = {
   title: string;
   details: string | null;
   priority: string;
+  risk?: string;
   owner_hint: string | null;
   confidence: number | null;
 };
 
-type Draft = Proposal & { decision: "pending" | "accepted" | "rejected" };
+type Draft = Proposal & { decision: "pending" | "accepted" | "rejected"; risk: string };
 
 type Props = {
   open: boolean;
