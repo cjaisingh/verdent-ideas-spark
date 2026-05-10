@@ -464,3 +464,97 @@ export function JobDetailsDrawer({
     </Sheet>
   );
 }
+
+function RiskNightEditor({ job }: { job: JobDetailsRecord }) {
+  const initialRisk: JobRisk = isJobRisk(job.risk) ? job.risk : "med";
+  const [risk, setRisk] = useState<JobRisk>(initialRisk);
+  const [override, setOverride] = useState<string>(job.night_override_reason ?? "");
+  const [nightOn, setNightOn] = useState<boolean>(!!job.night_eligible);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRisk(isJobRisk(job.risk) ? job.risk : "med");
+    setOverride(job.night_override_reason ?? "");
+    setNightOn(!!job.night_eligible);
+  }, [job.id, job.risk, job.night_override_reason, job.night_eligible]);
+
+  const allowedNow = nightAllowedFor(risk, override || null);
+  const blocked = nightBlockedReason(risk, override || null);
+  const dirty =
+    risk !== initialRisk ||
+    (override || "") !== (job.night_override_reason ?? "") ||
+    nightOn !== !!job.night_eligible;
+
+  const save = async () => {
+    setSaving(true);
+    const patch: Record<string, unknown> = {
+      risk,
+      night_override_reason: risk === "high" && override.trim() ? override.trim() : null,
+      night_eligible: allowedNow ? nightOn : false,
+    };
+    const { error } = await supabase
+      .from("discussion_actions")
+      .update(patch as never)
+      .eq("id", job.id);
+    setSaving(false);
+    if (error) {
+      toast({ title: "Could not save", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Saved" });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+        <label className="text-xs text-muted-foreground">Risk</label>
+        <Select value={risk} onValueChange={(v) => setRisk(v as JobRisk)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {JOB_RISKS.map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug">{RISK_RUBRIC[risk]}</p>
+
+      {risk === "high" && (
+        <div>
+          <label className="text-xs text-muted-foreground">Night override reason (required for high risk)</label>
+          <Textarea
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+            placeholder="e.g. dry-run only, behind feature flag, reverts in one step…"
+            className="text-xs mt-1 min-h-[60px]"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Moon className="h-3.5 w-3.5" />
+          <span className={cn(!allowedNow && "text-muted-foreground")}>
+            {nightOn ? "On night shift" : "Off night shift"}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant={nightOn ? "outline" : "default"}
+          disabled={!allowedNow}
+          onClick={() => setNightOn((v) => !v)}
+          title={blocked ?? undefined}
+        >
+          {nightOn ? "Take off" : "Add to night shift"}
+        </Button>
+      </div>
+      {blocked && <p className="text-[11px] text-amber-600 dark:text-amber-400">{blocked}</p>}
+
+      <div className="flex justify-end">
+        <Button size="sm" onClick={save} disabled={!dirty || saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
