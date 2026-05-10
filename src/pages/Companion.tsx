@@ -847,6 +847,20 @@ export default function Companion() {
                   </div>
                   <Switch checked={settings.rag_enabled} onCheckedChange={(v) => setSettings((s) => ({ ...s, rag_enabled: v }))} />
                 </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Environment context</Label>
+                    <p className="text-xs text-muted-foreground">Inject live snapshot (jobs, sentinel, automation, lessons) each turn{envSize ? ` · last ${envSize}B` : ""}</p>
+                  </div>
+                  <Switch checked={settings.env_context_enabled} onCheckedChange={(v) => setSettings((s) => ({ ...s, env_context_enabled: v }))} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-extract lessons</Label>
+                    <p className="text-xs text-muted-foreground">Propose durable preferences/corrections after each reply (you approve before saving)</p>
+                  </div>
+                  <Switch checked={settings.auto_extract_lessons} onCheckedChange={(v) => setSettings((s) => ({ ...s, auto_extract_lessons: v }))} />
+                </div>
               </div>
               <DialogFooter>
                 <Button onClick={() => setSettingsOpen(false)}>Done</Button>
