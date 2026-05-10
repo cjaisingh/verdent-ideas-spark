@@ -68,6 +68,7 @@ export function ProposalReviewSheet({
           title: p.title,
           details: p.details,
           priority: p.priority,
+          risk: p.risk ?? "med",
           owner: p.owner_hint,
           source: "extracted",
           extracted_confidence: p.confidence,
