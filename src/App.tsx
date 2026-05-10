@@ -49,6 +49,7 @@ import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
 import Walkthrough from "./pages/Walkthrough";
+import Reviews from "./pages/Reviews";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -107,6 +108,7 @@ const App = () => (
             <Route path="/admin/lessons" element={<LessonsLoop />} />
             <Route path="/audits" element={<Audits />} />
             <Route path="/walkthrough" element={<Walkthrough />} />
+            <Route path="/reviews" element={<Reviews />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
