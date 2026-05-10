@@ -409,7 +409,7 @@ Deno.serve(withLogger("awip-reviews-pull", async (req) => {
     return svc && SERVICE_TOKEN && svc === SERVICE_TOKEN ? "cron" : "manual";
   })());
 
-  if (req.method === "GET" || path === "/" && req.method === "POST" === false) {
+  if (req.method === "GET") {
     const { count } = await admin.from("awip_reviews").select("*", { count: "exact", head: true });
     const { data: latest } = await admin.from("awip_reviews")
       .select("review_date, reviewer, summary, fetched_at, process_status")
