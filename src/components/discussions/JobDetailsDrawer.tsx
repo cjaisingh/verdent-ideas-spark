@@ -3,12 +3,24 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { discussionHandle, jobHandle, subjectHandle } from "@/lib/discussionHandles";
-import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare } from "lucide-react";
+import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare, Moon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
+import { cn } from "@/lib/utils";
+import {
+  JOB_RISKS,
+  RISK_BADGE_CLASS,
+  RISK_RUBRIC,
+  isJobRisk,
+  nightAllowedFor,
+  nightBlockedReason,
+  type JobRisk,
+} from "@/lib/jobRisk";
 
 export type JobDetailsRecord = {
   id: string;
@@ -20,6 +32,9 @@ export type JobDetailsRecord = {
   details: string | null;
   status: string;
   priority: string;
+  risk: string;
+  night_eligible: boolean | null;
+  night_override_reason: string | null;
   owner: string | null;
   source: string;
   promoted_task_id: string | null;
