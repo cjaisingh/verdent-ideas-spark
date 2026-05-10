@@ -15,6 +15,9 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Design system](docs/design-system.md) — page layout, spacing, semantic tints, pane source colours
 - [Deepgram voice](docs/deepgram-voice.md) — required key role, token grant flow, mic failure recovery
 - [Gemini TTS](docs/gemini-tts.md) — `gemini-tts` edge function, 8 voices, cost, logging
+- [`awip-rag` knowledge base](docs/awip-rag.md) — full-text search over repo docs (Companion + Copilot)
+- [Edge function audit](docs/edge-function-audit.md) — inventory of all 35 functions and how each is invoked
+- [Migrations](docs/migrations.md) — naming convention; full chronological [index](docs/migration-index.md)
 - [Rork iPhone companion spec](docs/rork-companion-spec.md) — contract between Core and the separate Expo app
 - [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)
