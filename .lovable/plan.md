@@ -1,110 +1,123 @@
+## Night Shift expansion plan
 
-## Goal
+### 1. What already runs at night (baseline)
 
-Close the "nothing reviews the boring stuff" gap. Three deliverables, one PR each so they can be approved independently.
+So you can see what's *not* a gap before we add anything:
 
----
+| Job | Cadence (UTC) | Category |
+|---|---|---|
+| `night-agent-open` / `-close` | 22:00 / 06:00 | Audit eligible discussion actions |
+| `overnight-phase-runner-15m` | every 15 min in window | Phase briefings (observation only) |
+| `overnight-prequeue` | 21:55 | Auto-queue opt-in phases |
+| `app-walkthrough` | 02:15 | Route + capability self-test |
+| `deep-audit` (weekly/monthly) | Sun 04:00 / 1st 04:30 | Secrets, RBAC, automation, RLS, retention |
+| `retention-sweep` | 03:30 | Purge expired rows |
+| `sentinel-tick` | every 15 min | 5xx spikes, cron silence, stale secrets |
+| `lessons-synthesize` | weekly | AI synthesis into `lessons` |
+| `morning-review` | 06:00 | Daily KPI snapshot |
+| `awip-reviews-pull` | Mon 05:30 | Pull weekly external reviews |
+| `quarterly-review-open` | quarterly | Open quarterly checklist action |
+| Night model policy | always 22:00–06:00 | Forces all AI to `gemini-2.5-flash-lite` |
 
-## 1. Quarterly Review System
+**Already covered from your list:** purging ✓, health checks ✓, audit trail ✓, weekly/daily reports ✓, AI synthesis ✓.
 
-A single source of truth for "what should be checked every 90 days," plus an automated reminder that opens an actionable item in the operator console — not just a calendar ping.
+**Real gaps:** analytics rollups, external/contract data ingestion, snapshot reports, cache warming. (DB backups are handled by Lovable Cloud's managed snapshots; no project-level work needed. ML training is N/A — we don't host any trainable models.)
 
-### What gets created
-
-- **`docs/quarterly-review.md`** — the checklist itself. Sections:
-  - Scaffold configs (vite/tsconfig/eslint/postcss/components.json) — diff against current Lovable starter template
-  - Tailwind tokens vs. component usage drift
-  - Major-version Dependabot PRs awaiting human review
-  - Edge function inventory — caller check
-  - Cron job inventory — "still useful?" pass
-  - `mem://` accuracy sweep (light)
-  - ADRs — "still true?" pass
-  - Secrets rotation (`AWIP_SERVICE_TOKEN`, `GITHUB_REVIEWS_TOKEN`, Telegram tokens)
-  - Sidebar / nav IA review (trigger if route count > 30)
-  - RLS coverage report (`scripts/rls-coverage-report.ts`) summary
-
-- **New edge function `quarterly-review-open`** — idempotent. On run, inserts one `discussion_action` titled `Quarterly review — Q{n} {YYYY}` linking to `docs/quarterly-review.md`, tagged `night_eligible=false` (this is human work), `owner=operator`, `due` = 14 days out. Skips if a row with the same Q{n}-{YYYY} key already exists.
-
-- **Cron schedule** — Jan 1, Apr 1, Jul 1, Oct 1 at 09:00 UTC, via `pg_cron` + `AWIP_SERVICE_TOKEN` (matches existing pattern).
-
-- **Memory** — add `mem://preferences/review-cadence` summarizing the cadence table from my previous answer so future sessions stop guessing.
-
-### Out of scope
-
-No automation that *performs* the review — just opens the action. Humans still drive the actual sweep.
-
----
-
-## 2. Scaffold Config Refresh (one-shot)
-
-Bring template files in line with the current Lovable starter (`vite_react_shadcn_ts_2026-04-20` is what we have; we'll diff against latest at implementation time).
-
-### Files in scope
-
-`vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, `postcss.config.js`, `components.json`, `tailwind.config.ts` (the framework parts only — design tokens are untouched).
-
-### Approach
-
-1. Read each file, compare to a freshly-scaffolded Lovable project of the same template family.
-2. For every divergence: keep the AWIP-specific change (path aliases, Tailwind tokens, plugin order) and adopt the upstream change for everything else.
-3. Run `bun run build` + `bunx vitest run` + Playwright smoke (`e2e-playwright/roadmap.spec.ts`) to verify nothing regressed.
-4. Update `CHANGELOG.md` under "Tooling".
-
-### Risk
-
-Low-medium. Worst case: a TS strictness flip surfaces existing type errors. We fix or revert per-file, not all-or-nothing.
-
-### Out of scope
-
-`package.json` dependency bumps — Dependabot owns that. We only touch config files.
-
----
-
-## 3. Dead-Code / Edge-Function Sweep (one-shot)
-
-Verify which of the ~30 edge functions in `supabase/functions/` still have callers.
-
-### Method
-
-For each function directory:
-
-1. **Frontend callers** — `rg "functions.invoke\\(['\"]<name>" src/` and `rg "/functions/v1/<name>" src/`.
-2. **Edge-to-edge callers** — same `rg` against `supabase/functions/`.
-3. **Cron callers** — `select * from cron.job where command like '%<name>%'`.
-4. **External callers** — check `docs/api.md`, `docs/rork-companion-spec.md`, `mem://features/*` for documented external use.
-
-### Output
-
-`docs/edge-function-sweep-2026-05-10.md` with a table:
+### 2. New nightly jobs (the actual proposal)
 
 ```text
-| function              | frontend | edge | cron | external | verdict        |
-| --------------------- | -------- | ---- | ---- | -------- | -------------- |
-| awip-api              | ✓        | -    | -    | ✓ (Rork) | keep           |
-| copilot-noop-llm      | -        | -    | -    | -        | candidate kill |
-| ...                                                                        |
+22:00 ── night-agent-open ─────────────────────────────► (existing)
+22:30 ── ingest-external-data       (NEW, gap #2)
+23:00 ── nightly-rollup-analytics   (NEW, gap #1)
+23:30 ── snapshot-daily-report      (NEW, gap #3)
+00:00 ── cache-warm                 (NEW, gap #4)
+02:15 ── app-walkthrough ──────────────────────────────► (existing)
+03:30 ── retention-sweep ──────────────────────────────► (existing)
+04:00 ── deep-audit (Sun) ─────────────────────────────► (existing)
+05:30 ── awip-reviews-pull (Mon) ──────────────────────► (existing)
+06:00 ── morning-review + night-agent-close ───────────► (existing)
 ```
 
-Verdicts: **keep** / **candidate kill** / **needs operator decision**. No functions are deleted in this PR — kill list lands as a follow-up after operator review.
+#### NEW-1 · `nightly-rollup-analytics` (23:00 UTC daily)
 
-### Bonus
+Pre-compute the aggregations that `/admin/ai-usage`, `/admin/cron-health`, `/morning-review`, and the dashboard widgets currently calculate on every page load.
 
-While we're in the listing, flag any function whose `index.ts` lacks `withLogger` (the `logger-validation.yml` check should catch these, but a manual pass confirms).
+- New tables: `analytics_daily_ai_usage`, `analytics_daily_automation`, `analytics_daily_cost` (date + dims + counts/cost/p50/p95/error_rate). Operator-read RLS.
+- Idempotent on `(date, dims)`; backfills last 7 days on each run so a missed night self-heals.
+- Frontend widgets read the rollup table when present, fall back to live query for "today".
 
----
+#### NEW-2 · `ingest-external-data` (22:30 UTC daily)
 
-## Sequencing
+A generic, pluggable ingestor for the contract-context sources you mentioned. PR-1 ships the framework + one concrete source so we have an end-to-end path without overcommitting.
 
-```text
-PR-1  Quarterly Review System   (~2h, low risk, immediate value)
-PR-2  Edge-Function Sweep        (~1h, read-only, produces a kill list)
-PR-3  Scaffold Config Refresh    (~2h, needs build+test verification)
-```
+- New table `ingestion_sources` (source_key, kind, config jsonb, enabled, last_run_at, last_status).
+- New table `ingestion_runs` (source_key, started_at, finished_at, rows_in, rows_upserted, status, error, idempotency_key).
+- Edge function dispatches per-source by `kind` (start with `awip_docs_refresh` — re-runs `scripts/ingest-awip-docs.ts` server-side so the RAG corpus stays fresh nightly).
+- New sources are added by inserting a row + a small handler in the function — no schema change per source.
 
-Each PR is independent — approve and merge in any order.
+#### NEW-3 · `snapshot-daily-report` (23:30 UTC daily)
 
-## Verification caveat
+A frozen, point-in-time daily snapshot you can read in the morning without recomputation, and that we can diff week-over-week.
 
-Per `mem://preferences/verification-discipline`: the cron registration in PR-1 is verifiable from the Supabase side; the GitHub-side workflows are not (no confirmed git remote). PR-3's CI runs are similarly unverifiable from the sandbox — I'll run the build and tests locally inside the sandbox and report results, but cannot prove a green PR check on GitHub.
+- New table `daily_snapshots` (snapshot_date PK, kind, payload jsonb, summary text, ai_brief text). Operator-read RLS.
+- Generates two kinds: `system` (run counts, error rate, AI spend, sentinel/audit findings, deferred items due) and `contract` (capability manifest deltas, OKR mutations in 24h, promotion-vs-shipping drift).
+- AI brief uses `pickModel("google/gemini-2.5-flash")` → automatically falls back to `flash-lite` per night-cheap policy.
+- Mirrors the snapshot date into `morning-review` so the 06:00 page links straight to it.
 
-## Approve to start with PR-1, or pick a different order.
+#### NEW-4 · `cache-warm` (00:00 UTC daily)
+
+Pre-warm the heaviest read paths so morning load on `/companion`, `/dashboard`, `/roadmap`, `/audits` is instant.
+
+- New table `cache_warm_runs` (route, started_at, ms, ok).
+- Function calls a small list of public read RPCs (`list_managed_cron_jobs`, `retention_stats`, `awip_rag_search` with the top-N saved queries from `awip_rag_query_log` if it exists, else a static seed list).
+- Pure side-effect job — populates Supabase's query plan cache and our edge-function module cache. No business data changes.
+
+### 3. Operator surface
+
+One new page `/night-shift` (admin only) listing **every** nightly job in a single table:
+
+- columns: job, schedule, last status, last duration, next fire (computed from cron), category badge (audit / ingest / rollup / snapshot / hygiene), "Run now" button (admin only, calls the function with `x-awip-service-token`).
+- Reuses the `list_managed_cron_jobs` pattern — extended via a new RPC `list_all_nightly_jobs()` that returns the full curated set, not just the W2/W3/W4 trio.
+- Adds a "Night Shift" link in the sidebar under **Operations** (next to Automation and Audits).
+
+### 4. Memory + docs
+
+- New `mem://features/night-shift.md` — index of every nightly job, who reads its output, and which morning surface consumes it.
+- Update `mem://index.md` Core line to mention the new jobs.
+- New `docs/night-shift.md` — operator runbook (how to pause a job, how to re-run, where outputs land, how snapshots and rollups relate).
+- Update `mem/preferences/review-cadence.md` with the new daily entries.
+- `CHANGELOG.md` entry per PR.
+
+### 5. Sequencing
+
+Independent PRs so we can land them one at a time:
+
+| PR | Scope | Effort |
+|---|---|---|
+| **PR-1** | `nightly-rollup-analytics` + tables + 3 widgets switched to read rollups | ~3h |
+| **PR-2** | `snapshot-daily-report` + `/morning-review` link-through | ~2h |
+| **PR-3** | `ingest-external-data` framework + `awip_docs_refresh` source | ~2h |
+| **PR-4** | `cache-warm` + `/night-shift` page + sidebar link + `list_all_nightly_jobs` RPC | ~2h |
+
+Each PR registers its cron via `supabase--insert` (per project rule — cron registration uses anon key + URL, not migration). Each new edge function ships with `withLogger`, `AWIP_SERVICE_TOKEN` auth, and an `automation_runs` row per execution so they show up automatically in `/admin/cron-health` and the sentinel watches them.
+
+### 6. Out of scope (intentional)
+
+- DB backups — handled by Lovable Cloud managed snapshots; no project work needed.
+- ML training — no trainable models in the project today.
+- Real-time / interactive jobs — by definition not night work.
+- Removing or re-cadencing existing jobs — separate decision per the quarterly review.
+
+### 7. Verification caveats (per `mem://preferences/verification-discipline`)
+
+- I can verify cron registration via `supabase--read_query` against `cron.job` after each PR.
+- I can verify each new function deploys and returns 200 via `supabase--curl_edge_functions`.
+- I **cannot** verify that 22:00 UTC actually fires correctly until we observe a real `automation_runs` row the morning after — the first 24h after each PR is "unverified, awaiting first nightly run."
+- No GitHub remote is connected, so I will not claim any of this is "in CI" or "deployed via workflow."
+
+### 8. Decisions I need from you before PR-1
+
+1. **Rollup retention** — keep `analytics_daily_*` rows indefinitely, or purge after 90/180/365 days? (I'd default 365, retention-sweep handles it.)
+2. **Snapshot AI brief** — generate the AI summary every night (small recurring cost ~$0.001/night on flash-lite), or only on weekdays?
+3. **Ingestion sources beyond `awip_docs_refresh`** — do you have a specific external contract-data source in mind for PR-3, or is the framework + one source enough for now and we add real sources as you name them?
+4. **Order** — ship in the listed order (rollups → snapshot → ingest → cache+page), or do you want the `/night-shift` operator page first so you can watch the rest land?
