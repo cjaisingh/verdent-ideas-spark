@@ -616,8 +616,8 @@ export default function Companion() {
       }).select("*").single();
       if (u) setMessages((prev) => prev.some((x) => x.id === u.id) ? prev : [...prev, u as Msg]);
 
-      // 2. RAG
-      const rag = await fetchRagContext(userText);
+      // 2. RAG + live env snapshot in parallel
+      const [rag, envBlob] = await Promise.all([fetchRagContext(userText), fetchEnvContext()]);
       ragIds = rag.ids;
       ragBlob = rag.blob;
 
@@ -625,6 +625,7 @@ export default function Companion() {
       const history = [...messages, u as Msg].filter(Boolean).slice(-20);
       const llmMessages = [
         { role: "system", content: SYSTEM_PROMPT },
+        ...(envBlob ? [{ role: "system" as const, content: envBlob }] : []),
         ...(ragBlob ? [{ role: "system" as const, content: ragBlob }] : []),
         ...history.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       ];
