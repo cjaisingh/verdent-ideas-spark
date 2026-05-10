@@ -20,9 +20,10 @@ A modular, capability-driven operator platform: every business function is a reg
 **Purpose.** Promote the documented module scaffold (`docs/module-scaffold/`) into the registry; add capability versioning, dependency graph, and connector wiring.
 **Success criteria.** New modules can be added by following the scaffold and appear in `/capabilities` with their capability tree and connectors.
 
-### Phase 4 — OKR-Driven Execution
+### Phase 4 — OKR-Driven Execution → tracked as `phase-okr` in DB
 **Purpose.** Tie roadmap tasks to `okr_nodes` and `okr_measurements` so progress is measured against outcomes, not output.
 **Success criteria.** Every active sprint links to one or more OKRs; measurements update task health automatically.
+**DB note.** The DB row `roadmap_phases.phase-4` is consumed by **Voice** (closed). The OKR-driven execution work lives under the new row `roadmap_phases.phase-okr` (order 9). See [ADR-0003](adr/0003-okr-driven-execution.md) and [`docs/phase-2-closeout.md`](phase-2-closeout.md) for the rationale.
 
 ### Phase 5 — Entity & Tenant Resolution (planned)
 Canonical entity model, alias resolver, tenant_node graph. Foundation for ingest.
