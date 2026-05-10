@@ -118,8 +118,12 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
   const { favorites, isFavorite, toggleFavorite } = useFavorites();
   const dots = useStatusDots();
 
-  const isActive = (p: string) => pathname === p || pathname.startsWith(p + "/");
-  const isInCopilot = pathname.startsWith("/copilot");
+  // Exact-match only. Prefix-matching caused parent rows like "/admin" and
+  // "/roadmap" to light up on every nested route (e.g. "/admin/lessons" lit
+  // both "Admin" and "Lessons Loop"). Ancestor highlighting for Copilot is
+  // handled separately in renderCopilotGroup via pathname.startsWith.
+  const isActive = (p: string) => pathname === p;
+  const isInCopilot = pathname === "/copilot" || pathname.startsWith("/copilot/");
   const [copilotOpen, setCopilotOpen] = useCopilotOpen(isInCopilot);
 
   const itemsByUrl = useMemo(() => {
