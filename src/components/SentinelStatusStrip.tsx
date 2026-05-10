@@ -82,7 +82,7 @@ export function SentinelStatusStrip() {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("sentinel-strip")
+    const ch = supabase.channel(`sentinel-strip:${crypto.randomUUID()}`)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "sentinel_findings" },
         scheduleReload)
