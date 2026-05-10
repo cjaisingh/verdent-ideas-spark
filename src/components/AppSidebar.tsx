@@ -284,25 +284,70 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
           <SidebarGroupContent>
             <SidebarMenu>
               {operateTopItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="operate-logs"
+                title="Logs & data"
+                icon={ScrollText}
+                items={operateLogsItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Plan & roadmap</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {planTopItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="knowledge"
+                title="Knowledge"
+                icon={BookOpen}
+                items={knowledgeItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          {!collapsed && <SidebarGroupLabel>Copilot & automation</SidebarGroupLabel>}
+          <SidebarGroupContent>
+            <SidebarMenu>
               {renderCopilotGroup()}
+              {automationItems.map((it) => renderRow(it, { showPin: true }))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
         <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>Plan</SidebarGroupLabel>}
+          {!collapsed && <SidebarGroupLabel>System & admin</SidebarGroupLabel>}
           <SidebarGroupContent>
             <SidebarMenu>
-              {planItems.map((it) => renderRow(it, { showPin: true }))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel>System</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {systemItems.map((it) => renderRow(it, { showPin: true }))}
+              <CollapsibleSubgroup
+                groupKey="system-admin"
+                title="Show admin tools"
+                icon={Shield}
+                items={adminItems}
+                collapsed={collapsed}
+                pathname={pathname}
+                isActive={isActive}
+                dots={dots}
+                isFavorite={isFavorite}
+                toggleFavorite={toggleFavorite}
+                defaultOpen={false}
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
