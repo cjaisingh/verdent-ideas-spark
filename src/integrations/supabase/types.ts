@@ -511,6 +511,140 @@ export type Database = {
         }
         Relationships: []
       }
+      awip_review_findings: {
+        Row: {
+          actionable: boolean
+          area: string | null
+          created_at: string
+          discussion_action_id: string | null
+          evidence: string | null
+          ext_id: string | null
+          id: string
+          rag_doc_id: string | null
+          recommendation: string | null
+          review_id: string
+          sentinel_finding_id: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          actionable?: boolean
+          area?: string | null
+          created_at?: string
+          discussion_action_id?: string | null
+          evidence?: string | null
+          ext_id?: string | null
+          id?: string
+          rag_doc_id?: string | null
+          recommendation?: string | null
+          review_id: string
+          sentinel_finding_id?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          actionable?: boolean
+          area?: string | null
+          created_at?: string
+          discussion_action_id?: string | null
+          evidence?: string | null
+          ext_id?: string | null
+          id?: string
+          rag_doc_id?: string | null
+          recommendation?: string | null
+          review_id?: string
+          sentinel_finding_id?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "awip_review_findings_discussion_action_id_fkey"
+            columns: ["discussion_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "awip_review_findings_rag_doc_id_fkey"
+            columns: ["rag_doc_id"]
+            isOneToOne: false
+            referencedRelation: "awip_docs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "awip_review_findings_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "awip_reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "awip_review_findings_sentinel_finding_id_fkey"
+            columns: ["sentinel_finding_id"]
+            isOneToOne: false
+            referencedRelation: "sentinel_findings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      awip_reviews: {
+        Row: {
+          created_at: string
+          fetched_at: string
+          file_sha: string
+          id: string
+          parsed: Json
+          process_error: string | null
+          process_status: string
+          processed_at: string | null
+          raw_markdown: string
+          review_date: string | null
+          reviewer: string | null
+          scope: string | null
+          source_path: string
+          source_repo: string
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fetched_at?: string
+          file_sha: string
+          id?: string
+          parsed?: Json
+          process_error?: string | null
+          process_status?: string
+          processed_at?: string | null
+          raw_markdown: string
+          review_date?: string | null
+          reviewer?: string | null
+          scope?: string | null
+          source_path: string
+          source_repo: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fetched_at?: string
+          file_sha?: string
+          id?: string
+          parsed?: Json
+          process_error?: string | null
+          process_status?: string
+          processed_at?: string | null
+          raw_markdown?: string
+          review_date?: string | null
+          reviewer?: string | null
+          scope?: string | null
+          source_path?: string
+          source_repo?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       capabilities: {
         Row: {
           created_at: string
