@@ -37,6 +37,7 @@ import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
 import NightShifts from "./pages/NightShifts";
+import NightShift from "./pages/NightShift";
 import OvernightOverview from "./pages/OvernightOverview";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
@@ -79,6 +80,7 @@ const App = () => (
             <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/night-shifts" element={<NightShifts />} />
+            <Route path="/admin/night-shift" element={<NightShift />} />
             <Route path="/overnight" element={<OvernightOverview />} />
             <Route path="/ai-usage" element={<AiUsage />} />
             <Route path="/runbook" element={<Runbook />} />

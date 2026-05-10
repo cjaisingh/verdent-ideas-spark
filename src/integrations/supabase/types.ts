@@ -278,6 +278,126 @@ export type Database = {
         }
         Relationships: []
       }
+      analytics_daily_ai_usage: {
+        Row: {
+          calls: number
+          completion_tokens: number
+          computed_at: string
+          cost_usd: number
+          created_at: string
+          errors: number
+          id: string
+          job: string
+          model: string
+          p50_latency_ms: number | null
+          p95_latency_ms: number | null
+          prompt_tokens: number
+          rollup_date: string
+        }
+        Insert: {
+          calls?: number
+          completion_tokens?: number
+          computed_at?: string
+          cost_usd?: number
+          created_at?: string
+          errors?: number
+          id?: string
+          job: string
+          model: string
+          p50_latency_ms?: number | null
+          p95_latency_ms?: number | null
+          prompt_tokens?: number
+          rollup_date: string
+        }
+        Update: {
+          calls?: number
+          completion_tokens?: number
+          computed_at?: string
+          cost_usd?: number
+          created_at?: string
+          errors?: number
+          id?: string
+          job?: string
+          model?: string
+          p50_latency_ms?: number | null
+          p95_latency_ms?: number | null
+          prompt_tokens?: number
+          rollup_date?: string
+        }
+        Relationships: []
+      }
+      analytics_daily_automation: {
+        Row: {
+          avg_duration_ms: number | null
+          computed_at: string
+          created_at: string
+          error_rate: number
+          errors: number
+          id: string
+          job: string
+          p95_duration_ms: number | null
+          rollup_date: string
+          runs: number
+        }
+        Insert: {
+          avg_duration_ms?: number | null
+          computed_at?: string
+          created_at?: string
+          error_rate?: number
+          errors?: number
+          id?: string
+          job: string
+          p95_duration_ms?: number | null
+          rollup_date: string
+          runs?: number
+        }
+        Update: {
+          avg_duration_ms?: number | null
+          computed_at?: string
+          created_at?: string
+          error_rate?: number
+          errors?: number
+          id?: string
+          job?: string
+          p95_duration_ms?: number | null
+          rollup_date?: string
+          runs?: number
+        }
+        Relationships: []
+      }
+      analytics_daily_cost: {
+        Row: {
+          ai_calls: number
+          ai_cost_usd: number
+          ai_errors: number
+          computed_at: string
+          created_at: string
+          rollup_date: string
+          top_job: string | null
+          top_job_cost_usd: number | null
+        }
+        Insert: {
+          ai_calls?: number
+          ai_cost_usd?: number
+          ai_errors?: number
+          computed_at?: string
+          created_at?: string
+          rollup_date: string
+          top_job?: string | null
+          top_job_cost_usd?: number | null
+        }
+        Update: {
+          ai_calls?: number
+          ai_cost_usd?: number
+          ai_errors?: number
+          computed_at?: string
+          created_at?: string
+          rollup_date?: string
+          top_job?: string | null
+          top_job_cost_usd?: number | null
+        }
+        Relationships: []
+      }
       api_call_logs: {
         Row: {
           actor: string | null
@@ -642,6 +762,36 @@ export type Database = {
           source_repo?: string
           summary?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      cache_warm_runs: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          id: string
+          ok: boolean
+          route: string
+          started_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          ok?: boolean
+          route: string
+          started_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          ok?: boolean
+          route?: string
+          started_at?: string
         }
         Relationships: []
       }
@@ -1273,6 +1423,45 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_snapshots: {
+        Row: {
+          ai_brief: string | null
+          ai_cost_usd: number | null
+          ai_model: string | null
+          created_at: string
+          generated_at: string
+          id: string
+          kind: string
+          payload: Json
+          snapshot_date: string
+          summary: string | null
+        }
+        Insert: {
+          ai_brief?: string | null
+          ai_cost_usd?: number | null
+          ai_model?: string | null
+          created_at?: string
+          generated_at?: string
+          id?: string
+          kind: string
+          payload?: Json
+          snapshot_date: string
+          summary?: string | null
+        }
+        Update: {
+          ai_brief?: string | null
+          ai_cost_usd?: number | null
+          ai_model?: string | null
+          created_at?: string
+          generated_at?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          snapshot_date?: string
+          summary?: string | null
+        }
+        Relationships: []
+      }
       db_explorer_audit: {
         Row: {
           action: string | null
@@ -1654,6 +1843,96 @@ export type Database = {
           response?: Json
           scope?: string
           tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      ingestion_runs: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string | null
+          rows_failed: number
+          rows_in: number
+          rows_upserted: number
+          source_key: string
+          started_at: string
+          status: string
+          trigger: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          rows_failed?: number
+          rows_in?: number
+          rows_upserted?: number
+          source_key: string
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          rows_failed?: number
+          rows_in?: number
+          rows_upserted?: number
+          source_key?: string
+          started_at?: string
+          status?: string
+          trigger?: string
+        }
+        Relationships: []
+      }
+      ingestion_sources: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          enabled: boolean
+          kind: string
+          last_error: string | null
+          last_run_at: string | null
+          last_status: string | null
+          source_key: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          kind: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          source_key: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          enabled?: boolean
+          kind?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          last_status?: string | null
+          source_key?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -3868,6 +4147,19 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      list_all_nightly_jobs: {
+        Args: never
+        Returns: {
+          active: boolean
+          category: string
+          jobid: number
+          jobname: string
+          last_end: string
+          last_start: string
+          last_status: string
+          schedule: string
+        }[]
       }
       list_managed_cron_jobs: {
         Args: never

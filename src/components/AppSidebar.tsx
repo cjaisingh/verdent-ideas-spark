@@ -84,6 +84,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
+  { url: "/admin/night-shift", title: "Night Shift (all jobs)", icon: Moon },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
   { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
 ];
