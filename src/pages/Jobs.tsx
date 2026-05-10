@@ -10,6 +10,14 @@ import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
 import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
+import {
+  RISK_DOT_CLASS,
+  RISK_RUBRIC,
+  isJobRisk,
+  nightAllowedFor,
+  nightBlockedReason,
+  type JobRisk,
+} from "@/lib/jobRisk";
 
 type Job = JobDetailsRecord;
 
@@ -22,7 +30,7 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: "done", label: "Done" },
 ];
 
-const PRIORITY_RANK: Record<string, number> = { high: 3, med: 2, low: 1 };
+const PRIORITY_RANK: Record<string, number> = { critical: 4, high: 3, med: 2, low: 1 };
 
 export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
