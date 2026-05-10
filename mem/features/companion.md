@@ -22,8 +22,13 @@ type: feature
 
 **Mac one-time setup:** `launchctl setenv OLLAMA_ORIGINS "https://*.lovable.app,http://localhost:*"` then restart Ollama.
 
+**Voice (TTS):** Default is **Gemini TTS** via `POST /functions/v1/gemini-tts` (8 prebuilt voices, default `Kore`, returns `audio/wav`). See `mem://features/gemini-tts` and `docs/gemini-tts.md`. Browser `/companion` will adopt it; iPhone Rork app uses it by default with `expo-speech` as offline fallback.
+
+**iPhone (Rork) surface:** Separate Expo project. Talks to the same Supabase + edge functions via Supabase JS direct. Email/password auth, APNs push, voice + text everywhere. Full contract: `docs/rork-companion-spec.md`.
+
 **Phase status:**
 - Phase 1 ✅ shipped 2026-05-09 (local-only chat, RAG, escalation, morning-review seed)
 - Phase 1.5 — wire real cloud fallback edge fn (`companion-chat` → Lovable AI Gateway)
 - Phase 2 — manifest-only PWA scoped to `/companion`
 - Phase 3 — headless Mac daemon + `local_ai_jobs` queue
+- Phase 4 (in progress) — Rork iPhone companion + Gemini TTS as default voice
