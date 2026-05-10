@@ -356,4 +356,95 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
   );
 };
 
+type CollapsibleSubgroupProps = {
+  groupKey: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  items: NavItem[];
+  collapsed: boolean;
+  pathname: string;
+  isActive: (p: string) => boolean;
+  dots: Record<string, import("@/lib/sidebar-state").DotColor>;
+  isFavorite: (url: string) => boolean;
+  toggleFavorite: (url: string) => void;
+  defaultOpen?: boolean;
+};
+
+function CollapsibleSubgroup({
+  groupKey, title, icon: Icon, items, collapsed,
+  isActive, dots, isFavorite, toggleFavorite, defaultOpen = false,
+}: CollapsibleSubgroupProps) {
+  const childActive = items.some((c) => isActive(c.url));
+  const [open, setOpen] = useGroupOpen(groupKey, defaultOpen, childActive);
+
+  // When collapsed (icon-only rail), render children as plain rows so they remain reachable.
+  if (collapsed) {
+    return (
+      <>
+        {items.map((it) => (
+          <SidebarMenuItem key={it.url}>
+            <SidebarMenuButton asChild isActive={isActive(it.url)}>
+              <NavLink to={it.url} className="flex items-center gap-2">
+                <it.icon className="h-4 w-4 text-sidebar-foreground/70" />
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <SidebarMenuItem className="group/row">
+      <SidebarMenuButton
+        onClick={() => setOpen(!open)}
+        className={childActive ? "border-l-2 border-sidebar-primary/40" : ""}
+        aria-expanded={open}
+      >
+        <Icon className={`h-4 w-4 ${childActive ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+        <span className="flex-1 truncate text-sidebar-foreground/80">{title}</span>
+        <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
+      </SidebarMenuButton>
+      {open && (
+        <SidebarMenuSub>
+          {items.map((c) => {
+            const active = isActive(c.url);
+            const dot = dots[c.url];
+            const pinned = isFavorite(c.url);
+            return (
+              <SidebarMenuSubItem key={c.url} className="group/subrow">
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={active}
+                  className={active ? "border-l-2 border-sidebar-primary" : ""}
+                >
+                  <NavLink to={c.url} className="flex items-center gap-2">
+                    <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
+                    <span className="flex-1 truncate">{c.title}</span>
+                    {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
+                  </NavLink>
+                </SidebarMenuSubButton>
+                {!pinned && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFavorite(c.url);
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded text-sidebar-foreground/60 opacity-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/subrow:opacity-100 focus:opacity-100"
+                    aria-label={`Add ${c.title} to Favorites`}
+                  >
+                    <Star className="h-3 w-3" />
+                  </button>
+                )}
+              </SidebarMenuSubItem>
+            );
+          })}
+        </SidebarMenuSub>
+      )}
+    </SidebarMenuItem>
+  );
+}
+
 export default AppSidebar;
