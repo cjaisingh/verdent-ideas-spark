@@ -48,6 +48,7 @@ import AdminAiUsage from "./pages/AdminAiUsage";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
+import Walkthrough from "./pages/Walkthrough";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
