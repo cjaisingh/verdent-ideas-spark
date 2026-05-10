@@ -174,17 +174,31 @@ export function ProposalReviewSheet({
                 className="text-xs min-h-[60px]"
                 disabled={d.decision === "rejected"}
               />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Select
                   value={d.priority}
                   onValueChange={(v) => update(i, { priority: v })}
                   disabled={d.decision === "rejected"}
                 >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="priority" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">low</SelectItem>
-                    <SelectItem value="med">med</SelectItem>
-                    <SelectItem value="high">high</SelectItem>
+                    <SelectItem value="low">prio: low</SelectItem>
+                    <SelectItem value="med">prio: med</SelectItem>
+                    <SelectItem value="high">prio: high</SelectItem>
+                    <SelectItem value="critical">prio: critical</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={d.risk}
+                  onValueChange={(v) => update(i, { risk: v })}
+                  disabled={d.decision === "rejected"}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="risk" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">risk: low</SelectItem>
+                    <SelectItem value="med">risk: med</SelectItem>
+                    <SelectItem value="high">risk: high</SelectItem>
+                    <SelectItem value="critical">risk: critical</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input
