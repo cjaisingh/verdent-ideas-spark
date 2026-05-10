@@ -70,7 +70,7 @@ export const ReviewsCard = () => {
     <section className="rounded-md border border-border bg-card p-3 space-y-2">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <FileText className="h-4 w-4" /> Weekly reviews
+          <FileText className="h-4 w-4" /> External Weekly Reviews
         </div>
         <div className="flex items-center gap-2">
           <Link to="/reviews" className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
