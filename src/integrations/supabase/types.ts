@@ -1388,6 +1388,13 @@ export type Database = {
             foreignKeyName: "discussion_actions_promoted_task_id_fkey"
             columns: ["promoted_task_id"]
             isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "discussion_actions_promoted_task_id_fkey"
+            columns: ["promoted_task_id"]
+            isOneToOne: false
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
           },
@@ -1982,6 +1989,13 @@ export type Database = {
             referencedRelation: "okr_nodes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "okr_measurements_okr_node_id_fkey"
+            columns: ["okr_node_id"]
+            isOneToOne: true
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["okr_node_id"]
+          },
         ]
       }
       okr_node_events: {
@@ -2019,6 +2033,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "okr_nodes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_node_events_okr_node_id_fkey"
+            columns: ["okr_node_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["okr_node_id"]
           },
           {
             foreignKeyName: "okr_node_events_tenant_id_fkey"
@@ -2084,11 +2105,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "okr_nodes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["okr_node_id"]
+          },
+          {
             foreignKeyName: "okr_nodes_superseded_by_fkey"
             columns: ["superseded_by"]
             isOneToOne: false
             referencedRelation: "okr_nodes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "okr_nodes_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["okr_node_id"]
           },
           {
             foreignKeyName: "okr_nodes_tenant_id_fkey"
@@ -2470,6 +2505,13 @@ export type Database = {
           task_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "roadmap_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
           {
             foreignKeyName: "roadmap_comments_task_id_fkey"
             columns: ["task_id"]
@@ -2888,6 +2930,13 @@ export type Database = {
             foreignKeyName: "roadmap_task_activity_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "roadmap_task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
           },
@@ -3032,6 +3081,8 @@ export type Database = {
           id: string
           key: string
           module: string | null
+          okr_link_kind: string | null
+          okr_node_id: string | null
           order: number
           owner: string | null
           review_notes: string | null
@@ -3052,6 +3103,8 @@ export type Database = {
           id?: string
           key: string
           module?: string | null
+          okr_link_kind?: string | null
+          okr_node_id?: string | null
           order?: number
           owner?: string | null
           review_notes?: string | null
@@ -3072,6 +3125,8 @@ export type Database = {
           id?: string
           key?: string
           module?: string | null
+          okr_link_kind?: string | null
+          okr_node_id?: string | null
           order?: number
           owner?: string | null
           review_notes?: string | null
@@ -3084,6 +3139,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "roadmap_tasks_okr_node_id_fkey"
+            columns: ["okr_node_id"]
+            isOneToOne: false
+            referencedRelation: "okr_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_tasks_okr_node_id_fkey"
+            columns: ["okr_node_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["okr_node_id"]
+          },
           {
             foreignKeyName: "roadmap_tasks_sprint_id_fkey"
             columns: ["sprint_id"]
@@ -3161,6 +3230,13 @@ export type Database = {
           tokens_total?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "roadmap_work_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
           {
             foreignKeyName: "roadmap_work_log_task_id_fkey"
             columns: ["task_id"]
@@ -3474,6 +3550,20 @@ export type Database = {
           qa_total: number | null
           structural_ok: boolean | null
           total_tasks: number | null
+        }
+        Relationships: []
+      }
+      roadmap_task_outcome_health: {
+        Row: {
+          okr_kind: string | null
+          okr_link_kind: string | null
+          okr_node_id: string | null
+          okr_status: string | null
+          okr_title: string | null
+          task_id: string | null
+          task_key: string | null
+          task_status: string | null
+          task_title: string | null
         }
         Relationships: []
       }
