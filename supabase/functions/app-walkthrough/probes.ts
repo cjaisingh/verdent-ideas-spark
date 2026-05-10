@@ -21,7 +21,7 @@ export type RouteProbe = {
 /** awip-api surface — these are the contract endpoints other surfaces depend on. */
 export const AWIP_API_PROBES: RouteProbe[] = [
   { target: "awip-api:/capabilities", path: "/awip-api/capabilities", auth: "service", severity: "high" },
-  { target: "awip-api:/okr/tree", path: "/awip-api/okr/tree", auth: "service", severity: "high" },
+  // Note: /okr/tree requires tenant_id; we don't probe it generically — see capability self-test instead.
   { target: "awip-api:/events/recent", path: "/awip-api/events/recent?limit=1", auth: "service", severity: "medium" },
 ];
 
