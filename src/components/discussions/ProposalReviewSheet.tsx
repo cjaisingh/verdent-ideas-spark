@@ -38,7 +38,7 @@ export function ProposalReviewSheet({
 
   useEffect(() => {
     if (open) {
-      setDrafts(proposals.map((p) => ({ ...p, decision: "pending" })));
+      setDrafts(proposals.map((p) => ({ ...p, risk: p.risk ?? "med", decision: "pending" })));
     }
   }, [open, proposals]);
 
