@@ -117,6 +117,13 @@ function formatEvent(e: { event_type: string; payload: any }): { label: string; 
       return { label: `Due date: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
     case "priority_changed":
       return { label: `Priority: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "risk_changed":
+      return { label: `Risk: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "night_override":
+      return {
+        label: p.to ? "Night override set" : "Night override cleared",
+        detail: p.to ?? p.from ?? undefined,
+      };
     case "title_changed":
       return { label: "Title changed", detail: `${fmtVal(p.from)} → ${fmtVal(p.to)}` };
     case "promoted":
