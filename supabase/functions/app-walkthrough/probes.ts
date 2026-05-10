@@ -20,10 +20,9 @@ export type RouteProbe = {
 
 /** awip-api surface — these are the contract endpoints other surfaces depend on. */
 export const AWIP_API_PROBES: RouteProbe[] = [
-  { target: "awip-api:/health", path: "/awip-api/health", auth: "none", severity: "high" },
-  { target: "awip-api:/okrs", path: "/awip-api/okrs", auth: "service", severity: "high" },
   { target: "awip-api:/capabilities", path: "/awip-api/capabilities", auth: "service", severity: "high" },
-  { target: "awip-api:/events", path: "/awip-api/events?limit=1", auth: "service", severity: "medium" },
+  { target: "awip-api:/okr/tree", path: "/awip-api/okr/tree", auth: "service", severity: "high" },
+  { target: "awip-api:/events/recent", path: "/awip-api/events/recent?limit=1", auth: "service", severity: "medium" },
 ];
 
 /** Edge functions that should respond to a benign GET / OPTIONS. */
