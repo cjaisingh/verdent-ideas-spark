@@ -64,12 +64,12 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
       .select("id,kind,severity,summary,created_at,resolved_at")
       .gte("created_at", dayAgo).order("created_at", { ascending: false }).limit(15) as any),
     safe<any[]>(admin.from("automation_runs")
-      .select("id,job_name,status,started_at,finished_at,summary").order("started_at", { ascending: false }).limit(8) as any),
-    safe<any[]>(admin.from("audit_runs")
-      .select("id,kind,status,score,findings_count,created_at").order("created_at", { ascending: false }).limit(5) as any),
+      .select("id,job,status,trigger,duration_ms,message,created_at").order("created_at", { ascending: false }).limit(8) as any),
+    safe<any[]>(admin.from("deep_audit_runs")
+      .select("id,cadence,status,summary,started_at,finished_at").order("started_at", { ascending: false }).limit(5) as any),
     safe<any>(admin.from("daily_plans").select("for_date,focus,plan_md,risks,recommendations").order("for_date", { ascending: false }).limit(1).maybeSingle() as any),
     safe<any>(admin.from("morning_reviews").select("review_date,kpis,stuck_jobs,top_actions,open_findings").order("review_date", { ascending: false }).limit(1).maybeSingle() as any),
-    safe<any[]>(admin.from("ai_usage_log").select("model,total_tokens,cost_usd,created_at").gte("created_at", dayAgo).limit(2000) as any),
+    safe<any[]>(admin.from("ai_usage_log").select("model,prompt_tokens,completion_tokens,cost_usd,created_at").gte("created_at", dayAgo).limit(2000) as any),
     safe<any[]>(admin.from("capability_events").select("event_type,capability_id,created_at").order("created_at", { ascending: false }).limit(10) as any),
     safe<any[]>(admin.from("okr_node_events").select("event_type,node_id,created_at").order("created_at", { ascending: false }).limit(10) as any),
     safe<any[]>(admin.from("copilot_lessons").select("scope,lesson,created_at").eq("created_by", who.uid).eq("active", true).order("created_at", { ascending: false }).limit(30) as any),
@@ -109,14 +109,14 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
   if (sentinel?.length || automation?.length) {
     lines.push(`### [Last night] sentinel + automation`);
     for (const s of (sentinel ?? []).slice(0, 8)) lines.push(`- sentinel/${s.severity}: ${s.summary ?? s.kind} (${fmtDate(s.created_at)}${s.resolved_at ? " · resolved" : ""})`);
-    for (const a of (automation ?? []).slice(0, 6)) lines.push(`- run/${a.status}: ${a.job_name} ${a.summary ? `— ${String(a.summary).slice(0, 120)}` : ""} (${fmtDate(a.started_at)})`);
+    for (const a of (automation ?? []).slice(0, 6)) lines.push(`- run/${a.status}: ${a.job} ${a.message ? `— ${String(a.message).slice(0, 120)}` : ""} (${fmtDate(a.created_at)})`);
     lines.push("");
   }
 
   // Audits
   if (audits?.length) {
-    lines.push(`### [Audits] audit_runs (latest 5)`);
-    for (const a of audits) lines.push(`- ${a.kind}/${a.status} score=${a.score ?? "—"} findings=${a.findings_count ?? 0} (${fmtDate(a.created_at)})`);
+    lines.push(`### [Audits] deep_audit_runs (latest 5)`);
+    for (const a of audits) lines.push(`- ${a.cadence}/${a.status} (${fmtDate(a.started_at)})`);
     lines.push("");
   }
 
@@ -131,7 +131,7 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
   // AI usage 24h
   if (aiUsage?.length) {
     const calls = aiUsage.length;
-    const tokens = aiUsage.reduce((a: number, r: any) => a + (r.total_tokens || 0), 0);
+    const tokens = aiUsage.reduce((a: number, r: any) => a + (r.prompt_tokens || 0) + (r.completion_tokens || 0), 0);
     const cost = aiUsage.reduce((a: number, r: any) => a + Number(r.cost_usd || 0), 0);
     const models = new Set(aiUsage.map((r: any) => r.model)).size;
     lines.push(`### [Health] ai_usage 24h: ${calls} calls · ${tokens} tokens · $${cost.toFixed(3)} · ${models} model(s)`);
