@@ -32,3 +32,9 @@ type: feature
 - Phase 2 — manifest-only PWA scoped to `/companion`
 - Phase 3 — headless Mac daemon + `local_ai_jobs` queue
 - Phase 4 (in progress) — Rork iPhone companion + Gemini TTS as default voice
+
+## Full environment access + learning loop (2026-05-10)
+- Edge function `awip-companion-context` (operator JWT) returns a ~6KB markdown snapshot of `discussion_actions` (jobs), `roadmap_tasks`, `sentinel_findings` (24h), `automation_runs`, `audit_runs`, latest `daily_plans` + `morning_reviews`, 24h `ai_usage_log` totals, recent `okr_node_events` + `capability_events`, and active `copilot_lessons` (per-user) + global `lessons`.
+- `Companion.tsx` injects this as a system message every turn behind the `env_context_enabled` setting (default on), parallel with RAG.
+- After each assistant reply, a cheap `gemini-2.5-flash-lite` extractor proposes 0–3 durable lessons → `PendingLessonsTray` → operator clicks Save to persist into `copilot_lessons` (`source='voice'`). Toggle: `auto_extract_lessons` (default on).
+- System prompt updated to reference jobs by handle (J-NN) and honor active lessons.
