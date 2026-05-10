@@ -522,6 +522,7 @@ export type Database = {
           owning_module: string | null
           status: Database["public"]["Enums"]["capability_status"]
           updated_at: string
+          verify: Json | null
           version: string
         }
         Insert: {
@@ -534,6 +535,7 @@ export type Database = {
           owning_module?: string | null
           status?: Database["public"]["Enums"]["capability_status"]
           updated_at?: string
+          verify?: Json | null
           version?: string
         }
         Update: {
@@ -546,6 +548,7 @@ export type Database = {
           owning_module?: string | null
           status?: Database["public"]["Enums"]["capability_status"]
           updated_at?: string
+          verify?: Json | null
           version?: string
         }
         Relationships: []
@@ -3489,6 +3492,111 @@ export type Database = {
         }
         Relationships: []
       }
+      walkthrough_checks: {
+        Row: {
+          capability_id: string | null
+          created_at: string
+          detail: Json
+          error: string | null
+          http_status: number | null
+          id: string
+          kind: string
+          latency_ms: number | null
+          run_id: string
+          severity: string
+          status: string
+          target: string
+        }
+        Insert: {
+          capability_id?: string | null
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          kind: string
+          latency_ms?: number | null
+          run_id: string
+          severity?: string
+          status: string
+          target: string
+        }
+        Update: {
+          capability_id?: string | null
+          created_at?: string
+          detail?: Json
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          kind?: string
+          latency_ms?: number | null
+          run_id?: string
+          severity?: string
+          status?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walkthrough_checks_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walkthrough_checks_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "walkthrough_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      walkthrough_runs: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          failed: number
+          finished_at: string | null
+          id: string
+          passed: number
+          skipped: number
+          started_at: string
+          status: string
+          summary: Json
+          total: number
+          trigger: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          passed?: number
+          skipped?: number
+          started_at?: string
+          status?: string
+          summary?: Json
+          total?: number
+          trigger?: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          passed?: number
+          skipped?: number
+          started_at?: string
+          status?: string
+          summary?: Json
+          total?: number
+          trigger?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       cost_actuals_30d: {
@@ -3671,6 +3779,13 @@ export type Database = {
           _target: string
         }
         Returns: undefined
+      }
+      run_capability_sql_check: {
+        Args: { _min_rows?: number; _sql: string }
+        Returns: {
+          ok: boolean
+          row_count: number
+        }[]
       }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
