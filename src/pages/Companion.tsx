@@ -1050,6 +1050,7 @@ export default function Companion() {
               </div>
 
               <div className="border-t p-3">
+                <PendingLessonsTray pending={pendingLessons} onChange={setPendingLessons} />
                 {voicePartial && (
                   <div className="mb-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
                     <span className="font-mono uppercase mr-2">listening</span>{voicePartial}
@@ -1077,7 +1078,7 @@ export default function Companion() {
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · mic dictates into the box · RAG {settings.rag_enabled ? "on" : "off"} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · mic dictates · RAG {settings.rag_enabled ? "on" : "off"} · env {settings.env_context_enabled ? "on" : "off"} · lessons {settings.auto_extract_lessons ? "on" : "off"}{pendingLessons.length ? ` (${pendingLessons.length} pending)` : ""} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
               </div>
             </>
           )}
