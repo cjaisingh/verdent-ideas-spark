@@ -346,6 +346,15 @@ export function JobDetailsDrawer({
 
           <section>
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Risk & night shift
+            </h3>
+            <RiskNightEditor job={job} />
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
               Assignment
             </h3>
             <JobOwnerDueEditor
