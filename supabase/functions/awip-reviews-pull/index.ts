@@ -170,16 +170,19 @@ async function aiExtract(md: string, filename: string): Promise<ParsedReview> {
       }),
     });
     const txt = await res.text();
+    let data: Record<string, unknown> = {};
+    try { data = JSON.parse(txt); } catch { /* not json */ }
     await logAiCall(admin, {
-      function: "awip-reviews-pull",
+      job: "awip-reviews-pull",
       model,
-      status: res.status,
-      duration_ms: Date.now() - t0,
-      meta: { filename },
+      trigger: "service",
+      startedAt: t0,
+      response: res,
+      json: data as { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } },
+      request_ref: { filename },
     }).catch(() => {});
     if (!res.ok) return { findings: [] };
-    const data = JSON.parse(txt);
-    const content = data?.choices?.[0]?.message?.content ?? "{}";
+    const content = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content ?? "{}";
     const parsed = JSON.parse(content) as Partial<ParsedReview>;
     const findings = Array.isArray(parsed.findings)
       ? parsed.findings.map((f: ParsedFinding) => ({
