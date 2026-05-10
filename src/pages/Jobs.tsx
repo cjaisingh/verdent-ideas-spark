@@ -10,6 +10,14 @@ import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
 import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
+import {
+  RISK_DOT_CLASS,
+  RISK_RUBRIC,
+  isJobRisk,
+  nightAllowedFor,
+  nightBlockedReason,
+  type JobRisk,
+} from "@/lib/jobRisk";
 
 type Job = JobDetailsRecord;
 
@@ -22,7 +30,7 @@ const COLUMNS: { key: string; label: string }[] = [
   { key: "done", label: "Done" },
 ];
 
-const PRIORITY_RANK: Record<string, number> = { high: 3, med: 2, low: 1 };
+const PRIORITY_RANK: Record<string, number> = { critical: 4, high: 3, med: 2, low: 1 };
 
 export default function Jobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -40,6 +48,14 @@ export default function Jobs() {
   const [bulkOwner, setBulkOwner] = useState("");
 
   const toggleNightEligible = async (j: Job, on: boolean) => {
+    const risk: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+    if (on) {
+      const blocked = nightBlockedReason(risk, j.night_override_reason);
+      if (blocked) {
+        toast({ title: "Blocked by risk", description: blocked, variant: "destructive" });
+        return;
+      }
+    }
     setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, night_eligible: on } as any : x)));
     const { error } = await supabase
       .from("discussion_actions")
@@ -226,6 +242,15 @@ export default function Jobs() {
               />
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
+            {(() => {
+              const r: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+              return (
+                <span
+                  className={`h-1.5 w-1.5 rounded-full shrink-0 ${RISK_DOT_CLASS[r]}`}
+                  title={`Risk: ${r} — ${RISK_RUBRIC[r]}`}
+                />
+              );
+            })()}
             <Badge variant="outline" className="text-[9px] uppercase">{j.priority}</Badge>
             <Badge variant="outline" className="text-[9px]">{j.source}</Badge>
             {j.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
@@ -263,13 +288,22 @@ export default function Jobs() {
               {dHandle ? <span className="font-mono">{dHandle}</span> : <span className="font-mono">{subj}</span>}
             </span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleNightEligible(j, !(j as any).night_eligible); }}
-                className={`inline-flex items-center gap-0.5 hover:underline ${(j as any).night_eligible ? "text-foreground" : ""}`}
-                title={(j as any).night_eligible ? "Unmark night-eligible" : "Mark night-eligible"}
-              >
-                <Moon className="h-3 w-3" />
-              </button>
+              {(() => {
+                const r: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+                const allowed = nightAllowedFor(r, j.night_override_reason);
+                const moonOn = !!(j as any).night_eligible;
+                const blocked = nightBlockedReason(r, j.night_override_reason);
+                return (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleNightEligible(j, !moonOn); }}
+                    disabled={!allowed && !moonOn}
+                    className={`inline-flex items-center gap-0.5 hover:underline ${moonOn ? "text-foreground" : ""} ${(!allowed && !moonOn) ? "opacity-30 cursor-not-allowed" : ""}`}
+                    title={blocked && !moonOn ? blocked : (moonOn ? "Unmark night-eligible" : "Mark night-eligible")}
+                  >
+                    <Moon className="h-3 w-3" />
+                  </button>
+                );
+              })()}
               {j.subject_type === "roadmap_finding" && (
                 <Link
                   to={`/roadmap/risks#finding-${j.subject_id}`}

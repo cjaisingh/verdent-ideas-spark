@@ -3,12 +3,24 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { discussionHandle, jobHandle, subjectHandle } from "@/lib/discussionHandles";
-import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare } from "lucide-react";
+import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare, Moon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
+import { cn } from "@/lib/utils";
+import {
+  JOB_RISKS,
+  RISK_BADGE_CLASS,
+  RISK_RUBRIC,
+  isJobRisk,
+  nightAllowedFor,
+  nightBlockedReason,
+  type JobRisk,
+} from "@/lib/jobRisk";
 
 export type JobDetailsRecord = {
   id: string;
@@ -20,6 +32,9 @@ export type JobDetailsRecord = {
   details: string | null;
   status: string;
   priority: string;
+  risk: string;
+  night_eligible: boolean | null;
+  night_override_reason: string | null;
   owner: string | null;
   source: string;
   promoted_task_id: string | null;
@@ -102,6 +117,13 @@ function formatEvent(e: { event_type: string; payload: any }): { label: string; 
       return { label: `Due date: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
     case "priority_changed":
       return { label: `Priority: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "risk_changed":
+      return { label: `Risk: ${fmtVal(p.from)} → ${fmtVal(p.to)}` };
+    case "night_override":
+      return {
+        label: p.to ? "Night override set" : "Night override cleared",
+        detail: p.to ?? p.from ?? undefined,
+      };
     case "title_changed":
       return { label: "Title changed", detail: `${fmtVal(p.from)} → ${fmtVal(p.to)}` };
     case "promoted":
@@ -271,6 +293,13 @@ export function JobDetailsDrawer({
               {handle} <Copy className="h-3 w-3" />
             </button>
             <Badge variant="outline" className="text-[10px] uppercase">{job.priority}</Badge>
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] uppercase", RISK_BADGE_CLASS[(isJobRisk(job.risk) ? job.risk : "med")])}
+              title={`Risk: ${job.risk} — ${RISK_RUBRIC[(isJobRisk(job.risk) ? job.risk : "med")]}`}
+            >
+              risk:{job.risk}
+            </Badge>
             <Badge variant="outline" className="text-[10px]">{job.status}</Badge>
             <Badge variant="outline" className="text-[10px]">{job.source}</Badge>
             {job.promoted_task_id && (
@@ -311,6 +340,15 @@ export function JobDetailsDrawer({
             ) : (
               <p className="text-sm text-muted-foreground italic">No details.</p>
             )}
+          </section>
+
+          <Separator />
+
+          <section>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+              Risk & night shift
+            </h3>
+            <RiskNightEditor job={job} />
           </section>
 
           <Separator />
@@ -424,5 +462,99 @@ export function JobDetailsDrawer({
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function RiskNightEditor({ job }: { job: JobDetailsRecord }) {
+  const initialRisk: JobRisk = isJobRisk(job.risk) ? job.risk : "med";
+  const [risk, setRisk] = useState<JobRisk>(initialRisk);
+  const [override, setOverride] = useState<string>(job.night_override_reason ?? "");
+  const [nightOn, setNightOn] = useState<boolean>(!!job.night_eligible);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setRisk(isJobRisk(job.risk) ? job.risk : "med");
+    setOverride(job.night_override_reason ?? "");
+    setNightOn(!!job.night_eligible);
+  }, [job.id, job.risk, job.night_override_reason, job.night_eligible]);
+
+  const allowedNow = nightAllowedFor(risk, override || null);
+  const blocked = nightBlockedReason(risk, override || null);
+  const dirty =
+    risk !== initialRisk ||
+    (override || "") !== (job.night_override_reason ?? "") ||
+    nightOn !== !!job.night_eligible;
+
+  const save = async () => {
+    setSaving(true);
+    const patch: Record<string, unknown> = {
+      risk,
+      night_override_reason: risk === "high" && override.trim() ? override.trim() : null,
+      night_eligible: allowedNow ? nightOn : false,
+    };
+    const { error } = await supabase
+      .from("discussion_actions")
+      .update(patch as never)
+      .eq("id", job.id);
+    setSaving(false);
+    if (error) {
+      toast({ title: "Could not save", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Saved" });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-[120px_1fr] gap-2 items-center">
+        <label className="text-xs text-muted-foreground">Risk</label>
+        <Select value={risk} onValueChange={(v) => setRisk(v as JobRisk)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {JOB_RISKS.map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-snug">{RISK_RUBRIC[risk]}</p>
+
+      {risk === "high" && (
+        <div>
+          <label className="text-xs text-muted-foreground">Night override reason (required for high risk)</label>
+          <Textarea
+            value={override}
+            onChange={(e) => setOverride(e.target.value)}
+            placeholder="e.g. dry-run only, behind feature flag, reverts in one step…"
+            className="text-xs mt-1 min-h-[60px]"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+        <div className="flex items-center gap-2 text-xs">
+          <Moon className="h-3.5 w-3.5" />
+          <span className={cn(!allowedNow && "text-muted-foreground")}>
+            {nightOn ? "On night shift" : "Off night shift"}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant={nightOn ? "outline" : "default"}
+          disabled={!allowedNow}
+          onClick={() => setNightOn((v) => !v)}
+          title={blocked ?? undefined}
+        >
+          {nightOn ? "Take off" : "Add to night shift"}
+        </Button>
+      </div>
+      {blocked && <p className="text-[11px] text-amber-600 dark:text-amber-400">{blocked}</p>}
+
+      <div className="flex justify-end">
+        <Button size="sm" onClick={save} disabled={!dirty || saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </div>
+    </div>
   );
 }
