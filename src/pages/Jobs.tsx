@@ -242,6 +242,15 @@ export default function Jobs() {
               />
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
+            {(() => {
+              const r: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+              return (
+                <span
+                  className={`h-1.5 w-1.5 rounded-full shrink-0 ${RISK_DOT_CLASS[r]}`}
+                  title={`Risk: ${r} — ${RISK_RUBRIC[r]}`}
+                />
+              );
+            })()}
             <Badge variant="outline" className="text-[9px] uppercase">{j.priority}</Badge>
             <Badge variant="outline" className="text-[9px]">{j.source}</Badge>
             {j.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
