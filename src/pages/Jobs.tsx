@@ -48,6 +48,14 @@ export default function Jobs() {
   const [bulkOwner, setBulkOwner] = useState("");
 
   const toggleNightEligible = async (j: Job, on: boolean) => {
+    const risk: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+    if (on) {
+      const blocked = nightBlockedReason(risk, j.night_override_reason);
+      if (blocked) {
+        toast({ title: "Blocked by risk", description: blocked, variant: "destructive" });
+        return;
+      }
+    }
     setJobs((prev) => prev.map((x) => (x.id === j.id ? { ...x, night_eligible: on } as any : x)));
     const { error } = await supabase
       .from("discussion_actions")
