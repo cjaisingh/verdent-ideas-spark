@@ -34,8 +34,11 @@ export const WorkLogPulse = () => {
 
   useEffect(() => {
     load();
+    // Unique channel name per mount — supabase-js caches channels by name and a
+    // StrictMode/HMR remount that hits a still-cached `joined` channel throws
+    // "cannot add postgres_changes callbacks ... after subscribe()".
     const channel = supabase
-      .channel("work_log_pulse")
+      .channel(`work_log_pulse:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "roadmap_work_log" },

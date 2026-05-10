@@ -28,7 +28,7 @@ const PendingApprovalsIndicator = () => {
   useEffect(() => {
     load();
     const channel = supabase
-      .channel("approval_queue_indicator")
+      .channel(`approval_queue_indicator:${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "approval_queue" },

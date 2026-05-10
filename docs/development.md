@@ -164,6 +164,24 @@ WHERE id = '<capability-id>';
 
 Then have the owning module register itself with `POST /capabilities/register` to emit a fresh `capability_events.registered` row.
 
+## Realtime channels
+
+Always give `supabase.channel()` a **unique name per mount** when calling it inside `useEffect`:
+
+```ts
+const channel = supabase
+  .channel(`my_thing:${crypto.randomUUID()}`)
+  .on("postgres_changes", { ... }, handler)
+  .subscribe();
+return () => { supabase.removeChannel(channel); };
+```
+
+Static names crash under React StrictMode / HMR with:
+
+> `cannot add postgres_changes callbacks for realtime:<name> after subscribe()`
+
+The `sentinel-tick` job watches `frontend_error_logs` for this class of bug (see `checkFrontendRealtimeErrors`).
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

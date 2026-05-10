@@ -3,7 +3,13 @@
 // `FindingCandidate` objects ready to upsert into public.sentinel_findings.
 
 export type FindingCandidate = {
-  kind: "cron_silence" | "five_xx_spike" | "secret_age" | "role_grant" | "job_error_rate";
+  kind:
+    | "cron_silence"
+    | "five_xx_spike"
+    | "secret_age"
+    | "role_grant"
+    | "job_error_rate"
+    | "frontend_realtime_error";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -182,4 +188,49 @@ export const SENTINEL_CADENCES: Record<string, number> = {
   "sentinel-tick": 15,
   "lessons-synthesize": 7 * 24 * 60,
 };
+
+// Pattern matchers for realtime / channel-lifecycle bugs we've actually hit.
+// Keep narrow — we want to flag class-of-bug regressions, not every JS error.
+const REALTIME_ERROR_PATTERNS: RegExp[] = [
+  /cannot add `?postgres_changes`? callbacks/i,
+  /tried to subscribe multiple times/i,
+  /CHANNEL_ERROR/,
+  /channel.*already (subscribed|joined)/i,
+];
+
+export type FrontendErrorRow = {
+  message: string;
+  url: string | null;
+  created_at: string;
+  kind?: string | null;
+};
+
+export function checkFrontendRealtimeErrors(
+  now: Date,
+  windowMin: number,
+  rows: FrontendErrorRow[],
+): FindingCandidate[] {
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const matches = rows.filter((r) => {
+    if (+new Date(r.created_at) < sinceMs) return false;
+    return REALTIME_ERROR_PATTERNS.some((p) => p.test(r.message ?? ""));
+  });
+  if (matches.length === 0) return [];
+  const bucket = Math.floor(now.getTime() / (windowMin * 60_000));
+  const sample = matches[0].message.slice(0, 160);
+  const sev: FindingCandidate["severity"] = matches.length >= 5 ? "high" : "medium";
+  return [{
+    kind: "frontend_realtime_error",
+    severity: sev,
+    summary: `${matches.length} realtime/channel error(s) in browser in last ${windowMin}m: ${sample}`,
+    dedupe_key: `frontend_realtime_error:${bucket}`,
+    subject_ref: { sample_url: matches[0].url ?? null },
+    payload: {
+      window_minutes: windowMin,
+      count: matches.length,
+      sample_message: sample,
+      sample_url: matches[0].url ?? null,
+    },
+  }];
+}
 
