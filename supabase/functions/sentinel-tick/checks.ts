@@ -3,7 +3,13 @@
 // `FindingCandidate` objects ready to upsert into public.sentinel_findings.
 
 export type FindingCandidate = {
-  kind: "cron_silence" | "five_xx_spike" | "secret_age" | "role_grant" | "job_error_rate";
+  kind:
+    | "cron_silence"
+    | "five_xx_spike"
+    | "secret_age"
+    | "role_grant"
+    | "job_error_rate"
+    | "frontend_realtime_error";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
