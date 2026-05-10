@@ -119,7 +119,7 @@ export default function Reviews() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
-            <FileText className="h-5 w-5" /> Weekly Reviews
+            <FileText className="h-5 w-5" /> External Weekly Reviews
           </h1>
           <p className="text-xs text-muted-foreground">
             Pulled Mondays 05:30 UTC from <code>cjaisingh/verdent-ideas-spark/docs/reviews</code>.
