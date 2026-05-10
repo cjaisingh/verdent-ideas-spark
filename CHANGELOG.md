@@ -5,6 +5,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ## [Unreleased]
 
 ### Added
+- **Companion full env access + learning loop** — new `awip-companion-context` edge function returns a per-turn ~6KB markdown snapshot of jobs board, roadmap, sentinel/automation (24h), audits, daily plan, morning review, AI usage, OKR/capability events, and active lessons. `/companion` injects it as a system message every send (toggle: Environment context). After each reply, a cheap extractor proposes durable lessons that the operator approves into `copilot_lessons` via a Pending lessons tray (toggle: Auto-extract lessons).
 - **Quarterly Review System** — new `quarterly-review-open` edge function + cron `scheduled-quarterly-review-open` (Jan/Apr/Jul/Oct 1 @ 09:00 UTC) opens an idempotent `discussion_action` per quarter linking to the new `docs/quarterly-review.md` checklist (scaffold configs, Tailwind drift, Dependabot majors, edge-function & cron inventory, mem:// sweep, ADRs, secrets rotation, sidebar IA, RLS coverage). Owner: operator, due 14 days. Memory: `mem://preferences/review-cadence` codifies the full per-PR/daily/weekly/quarterly map so future sessions stop guessing.
 
 ### Documented
