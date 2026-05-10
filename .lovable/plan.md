@@ -1,90 +1,110 @@
-## Problem
 
-Sidebar lists ~35 flat items across 4 long groups. New pages (`/reviews`, `/walkthrough`, `/master-plan`) aren't in the nav at all, and several items overlap (e.g. `/ai-usage` vs `/admin/ai-usage`, `/runbook` vs `/runbooks`, `/admin/lessons` vs `/copilot/lessons`). The "Plan" group alone has 14 entries which is the main source of fatigue.
+## Goal
 
-## Goals
+Close the "nothing reviews the boring stuff" gap. Three deliverables, one PR each so they can be approved independently.
 
-1. Every route in `App.tsx` is reachable from the sidebar.
-2. Top-level groups stay scannable (≤7 visible items each by default).
-3. Power-user pages (admin, explorers, deep audits) are tucked behind collapsible subgroups so they don't dominate the rail.
-4. No route changes, no page changes — sidebar reorg only.
+---
 
-## Proposed structure
+## 1. Quarterly Review System
 
-Five groups, with collapsible subgroups for the long tails. Items in **bold** are currently missing from the nav.
+A single source of truth for "what should be checked every 90 days," plus an automated reminder that opens an actionable item in the operator console — not just a calendar ping.
+
+### What gets created
+
+- **`docs/quarterly-review.md`** — the checklist itself. Sections:
+  - Scaffold configs (vite/tsconfig/eslint/postcss/components.json) — diff against current Lovable starter template
+  - Tailwind tokens vs. component usage drift
+  - Major-version Dependabot PRs awaiting human review
+  - Edge function inventory — caller check
+  - Cron job inventory — "still useful?" pass
+  - `mem://` accuracy sweep (light)
+  - ADRs — "still true?" pass
+  - Secrets rotation (`AWIP_SERVICE_TOKEN`, `GITHUB_REVIEWS_TOKEN`, Telegram tokens)
+  - Sidebar / nav IA review (trigger if route count > 30)
+  - RLS coverage report (`scripts/rls-coverage-report.ts`) summary
+
+- **New edge function `quarterly-review-open`** — idempotent. On run, inserts one `discussion_action` titled `Quarterly review — Q{n} {YYYY}` linking to `docs/quarterly-review.md`, tagged `night_eligible=false` (this is human work), `owner=operator`, `due` = 14 days out. Skips if a row with the same Q{n}-{YYYY} key already exists.
+
+- **Cron schedule** — Jan 1, Apr 1, Jul 1, Oct 1 at 09:00 UTC, via `pg_cron` + `AWIP_SERVICE_TOKEN` (matches existing pattern).
+
+- **Memory** — add `mem://preferences/review-cadence` summarizing the cadence table from my previous answer so future sessions stop guessing.
+
+### Out of scope
+
+No automation that *performs* the review — just opens the action. Humans still drive the actual sweep.
+
+---
+
+## 2. Scaffold Config Refresh (one-shot)
+
+Bring template files in line with the current Lovable starter (`vite_react_shadcn_ts_2026-04-20` is what we have; we'll diff against latest at implementation time).
+
+### Files in scope
+
+`vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `eslint.config.js`, `postcss.config.js`, `components.json`, `tailwind.config.ts` (the framework parts only — design tokens are untouched).
+
+### Approach
+
+1. Read each file, compare to a freshly-scaffolded Lovable project of the same template family.
+2. For every divergence: keep the AWIP-specific change (path aliases, Tailwind tokens, plugin order) and adopt the upstream change for everything else.
+3. Run `bun run build` + `bunx vitest run` + Playwright smoke (`e2e-playwright/roadmap.spec.ts`) to verify nothing regressed.
+4. Update `CHANGELOG.md` under "Tooling".
+
+### Risk
+
+Low-medium. Worst case: a TS strictness flip surfaces existing type errors. We fix or revert per-file, not all-or-nothing.
+
+### Out of scope
+
+`package.json` dependency bumps — Dependabot owns that. We only touch config files.
+
+---
+
+## 3. Dead-Code / Edge-Function Sweep (one-shot)
+
+Verify which of the ~30 edge functions in `supabase/functions/` still have callers.
+
+### Method
+
+For each function directory:
+
+1. **Frontend callers** — `rg "functions.invoke\\(['\"]<name>" src/` and `rg "/functions/v1/<name>" src/`.
+2. **Edge-to-edge callers** — same `rg` against `supabase/functions/`.
+3. **Cron callers** — `select * from cron.job where command like '%<name>%'`.
+4. **External callers** — check `docs/api.md`, `docs/rork-companion-spec.md`, `mem://features/*` for documented external use.
+
+### Output
+
+`docs/edge-function-sweep-2026-05-10.md` with a table:
 
 ```text
-FAVORITES                       (unchanged — user-pinned)
-
-OPERATE
-  Dashboard
-  Tenants
-  Capabilities
-  Events
-  Control plane
-  ▸ Logs & data            (collapsed by default)
-      API logs
-      API explorer
-      DB explorer
-      DB audit log
-
-PLAN & ROADMAP
-  Morning Review
-  Roadmap
-  Risk dashboard
-  Approval pack
-  Jobs board
-  Plan (workstreams)
-  **Master plan**
-  ▸ Knowledge             (collapsed)
-      Notebook
-      Runbook
-      Runbooks
-      Memory
-      Lessons Loop
-
-COPILOT & AUTOMATION
-  Companion
-  Copilot ▸ (existing submenu: Agents / Profile / Lessons / Transcripts)
-  Overnight overview
-  Night shifts
-  **App walkthrough**
-  **External weekly reviews**
-  Deep audits
-  AI usage & cost
-
-SYSTEM & ADMIN                  (whole group collapsed by default)
-  Admin
-  Status
-  Capability promotion
-  Promotion audits
-  Cron health
-  Automation schedules
-  Logs
-  AI usage (admin)
+| function              | frontend | edge | cron | external | verdict        |
+| --------------------- | -------- | ---- | ---- | -------- | -------------- |
+| awip-api              | ✓        | -    | -    | ✓ (Rork) | keep           |
+| copilot-noop-llm      | -        | -    | -    | -        | candidate kill |
+| ...                                                                        |
 ```
 
-Net effect: default-visible item count drops from ~35 to ~22, and all routes are reachable.
+Verdicts: **keep** / **candidate kill** / **needs operator decision**. No functions are deleted in this PR — kill list lands as a follow-up after operator review.
 
-## De-duplication notes (labels only, no route changes)
+### Bonus
 
-- `/ai-usage` → "AI usage & cost" (operator view), `/admin/ai-usage` → "AI usage (admin)" — kept distinct by suffix.
-- `/runbook` → "Runbook (active)", `/runbooks` → "Runbook library" — clarifies the singular vs plural pair.
-- `/copilot/lessons` stays under Copilot; `/admin/lessons` is renamed "Lessons Loop (weekly)" so the difference is obvious.
+While we're in the listing, flag any function whose `index.ts` lacks `withLogger` (the `logger-validation.yml` check should catch these, but a manual pass confirms).
 
-## Technical changes
+---
 
-Single file: `src/components/AppSidebar.tsx`.
+## Sequencing
 
-1. Restructure the `NavItem` arrays into the five groups above; add `masterPlanItem`, `walkthroughItem`, `reviewsItem`.
-2. Introduce a small `CollapsibleGroup` helper (mirroring the existing Copilot expand/collapse pattern using `SidebarMenuSub`) for the new "Logs & data", "Knowledge", and "System & admin" subgroups. Persist open/closed state in the same `sidebar-state` store that already handles `useCopilotOpen` (add `useGroupOpen(key, defaultOpen)`).
-3. `allItems` (used for favorites lookup) gets the three new entries so they can be pinned.
-4. No route, page, RLS, edge function, or memory changes.
+```text
+PR-1  Quarterly Review System   (~2h, low risk, immediate value)
+PR-2  Edge-Function Sweep        (~1h, read-only, produces a kill list)
+PR-3  Scaffold Config Refresh    (~2h, needs build+test verification)
+```
 
-## Out of scope
+Each PR is independent — approve and merge in any order.
 
-- Renaming routes or moving pages.
-- Touching the mobile/offcanvas behaviour beyond what falls out of the group restructure.
-- Changing the Copilot submenu (already works well).
+## Verification caveat
 
-Approve this and I'll implement in `AppSidebar.tsx` + a small addition to `src/lib/sidebar-state.ts`.
+Per `mem://preferences/verification-discipline`: the cron registration in PR-1 is verifiable from the Supabase side; the GitHub-side workflows are not (no confirmed git remote). PR-3's CI runs are similarly unverifiable from the sandbox — I'll run the build and tests locally inside the sandbox and report results, but cannot prove a green PR check on GitHub.
+
+## Approve to start with PR-1, or pick a different order.
