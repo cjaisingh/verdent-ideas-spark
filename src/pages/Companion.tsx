@@ -21,6 +21,7 @@ import { InstallPwaButton } from "@/components/companion/InstallPwaButton";
 import { IphoneInstallHelpCard } from "@/components/companion/IphoneInstallHelpCard";
 import { CompanionVoiceDock } from "@/components/companion/CompanionVoiceDock";
 import { fetchLiveState, formatLiveStateBlock, liveStateAge, seedLovableFocus, seedOperatorQueue, type LiveState } from "@/lib/companion-live-state";
+import { PendingLessonsTray, type PendingLesson } from "@/components/companion/PendingLessonsTray";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
@@ -271,6 +272,8 @@ type CompanionSettings = {
   use_cloud: boolean;
   rag_enabled: boolean;
   rag_top_k: number;
+  env_context_enabled: boolean;
+  auto_extract_lessons: boolean;
 };
 
 const SETTINGS_KEY = "awip.companion.settings.v1";
@@ -293,6 +296,8 @@ function defaults(): CompanionSettings {
     use_cloud: false,
     rag_enabled: true,
     rag_top_k: 6,
+    env_context_enabled: true,
+    auto_extract_lessons: true,
   };
 }
 function saveSettings(s: CompanionSettings) {
@@ -307,6 +312,8 @@ Your job:
 - When the operator decides on action items, suggest they "Promote → action" so Lovable picks them up.
 - Be concise. Use markdown. Ask one focused follow-up question at a time.
 - If RAG context is provided below, ground your answers in it; cite paths/headings inline.
+- A live AWIP environment snapshot may be injected each turn (jobs board, sentinel, automation, audits, daily plan, lessons). Treat it as the current state and reference jobs by handle (J-NN). If a section is missing, say so — don't invent.
+- Active lessons reflect the operator's standing preferences; honor them.
 
 You do NOT execute code, edit files, or run migrations. You discuss and propose.`;
 
@@ -322,6 +329,8 @@ export default function Companion() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [healthOk, setHealthOk] = useState<boolean | null>(null);
   const [resolvedOllamaUrl, setResolvedOllamaUrl] = useState<string | null>(null);
+  const [pendingLessons, setPendingLessons] = useState<PendingLesson[]>([]);
+  const [envSize, setEnvSize] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   // Filters / search
@@ -520,6 +529,75 @@ export default function Companion() {
     } catch { return { blob: "", ids: [] }; }
   };
 
+  // Live environment snapshot (jobs, sentinel, automation, lessons, …)
+  const fetchEnvContext = async (): Promise<string> => {
+    if (!settings.env_context_enabled) return "";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return "";
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/awip-companion-context`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: "{}",
+      });
+      if (!r.ok) return "";
+      const j = await r.json();
+      setEnvSize(j?.size ?? null);
+      return j?.markdown ?? "";
+    } catch { return ""; }
+  };
+
+  // Extract durable lessons from a single user/assistant exchange.
+  const extractLessons = async (userText: string, assistantText: string) => {
+    if (!settings.auto_extract_lessons) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const sys = `Read one user/assistant exchange. If it states a DURABLE preference, fact, or correction worth remembering across sessions, output STRICT JSON: {"lessons":[{"scope":"global|notebook|approvals|voice_style","lesson":"..."}]} (max 3, each ≤500 chars, imperative). Otherwise {"lessons":[]}. JSON ONLY.`;
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/companion-cloud-chat`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [
+            { role: "system", content: sys },
+            { role: "user", content: `USER: ${userText}\n\nASSISTANT: ${assistantText}` },
+          ],
+        }),
+      });
+      if (!r.ok || !r.body) return;
+      const reader = r.body.getReader();
+      const dec = new TextDecoder(); let buf = ""; let acc = "";
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          let line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const d = line.slice(6).trim();
+          if (d === "[DONE]") continue;
+          try { const p = JSON.parse(d); const x = p?.choices?.[0]?.delta?.content; if (typeof x === "string") acc += x; } catch { /* */ }
+        }
+      }
+      const m = acc.match(/\{[\s\S]*\}/); if (!m) return;
+      const parsed = JSON.parse(m[0]);
+      const arr = Array.isArray(parsed?.lessons) ? parsed.lessons : [];
+      const next: PendingLesson[] = arr
+        .filter((l: any) => typeof l?.lesson === "string" && l.lesson.trim().length > 0)
+        .slice(0, 3)
+        .map((l: any) => ({
+          id: crypto.randomUUID(),
+          scope: ["global","notebook","approvals","voice_style"].includes(l?.scope) ? l.scope : "global",
+          lesson: String(l.lesson).slice(0, 500),
+        }));
+      if (next.length) setPendingLessons((prev) => [...prev, ...next]);
+    } catch { /* silent */ }
+  };
+
   // Send a message — streams from Ollama (local) or AI Gateway (cloud)
   const sendMessage = async () => {
     if (!input.trim() || !active || sending) return;
@@ -538,8 +616,8 @@ export default function Companion() {
       }).select("*").single();
       if (u) setMessages((prev) => prev.some((x) => x.id === u.id) ? prev : [...prev, u as Msg]);
 
-      // 2. RAG
-      const rag = await fetchRagContext(userText);
+      // 2. RAG + live env snapshot in parallel
+      const [rag, envBlob] = await Promise.all([fetchRagContext(userText), fetchEnvContext()]);
       ragIds = rag.ids;
       ragBlob = rag.blob;
 
@@ -547,6 +625,7 @@ export default function Companion() {
       const history = [...messages, u as Msg].filter(Boolean).slice(-20);
       const llmMessages = [
         { role: "system", content: SYSTEM_PROMPT },
+        ...(envBlob ? [{ role: "system" as const, content: envBlob }] : []),
         ...(ragBlob ? [{ role: "system" as const, content: ragBlob }] : []),
         ...history.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       ];
@@ -621,6 +700,8 @@ export default function Companion() {
       // bump thread updated_at
       await supabase.from("companion_threads").update({ updated_at: new Date().toISOString() }).eq("id", active.id);
       setStreaming("");
+      // 6. Best-effort lesson extraction (does not block UI)
+      if (acc.trim()) void extractLessons(userText, acc);
     } catch (e) {
       toast({
         title: "Companion error",
@@ -765,6 +846,20 @@ export default function Companion() {
                     <p className="text-xs text-muted-foreground">Inject top-k AWIP doc chunks per turn</p>
                   </div>
                   <Switch checked={settings.rag_enabled} onCheckedChange={(v) => setSettings((s) => ({ ...s, rag_enabled: v }))} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Environment context</Label>
+                    <p className="text-xs text-muted-foreground">Inject live snapshot (jobs, sentinel, automation, lessons) each turn{envSize ? ` · last ${envSize}B` : ""}</p>
+                  </div>
+                  <Switch checked={settings.env_context_enabled} onCheckedChange={(v) => setSettings((s) => ({ ...s, env_context_enabled: v }))} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>Auto-extract lessons</Label>
+                    <p className="text-xs text-muted-foreground">Propose durable preferences/corrections after each reply (you approve before saving)</p>
+                  </div>
+                  <Switch checked={settings.auto_extract_lessons} onCheckedChange={(v) => setSettings((s) => ({ ...s, auto_extract_lessons: v }))} />
                 </div>
               </div>
               <DialogFooter>
@@ -955,6 +1050,7 @@ export default function Companion() {
               </div>
 
               <div className="border-t p-3">
+                <PendingLessonsTray pending={pendingLessons} onChange={setPendingLessons} />
                 {voicePartial && (
                   <div className="mb-2 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
                     <span className="font-mono uppercase mr-2">listening</span>{voicePartial}
@@ -982,7 +1078,7 @@ export default function Companion() {
                     />
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · mic dictates into the box · RAG {settings.rag_enabled ? "on" : "off"} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
+                <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl+Enter to send · mic dictates · RAG {settings.rag_enabled ? "on" : "off"} · env {settings.env_context_enabled ? "on" : "off"} · lessons {settings.auto_extract_lessons ? "on" : "off"}{pendingLessons.length ? ` (${pendingLessons.length} pending)` : ""} · model {settings.use_cloud ? settings.cloud_model : settings.ollama_model}</p>
               </div>
             </>
           )}

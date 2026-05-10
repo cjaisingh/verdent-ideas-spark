@@ -1,123 +1,74 @@
-## Night Shift expansion plan
+# Give the Companion full read access to the environment + a learning loop
 
-### 1. What already runs at night (baseline)
+## Goal
 
-So you can see what's *not* a gap before we add anything:
+Make `/companion` a true operator co-pilot: it reads from the whole environment, not just docs, and it captures lessons it learns so they persist across sessions. Browser-only surface, read-only writes are scoped to the lessons store. No new permissions model — RLS already restricts everything to operators.
 
-| Job | Cadence (UTC) | Category |
-|---|---|---|
-| `night-agent-open` / `-close` | 22:00 / 06:00 | Audit eligible discussion actions |
-| `overnight-phase-runner-15m` | every 15 min in window | Phase briefings (observation only) |
-| `overnight-prequeue` | 21:55 | Auto-queue opt-in phases |
-| `app-walkthrough` | 02:15 | Route + capability self-test |
-| `deep-audit` (weekly/monthly) | Sun 04:00 / 1st 04:30 | Secrets, RBAC, automation, RLS, retention |
-| `retention-sweep` | 03:30 | Purge expired rows |
-| `sentinel-tick` | every 15 min | 5xx spikes, cron silence, stale secrets |
-| `lessons-synthesize` | weekly | AI synthesis into `lessons` |
-| `morning-review` | 06:00 | Daily KPI snapshot |
-| `awip-reviews-pull` | Mon 05:30 | Pull weekly external reviews |
-| `quarterly-review-open` | quarterly | Open quarterly checklist action |
-| Night model policy | always 22:00–06:00 | Forces all AI to `gemini-2.5-flash-lite` |
+## What's missing today
 
-**Already covered from your list:** purging ✓, health checks ✓, audit trail ✓, weekly/daily reports ✓, AI synthesis ✓.
+`Companion.tsx` only feeds the model two things:
+- A small "morning review" seed (counts only).
+- `awip-rag` doc search.
 
-**Real gaps:** analytics rollups, external/contract data ingestion, snapshot reports, cache warming. (DB backups are handled by Lovable Cloud's managed snapshots; no project-level work needed. ML training is N/A — we don't host any trainable models.)
+It never reads `discussion_actions` (jobs), `roadmap_tasks`, `sentinel_findings`, `audit_runs`, `ai_usage_log`, `automation_runs`, `capability_events`, `okr_node_events`, `morning_reviews`, `daily_plans`, `lessons`, `copilot_lessons`, etc. So it can't answer "what's on the jobs board?", "what failed last night?", "what did we ship this week?", or "what have I taught you before?".
 
-### 2. New nightly jobs (the actual proposal)
+## Two-layer access (read-only)
 
-```text
-22:00 ── night-agent-open ─────────────────────────────► (existing)
-22:30 ── ingest-external-data       (NEW, gap #2)
-23:00 ── nightly-rollup-analytics   (NEW, gap #1)
-23:30 ── snapshot-daily-report      (NEW, gap #3)
-00:00 ── cache-warm                 (NEW, gap #4)
-02:15 ── app-walkthrough ──────────────────────────────► (existing)
-03:30 ── retention-sweep ──────────────────────────────► (existing)
-04:00 ── deep-audit (Sun) ─────────────────────────────► (existing)
-05:30 ── awip-reviews-pull (Mon) ──────────────────────► (existing)
-06:00 ── morning-review + night-agent-close ───────────► (existing)
-```
+### Layer 1 — Per-turn environment snapshot (auto-injected)
 
-#### NEW-1 · `nightly-rollup-analytics` (23:00 UTC daily)
+New edge function `awip-companion-context` (operator JWT, `verify_jwt = false` + in-code `has_role` check) returns a compact JSON snapshot the chat injects as a system message before each turn. Sources:
 
-Pre-compute the aggregations that `/admin/ai-usage`, `/admin/cron-health`, `/morning-review`, and the dashboard widgets currently calculate on every page load.
+- **Jobs board** — `discussion_actions` open + in-progress, top 25 by priority, with handles.
+- **Roadmap** — `roadmap_tasks` in active phases, status counts + top 10 at-risk.
+- **Last night** — most recent `automation_runs`, `sentinel_findings` (last 24h, severity≥med), `audit_runs` summary.
+- **Today** — newest `daily_plans` row + newest `morning_reviews` row.
+- **Health** — last 24h `ai_usage_log` totals (calls, tokens, cost, model mix), failed cron jobs from `list_all_nightly_jobs()`.
+- **OKRs / capabilities** — last 10 `okr_node_events` + last 10 `capability_events`.
+- **Active lessons** — all `copilot_lessons` for the current user + global `lessons` (capped, ordered by recency).
 
-- New tables: `analytics_daily_ai_usage`, `analytics_daily_automation`, `analytics_daily_cost` (date + dims + counts/cost/p50/p95/error_rate). Operator-read RLS.
-- Idempotent on `(date, dims)`; backfills last 7 days on each run so a missed night self-heals.
-- Frontend widgets read the rollup table when present, fall back to live query for "today".
+The function returns markdown ready to drop in as system context, capped at ~6 KB so it doesn't blow the prompt budget. Each section has a one-line header so the model can cite it (e.g. `[Jobs] J-123 …`).
 
-#### NEW-2 · `ingest-external-data` (22:30 UTC daily)
+### Layer 2 — On-demand RAG (already exists, broaden corpus)
 
-A generic, pluggable ingestor for the contract-context sources you mentioned. PR-1 ships the framework + one concrete source so we have an end-to-end path without overcommitting.
+Keep the existing `awip-rag/search` for docs. Add a second search path `awip-rag/search-data` that accepts a free-text query and routes to whichever table matches keywords (`jobs:`, `audit:`, `sentinel:`, `roadmap:`, `lesson:`) — pure pass-through, no new index. The Companion calls this only when the user's message contains a search-shaped question. Cheap, optional.
 
-- New table `ingestion_sources` (source_key, kind, config jsonb, enabled, last_run_at, last_status).
-- New table `ingestion_runs` (source_key, started_at, finished_at, rows_in, rows_upserted, status, error, idempotency_key).
-- Edge function dispatches per-source by `kind` (start with `awip_docs_refresh` — re-runs `scripts/ingest-awip-docs.ts` server-side so the RAG corpus stays fresh nightly).
-- New sources are added by inserting a row + a small handler in the function — no schema change per source.
+## Learning loop
 
-#### NEW-3 · `snapshot-daily-report` (23:30 UTC daily)
+The model already proposes "discussion actions" today. Extend that to a parallel "lesson capture" path:
 
-A frozen, point-in-time daily snapshot you can read in the morning without recomputation, and that we can diff week-over-week.
+- Reuse `public.copilot_lessons` (table already exists, validated by `validate_copilot_lesson` trigger — scopes: `global`, `notebook`, `approvals`, `voice_style`; ≤500 chars; sources: `voice`, `manual`).
+- After every assistant turn, the Companion runs a small extraction prompt against the user+assistant pair: "Is there a durable preference, fact, or correction here? If yes, propose 0–3 lessons." Proposals appear in a new "Pending lessons" tray under the chat with **Save / Edit / Discard** controls; saved rows go to `copilot_lessons` with `source='voice'`.
+- The per-turn snapshot (Layer 1) always includes the active lessons, so future turns reflect what's been learned.
 
-- New table `daily_snapshots` (snapshot_date PK, kind, payload jsonb, summary text, ai_brief text). Operator-read RLS.
-- Generates two kinds: `system` (run counts, error rate, AI spend, sentinel/audit findings, deferred items due) and `contract` (capability manifest deltas, OKR mutations in 24h, promotion-vs-shipping drift).
-- AI brief uses `pickModel("google/gemini-2.5-flash")` → automatically falls back to `flash-lite` per night-cheap policy.
-- Mirrors the snapshot date into `morning-review` so the 06:00 page links straight to it.
+## Settings (Companion settings sheet)
 
-#### NEW-4 · `cache-warm` (00:00 UTC daily)
+Three new toggles, persisted in the existing `SETTINGS_KEY` localStorage blob:
+- **Environment context** (default on) — Layer 1.
+- **Data search** (default on) — Layer 2.
+- **Auto-extract lessons** (default on) — proposes; never auto-saves without click.
 
-Pre-warm the heaviest read paths so morning load on `/companion`, `/dashboard`, `/roadmap`, `/audits` is instant.
+Footer status line gains `· env {on|off} · lessons {N}`.
 
-- New table `cache_warm_runs` (route, started_at, ms, ok).
-- Function calls a small list of public read RPCs (`list_managed_cron_jobs`, `retention_stats`, `awip_rag_search` with the top-N saved queries from `awip_rag_query_log` if it exists, else a static seed list).
-- Pure side-effect job — populates Supabase's query plan cache and our edge-function module cache. No business data changes.
+## Files
 
-### 3. Operator surface
+- **New** `supabase/functions/awip-companion-context/index.ts` — Layer 1 aggregator.
+- **New** `supabase/functions/awip-rag/search-data` route inside the existing `awip-rag` function (no new function).
+- **Edited** `src/pages/Companion.tsx` — call context fn per send, render Pending lessons tray, settings switches, system-prompt addendum.
+- **New** `src/components/companion/PendingLessonsTray.tsx` — small list with Save/Edit/Discard.
+- **CHANGELOG.md** — one line.
+- **`mem://features/companion.md`** — append: "Per-turn env snapshot + auto lesson capture into `copilot_lessons`."
 
-One new page `/night-shift` (admin only) listing **every** nightly job in a single table:
+## Out of scope (call out, do not build)
 
-- columns: job, schedule, last status, last duration, next fire (computed from cron), category badge (audit / ingest / rollup / snapshot / hygiene), "Run now" button (admin only, calls the function with `x-awip-service-token`).
-- Reuses the `list_managed_cron_jobs` pattern — extended via a new RPC `list_all_nightly_jobs()` that returns the full curated set, not just the W2/W3/W4 trio.
-- Adds a "Night Shift" link in the sidebar under **Operations** (next to Automation and Audits).
+- **Write/CRUD tools** for the Companion (creating jobs, closing tasks, etc.) — separate PR after we trust the read path.
+- **Rork iPhone** — same edge function will be reusable, but no Rork changes here.
+- **New tables** — uses existing `copilot_lessons`, `lessons`, `discussion_actions`, etc.
+- **Embeddings on data tables** — Layer 2 is keyword routing, not vector search.
 
-### 4. Memory + docs
+## Verification
 
-- New `mem://features/night-shift.md` — index of every nightly job, who reads its output, and which morning surface consumes it.
-- Update `mem://index.md` Core line to mention the new jobs.
-- New `docs/night-shift.md` — operator runbook (how to pause a job, how to re-run, where outputs land, how snapshots and rollups relate).
-- Update `mem/preferences/review-cadence.md` with the new daily entries.
-- `CHANGELOG.md` entry per PR.
-
-### 5. Sequencing
-
-Independent PRs so we can land them one at a time:
-
-| PR | Scope | Effort |
-|---|---|---|
-| **PR-1** | `nightly-rollup-analytics` + tables + 3 widgets switched to read rollups | ~3h |
-| **PR-2** | `snapshot-daily-report` + `/morning-review` link-through | ~2h |
-| **PR-3** | `ingest-external-data` framework + `awip_docs_refresh` source | ~2h |
-| **PR-4** | `cache-warm` + `/night-shift` page + sidebar link + `list_all_nightly_jobs` RPC | ~2h |
-
-Each PR registers its cron via `supabase--insert` (per project rule — cron registration uses anon key + URL, not migration). Each new edge function ships with `withLogger`, `AWIP_SERVICE_TOKEN` auth, and an `automation_runs` row per execution so they show up automatically in `/admin/cron-health` and the sentinel watches them.
-
-### 6. Out of scope (intentional)
-
-- DB backups — handled by Lovable Cloud managed snapshots; no project work needed.
-- ML training — no trainable models in the project today.
-- Real-time / interactive jobs — by definition not night work.
-- Removing or re-cadencing existing jobs — separate decision per the quarterly review.
-
-### 7. Verification caveats (per `mem://preferences/verification-discipline`)
-
-- I can verify cron registration via `supabase--read_query` against `cron.job` after each PR.
-- I can verify each new function deploys and returns 200 via `supabase--curl_edge_functions`.
-- I **cannot** verify that 22:00 UTC actually fires correctly until we observe a real `automation_runs` row the morning after — the first 24h after each PR is "unverified, awaiting first nightly run."
-- No GitHub remote is connected, so I will not claim any of this is "in CI" or "deployed via workflow."
-
-### 8. Decisions I need from you before PR-1
-
-1. **Rollup retention** — keep `analytics_daily_*` rows indefinitely, or purge after 90/180/365 days? (I'd default 365, retention-sweep handles it.)
-2. **Snapshot AI brief** — generate the AI summary every night (small recurring cost ~$0.001/night on flash-lite), or only on weekdays?
-3. **Ingestion sources beyond `awip_docs_refresh`** — do you have a specific external contract-data source in mind for PR-3, or is the framework + one source enough for now and we add real sources as you name them?
-4. **Order** — ship in the listed order (rollups → snapshot → ingest → cache+page), or do you want the `/night-shift` operator page first so you can watch the rest land?
+1. Open `/companion`, ask "what's on the jobs board?" → response cites real handles from `discussion_actions`.
+2. Ask "what failed last night?" → cites real rows from `sentinel_findings` / `automation_runs`.
+3. Tell it "always refer to me as 'Chief'" → a pending lesson appears; click Save; refresh; next turn it uses 'Chief'.
+4. Toggle "Environment context" off → snapshot disappears from the next request payload (visible in Network tab).
+5. Confirm context payload stays under ~6 KB on a busy day (log size in dev).
