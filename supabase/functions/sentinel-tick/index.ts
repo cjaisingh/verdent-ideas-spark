@@ -4,6 +4,7 @@ import { withLogger } from "../_shared/logger.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
+  checkFrontendRealtimeErrors,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -49,13 +50,14 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since30m = new Date(now.getTime() - 30 * 60_000).toISOString();
     const since24h = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, secretsRes, auditRes] = await Promise.all([
+    const [runsRes, edgeRes, secretsRes, auditRes, feRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since24h),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
         .gte("created_at", since30m).limit(1000),
       sb.from("app_secrets").select("key,updated_at"),
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
+      sb.from("frontend_error_logs").select("message,url,created_at,kind").gte("created_at", since30m).limit(500),
     ]);
 
     const runs = runsRes.data ?? [];
@@ -65,6 +67,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkSecretAge(now, secretsRes.data ?? []),
       ...checkAdminGrants(now, 15, auditRes.data ?? []),
       ...checkJobErrorRate(now, runs),
+      ...checkFrontendRealtimeErrors(now, 30, feRes.data ?? []),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;
