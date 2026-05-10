@@ -293,6 +293,13 @@ export function JobDetailsDrawer({
               {handle} <Copy className="h-3 w-3" />
             </button>
             <Badge variant="outline" className="text-[10px] uppercase">{job.priority}</Badge>
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] uppercase", RISK_BADGE_CLASS[(isJobRisk(job.risk) ? job.risk : "med")])}
+              title={`Risk: ${job.risk} — ${RISK_RUBRIC[(isJobRisk(job.risk) ? job.risk : "med")]}`}
+            >
+              risk:{job.risk}
+            </Badge>
             <Badge variant="outline" className="text-[10px]">{job.status}</Badge>
             <Badge variant="outline" className="text-[10px]">{job.source}</Badge>
             {job.promoted_task_id && (
