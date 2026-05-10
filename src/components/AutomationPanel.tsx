@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { NightAgentCard } from "@/components/NightAgentCard";
 import { NightAgentScheduleCard } from "@/components/NightAgentScheduleCard";
 import { NightAgentTestModeCard } from "@/components/NightAgentTestModeCard";
+import { WalkthroughCard } from "@/components/WalkthroughCard";
 
 type Finding = {
   id: string; created_at: string; severity: string; category: string | null;
