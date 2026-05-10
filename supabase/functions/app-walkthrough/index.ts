@@ -61,7 +61,10 @@ async function runRouteProbe(p: RouteProbe, runId: string): Promise<CheckRow> {
   const expectStatus = p.expectStatus ?? [200];
   const maxMs = p.maxMs ?? 8000;
   const headers: Record<string, string> = {};
-  if (p.auth === "service" && SERVICE_TOKEN) headers["x-service-token"] = SERVICE_TOKEN;
+  if (p.auth === "service" && SERVICE_TOKEN) {
+    headers["x-service-token"] = SERVICE_TOKEN;
+    headers["x-awip-service-token"] = SERVICE_TOKEN;
+  }
   if (ANON && !/^https?:\/\//i.test(p.path)) headers["apikey"] = ANON;
 
   const t0 = Date.now();
