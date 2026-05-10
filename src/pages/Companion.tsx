@@ -700,6 +700,8 @@ export default function Companion() {
       // bump thread updated_at
       await supabase.from("companion_threads").update({ updated_at: new Date().toISOString() }).eq("id", active.id);
       setStreaming("");
+      // 6. Best-effort lesson extraction (does not block UI)
+      if (acc.trim()) void extractLessons(userText, acc);
     } catch (e) {
       toast({
         title: "Companion error",
