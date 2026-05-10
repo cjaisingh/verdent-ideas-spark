@@ -71,9 +71,9 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
     safe<any>(admin.from("morning_reviews").select("review_date,kpis,stuck_jobs,top_actions,open_findings").order("review_date", { ascending: false }).limit(1).maybeSingle() as any),
     safe<any[]>(admin.from("ai_usage_log").select("model,prompt_tokens,completion_tokens,cost_usd,created_at").gte("created_at", dayAgo).limit(2000) as any),
     safe<any[]>(admin.from("capability_events").select("event_type,capability_id,created_at").order("created_at", { ascending: false }).limit(10) as any),
-    safe<any[]>(admin.from("okr_node_events").select("event_type,node_id,created_at").order("created_at", { ascending: false }).limit(10) as any),
+    safe<any[]>(admin.from("okr_node_events").select("event_type,okr_node_id,created_at").order("created_at", { ascending: false }).limit(10) as any),
     safe<any[]>(admin.from("copilot_lessons").select("scope,lesson,created_at").eq("created_by", who.uid).eq("active", true).order("created_at", { ascending: false }).limit(30) as any),
-    safe<any[]>(admin.from("lessons").select("title,summary,severity,created_at").order("created_at", { ascending: false }).limit(10) as any),
+    safe<any[]>(admin.from("lessons").select("category,severity,recommendation,created_at").order("created_at", { ascending: false }).limit(10) as any),
   ]);
 
   const lines: string[] = [];
@@ -141,7 +141,7 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
   // OKR / capability events
   if (okrEvents?.length || capEvents?.length) {
     lines.push(`### [Events]`);
-    for (const e of (okrEvents ?? []).slice(0, 5)) lines.push(`- okr/${e.event_type} on ${e.node_id?.slice(0, 8)} (${fmtDate(e.created_at)})`);
+    for (const e of (okrEvents ?? []).slice(0, 5)) lines.push(`- okr/${e.event_type} on ${String(e.okr_node_id ?? "").slice(0, 8)} (${fmtDate(e.created_at)})`);
     for (const e of (capEvents ?? []).slice(0, 5)) lines.push(`- cap/${e.event_type} on ${e.capability_id} (${fmtDate(e.created_at)})`);
     lines.push("");
   }
@@ -152,7 +152,7 @@ Deno.serve(withLogger("awip-companion-context", async (req) => {
   if (lUser.length || lGlobal.length) {
     lines.push(`### [Lessons] active learning (${lUser.length} personal · ${lGlobal.length} global)`);
     for (const l of lUser.slice(0, 20)) lines.push(`- (${l.scope}) ${l.lesson}`);
-    for (const l of lGlobal.slice(0, 8)) lines.push(`- [global/${l.severity ?? "info"}] ${l.title}: ${(l.summary ?? "").slice(0, 140)}`);
+    for (const l of lGlobal.slice(0, 8)) lines.push(`- [global/${l.severity ?? "info"}/${l.category ?? "—"}] ${(l.recommendation ?? "").slice(0, 160)}`);
     lines.push("");
   }
 
