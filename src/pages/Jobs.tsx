@@ -288,13 +288,22 @@ export default function Jobs() {
               {dHandle ? <span className="font-mono">{dHandle}</span> : <span className="font-mono">{subj}</span>}
             </span>
             <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleNightEligible(j, !(j as any).night_eligible); }}
-                className={`inline-flex items-center gap-0.5 hover:underline ${(j as any).night_eligible ? "text-foreground" : ""}`}
-                title={(j as any).night_eligible ? "Unmark night-eligible" : "Mark night-eligible"}
-              >
-                <Moon className="h-3 w-3" />
-              </button>
+              {(() => {
+                const r: JobRisk = isJobRisk(j.risk) ? j.risk : "med";
+                const allowed = nightAllowedFor(r, j.night_override_reason);
+                const moonOn = !!(j as any).night_eligible;
+                const blocked = nightBlockedReason(r, j.night_override_reason);
+                return (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleNightEligible(j, !moonOn); }}
+                    disabled={!allowed && !moonOn}
+                    className={`inline-flex items-center gap-0.5 hover:underline ${moonOn ? "text-foreground" : ""} ${(!allowed && !moonOn) ? "opacity-30 cursor-not-allowed" : ""}`}
+                    title={blocked && !moonOn ? blocked : (moonOn ? "Unmark night-eligible" : "Mark night-eligible")}
+                  >
+                    <Moon className="h-3 w-3" />
+                  </button>
+                );
+              })()}
               {j.subject_type === "roadmap_finding" && (
                 <Link
                   to={`/roadmap/risks#finding-${j.subject_id}`}
