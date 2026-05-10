@@ -96,3 +96,30 @@ Operator action — not enforceable from code. In **Settings → Branches → ma
 7. **Lock force-pushes and deletions** on `main`.
 
 Mirror a relaxed version on `develop`: same checks but allow direct pushes from maintainers for fast-iteration spikes.
+
+## GitHub Actions secrets — at a glance
+
+What fails if each is missing:
+
+| Secret | Used by | Failure mode if missing |
+|---|---|---|
+| `VITE_SUPABASE_URL` | `ci.yml` build step | Build fails: client cannot resolve backend URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | `ci.yml` build step | Build fails: anon-auth requests rejected |
+| `VITE_SUPABASE_PROJECT_ID` | `ci.yml` build step | Build fails: edge-function URL helpers throw |
+| `AWIP_SERVICE_TOKEN` | `nightly.yml` `record-test-run` POST | Nightly tests run, but `/roadmap` Automation card never receives results (POST returns 401) |
+| `SUPABASE_ACCESS_TOKEN` | `deploy-staging.yml`, `deploy-production.yml` | Migration push + edge-function deploy fail |
+| `SUPABASE_STAGING_PROJECT_ID` / `_DB_PASSWORD` | `deploy-staging.yml` | Staging deploy cannot connect to Supabase project |
+| `SUPABASE_PROD_PROJECT_ID` / `_DB_PASSWORD` | `deploy-production.yml` | Production deploy cannot connect to Supabase project |
+
+### Verifying the nightly POST landed
+
+After the first 02:00 UTC run, this should return today's row:
+
+```sql
+select started_at, suite, status, total, passed, failed, commit_sha, branch
+from public.test_runs
+where started_at > now() - interval '36 hours'
+order by started_at desc;
+```
+
+Empty result with a green `nightly.yml` run = `AWIP_SERVICE_TOKEN` secret missing or wrong value.

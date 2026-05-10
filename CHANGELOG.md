@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Documented
+- **Plan execution — 10 May review** — landed CI-secrets-at-a-glance table + nightly POST verification snippet in `docs/ci-cd.md`; `mem/` secret scrub came back clean (`docs/mem-audit-2026-05-10.md`); migration naming convention + auto-generated chronological index (`docs/migrations.md`, `docs/migration-index.md`, `scripts/index-migrations.ts` — 86 migrations, 28 documented, 58 missing top-of-file summary); full `awip-rag` reference (`docs/awip-rag.md`) and 35-function inventory with cron/UI/server callers and two flagged candidates `copilot-noop-llm` + `telegram-send-voice` (`docs/edge-function-audit.md`); Phase 2 closeout report (`docs/phase-2-closeout.md`) — gate snapshot, 7-task triage, and a flagged drift between `roadmap_phases` in DB (phase-3 + phase-4 already `done`, phase-4 titled "Voice") and `docs/master-plan.md` (which still treats Phase 4 "OKR-Driven Execution" as planned). README docs index updated to surface the four new docs.
+
 ### Changed
 - **Memory hygiene** — corrected the stale "GitHub repo connected" assumption in `mem://index.md` (no git provider is actually wired to this Lovable project yet). Added new `mem/preferences/verification-discipline.md` codifying what is / isn't verifiable from the sandbox and the required "unverified — please confirm" phrasing for git-sync, CI, deploy, and published-frontend state. Logged a `governance` lesson ("Verify external state before asserting it") in `public.lessons` so it surfaces on `/admin/lessons`.
 

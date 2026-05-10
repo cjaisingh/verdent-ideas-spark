@@ -1,44 +1,123 @@
-## Lessons learned from this exchange
 
-1. **Memory is not ground truth.** The Core line `GitHub repo (not GitLab)` was treated as current state. It described intent, not reality — no repo was actually connected. I repeated the claim three times before your screenshot forced a correction.
-2. **"Auto-sync to GitHub" requires a connected provider.** Lovable does not push anywhere until Project Settings → Git is wired up. Edge functions and runtime secrets deploy to Lovable Cloud independently of git, which made the mistake easy to miss.
-3. **CI workflows in `.github/workflows/*.yml` are inert without a remote.** Every assumption in `mem/preferences/ci-cd-hardening.md` about "checks green on `main`" is unverified until the repo exists.
-4. **When observable reality (your screenshot) and project memory disagree, reality wins** — and the memory must be corrected immediately so the next session doesn't repeat the error.
-5. **Never assert deploy / sync / CI status I can't directly verify** from the sandbox. Default phrasing should be "I can't see this from here — please confirm" instead of confident claims.
+# Plan — Acting on the 10 May review
 
-## Plan to update learning
+Five workstreams, sequenced so each one un-blocks the next. Phase 4 is the destination; everything before it removes a blocker to getting there cleanly.
 
-### A. Fix the stale Core rule in `mem://index.md`
-Replace the line:
-> `GitHub repo (not GitLab). Nightly + weekly automation surfaced…`
+---
 
-with:
-> `Git provider: not yet connected — verify in Project Settings → Git before claiming anything is "in GitHub" or that CI ran. Nightly + weekly automation surfaced on /roadmap via AutomationPanel + SentinelStatusStrip; overview lives at /overnight; daily hygiene at /morning-review.`
+## WS-A — GitHub housekeeping (today, ~30 min)
 
-### B. Add a new Core rule (one line)
-> `Never claim deploy / git-sync / CI status from memory alone. If it cannot be verified from the sandbox, say "unverified" and ask the operator.`
+Two halves: things you do on GitHub, things I do in the repo.
 
-### C. New memory file `mem/preferences/verification-discipline.md`
-One-screen rule sheet covering:
-- What is verifiable from the sandbox (files in tree, edge function code, runtime secrets list, Cloud DB via tools)
-- What is NOT verifiable (GitHub remote, CI run status, branch protection, published frontend version, custom domain DNS)
-- Required phrasing for the unverifiable category
-- Add reference under `## Memories` in `mem://index.md`
+**You (operator) — on GitHub:**
+1. Merge Dependabot PRs in this order (each green-CI before the next):
+   `#1 setup-cli` → `#2 sticky-pull-request-comment` → `#3 actions/checkout` → `#4 codeql-action` → `#5 upload-artifact`.
+   Rationale: CI tooling first (#1), then comment bot (#2), then the three action bumps. If `#3` checkout v6 breaks anything, every later PR will rebase on the failure — easier to bisect.
+2. Repo Settings → Secrets and variables → Actions → New repository secret:
+   - `AWIP_SERVICE_TOKEN` = same value stored in Lovable Cloud secrets
+   - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID` (used by `ci.yml` build step — confirm these are set; some repos already have them)
 
-### D. Append a row to `public.lessons` (the Lessons Loop table)
-Title: "Verify external state before asserting it"  
-Body: condensed version of points 1–5 above  
-Severity: `medium`  
-Source: `manual` (operator-recorded, not from weekly synthesis)  
-This puts the lesson on `/admin/lessons` so it surfaces in normal review, not just in agent memory.
+**Me — in the repo:**
+3. Add a `docs/ci-cd.md` § "GitHub Actions secrets" enumerating the four secrets above and what fails without each one.
+4. Append a one-liner to README "Operations" section pointing at that section so future-you doesn't re-discover the 401.
 
-### E. Add an `[Unreleased]` CHANGELOG entry under `Changed`
-> `Memory: corrected stale "GitHub repo connected" assumption; added verification-discipline rule and a manual lesson to public.lessons.`
+**Verification:** after the merges + secret, the next nightly run (02:00 UTC) should produce a row in `test_runs` table. I'll add a SQL snippet to `docs/ci-cd.md` to check it.
 
-## Out of scope
-- No code changes.
-- No connecting the repo (you do that in the Lovable UI).
-- No edits to the doc files created earlier — they're fine, just not yet pushed anywhere.
+---
 
-## After this lands
-Once you connect GitHub via Project Settings → Git, I'll re-verify the doc set landed on the default branch and update the Core rule again to reflect the connected state.
+## WS-B — Close Phase 2 through the gate (this week)
+
+Goal: stop landing Phase 3–6 work under a "Phase 2 active" banner.
+
+1. **Inventory** — query `roadmap_phase_gate_status` view + `roadmap_tasks` for Phase 2. Produce a markdown table of: open tasks, QA failures, open high-sev night audits, pending approvals. Save to `docs/phase-2-closeout.md`.
+2. **Triage** — for each open task, decide:
+   - **Ship now** (small, owner identified, will close this week)
+   - **Defer to Phase 2.1** (genuinely Phase 2, but not blocking sign-off — split into a follow-up sprint)
+   - **Reclassify** (actually Phase 3+ work that crept in — move to its true phase)
+3. **Execute the triage** with `supabase--insert` updates to `roadmap_tasks.phase_id` / `status`. No schema changes.
+4. **Run the gate** — operator clicks Proceed → Request phase sign-off on `/roadmap`. Gate fails → fix; gate passes → Phase 2 done, Phase 3 active.
+5. **Memory update** — flip the Core line "Phase 2 (active)" → "Phase 3 (active)" once gate is green.
+
+No new code — this is operator + data hygiene work.
+
+---
+
+## WS-C — Migration hygiene + `mem/` audit (this week, parallelisable with WS-B)
+
+**Migration naming convention.** New migrations get a human suffix after the timestamp:
+
+```text
+20260510_141500__add_okr_task_link.sql
+20260510_142000__idx_okr_node_events_node.sql
+20260510_143000__drop_legacy_phase_4_stub.sql
+```
+
+Verbs allowed: `add`, `drop`, `alter`, `idx`, `rls`, `fn`, `seed`, `data`. I'll add a `docs/migrations.md` documenting this + a one-paragraph "how to write a good migration" (small, single-purpose, includes RLS).
+
+**No retroactive rename** of the existing 87 migrations — too risky. Instead:
+- Add `docs/migration-index.md` — a generated table mapping each existing UUID-named file to a one-line summary, ordered by date. Generated by a `scripts/index-migrations.ts` that parses comments from each migration. Re-runnable.
+
+**`mem/` scrub** — I'll grep `mem/` in the repo for: anything matching common token shapes (`sk-*`, `eyJ*`, `ghp_*`, hex≥32, `xox[bp]-`), then any of these literal strings: `AWIP_SERVICE_TOKEN`, `LOVABLE_API_KEY`, `GOOGLE_AI_API_KEY`, `DEEPGRAM_API_KEY`, `TELEGRAM_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Report findings; if any hit, redact + log a lesson. Result goes in `docs/mem-audit-2026-05-10.md`.
+
+---
+
+## WS-D — Edge function & `awip-rag` audit (next, ~half day)
+
+1. **List all 37 functions** with three columns: invoked-by-cron, invoked-by-UI, invoked-by-nothing-found. Source: grep `supabase.functions.invoke`, grep cron schedules in migrations, grep `fetch.*functions/v1/`.
+2. **Document `awip-rag`** properly:
+   - Add `docs/awip-rag.md` covering: purpose (RAG over repo docs for Companion + copilot agents), endpoints (`/ingest`, `/search`, `/scope-map`), tables (`awip_docs`, `awip_doc_chunks`), how `scripts/ingest-awip-docs.ts` is run.
+   - Add a one-line entry to README's "Edge functions" list.
+   - Add a row to CHANGELOG `[Unreleased] → Documented`.
+3. **Flag candidates for deletion** (don't delete yet — needs operator OK):
+   - `copilot-noop-llm` — confirm whether anything still calls it
+   - `telegram-test`, `telegram-bot-info`, `telegram-send-voice` — confirm vs `telegram-send` + `telegram-webhook`
+   Result: `docs/edge-function-audit.md` with a recommendation column. You decide what to delete; I execute via `supabase--delete_edge_functions` + remove folders in a follow-up.
+
+---
+
+## WS-E — Phase 4 kickoff (the architectural centre of gravity)
+
+The point of all the above is to get here cleanly. Phase 4 = roadmap tasks driven by OKR outcomes.
+
+**Architecture (one page, ADR-0003):**
+- `roadmap_tasks` gains `okr_node_id uuid` (nullable; FK to `okr_nodes`) + `okr_link_kind` enum (`drives_kr`, `supports_kr`, `discovery`).
+- New view `roadmap_task_outcome_health` joining task → okr_node → latest `okr_measurement` → computing `on_track | at_risk | off_track` from KR target/current.
+- `/roadmap` task row gets a small outcome chip (green/amber/red) sourced from that view; clicking it opens the OKR node panel.
+- Phase gate gains a 5th gate: **outcome** — sprint may not sign off if any linked KR is `off_track` without an operator override comment.
+
+**Slice 1 (this is what the plan implements first; the rest is follow-up sprints):**
+1. ADR-0003 doc.
+2. Migration: add `okr_node_id` + `okr_link_kind` columns + index + view + RLS pass-through.
+3. Seed-time validation: a tiny script `scripts/check-okr-links.ts` that prints the % of active sprint tasks linked to an OKR (target ≥ 80% by Phase 4 sign-off).
+4. UI: read-only outcome chip on roadmap task rows. Editing the link is operator-only via existing `InlineEdit`.
+5. Memory + CHANGELOG updates.
+
+Slice 2 (out of this plan, raises a follow-up sprint): outcome gate in `roadmap-phase-signoff`, automated `at_risk` propagation into Sentinel, AI-suggested OKR links during task creation.
+
+---
+
+## Sequencing
+
+```text
+Today    : WS-A (operator merges + secret)         ──┐
+Day 1–2  : WS-A docs + WS-C mem/ scrub             ──┤── parallelisable
+Day 1–3  : WS-B Phase 2 closeout                   ──┘
+Day 3–4  : WS-D edge audit + awip-rag docs
+Day 4–7  : WS-E Slice 1 (ADR-0003 + migration + chip)
+Then     : Phase 2 signed off, Phase 3 active, Phase 4 has its first measurable surface.
+```
+
+---
+
+## Out of scope (intentionally)
+
+- Building Discovery AI — that's a separate Lovable project; documented gap, but not this plan.
+- Renaming the 87 existing migration files.
+- Deleting any edge function (audit only — operator approval required).
+- Branch protection on `main` — already documented in `mem/preferences/ci-cd-hardening.md`; operator action when ready.
+
+---
+
+## What I need from you to start
+
+Just **"approve"** — and which workstreams (A–E) to run now vs queue. Default if you say "all": run them in the sequence above and surface checkpoints between each.
