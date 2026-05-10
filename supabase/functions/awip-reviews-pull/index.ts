@@ -146,7 +146,7 @@ function fromFrontmatter(fm: Record<string, unknown>): ParsedReview {
 
 async function aiExtract(md: string, filename: string): Promise<ParsedReview> {
   if (!LOVABLE_API_KEY) return { findings: [] };
-  const model = pickModel({ task: "extract", default: "google/gemini-2.5-flash-lite" });
+  const model = pickModel("google/gemini-2.5-flash");
   const sys =
     `Extract a structured review from a markdown file. Return STRICT JSON ONLY:
 {"review_date":"YYYY-MM-DD"|null,"reviewer":string|null,"scope":string|null,"summary":string|null,
