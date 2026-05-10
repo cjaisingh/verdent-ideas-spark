@@ -14,6 +14,8 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys
 - [Design system](docs/design-system.md) — page layout, spacing, semantic tints, pane source colours
 - [Deepgram voice](docs/deepgram-voice.md) — required key role, token grant flow, mic failure recovery
+- [Gemini TTS](docs/gemini-tts.md) — `gemini-tts` edge function, 8 voices, cost, logging
+- [Rork iPhone companion spec](docs/rork-companion-spec.md) — contract between Core and the separate Expo app
 - [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)
 
