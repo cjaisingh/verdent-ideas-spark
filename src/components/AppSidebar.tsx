@@ -24,13 +24,39 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
+// ----- Top-level groups (visible by default) -----
+
 const operateTopItems: NavItem[] = [
   { url: "/dashboard", title: "Dashboard", icon: LayoutDashboard },
   { url: "/tenants", title: "Tenants", icon: Building2 },
   { url: "/capabilities", title: "Capabilities", icon: Boxes },
   { url: "/events", title: "Events", icon: Activity },
-  { url: "/api-logs", title: "API logs", icon: ScrollText },
   { url: "/control-plane", title: "Control plane", icon: Settings2 },
+];
+
+const operateLogsItems: NavItem[] = [
+  { url: "/api-logs", title: "API logs", icon: ScrollText },
+  { url: "/api-explorer", title: "API explorer", icon: Code2 },
+  { url: "/db-explorer", title: "DB explorer", icon: Database },
+  { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
+];
+
+const planTopItems: NavItem[] = [
+  { url: "/morning-review", title: "Morning Review", icon: Sparkles },
+  { url: "/roadmap", title: "Roadmap", icon: MapIcon },
+  { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
+  { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
+  { url: "/jobs", title: "Jobs board", icon: ListChecks },
+  { url: "/plan", title: "Plan (workstreams)", icon: Target },
+  { url: "/master-plan", title: "Master plan", icon: FileSpreadsheet },
+];
+
+const knowledgeItems: NavItem[] = [
+  { url: "/notebook", title: "Notebook", icon: NotebookIcon },
+  { url: "/runbook", title: "Runbook (active)", icon: BookOpen },
+  { url: "/runbooks", title: "Runbook library", icon: Library },
+  { url: "/memory", title: "Memory", icon: Brain },
+  { url: "/admin/lessons", title: "Lessons Loop (weekly)", icon: GraduationCap },
 ];
 
 const copilotParent = { url: "/copilot", title: "Copilot", icon: Mic };
@@ -41,45 +67,36 @@ const copilotChildren: NavItem[] = [
   { url: "/copilot/transcripts", title: "Transcripts", icon: MessageSquareText },
 ];
 
-const planItems: NavItem[] = [
-  { url: "/companion", title: "Companion (local LLM)", icon: Bot },
-  { url: "/plan", title: "Plan (workstreams)", icon: Target },
-  { url: "/morning-review", title: "Morning Review", icon: Sparkles },
-  { url: "/admin/lessons", title: "Lessons Loop", icon: GraduationCap },
-  { url: "/roadmap", title: "Roadmap", icon: MapIcon },
-  { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
-  { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
-  { url: "/jobs", title: "Jobs board", icon: ListChecks },
+const automationItems: NavItem[] = [
+  { url: "/companion", title: "Companion", icon: Bot },
   { url: "/overnight", title: "Overnight overview", icon: Activity },
   { url: "/night-shifts", title: "Night shifts", icon: Moon },
+  { url: "/walkthrough", title: "App walkthrough", icon: Footprints },
+  { url: "/reviews", title: "External weekly reviews", icon: Newspaper },
+  { url: "/audits", title: "Deep audits", icon: ShieldCheck },
   { url: "/ai-usage", title: "AI usage & cost", icon: Sparkles },
-  { url: "/notebook", title: "Notebook", icon: NotebookIcon },
-  { url: "/runbook", title: "Runbook", icon: BookOpen },
-  { url: "/memory", title: "Memory", icon: Brain },
 ];
 
-const systemItems: NavItem[] = [
-  { url: "/api-explorer", title: "API explorer", icon: Code2 },
-  { url: "/db-explorer", title: "DB explorer", icon: Database },
-  { url: "/db-audit", title: "DB audit log", icon: ShieldAlert },
-  { url: "/runbooks", title: "Runbooks", icon: Library },
+const adminItems: NavItem[] = [
   { url: "/admin", title: "Admin", icon: Shield },
+  { url: "/status", title: "Status", icon: Heart },
   { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
   { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
-  { url: "/admin/ai-usage", title: "AI usage", icon: Sparkles },
-  { url: "/audits", title: "Deep audits", icon: ShieldCheck },
-  { url: "/status", title: "Status", icon: Heart },
+  { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
 ];
 
 const allItems: NavItem[] = [
   ...operateTopItems,
+  ...operateLogsItems,
+  ...planTopItems,
+  ...knowledgeItems,
   copilotParent,
   ...copilotChildren,
-  ...planItems,
-  ...systemItems,
+  ...automationItems,
+  ...adminItems,
 ];
 
 function StatusDot({ color, label }: { color?: string; label?: string }) {
