@@ -50,6 +50,11 @@ export default function MorningReview() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const triage = useMorningReviewTriage();
+  const [activePanel, setActivePanel] = useState<{ ref: string; title: string; data: unknown } | null>(null);
+
+  const openPanel = (ref: string, title: string, data: unknown) => {
+    setActivePanel({ ref, title, data });
+  };
 
   const load = async () => {
     setLoading(true);
