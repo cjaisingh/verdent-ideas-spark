@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TomorrowPlan from "@/components/morning-review/TomorrowPlan";
 import TriageChip from "@/components/morning-review/TriageChip";
 import DiscussNextStrip, { type PanelEntry } from "@/components/morning-review/DiscussNextStrip";
+import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDrawer";
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +50,11 @@ export default function MorningReview() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const triage = useMorningReviewTriage();
+  const [activePanel, setActivePanel] = useState<{ ref: string; title: string; data: unknown } | null>(null);
+
+  const openPanel = (ref: string, title: string, data: unknown) => {
+    setActivePanel({ ref, title, data });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -170,7 +176,7 @@ export default function MorningReview() {
         <OvernightRetroLine reviewDate={review.review_date} />
 
         <div className="grid md:grid-cols-2 gap-4">
-          <Section anchor="stuck-cron-jobs" title="Stuck cron jobs" triage={triage} empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
+          <Section anchor="stuck-cron-jobs" title="Stuck cron jobs" triage={triage} onFocus={openPanel} panelData={review.stuck_jobs} empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
             {review.stuck_jobs.map((s) => (
               <div key={s.job} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -184,7 +190,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="promotion-drift" title="Promotion-vs-shipping drift" triage={triage} empty={!review.promotion_drift.length} emptyMsg="No drift in last 72h.">
+          <Section anchor="promotion-drift" title="Promotion-vs-shipping drift" triage={triage} onFocus={openPanel} panelData={review.promotion_drift} empty={!review.promotion_drift.length} emptyMsg="No drift in last 72h.">
             {review.promotion_drift.map((d) => (
               <div key={d.action_id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -198,7 +204,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="night-throughput" title="Night throughput" triage={triage} empty={!review.night_throughput?.shifts} emptyMsg="No shifts in last 24h.">
+          <Section anchor="night-throughput" title="Night throughput" triage={triage} onFocus={openPanel} panelData={review.night_throughput} empty={!review.night_throughput?.shifts} emptyMsg="No shifts in last 24h.">
             <div className="text-sm space-y-1">
               <div>Shifts: <strong>{review.night_throughput?.shifts ?? 0}</strong> ({review.night_throughput?.completed_shifts ?? 0} completed)</div>
               <div>Last window end: {review.night_throughput?.last_window_end ?? "—"}</div>
@@ -208,7 +214,7 @@ export default function MorningReview() {
             </div>
           </Section>
 
-          <Section anchor="open-findings" title="Open findings (medium+)" triage={triage} empty={!review.open_findings.length} emptyMsg="No open findings.">
+          <Section anchor="open-findings" title="Open findings (medium+)" triage={triage} onFocus={openPanel} panelData={review.open_findings} empty={!review.open_findings.length} emptyMsg="No open findings.">
             {review.open_findings.slice(0, 10).map((f) => (
               <div key={f.id} className="flex items-start justify-between gap-2 text-sm border-b border-border/40 py-2 last:border-0">
                 <div className="flex-1">
@@ -220,7 +226,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="top-actions" title="Top 5 actions" triage={triage} empty={!review.top_actions.length} emptyMsg="No open actions.">
+          <Section anchor="top-actions" title="Top 5 actions" triage={triage} onFocus={openPanel} panelData={review.top_actions} empty={!review.top_actions.length} emptyMsg="No open actions.">
             {review.top_actions.map((a) => (
               <div key={a.action_id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -234,7 +240,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="revisit" title="Revisit (deferred items due)" triage={triage} empty={!review.revisit_items.length} emptyMsg="Nothing due.">
+          <Section anchor="revisit" title="Revisit (deferred items due)" triage={triage} onFocus={openPanel} panelData={review.revisit_items} empty={!review.revisit_items.length} emptyMsg="Nothing due.">
             {review.revisit_items.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -264,6 +270,16 @@ export default function MorningReview() {
         <TabsContent value="yesterday" className="mt-4">{renderYesterday()}</TabsContent>
         <TabsContent value="tomorrow" className="mt-4"><TomorrowPlan /></TabsContent>
       </Tabs>
+      <PanelDiscussionDrawer
+        open={!!activePanel}
+        onOpenChange={(o) => { if (!o) setActivePanel(null); }}
+        reviewId={review?.id ?? null}
+        reviewDate={review?.review_date ?? null}
+        panelRef={activePanel?.ref ?? null}
+        panelTitle={activePanel?.title ?? null}
+        panelData={activePanel?.data}
+        triage={triage}
+      />
     </div>
   );
 }
@@ -287,6 +303,8 @@ function Section({
   children,
   empty,
   emptyMsg,
+  onFocus,
+  panelData,
 }: {
   title: string;
   anchor: string;
@@ -294,8 +312,14 @@ function Section({
   children: React.ReactNode;
   empty?: boolean;
   emptyMsg?: string;
+  onFocus?: (ref: string, title: string, data: unknown) => void;
+  panelData?: unknown;
 }) {
   const state = triage.getState("panel", anchor);
+  const handleChange = async (kind: typeof anchor extends string ? "panel" : never, ref: string, next: TriageState | null) => {
+    await triage.setState("panel", ref, next);
+    if (next === "focus" && onFocus) onFocus(ref, title, panelData);
+  };
   return (
     <Card
       id={`panel-${anchor}`}
@@ -311,12 +335,22 @@ function Section({
             {state && (
               <Badge className={cn("text-[10px] capitalize", stateBadgeCls[state])}>{state}</Badge>
             )}
+            {state === "focus" && onFocus && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => onFocus(anchor, title, panelData)}
+              >
+                Re-open chat
+              </Button>
+            )}
           </CardTitle>
           <TriageChip
             kind="panel"
             itemRef={anchor}
             current={state}
-            onChange={triage.setState}
+            onChange={handleChange as any}
           />
         </div>
       </CardHeader>

@@ -2328,6 +2328,85 @@ export type Database = {
         }
         Relationships: []
       }
+      morning_review_discussion_messages: {
+        Row: {
+          body: string
+          created_at: string
+          discussion_id: string
+          id: string
+          model: string | null
+          role: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          discussion_id: string
+          id?: string
+          model?: string | null
+          role: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          discussion_id?: string
+          id?: string
+          model?: string | null
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "morning_review_discussion_messages_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "morning_review_discussions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      morning_review_discussions: {
+        Row: {
+          closed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          outcome: string | null
+          panel_ref: string
+          panel_title: string | null
+          review_id: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          outcome?: string | null
+          panel_ref: string
+          panel_title?: string | null
+          review_id: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          outcome?: string | null
+          panel_ref?: string
+          panel_title?: string | null
+          review_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "morning_review_discussions_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "morning_reviews"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       morning_review_triage: {
         Row: {
           cleared_at: string | null
