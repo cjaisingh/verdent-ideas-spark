@@ -2328,6 +2328,39 @@ export type Database = {
         }
         Relationships: []
       }
+      morning_review_triage: {
+        Row: {
+          cleared_at: string | null
+          id: string
+          item_kind: string
+          item_ref: string
+          note: string | null
+          set_at: string
+          set_by: string | null
+          state: string
+        }
+        Insert: {
+          cleared_at?: string | null
+          id?: string
+          item_kind: string
+          item_ref: string
+          note?: string | null
+          set_at?: string
+          set_by?: string | null
+          state: string
+        }
+        Update: {
+          cleared_at?: string | null
+          id?: string
+          item_kind?: string
+          item_ref?: string
+          note?: string | null
+          set_at?: string
+          set_by?: string | null
+          state?: string
+        }
+        Relationships: []
+      }
       morning_reviews: {
         Row: {
           acknowledged_at: string | null
@@ -4417,6 +4450,36 @@ export type Database = {
           slug: string | null
           title: string | null
           workstream_id: string | null
+        }
+        Relationships: []
+      }
+      morning_review_triage_active: {
+        Row: {
+          id: string | null
+          item_kind: string | null
+          item_ref: string | null
+          note: string | null
+          set_at: string | null
+          set_by: string | null
+          state: string | null
+        }
+        Insert: {
+          id?: string | null
+          item_kind?: string | null
+          item_ref?: string | null
+          note?: string | null
+          set_at?: string | null
+          set_by?: string | null
+          state?: string | null
+        }
+        Update: {
+          id?: string | null
+          item_kind?: string | null
+          item_ref?: string | null
+          note?: string | null
+          set_at?: string | null
+          set_by?: string | null
+          state?: string | null
         }
         Relationships: []
       }

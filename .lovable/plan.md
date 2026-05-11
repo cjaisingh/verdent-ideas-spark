@@ -1,90 +1,73 @@
-## Goal
+## Morning Review Triage
 
-Stop leaving the overnight phase runner idle. Each night, recommend which active phases would be safe + valuable to run overnight. Operator still clicks to enable — no auto-queue.
+Add a 4-state triage chip (**Focus · Revisit · Done · Skip**) to every row in every panel on `/morning-review` (Yesterday tab). State is sticky per item across review dates — set it once and it carries forward until you flip it.
 
-## What gets built
+### How it feels
 
-### 1. New edge function: `overnight-recommender`
+- Each row gets a small segmented control on the right (next to existing badges/Mirror buttons).
+- Default state is **unset** (neutral). Click sets Focus / Revisit / Done / Skip.
+- Each panel header gets a count chip: `Focus 3 · Revisit 1`.
+- A new top strip "**Discuss next**" pulls every Focus item across all 6 panels into one ordered list — that's your morning agenda.
+- "Done" and "Skip" rows dim to ~50% opacity so attention stays on Focus/Revisit/unset.
+- A header filter toggle: `Hide cleared` (hides Done + Skip rows) — on by default.
 
-- Schedule: cron `scheduled-overnight-recommender` at **21:30 UTC** (25 min before `overnight-prequeue` at 21:55).
-- Auth: `x-service-token` (cron) or operator JWT (manual "Refresh recommendations" button).
-- Wrapped with `withLogger`. Logs to `automation_runs` (job `overnight-recommender`).
+### Color/semantic mapping
 
-**Selection heuristics** (pure SQL, no AI — keeps cost ≈ 0):
-- `roadmap_phases.status` NOT IN (`shipped`, `done`, `cancelled`)
-- Phase has ≥1 row in `roadmap_phase_signoffs` (runner requires this anyway)
-- Phase is NOT already flagged `run_overnight=true` (those auto-queue via prequeue)
-- No queued/running row in `roadmap_phase_overnight_runs` for tomorrow
-- Last successful overnight run for this phase was ≥3 days ago (or never)
-- Among the phase's open `roadmap_tasks` joined via `roadmap_sprints`:
-  - 0 tasks linked to `discussion_actions.risk='critical'`
-  - 0 tasks linked to `discussion_actions.risk='high'` without `night_override_reason`
+- **Focus** — primary, solid. "Talk about this now."
+- **Revisit** — amber/warning. "Come back to it, not today."
+- **Done** — muted/success outline. "Resolved, no discussion needed."
+- **Skip** — muted outline. "Not actionable, ignore in future reviews too."
 
-**Confidence score** (0–100, simple weighted sum):
-- +40 baseline if eligible
-- +20 if phase has zero open high-risk linked actions
-- +20 if last run was ≥7 days ago (or never)
-- +20 if open task count ≥ 3 (more value to a briefing)
+### Sticky behavior
 
-Returns: list of `{phase_id, phase_key, title, score, reasons[], blockers[]}` plus phases rejected with reasons (for transparency in the UI).
+State is keyed on the underlying `item_ref` (e.g. `discussion_action:<id>`, `sentinel_finding:<id>`, `roadmap_review_finding:<id>`, `cron:<job>`, `deferred:<id>`, `drift:<action_id>`, `night_throughput:<shift_id>`). When tomorrow's review renders the same finding, its triage state is preserved. Flip it to a new value (or click the active chip again to clear) to reset.
 
-### 2. New table: `overnight_recommendations`
+### Technical section
 
-```text
-id uuid pk
-generated_at timestamptz default now()
-scheduled_for date              -- the night this batch covers (= tomorrow UTC date)
-phase_id uuid
-phase_key text
-score int
-reasons jsonb                   -- ["signoff present","no high-risk open"]
-blockers jsonb                  -- empty when eligible
-status text default 'open'      -- open | queued | dismissed | expired
-acted_at timestamptz
-acted_by uuid
-unique (scheduled_for, phase_id)
-```
+**New table** `public.morning_review_triage`
+- `id uuid pk`
+- `item_kind text` — one of `discussion_action | sentinel_finding | code_review_finding | cron_stuck | deferred | promotion_drift | night_throughput`
+- `item_ref text` — stable id (uuid string, job name, etc.)
+- `state text` — `focus | revisit | done | skip`
+- `note text null` — optional one-liner
+- `set_by uuid` (auth.uid)
+- `set_at timestamptz default now()`
+- `cleared_at timestamptz null`
+- Unique partial index on `(item_kind, item_ref) where cleared_at is null` so each item has exactly one active state.
+- RLS: operator/admin only via `has_role()`, same pattern as other Morning Review tables.
+- Realtime: add to `supabase_realtime` publication.
+- Trigger: when a new state is inserted for an `(item_kind, item_ref)`, set `cleared_at = now()` on the previous active row (acts as audit history).
 
-- RLS: operator/admin SELECT/UPDATE; insert via service role only.
-- Realtime ON.
-- Old rows (`scheduled_for < today - 14 days`) purged by existing retention sweep — add to `retention_settings`.
+**Helper view** `morning_review_triage_active` — `select distinct on (item_kind, item_ref) ...where cleared_at is null` for fast lookup.
 
-### 3. UI: Master Plan panel
+**Frontend**
+- New component `src/components/morning-review/TriageChip.tsx` — 4-segment control + "clear" affordance on active. Uses semantic tokens (`primary`, `warning`, `muted`, `destructive`).
+- New hook `src/hooks/useMorningReviewTriage.ts` — fetches all active triage rows once (small table), exposes `getState(kind, ref)` + `setState(kind, ref, state)` with optimistic update + realtime channel `mr-triage-live` (unique per mount, per channel-naming preference).
+- New component `src/components/morning-review/DiscussNextStrip.tsx` — renders above the KPI grid; lists every Focus item with a one-line summary and a jump-to-panel anchor.
+- `src/pages/MorningReview.tsx` — render `<TriageChip kind="..." ref={item.id} />` on each row in all 6 `Section`s; render `<DiscussNextStrip />` between header and KPI tiles; add panel-header counts; add `Hide cleared` toggle in page header (persisted to localStorage).
+- No changes to `morning-review` edge function or aggregator — triage is pure operator UI state on top of the existing snapshot.
 
-Component `OvernightCandidatesCard` on `/master-plan`:
-- Lists tonight's `open` recommendations sorted by score desc.
-- Each row: phase title + key, score badge, "why" reasons, two buttons:
-  - **Queue for tonight** → inserts row into `roadmap_phase_overnight_runs` (scheduled_for=tomorrow, status=queued, requested_by=auth.uid()), marks recommendation `queued`.
-  - **Dismiss** → marks `dismissed` with `acted_by`.
-- Empty state: "No overnight candidates tonight" with last-generated timestamp.
-- "Refresh now" button → invokes recommender with operator JWT.
+**Item-ref resolution per panel**
+- Stuck cron jobs → `cron_stuck` / `s.job`
+- Promotion drift → `promotion_drift` / `d.action_id`
+- Night throughput → `night_throughput` / `review.night_throughput.last_window_end || review.id` (single row)
+- Open findings → `sentinel_finding` or `code_review_finding` based on `f.source` / `f.id`
+- Top 5 actions → `discussion_action` / `a.action_id`
+- Revisit items → `deferred` / `r.id`
 
-### 4. UI: Morning Review retrospective line
+**Out of scope** (explicit, per your answers)
+- No auto-population of Tomorrow Plan from Focus.
+- No auto-suggest from severity — operator chooses.
+- No editing UI for triage history; the audit row exists in the table but isn't surfaced.
 
-In `MorningReview.tsx` (today tab), add a small line under the existing summary:
-> "Last night: 2 phases were recommended, 1 ran, 1 was dismissed."
+### Files to add
+- `supabase/migrations/<ts>_morning_review_triage.sql`
+- `src/components/morning-review/TriageChip.tsx`
+- `src/components/morning-review/DiscussNextStrip.tsx`
+- `src/hooks/useMorningReviewTriage.ts`
+- `docs/morning-review.md` (append "Triage" section)
+- `mem/features/morning-review-triage.md` + index entry
 
-Pulled from `overnight_recommendations` where `scheduled_for = yesterday`.
-
-### 5. Docs + memory
-
-- New `docs/overnight-recommender.md`
-- Append to `docs/automation.md` cron table
-- Update `mem/features/night-cheap-models.md` to note the recommender
-- Add cron job name to Core memory cron list
-- CHANGELOG entry
-
-## Out of scope (explicit non-goals)
-
-- No auto-queueing. Recommender only suggests.
-- No AI calls — pure SQL heuristics. Zero ongoing cost.
-- No changes to `overnight-phase-runner` or `overnight-prequeue` logic.
-- No new risk gates — reuses existing `discussion_actions.risk` + `enforce_night_eligibility_by_risk`.
-
-## Acceptance
-
-- 21:30 UTC tonight: `overnight-recommender` runs, writes 0–N rows into `overnight_recommendations` for tomorrow's date, logs to `automation_runs`.
-- `/master-plan` shows the candidates card with working Queue + Dismiss buttons.
-- Clicking Queue inserts a `roadmap_phase_overnight_runs` row that the existing 15-min runner picks up after 22:00 UTC.
-- Morning Review shows the previous night's recommend → ran/dismissed tally.
-- Re-running the recommender is idempotent (unique on `scheduled_for, phase_id`).
+### Files to edit
+- `src/pages/MorningReview.tsx` — wire chips, strip, counts, hide-cleared toggle
+- `CHANGELOG.md`

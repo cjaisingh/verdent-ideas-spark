@@ -1,0 +1,1 @@
+alter view public.morning_review_triage_active set (security_invoker = true);
