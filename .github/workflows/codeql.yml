@@ -3,8 +3,20 @@ name: CodeQL
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - "dist/**"
+      - "docs/**"
+      - "supabase/migrations/**"
+      - "e2e-playwright/**"
+      - "**/*.md"
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - "dist/**"
+      - "docs/**"
+      - "supabase/migrations/**"
+      - "e2e-playwright/**"
+      - "**/*.md"
   schedule:
     - cron: "23 4 * * 1" # Mondays 04:23 UTC
 
@@ -43,5 +55,10 @@ jobs:
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
+        # Non-blocking: a transient analyzer failure (or the well-known
+        # "default setup is enabled" SARIF rejection — see docs/ci-cd.md
+        # § "CodeQL: default vs advanced setup") should not email red on
+        # every push. Findings still appear under Security → Code scanning.
+        continue-on-error: true
         with:
           category: "/language:${{ matrix.language }}"
