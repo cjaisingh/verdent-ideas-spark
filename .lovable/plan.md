@@ -1,66 +1,93 @@
 ## Goal
 
-Make Morning Review actionable: clicking **Focus** on a panel opens a side chat where you and the AI can discuss that panel's findings, agree a strategy, mirror an action, or dismiss.
+Replace the confusing **Mirror / Defer / Done / Skip** footer with three clear actions — **Fix · Cancel · Escalate** — and add a sentinel for jobs that night-shift 3+ times without closing.
 
-## Behavior
+## Why
 
-1. Click **Focus** on any panel header → triage state still saves as `focus`, but a right-side **Discussion Drawer** also opens, scoped to that panel.
-2. Drawer header shows panel title + the panel's current data (stuck jobs / findings / actions / etc.) as a compact context card.
-3. Chat thread below: AI is pre-seeded with the panel's JSON payload + a system prompt ("you are reviewing the morning review panel X for date Y, help the operator decide: clarify, agree strategy, fix, or defer").
-4. Operator types freely. Streaming responses via Lovable AI Gateway (`google/gemini-3-flash-preview`, falls back to night-cheap model in night window via existing `pickModel`).
-5. Drawer footer has 4 quick-resolution buttons that close the loop:
-   - **Mirror as action** → inserts `discussion_actions` row (existing pattern), marks panel `revisit`.
-   - **Defer** → inserts `deferred_items`, marks panel `revisit`.
-   - **Mark done** → sets panel triage to `done`, closes drawer.
-   - **Skip** → sets panel triage to `skip`, closes drawer.
-6. Re-clicking Focus on a panel that already has a discussion re-opens the same thread (sticky on `(review_id, panel_ref)`).
-7. Other chips (Revisit / Done / Skip) keep current behavior — no drawer.
+- "Mirror" today inserts a near-empty `discussion_actions` row with no context and no link back. Nobody knows what it did.
+- Items can sit in night shift forever; we have no escalation signal.
+- Done/Skip just hide the panel — the underlying issue (stuck cron, drift, etc.) keeps reappearing with no record of why we cancelled it.
 
-## Storage
+## New behavior
 
-New table `morning_review_discussions`:
-- `id`, `review_id` (fk `morning_reviews`), `panel_ref` (text, e.g. `stuck-cron-jobs`), `created_by`, `created_at`, `closed_at`, `outcome` (focus/mirrored/deferred/done/skipped/null).
-- Unique on `(review_id, panel_ref)` where `closed_at is null`.
+### Footer buttons
+1. **Fix** — primary. Opens a small inline form (title prefilled from panel + AI summary, risk select default `med`, owner = current operator, optional due date). On submit:
+   - inserts a `discussion_actions` row with `details` containing: panel ref, review date, AI summary of the chat (3 bullets), link back to discussion, last 6 turns
+   - `subject_type='morning_review_panel'`, new column `morning_review_panel_ref`
+   - dedupes against existing **open** action with same `morning_review_panel_ref` (appends a note instead of duplicating)
+   - closes discussion with `outcome='fixed'`, panel triage → `revisit`
+   - toast: `Queued as job #<short_num>` with **Open** action linking to `/jobs?focus=<short_num>`
 
-New table `morning_review_discussion_messages`:
-- `id`, `discussion_id` (fk), `role` (user/assistant/system), `content`, `created_at`, `model`, `tokens_in`, `tokens_out`.
+2. **Cancel** — destructive variant. Asks for a one-line reason. On submit:
+   - closes discussion with `outcome='cancelled'`
+   - inserts a `system` message: `Cancelled: <reason>`
+   - panel triage → `done`
+   - **No suppression** — if the underlying detector fires again tomorrow, it shows up again (this is the simple semantics chosen).
 
-Operator-only RLS via `has_role()`, realtime on both. Standard timestamps trigger.
+3. **Escalate** — shortcut. Same as Fix but pre-sets `risk='high'`, `priority='high'`, `night_eligible=false`, and **also** writes a `sentinel_findings` row (`severity='high'`, `kind='operator_escalation'`) so it surfaces tomorrow's morning review at the top.
 
-## Edge function
+(Defer/Done/Skip removed from the drawer. The panel-header chip strip still has Focus/Revisit/Done/Skip for quick triage without a discussion — unchanged.)
 
-`morning-review-discuss` (new, wrapped with `withLogger`):
-- Auth: operator JWT.
-- Input: `{ discussion_id, messages: UIMessage[] }`.
-- Loads panel context from `morning_reviews` + panel_ref, builds system prompt.
-- Streams via AI SDK `streamText` + `createLovableAiGatewayProvider` + `pickModel('google/gemini-3-flash-preview')`.
-- `onFinish` saves assistant message; user messages saved client-side before invoke.
-- Logs to `ai_usage_log` (existing pattern).
+### Auto-escalation: 3 night-shift attempts
+- New table `night_shift_job_attempts` (`id`, `action_id`, `night_shift_id`, `attempted_at`, `outcome`).
+- Existing `night-agent-close` edge function logs one row per audited action per shift.
+- New SQL view `discussion_actions_stuck_in_night` returning open jobs with `attempts >= 3`.
+- New scheduled function `night-stuck-escalator` (runs once after `night-agent-close`, ~06:05 UTC) iterates that view and:
+  - flips `risk` to `high`
+  - clears `night_eligible`
+  - inserts a `sentinel_findings` row (`kind='night_stuck_3x'`, `severity='high'`, links to action)
+  - emits a `discussion_action_events` row of type `auto_escalated`
+- Morning review aggregator picks up these sentinel findings via the existing open-findings panel — no UI change needed there, but it gets a small "🔁 night-stuck" badge.
+
+## Schema changes
+
+```sql
+alter table discussion_actions add column morning_review_panel_ref text;
+create unique index discussion_actions_open_per_mr_panel
+  on discussion_actions (morning_review_panel_ref)
+  where status = 'open' and morning_review_panel_ref is not null;
+
+create table night_shift_job_attempts (
+  id uuid pk, action_id uuid fk discussion_actions,
+  night_shift_id uuid fk night_shifts, attempted_at timestamptz default now(),
+  outcome text  -- 'no_change' | 'progressed' | 'closed'
+);
+-- operator-only RLS, realtime on
+
+create view discussion_actions_stuck_in_night as
+  select da.id, da.short_num, da.title, count(a.id) as attempts
+  from discussion_actions da
+  join night_shift_job_attempts a on a.action_id = da.id
+  where da.status = 'open' and da.night_eligible = true
+  group by da.id having count(a.id) >= 3;
+```
+
+Add `outcome='cancelled'` and `'fixed'` to the discussion `outcome` check.
+
+## Edge functions
+
+- **New** `morning-review-resolve` (operator JWT, `withLogger`): single endpoint, body `{ discussion_id, action: 'fix'|'cancel'|'escalate', payload }`. Handles all three flows server-side so the client doesn't juggle 3 inserts. Returns `{ short_num?, action_id?, finding_id? }`.
+- **Edited** `night-agent-close`: at the end, insert `night_shift_job_attempts` rows for every action it touched.
+- **New** `night-stuck-escalator` + cron entry (06:05 UTC daily, `AWIP_SERVICE_TOKEN`).
 
 ## Frontend
 
-- New `src/components/morning-review/PanelDiscussionDrawer.tsx` — Sheet from right, AI Elements primitives (`Conversation`, `Message`, `MessageResponse`, `PromptInput`, `Shimmer`), 4 footer resolution buttons.
-- New `src/hooks/useMorningReviewDiscussion.ts` — open/close, load history, send message via `useChat` with custom transport pointing at the edge function.
-- `useMorningReviewTriage.setState`: when new state is `focus`, also call `openDiscussion(panelRef)` (passed in via props).
-- `MorningReview.tsx` `Section`: pass `onFocus` callback; render the drawer once at page level keyed by active panel.
-- `DiscussNextStrip`: clicking a Focus chip opens the drawer for that panel instead of just scrolling.
+- **Edited** `PanelDiscussionDrawer.tsx`: footer rebuilt as 3 buttons, each opens a small inline form (no nested dialog — keep it in the sheet). Toast becomes a sonner action toast with **Open** linking to `/jobs?focus=<short_num>`.
+- **Edited** `useMorningReviewTriage.ts`: no change needed; resolve endpoint sets triage server-side.
+- **Edited** `MorningReview.tsx`: open-findings panel renders a small badge `🔁 night-stuck ×N` when `sentinel_findings.kind='night_stuck_3x'`.
+
+## Docs / memory
+
+- `docs/morning-review.md` — replace Mirror section with Fix/Cancel/Escalate
+- `docs/jobs-board.md` — add night-stuck auto-escalation
+- `mem/features/morning-review-triage.md` — update footer buttons
+- `mem/features/night-agent.md` — add 3-attempts rule
+- `mem/index.md` — note auto-escalation in core
+- `CHANGELOG.md`
 
 ## Out of scope
 
-- No tool-calling in the chat (read-only context, action via the 4 footer buttons).
-- No per-row discussions — panel-level only, matches existing triage granularity.
-- No reuse across review_dates (each day's review gets its own discussions; sticky triage state is unchanged).
-
-## Files
-
-**New**
-- `supabase/migrations/<ts>_morning_review_discussions.sql`
-- `supabase/functions/morning-review-discuss/index.ts`
-- `src/components/morning-review/PanelDiscussionDrawer.tsx`
-- `src/hooks/useMorningReviewDiscussion.ts`
-
-**Edited**
-- `src/pages/MorningReview.tsx` (wire drawer + onFocus)
-- `src/components/morning-review/DiscussNextStrip.tsx` (open drawer on click)
-- `src/hooks/useMorningReviewTriage.ts` (optional `onFocus` side-effect callback)
-- `docs/morning-review.md`, `mem/features/morning-review-triage.md`, `mem/index.md`, `CHANGELOG.md`
+- No suppressions table (per your answer).
+- No CI-failure auto-escalation (not in this pass).
+- No "snooze until tomorrow" defer button — Cancel + the underlying detector re-firing covers it.
+- No edit UI for the 3-attempts threshold (hardcoded constant; change via PR if needed).
