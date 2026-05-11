@@ -270,6 +270,16 @@ export default function MorningReview() {
         <TabsContent value="yesterday" className="mt-4">{renderYesterday()}</TabsContent>
         <TabsContent value="tomorrow" className="mt-4"><TomorrowPlan /></TabsContent>
       </Tabs>
+      <PanelDiscussionDrawer
+        open={!!activePanel}
+        onOpenChange={(o) => { if (!o) setActivePanel(null); }}
+        reviewId={review?.id ?? null}
+        reviewDate={review?.review_date ?? null}
+        panelRef={activePanel?.ref ?? null}
+        panelTitle={activePanel?.title ?? null}
+        panelData={activePanel?.data}
+        triage={triage}
+      />
     </div>
   );
 }
