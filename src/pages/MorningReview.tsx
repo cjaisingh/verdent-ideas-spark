@@ -219,6 +219,24 @@ export default function MorningReview() {
         </Section>
       </div>
     </div>
+    );
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Morning Review</h1>
+        <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
+      </div>
+      <Tabs defaultValue="yesterday" className="w-full">
+        <TabsList>
+          <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
+          <TabsTrigger value="tomorrow">Tomorrow</TabsTrigger>
+        </TabsList>
+        <TabsContent value="yesterday" className="mt-4">{renderYesterday()}</TabsContent>
+        <TabsContent value="tomorrow" className="mt-4"><TomorrowPlan /></TabsContent>
+      </Tabs>
+    </div>
   );
 }
 
