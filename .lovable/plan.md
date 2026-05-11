@@ -1,31 +1,85 @@
-## Plan: Auto-update jobs board from GitHub workflow results
+## What’s actually happening
 
-**1. Schema (migration)** — add CI linkage columns to `discussion_actions`:
-- `ci_workflow_file text` (e.g. `lint-and-typecheck.yml`) — null = no link
-- `ci_branch text default 'main'`
-- `ci_close_on_success boolean default false` — opt-in auto-close
-- `ci_last_status text`, `ci_last_conclusion text`, `ci_last_run_id bigint`, `ci_last_run_url text`, `ci_last_checked_at timestamptz`
-- `ci_last_run_sha text`
-- Index on `(ci_workflow_file) where ci_workflow_file is not null and status='open'`
+The GitHub errors are real, and I can see them now.
 
-Trigger extension: emit `ci_status_changed` and `ci_auto_closed` events into `discussion_action_events`.
+Latest public runs on `cjaisingh/verdent-ideas-spark` show multiple genuine failures on `main`:
+- `CI` → failed
+- `Lint & Typecheck` → failed
+- `Deploy Production` → failed
+- `CodeQL` → failed
+- `Security audit` → failed
 
-**2. Edge function `ci-status-sync`** (wrapped with `withLogger`):
-- Auth: `x-awip-service-token` (cron) or operator JWT
-- Loops every open action with `ci_workflow_file != null`
-- Polls `GET /repos/cjaisingh/verdent-ideas-spark/actions/workflows/{file}/runs?branch={branch}&per_page=1`
-- Updates the `ci_*` columns; if conclusion=`success` and `ci_close_on_success=true`, sets `status='done'` and inserts a `ci_auto_closed` event
-- Returns `{ checked, updated, auto_closed }` summary
+This is not a GitHub outage, and the jobs-board auto-sync does not fix the workflows themselves — it only mirrors workflow status into the app.
 
-**3. Cron** — pg_cron every 30 min via `supabase--insert` (anon key + service token, follows existing pattern). Job name: `ci-status-sync-30m`.
+## Why those workflows are failing
 
-**4. Backfill links** — wire the obvious open jobs to their workflows:
-- `#594fb59b` "Lint regression" → `lint-and-typecheck.yml`, `ci_close_on_success=true`
-- `#bf7df716` "Unverified Branch Protection" — no workflow; leave unlinked (it's a GitHub settings check, handled separately later)
-- Also link `#ee7937ce` "Replace ~480 no-explicit-any" → `lint-and-typecheck.yml` but `ci_close_on_success=false` (just track status, not auto-close — closure needs human review)
+### 1) CI / Lint / Deploy are failing because the repo is currently lint-red
+I reproduced the failure locally from the repo scripts. Current hard ESLint errors include:
+- `e2e-playwright/fixtures/auth.ts` — Playwright fixture callback uses a parameter named `use`, which trips `react-hooks/rules-of-hooks`
+- `src/components/AutomationPanel.tsx` — unused-expression, useless escape, prefer-const issues
+- `src/components/EvidencePanel.tsx` — `prefer-const`
 
-**5. Surface (minimal)** — `JobDetailsDrawer.tsx` already shows the activity log; `ci_status_changed` events render automatically. No new UI.
+Because `ci.yml` and `deploy-production.yml` both run `bun run lint`, they fail immediately once lint is red.
 
-**6. Docs + memory** — `docs/jobs-board.md` gets a new section "CI auto-sync"; mem entry under `mem://features/jobs-board-risk` updated with the linkage convention.
+### 2) Security audit is failing from env/workflow setup, not just GitHub itself
+The security suite requires real E2E operator credentials and backend env vars. The test harness expects:
+- `E2E_OPERATOR_EMAIL`
+- `E2E_OPERATOR_PASSWORD`
+- plus the E2E backend vars
 
-Risk: `low`. Read-only on GitHub side; only writes are status updates on rows that explicitly opt in via `ci_close_on_success`. Safe to night-shift if ever needed.
+The workflow is wired to a GitHub `staging` environment and is sensitive to secret naming / presence there. The local run fails immediately when those E2E vars are absent, which matches the kind of fast failure shown in your screenshots.
+
+### 3) CodeQL is likely failing because the workflow is using generic `autobuild` on a Bun/Vite repo
+`codeql.yml` currently does:
+- checkout
+- CodeQL init
+- `github/codeql-action/autobuild`
+- analyze
+
+That pattern is often fragile on Bun projects. This repo likely needs an explicit JS/TS setup flow instead of relying on `autobuild`.
+
+## Why my earlier answer was incomplete
+
+I checked workflow status and branch settings, but I had not yet drilled into the actual failing workflow definitions and reproduced the repo scripts behind them. That part is on me.
+
+## Plan to fix it
+
+### 1) Make the repo green again
+- Fix the current ESLint-breaking files
+- Re-run the same scripts GitHub runs (`lint`, targeted tests)
+- Ensure `CI`, `Lint & Typecheck`, and `Deploy Production` stop failing on lint
+
+### 2) Harden `codeql.yml`
+- Replace or adjust `autobuild` for this Bun/Vite TypeScript project
+- Use an explicit setup that matches the repo instead of the generic default
+- Re-test on the next push
+
+### 3) Reconcile the security-audit workflow with the required secrets
+- Verify the workflow’s expected GitHub environment secrets against the test harness
+- Align any mismatched names/docs
+- Make the job either run successfully with the configured secrets or fail with a clearer reason
+
+### 4) Clean up the jobs board linkage
+- Keep the jobs-board auto-sync
+- Update linked jobs so they reflect the real blockers: lint failures, CodeQL workflow wiring, and security-audit env setup
+
+### 5) Verify from GitHub after the next push
+- Re-poll the live GitHub runs
+- Confirm which workflows go green and which, if any, still need follow-up
+
+## Technical details
+
+Files most likely needing changes:
+- `.github/workflows/codeql.yml`
+- `.github/workflows/security-audit.yml`
+- `e2e-playwright/fixtures/auth.ts`
+- `src/components/AutomationPanel.tsx`
+- `src/components/EvidencePanel.tsx`
+- possibly docs if secret names or workflow expectations are out of sync
+
+Success criteria:
+- `Lint & Typecheck` passes
+- `CI` passes
+- `Security audit` has valid env wiring and passes or fails with one explicit actionable cause
+- `CodeQL` runs successfully on the repo
+- I can confirm the result from the live GitHub API after the next push
