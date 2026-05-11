@@ -1643,6 +1643,15 @@ export type Database = {
       }
       discussion_actions: {
         Row: {
+          ci_branch: string | null
+          ci_close_on_success: boolean
+          ci_last_checked_at: string | null
+          ci_last_conclusion: string | null
+          ci_last_run_id: number | null
+          ci_last_run_sha: string | null
+          ci_last_run_url: string | null
+          ci_last_status: string | null
+          ci_workflow_file: string | null
           created_at: string
           created_by: string | null
           details: string | null
@@ -1665,6 +1674,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ci_branch?: string | null
+          ci_close_on_success?: boolean
+          ci_last_checked_at?: string | null
+          ci_last_conclusion?: string | null
+          ci_last_run_id?: number | null
+          ci_last_run_sha?: string | null
+          ci_last_run_url?: string | null
+          ci_last_status?: string | null
+          ci_workflow_file?: string | null
           created_at?: string
           created_by?: string | null
           details?: string | null
@@ -1687,6 +1705,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ci_branch?: string | null
+          ci_close_on_success?: boolean
+          ci_last_checked_at?: string | null
+          ci_last_conclusion?: string | null
+          ci_last_run_id?: number | null
+          ci_last_run_sha?: string | null
+          ci_last_run_url?: string | null
+          ci_last_status?: string | null
+          ci_workflow_file?: string | null
           created_at?: string
           created_by?: string | null
           details?: string | null
