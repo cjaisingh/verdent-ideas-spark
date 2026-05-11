@@ -3890,6 +3890,139 @@ export type Database = {
         }
         Relationships: []
       }
+      tomorrow_plan_blocks: {
+        Row: {
+          created_at: string
+          est_minutes: number | null
+          id: string
+          ordinal: number
+          plan_id: string
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          est_minutes?: number | null
+          id?: string
+          ordinal: number
+          plan_id: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          est_minutes?: number | null
+          id?: string
+          ordinal?: number
+          plan_id?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tomorrow_plan_blocks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tomorrow_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tomorrow_plan_items: {
+        Row: {
+          auto_done: boolean | null
+          block_id: string
+          created_at: string
+          detail: string | null
+          done_at: string | null
+          id: string
+          label: string
+          manual_done: boolean
+          notes: string | null
+          ordinal: number
+          source_kind: string
+          source_ref: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_done?: boolean | null
+          block_id: string
+          created_at?: string
+          detail?: string | null
+          done_at?: string | null
+          id?: string
+          label: string
+          manual_done?: boolean
+          notes?: string | null
+          ordinal: number
+          source_kind?: string
+          source_ref?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_done?: boolean | null
+          block_id?: string
+          created_at?: string
+          detail?: string | null
+          done_at?: string | null
+          id?: string
+          label?: string
+          manual_done?: boolean
+          notes?: string | null
+          ordinal?: number
+          source_kind?: string
+          source_ref?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tomorrow_plan_items_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "tomorrow_plan_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tomorrow_plans: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          plan_date: string
+          status: string
+          success_criteria: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          plan_date: string
+          status?: string
+          success_criteria?: Json
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          plan_date?: string
+          status?: string
+          success_criteria?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
