@@ -1,80 +1,213 @@
-## What's actually failing
 
-I pulled all 6 failing runs on commit `acce596` (main) using `GITHUB_REVIEWS_TOKEN`. They are **not 6 separate bugs** — they collapse into **3 root causes**, plus 1 repo-settings issue.
+# AWIP 30-Day Program: Stabilize → Harden → Commercialize
 
-| Workflow | Real failing step | Root cause group |
+Four phases, one per week. Each week delivers shippable artifacts and ends with a checkpoint. **No new agents, no new dashboards, no new AI surfaces** until Week 3.
+
+---
+
+## Guiding rules (apply to every week)
+
+1. **Discipline over creativity.** No feature outside this plan. Anything new goes to `discussion_actions` with `risk='low'` and is deferred.
+2. **Evidence is immutable.** Narratives can reference but never overwrite.
+3. **Every change is auditable.** Schema, cron, RLS, and ontology mutations log to `memory_audit_log`.
+4. **Verification before "done".** Each deliverable has a check listed; if it can't be verified from the sandbox, say so.
+
+---
+
+## Week 1 — Stabilize the Foundation
+
+### 1.1 Lock the ontology
+**Source of truth:** `docs/ontology.md` (markdown, git-versioned).
+**Surface:** `/ontology` page reads and renders it (no DB table, no editing UI yet).
+
+11 entities, each with: **ownership · lifecycle (states + transitions) · mutation rules · authority source · audit table · relationships**.
+
+| Entity | Authority | Audit table |
 |---|---|---|
-| Logger Validation | `scripts/check-logger-coverage.ts` exits 1 — 4 unwrapped functions | **A. Missing `withLogger`** |
-| Lint & Typecheck | `bun run lint` → 491 errors / 34 warnings | **B. ESLint regression** |
-| CI | same `bun run lint` | **B** |
-| Deploy Production | same `bun run lint` (gates the deploy) | **B** |
-| Security audit | `vitest e2e/*` → "Missing required env vars for e2e" | **C. Missing repo Secrets** |
-| CodeQL | "Code scanning is not enabled for this repository" | **D. Repo setting** |
+| task | `roadmap_tasks` | `roadmap_task_activity` |
+| finding | `sentinel_findings` / `roadmap_findings` | `*_events` |
+| lesson | `lessons` | append-only |
+| approval | `discussion_actions` (status transitions) | `discussion_action_events` |
+| event | `*_events` tables | self |
+| discussion | `roadmap_finding_discussions` | `discussion_action_events` |
+| workflow | cron jobs + edge fns | `cron.job_run_details` + logger |
+| roadmap item | `roadmap_phases` / `roadmap_tasks` | activity tables |
+| sign-off | `discussion_actions` w/ `status='shipped'` + reviewer | events |
+| action | `discussion_actions` | events |
+| review | `morning_reviews`, `deep_audits`, `awip_reviews` | self |
 
-### A. Logger Validation (introduced partly by me in the last turn)
+**Deliverables:** `docs/ontology.md`, `src/pages/Ontology.tsx`, nav link, memory entry `mem://features/ontology`.
+**Check:** `/ontology` renders all 11 entities; each has all 6 fields populated.
 
-`check-logger-coverage.ts` reports these handlers don't call `withLogger(...)`:
+### 1.2 Separate evidence / interpretation / narrative (HARD enforcement)
+**New table:** `public.table_layers (table_name pk, layer enum('evidence','interpretation','narrative'), notes)`.
 
-- `supabase/functions/companion-cloud-chat/index.ts`
-- `supabase/functions/gemini-tts/index.ts`
-- `supabase/functions/tomorrow-plan-refresh/index.ts`  ← created last turn, my miss
-- `supabase/functions/companion-context/index.ts`
+Seed it for every public table. Then:
 
-Fix: wrap each handler with `withLogger` from `_shared/logger.ts` (same pattern as `awip-reviews-pull` and friends). For the two companion functions, if there's a deliberate reason to skip logging (high request volume, streamed responses), add `// @logger-exempt: <reason>` at the top instead — but default is wrap.
+- **RLS guard** on evidence tables: add policy `block_narrative_writes` using a SECURITY DEFINER fn `public.is_narrative_caller()` that checks a per-request GUC `app.caller_layer` (set by edge functions via `set_config`). If caller layer = `narrative`, deny `UPDATE/DELETE` on evidence rows (INSERT to append-only evidence still allowed).
+- **Trigger guard** on evidence tables: `BEFORE UPDATE OR DELETE` raises if `current_setting('app.caller_layer', true) = 'narrative'`.
+- **Edge function convention:** every fn declares its layer at top via `setCallerLayer(supabase, 'narrative'|'interpretation'|'evidence')` helper in `_shared/layer.ts`. Logger validation script extended to require it.
 
-### B. ESLint regression (3 workflows, 1 cause)
+**Risk:** invasive — must inventory existing writes first. Mitigation: dry-run mode (log violations, don't block) for 48h before flipping to enforce.
 
-Sampling the lint output: **~480 of the 491 errors are `@typescript-eslint/no-explicit-any`**, plus a smaller cluster (`react-hooks/rules-of-hooks` in `authedPage`, `no-unused-expressions`, `no-useless-escape`). Pattern says the rule was promoted from `warn` → `error` (or eslint config bumped) — pre-existing `any` usages across the codebase suddenly became blocking.
+**Deliverables:** migration, `_shared/layer.ts`, dry-run flag in `memory_settings`, audit query `select * from layer_violations_recent`.
+**Check:** dry-run report shows zero violations from current code; flip to enforce; Sentinel watches `layer_violations` table.
 
-Two-step fix:
+### 1.3 Stabilize cron + events (full hardening)
+Audit, then fix.
 
-1. **Unblock now**: in `eslint.config.js` set `'@typescript-eslint/no-explicit-any': 'warn'` and run lint with `--max-warnings 9999` (or remove `--max-warnings`). Fix the ~11 *real* errors (the rules-of-hooks in `authedPage`, the unused expression on line 91, the useless escape).
-2. **Track the cleanup**: open a discussion_action "Replace 480 `any` usages" with `risk: low`, `night_eligible: true` so the night agent can chip away at it.
+**Audit (read-only):**
+- New page `/admin/cron-health` — for all 16 jobs: schedule, last 14 days runs, success rate, p95 duration, missed windows (gap > 1.5× schedule), idempotency-key coverage.
+- Markdown report saved to `docs/audits/cron-health-W1.md`.
 
-### C. Security audit — missing e2e env vars
+**Hardening:**
+- Add `correlation_id uuid` + `parent_event_id uuid` + `caller_layer text` to every `*_events` table missing them.
+- Edge functions: standard helper `withCorrelation(req)` that extracts/generates correlation id and propagates via `x-correlation-id` header to downstream invokes.
+- Replay tool: `/admin/cron-health` row action "Replay" → calls fn with original payload + new correlation id, marks as `replay_of=<original_id>`.
+- Deduplication: events get unique `(source, dedup_key)` index where `dedup_key` provided; helper rejects duplicates.
 
-`e2e/rls-matrix.test.ts`, `e2e/rls-role-matrix.test.ts`, `e2e/security-audit.test.ts` all bail with "Missing required env vars for e2e". The repo (or its Actions environment) is missing one of: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `AWIP_SERVICE_TOKEN`. **You** add these in GitHub → Settings → Secrets and variables → Actions for `verdent-ideas-spark`. I can't write to that repo's settings from here.
+**Deliverables:** migration, `_shared/correlation.ts`, `/admin/cron-health` page, `docs/audits/cron-health-W1.md`.
+**Check:** every event row from W1 onward has non-null `correlation_id`; replay produces a child event linked to parent.
 
-### D. CodeQL — repo setting
+### Week 1 checkpoint
+- `docs/ontology.md` complete · `/ontology` live · layer enforcement in dry-run · cron-health page live · all event tables have lineage columns.
 
-GitHub returned: "Code scanning is not enabled for this repository." Either enable Code Scanning in repo settings, or remove the CodeQL workflow if you don't want it.
+---
 
-## What I'll do in this implementation pass
+## Week 2 — Governance Hardening
 
-1. **Wrap the 4 edge functions with `withLogger`**
-   - `companion-cloud-chat/index.ts`
-   - `gemini-tts/index.ts`
-   - `tomorrow-plan-refresh/index.ts`
-   - `companion-context/index.ts`
-   - Read each one first, preserve streaming/SSE behavior, follow the existing `awip-reviews-pull` pattern.
-2. **Soften the lint rule + fix the ~11 real errors**
-   - Edit `eslint.config.js`: demote `@typescript-eslint/no-explicit-any` to `warn`.
-   - Find and fix:
-     - `authedPage` — convert from `function authedPage(...)` to a proper component or rename so the `use(...)` call is legal.
-     - The `no-unused-expressions` line.
-     - The `no-useless-escape` (`\-` → `-`).
-   - Leave the 480 `any`s alone for now.
-3. **Mirror the 4 root causes as `discussion_actions` in AWIP Core** so they show up in Tomorrow Plan / Sentinel instead of just inbox emails:
-   - `risk: critical` — "Logger Validation red on verdent-ideas-spark@main" (resolves on green run)
-   - `risk: high` — "Lint regression: 491 errors on verdent-ideas-spark@main"
-   - `risk: high`, `night_eligible: false` — "Security audit e2e missing GitHub Actions secrets" (you-only)
-   - `risk: low`, `night_eligible: true` — "Enable Code Scanning or drop CodeQL workflow"
-   - `risk: low`, `night_eligible: true` — "Replace 480 `@typescript-eslint/no-explicit-any` usages"
-   Each links to the relevant workflow run URL.
-4. **Update memory** — add a `mem://features/lint-policy` note recording that `no-explicit-any` is `warn` (not `error`) until the cleanup action is closed, so I don't accidentally re-promote it.
+### 2.1 Event taxonomy + severity model
+**New table:** `event_types (key pk, layer, severity_default, dedup_strategy, escalation_after_count, escalation_window, description)`. Seed with every event type currently emitted.
 
-## Out of scope (you / repo-settings only)
+`*_events.event_type` becomes FK to `event_types.key`. Severity column added: `info|notice|warn|error|critical`.
 
-- Adding the missing GitHub Actions secrets for the Security audit job (C).
-- Toggling Code Scanning on the repo (D).
-- Re-running the workflows — they'll re-run automatically on the next push that includes these fixes (assuming this project is mirrored to that repo; if not, I'll flag it).
+**Correlation/escalation rules** live in `event_types`:
+- `dedup_strategy`: `none | by_correlation | by_subject_hour | by_subject_day`
+- `escalation_after_count` + `escalation_window`: when threshold hit, auto-create `sentinel_finding` at next severity tier.
 
-## Verification plan
+**Surface:** `/admin/event-taxonomy` (read + edit, operator only).
 
-After the edit pass:
-- Run `grep -L "withLogger" supabase/functions/{companion-cloud-chat,gemini-tts,tomorrow-plan-refresh,companion-context}/index.ts` — should print nothing.
-- Confirm `eslint.config.js` change.
-- Confirm 4 new actions appear via `supabase--read_query` on `discussion_actions`.
-- Tell you the exact 2 follow-ups (C and D) you need to do in the GitHub UI.
+### 2.2 Operational state boundaries
+Document and enforce six lanes: **planning · execution · review · governance · lessons · intelligence**.
 
-I will **not** claim CI is green — I can't verify that until the next workflow run on that repo finishes. After the push lands I can re-poll the GitHub API and report back.
+Add `lane text` column to: `roadmap_tasks`, `roadmap_phases`, `discussion_actions`, `lessons`, `morning_reviews`, `deep_audits`, `sentinel_findings`. CHECK constraint to enum.
+
+Cross-lane rule: a `discussion_action` in lane=execution cannot mutate a row in lane=governance without an `approval_event`. Enforced via trigger on `discussion_actions.UPDATE`.
+
+`/ontology` page gains a "Lanes" tab showing the matrix.
+
+### 2.3 Confidence architecture
+Add to `findings`, `lessons`, `sentinel_findings`, `roadmap_findings`, `morning_reviews`, `awip_reviews`:
+- `evidence_confidence numeric(3,2)` 0–1
+- `operational_certainty numeric(3,2)` 0–1
+- `traceability_score numeric(3,2)` 0–1 (computed: % of supporting events still resolvable)
+- `validation_status enum('unvalidated','auto_validated','human_reviewed','disputed')`
+- `human_reviewer uuid` + `human_reviewed_at`
+
+UI badges everywhere these surface. Morning Review groups findings by validation_status.
+
+### Week 2 checkpoint
+- Event taxonomy seeded · severity propagating · lanes enforced · confidence visible on Morning Review and Sentinel pages.
+
+---
+
+## Week 3 — Productize the Discovery Engine
+
+> Commercialization track starts here. Internal AWIP work this week is **maintenance only**.
+
+### 3.1 Extract discovery primitives into `/discovery`
+You already have: stakeholder interviewing, evidence ingestion, synthesis, requirements clustering, human review, output generation. Surface them as a **single guided flow** under `/discovery`:
+
+1. **New engagement** form (client name, scope, stakeholders).
+2. **Interview capture** (uses existing companion + Gemini TTS; transcripts → `discovery_evidence`).
+3. **Synthesis** run (existing AI synthesis, scoped to engagement).
+4. **Cluster review** (human accept/reject/edit).
+5. **Output generation** (markdown report + optional PDF via `/mnt/documents`).
+
+**New tables:** `discovery_engagements`, `discovery_evidence`, `discovery_clusters`, `discovery_outputs` — all in `interpretation` layer except `discovery_evidence` (`evidence`).
+
+### 3.2 Consulting feedback loop
+- Every engagement auto-creates a `lesson` candidate at close referencing what AWIP got wrong/right.
+- `/discovery/engagements/:id/lessons` review surface; accepted lessons flow into existing weekly Lessons Loop.
+
+### 3.3 Soft authority content
+- `docs/case-studies/_template.md` + first stub.
+- LinkedIn-post drafts under `docs/content/linkedin/` (3 drafts/week, no automation).
+
+### Week 3 checkpoint
+- `/discovery` runs end-to-end with a fake engagement · one case-study stub committed · 3 LinkedIn drafts ready.
+
+---
+
+## Week 4 — Controlled Expansion + Architecture Docs
+
+### 4.1 Architecture documents (the missing brain)
+Create under `docs/architecture/`:
+- `00-overview.md` — system map
+- `01-ontology-map.md` — entity diagram (mermaid)
+- `02-lifecycle-maps.md` — state machines per entity (mermaid)
+- `03-event-flow.md` — emission → correlation → escalation (mermaid)
+- `04-governance-model.md` — lanes, approvals, sign-offs
+- `05-operational-contracts.md` — `awip-api` endpoints, idempotency, auth
+- `06-layer-enforcement.md` — evidence/interpretation/narrative
+
+Render at `/architecture` (same pattern as `/ontology`).
+
+### 4.2 Package the discovery offering
+- `docs/discovery-offering.md` — pricing tiers, deliverables, timeline, exclusions.
+- `docs/discovery-sow-template.md` — SOW template.
+- One page on the public site: `/services/discovery`.
+
+### 4.3 Controlled roadmap review
+- Run a Deep Audit scoped to "feature explosion check": flag any open `discussion_action` not mapped to a documented capability or ontology entity.
+- Output → `docs/audits/feature-discipline-W4.md`.
+- Auto-create `discussion_actions` (risk=low) to retire or document each orphan.
+
+### 4.4 AWIP governance hardening (final pass)
+- Branch protection on `main` (manual: requires user action in GitHub).
+- All cron jobs must reference an `event_type`; lint fails otherwise.
+- All edge functions must declare a `lane`; logger-coverage script extended.
+
+### Week 4 checkpoint
+- 7 architecture docs live · `/architecture` page · discovery offering packaged · feature-discipline audit run · governance lints enforcing.
+
+---
+
+## Out of scope (explicit refusals)
+
+- ❌ New agents beyond what exists
+- ❌ New AI dashboards
+- ❌ New operational layers beyond the 3 declared
+- ❌ Any commercialization beyond Discovery (no AWIP sales yet)
+- ❌ Any schema change not listed above
+
+---
+
+## Technical details (for implementation phase)
+
+**Migrations (W1):** `table_layers`, `is_narrative_caller()`, layer policies on every evidence table, lineage columns on `*_events`, `replay_of` column.
+**Migrations (W2):** `event_types`, FK + severity on events, `lane` columns + CHECK, confidence columns + `validation_status` enum.
+**Migrations (W3):** 4 discovery tables.
+**Edge functions:** `_shared/layer.ts`, `_shared/correlation.ts`; modify every existing fn to call both helpers (mechanical change, ~22 fns).
+**New pages:** `/ontology`, `/admin/cron-health`, `/admin/event-taxonomy`, `/discovery/*` (5 sub-routes), `/architecture`.
+**Logger script extension:** assert `setCallerLayer` and `withCorrelation` calls in every non-exempt fn.
+
+**Verification matrix:**
+| Deliverable | How to verify from sandbox |
+|---|---|
+| Ontology doc + page | `code--view docs/ontology.md` + visit `/ontology` |
+| Layer enforcement | Insert test row from narrative-tagged fn → expect error |
+| Cron lineage | `select count(*) from x_events where correlation_id is null and created_at > 'W1'` → 0 |
+| Event taxonomy | All `*_events.event_type` resolve to `event_types.key` |
+| Lanes | `select count(*) from discussion_actions where lane is null` → 0 |
+| Discovery flow | Run with seed engagement, confirm output written to `/mnt/documents` |
+| Architecture docs | 7 files exist + `/architecture` renders |
+| CI mirror | Poll `cjaisingh/verdent-ideas-spark` runs after each push, link in checkpoint notes |
+
+---
+
+## What this plan refuses to promise
+
+- I can't verify branch protection, GitHub Secrets, or CodeQL settings from the sandbox — those remain user actions.
+- Consulting engagements / LinkedIn posting are calendar items, not code.
+- "Stabilize" doesn't mean "zero failures" — it means **observable, replayable, deduplicated**.
