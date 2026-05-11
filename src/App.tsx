@@ -39,6 +39,7 @@ import CopilotProfile from "./pages/CopilotProfile";
 import NightShifts from "./pages/NightShifts";
 import NightShift from "./pages/NightShift";
 import OvernightOverview from "./pages/OvernightOverview";
+import OvernightActivity from "./pages/OvernightActivity";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
 import AdminCronHealth from "./pages/AdminCronHealth";
@@ -84,6 +85,7 @@ const App = () => (
             <Route path="/night-shifts" element={<NightShifts />} />
             <Route path="/admin/night-shift" element={<NightShift />} />
             <Route path="/overnight" element={<OvernightOverview />} />
+            <Route path="/overnight-activity" element={<OvernightActivity />} />
             <Route path="/ai-usage" element={<AiUsage />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />

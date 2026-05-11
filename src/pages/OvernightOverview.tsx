@@ -151,13 +151,18 @@ const OvernightOverview = () => {
 
   return (
     <div className="p-6 space-y-4 max-w-6xl">
-      <header>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Activity className="h-5 w-5" /> Overnight overview
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Snapshot of the overnight automation: last shift, upcoming windows, queued phases, recent failures.
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <Activity className="h-5 w-5" /> Overnight overview
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Snapshot of the overnight automation: last shift, upcoming windows, queued phases, recent failures.
+          </p>
+        </div>
+        <Link to="/overnight-activity" className="text-xs text-primary hover:underline whitespace-nowrap mt-1">
+          7-day activity →
+        </Link>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
