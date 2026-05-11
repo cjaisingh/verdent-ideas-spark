@@ -176,7 +176,7 @@ export default function MorningReview() {
         <OvernightRetroLine reviewDate={review.review_date} />
 
         <div className="grid md:grid-cols-2 gap-4">
-          <Section anchor="stuck-cron-jobs" title="Stuck cron jobs" triage={triage} empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
+          <Section anchor="stuck-cron-jobs" title="Stuck cron jobs" triage={triage} onFocus={openPanel} panelData={review.stuck_jobs} empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
             {review.stuck_jobs.map((s) => (
               <div key={s.job} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -190,7 +190,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="promotion-drift" title="Promotion-vs-shipping drift" triage={triage} empty={!review.promotion_drift.length} emptyMsg="No drift in last 72h.">
+          <Section anchor="promotion-drift" title="Promotion-vs-shipping drift" triage={triage} onFocus={openPanel} panelData={review.promotion_drift} empty={!review.promotion_drift.length} emptyMsg="No drift in last 72h.">
             {review.promotion_drift.map((d) => (
               <div key={d.action_id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -204,7 +204,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="night-throughput" title="Night throughput" triage={triage} empty={!review.night_throughput?.shifts} emptyMsg="No shifts in last 24h.">
+          <Section anchor="night-throughput" title="Night throughput" triage={triage} onFocus={openPanel} panelData={review.night_throughput} empty={!review.night_throughput?.shifts} emptyMsg="No shifts in last 24h.">
             <div className="text-sm space-y-1">
               <div>Shifts: <strong>{review.night_throughput?.shifts ?? 0}</strong> ({review.night_throughput?.completed_shifts ?? 0} completed)</div>
               <div>Last window end: {review.night_throughput?.last_window_end ?? "—"}</div>
@@ -214,7 +214,7 @@ export default function MorningReview() {
             </div>
           </Section>
 
-          <Section anchor="open-findings" title="Open findings (medium+)" triage={triage} empty={!review.open_findings.length} emptyMsg="No open findings.">
+          <Section anchor="open-findings" title="Open findings (medium+)" triage={triage} onFocus={openPanel} panelData={review.open_findings} empty={!review.open_findings.length} emptyMsg="No open findings.">
             {review.open_findings.slice(0, 10).map((f) => (
               <div key={f.id} className="flex items-start justify-between gap-2 text-sm border-b border-border/40 py-2 last:border-0">
                 <div className="flex-1">
@@ -226,7 +226,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="top-actions" title="Top 5 actions" triage={triage} empty={!review.top_actions.length} emptyMsg="No open actions.">
+          <Section anchor="top-actions" title="Top 5 actions" triage={triage} onFocus={openPanel} panelData={review.top_actions} empty={!review.top_actions.length} emptyMsg="No open actions.">
             {review.top_actions.map((a) => (
               <div key={a.action_id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
@@ -240,7 +240,7 @@ export default function MorningReview() {
             ))}
           </Section>
 
-          <Section anchor="revisit" title="Revisit (deferred items due)" triage={triage} empty={!review.revisit_items.length} emptyMsg="Nothing due.">
+          <Section anchor="revisit" title="Revisit (deferred items due)" triage={triage} onFocus={openPanel} panelData={review.revisit_items} empty={!review.revisit_items.length} emptyMsg="Nothing due.">
             {review.revisit_items.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
