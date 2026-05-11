@@ -45,7 +45,7 @@ jobs:
       # Explicit setup for Bun + TypeScript instead of relying on autobuild,
       # which is fragile on Bun/Vite repos and was the cause of CodeQL failing.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -54,7 +54,7 @@ jobs:
           build-mode: none
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         # Non-blocking: a transient analyzer failure (or the well-known
         # "default setup is enabled" SARIF rejection — see docs/ci-cd.md
         # § "CodeQL: default vs advanced setup") should not email red on
