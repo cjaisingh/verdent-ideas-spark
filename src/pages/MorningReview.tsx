@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import TomorrowPlan from "@/components/morning-review/TomorrowPlan";
 import TriageChip from "@/components/morning-review/TriageChip";
 import DiscussNextStrip, { type PanelEntry } from "@/components/morning-review/DiscussNextStrip";
+import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDrawer";
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
 import { cn } from "@/lib/utils";
 
