@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckCircle2, AlertCircle, Loader2, RefreshCcw, ArrowUpRight, BookOpen } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import TomorrowPlan from "@/components/morning-review/TomorrowPlan";
 
 type Review = {
   id: string;
