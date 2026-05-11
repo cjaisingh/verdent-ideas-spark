@@ -1,45 +1,38 @@
-## Plan: Credit-efficiency pass
+# Fix remaining GitHub Actions failures
 
-### What I checked first
-- 7-day AI Gateway spend across all jobs: **$0.032 total** (11 + 1 + 2 + 1 + 3 calls). The expensive-looking routes (`google/gemini-2.5-pro` in `awip-api:analyze-transcript`, `finding-discuss-copilot`) haven’t fired in the last week.
-- Night model policy is already in place (`pickModel` → `gemini-2.5-flash-lite` 22:00–06:00 UTC) and most non-realtime jobs route through it.
-- `daily-plan` and `lessons-synthesize` are correctly on flash-lite.
-- `route-operator-message:reply` is on `gpt-5-mini` and is not gated by `pickModel`.
-- `awip-api:analyze-transcript` and `finding-discuss-copilot` are hardcoded to `gemini-2.5-pro` with no night fallback.
+Two workflows are red. Each has a confirmed root cause from the failed-run logs.
 
-**Conclusion:** AI Gateway spend is not a real cost lever right now — it’s sub-cent per day. The credits you’re burning are **Lovable editor credits**, driven by my behavior, not by the app’s model routing.
+## 1. CodeQL — setup conflict
 
-So the pass splits into two parts.
+**Failure:** `CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled`
 
-### Part A — Tiny model-routing tightening (low impact, but cheap to do)
-1. Wrap the three remaining hardcoded routes through `pickModel` so they auto-cheapen at night without changing daytime behavior:
-   - `route-operator-message:reply` — `pickModel("openai/gpt-5-mini")`.
-   - `awip-api:analyze-transcript` — `pickModel("google/gemini-2.5-pro")`.
-   - `finding-discuss-copilot` — `pickModel("google/gemini-2.5-pro")`.
-2. Add a one-line note in `mem://features/night-cheap-models` listing the three routes now covered.
-3. No new tables, no UI, no cron changes. ~10-line diff per function.
+**Cause:** The repo has both `.github/workflows/codeql.yml` (advanced) AND GitHub's built-in default CodeQL setup turned on. GitHub rejects SARIF uploads from the workflow.
 
-This is bookkeeping rather than savings — at current volume it’s a couple of cents a month — but it makes the policy uniform so a future spike doesn’t leak.
+**Fix (operator action — not code):**
+On GitHub → repo `cjaisingh/verdent-ideas-spark` → **Settings → Code security → CodeQL analysis** → switch from **Default** to **Advanced** (or click **Disable** on default setup). This makes the in-repo `codeql.yml` the only source.
 
-### Part B — Editor-credit guardrails (the real lever)
-Codify behavior in `mem://~user` (your personal preferences, applies to every project) so I stop burning credits on exploration when you ask narrow questions. Concretely, I’d add:
+I'll update `docs/ci-cd.md` to make this step more prominent (it's already documented but easy to miss).
 
-- **Narrow-question rule:** if your message names a specific file/symbol/error, I answer or fix in-place — no codebase sweep, no extra file reads, no plan unless asked.
-- **Diagnose-before-fix rule:** when something external is failing (CI, deploy, GitHub), reproduce the exact failing command or pull the actual error log first; never propose a fix from inference.
-- **No re-summarizing:** I don’t restate context already loaded in the message.
-- **Plan-mode default for ambiguous asks:** flat 1 credit to align scope is cheaper than a wrong build pass.
-- **Stop on first green signal:** when a fix verifies (build/test/log), I stop — no extra polish, no tangential cleanups.
+## 2. Deploy Staging / Production — missing project ref
 
-These go into your user-level memory so they apply across every project, not just AWIP.
+**Failure:** `supabase db push --linked` exits 1 because there's no linked project (no `supabase/.temp/project-ref` in CI checkout).
 
-### What I will NOT do
-- No new dashboards, no “credit usage” page, no cron job to track Lovable editor credits (that data isn’t exposed to the app).
-- No model swap on `companion-cloud-chat` defaults — operator picks the model there intentionally.
-- No changes to TTS routing (already exempt by design).
+**Cause:** `--linked` only works when the CLI has a project ref recorded locally. In CI we have to pass it explicitly.
 
-### Risk
-Low. Part A is three localized edits behind an existing helper; Part B is memory text only.
+**Fix (code, in `.github/workflows/`):**
+- `deploy-staging.yml` → change push step to:
+  ```yaml
+  run: supabase db push --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+  ```
+  (drop `--linked`; env vars already set: `SUPABASE_PROJECT_ID` = `SUPABASE_STAGING_PROJECT_ID`, `SUPABASE_DB_PASSWORD` = `SUPABASE_STAGING_DB_PASSWORD`)
+- `deploy-production.yml` → identical change with prod secrets.
 
-### Expected outcome
-- AI Gateway: night-mode coverage goes from “most” to “all” jobs.
-- Editor credits: fewer wasted exploration turns on narrow asks; faster, cheaper responses.
+No new secrets needed.
+
+## 3. Verify
+
+After the push lands on the mirror, poll the GitHub API with `GITHUB_REVIEWS_TOKEN` until both workflows show `conclusion: success` on the next triggering run. CodeQL won't go green until you also flip the GitHub setting in step 1 — I'll flag that explicitly if it's still red.
+
+## Out of scope
+
+No model routing changes, no new workflows, no branch-protection edits. Stop on first green signal.
