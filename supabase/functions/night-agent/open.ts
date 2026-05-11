@@ -215,6 +215,13 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     });
     auditedCount++;
 
+    // 6b. record attempt for the 3-strikes auto-escalator
+    await sb.from("night_shift_job_attempts").insert({
+      action_id: job.id,
+      night_shift_id: shiftId,
+      outcome: qaPassed ? "progressed" : "no_change",
+    });
+
     // 7. always-propose, audit attached
     const rationale = `Audit: 5 steps · worst=${worst} · ${qaPassed ? "qa pass" : "qa fail — review before accept"}`;
     await sb.from("night_proposals").insert({
