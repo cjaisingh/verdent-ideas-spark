@@ -1516,6 +1516,84 @@ export type Database = {
         }
         Relationships: []
       }
+      decision_authorities: {
+        Row: {
+          created_at: string
+          entity: string
+          field: string
+          id: string
+          notes: string | null
+          override_policy: string
+          precedence: number
+          source: string
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          entity: string
+          field?: string
+          id?: string
+          notes?: string | null
+          override_policy?: string
+          precedence: number
+          source: string
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          entity?: string
+          field?: string
+          id?: string
+          notes?: string | null
+          override_policy?: string
+          precedence?: number
+          source?: string
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
+      decision_authority_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          created_at: string
+          entity: string
+          event_type: string
+          field: string
+          id: string
+          payload: Json
+          rule_id: string | null
+          source: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          entity: string
+          event_type: string
+          field: string
+          id?: string
+          payload?: Json
+          rule_id?: string | null
+          source: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          entity?: string
+          event_type?: string
+          field?: string
+          id?: string
+          payload?: Json
+          rule_id?: string | null
+          source?: string
+        }
+        Relationships: []
+      }
       deep_audit_runs: {
         Row: {
           cadence: string
@@ -4355,6 +4433,10 @@ export type Database = {
           deleted: number
           table_name: string
         }[]
+      }
+      resolve_truth: {
+        Args: { _entity: string; _entity_id: string; _field?: string }
+        Returns: Json
       }
       retention_stats: {
         Args: never
