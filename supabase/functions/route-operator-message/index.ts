@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { withLogger } from "../_shared/logger.ts";
 import { logAiUsage } from "../_shared/ai-usage.ts";
+import { pickModel } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -284,7 +285,7 @@ Deno.serve(withLogger("route-operator-message", async (req) => {
         now: new Date().toISOString(),
       };
 
-      const replyModel = 'openai/gpt-5-mini';
+      const replyModel = pickModel('openai/gpt-5-mini');
       const replyStart = Date.now();
       const aiRes = await fetch(AI_URL, {
         method: 'POST',

@@ -1,47 +1,45 @@
-## Plan: Resolve the remaining GitHub CodeQL error
+## Plan: Credit-efficiency pass
 
-**What’s actually broken**
-The new GitHub error is not from app code, lint, or Bun. The `CodeQL` workflow now completes extraction, but GitHub rejects the uploaded results with:
+### What I checked first
+- 7-day AI Gateway spend across all jobs: **$0.032 total** (11 + 1 + 2 + 1 + 3 calls). The expensive-looking routes (`google/gemini-2.5-pro` in `awip-api:analyze-transcript`, `finding-discuss-copilot`) haven’t fired in the last week.
+- Night model policy is already in place (`pickModel` → `gemini-2.5-flash-lite` 22:00–06:00 UTC) and most non-realtime jobs route through it.
+- `daily-plan` and `lessons-synthesize` are correctly on flash-lite.
+- `route-operator-message:reply` is on `gpt-5-mini` and is not gated by `pickModel`.
+- `awip-api:analyze-transcript` and `finding-discuss-copilot` are hardcoded to `gemini-2.5-pro` with no night fallback.
 
-`CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled`
+**Conclusion:** AI Gateway spend is not a real cost lever right now — it’s sub-cent per day. The credits you’re burning are **Lovable editor credits**, driven by my behavior, not by the app’s model routing.
 
-That means the repository currently has **two conflicting CodeQL systems enabled at the same time**:
-- GitHub’s built-in **default setup**
-- this repo’s custom **`.github/workflows/codeql.yml` advanced setup**
+So the pass splits into two parts.
 
-Only one can be active.
+### Part A — Tiny model-routing tightening (low impact, but cheap to do)
+1. Wrap the three remaining hardcoded routes through `pickModel` so they auto-cheapen at night without changing daytime behavior:
+   - `route-operator-message:reply` — `pickModel("openai/gpt-5-mini")`.
+   - `awip-api:analyze-transcript` — `pickModel("google/gemini-2.5-pro")`.
+   - `finding-discuss-copilot` — `pickModel("google/gemini-2.5-pro")`.
+2. Add a one-line note in `mem://features/night-cheap-models` listing the three routes now covered.
+3. No new tables, no UI, no cron changes. ~10-line diff per function.
 
-## Recommended fix
+This is bookkeeping rather than savings — at current volume it’s a couple of cents a month — but it makes the policy uniform so a future spike doesn’t leak.
 
-**1. Confirm repo security mode**
-- Verify that GitHub repository code scanning is still on **default setup**.
-- Treat this as the root cause unless the repo state changed after the last run.
+### Part B — Editor-credit guardrails (the real lever)
+Codify behavior in `mem://~user` (your personal preferences, applies to every project) so I stop burning credits on exploration when you ask narrow questions. Concretely, I’d add:
 
-**2. Move GitHub to advanced setup**
-- Disable CodeQL default setup in the repository’s GitHub security settings so the checked-in `codeql.yml` becomes the only active CodeQL source.
-- Keep the repo-managed workflow as the source of truth, since it is versioned and auditable.
+- **Narrow-question rule:** if your message names a specific file/symbol/error, I answer or fix in-place — no codebase sweep, no extra file reads, no plan unless asked.
+- **Diagnose-before-fix rule:** when something external is failing (CI, deploy, GitHub), reproduce the exact failing command or pull the actual error log first; never propose a fix from inference.
+- **No re-summarizing:** I don’t restate context already loaded in the message.
+- **Plan-mode default for ambiguous asks:** flat 1 credit to align scope is cheaper than a wrong build pass.
+- **Stop on first green signal:** when a fix verifies (build/test/log), I stop — no extra polish, no tangential cleanups.
 
-**3. Keep the workflow, don’t rewrite it blindly**
-- Leave `.github/workflows/codeql.yml` in advanced mode.
-- Only make a code change if a second issue appears after default setup is turned off.
-- If needed, then update the workflow to `github/codeql-action@v4` in a follow-up pass rather than guessing before the configuration conflict is removed.
+These go into your user-level memory so they apply across every project, not just AWIP.
 
-**4. Re-run and verify**
-- Poll the latest CodeQL run on GitHub after the config switch.
-- Confirm the run reaches successful SARIF processing and no longer fails in `Perform CodeQL analysis`.
+### What I will NOT do
+- No new dashboards, no “credit usage” page, no cron job to track Lovable editor credits (that data isn’t exposed to the app).
+- No model swap on `companion-cloud-chat` defaults — operator picks the model there intentionally.
+- No changes to TTS routing (already exempt by design).
 
-**5. Jobs board follow-through**
-- If the run turns green, allow the existing CI auto-sync to update any linked job rows.
-- If it still fails, capture the new concrete error and fix that specific next issue instead of another broad GitHub pass.
+### Risk
+Low. Part A is three localized edits behind an existing helper; Part B is memory text only.
 
-## Technical notes
-- Evidence from the current failed run (`25678261755`) shows:
-  - `Initialize CodeQL`: success
-  - extraction/analysis: success
-  - upload rejection message: `advanced configurations cannot be processed when the default setup is enabled`
-- This is a **GitHub repository configuration conflict**, not a TypeScript/lint/build failure.
-- No app or database changes are required unless we choose to add a small doc note about “default vs advanced CodeQL” afterward.
-
-## Expected outcome
-- CodeQL stops failing for the current repo configuration reason.
-- The remaining GitHub issue becomes either resolved outright or narrowed to a new, much smaller follow-up error.
+### Expected outcome
+- AI Gateway: night-mode coverage goes from “most” to “all” jobs.
+- Editor credits: fewer wasted exploration turns on narrow asks; faster, cheaper responses.

@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { withLogger } from "../_shared/logger.ts";
 import { logAiUsage } from "../_shared/ai-usage.ts";
+import { pickModel } from "../_shared/model-policy.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -102,7 +103,7 @@ ${finding.body ?? "(no body)"}`;
       { role: "user", content: userMessage },
     ];
 
-    const MODEL = "google/gemini-2.5-pro";
+    const MODEL = pickModel("google/gemini-2.5-pro");
     const aiStart = Date.now();
     const upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { scanLesson, describeIssues } from "./lessonSafety.ts";
 import { withLogger } from "../_shared/logger.ts";
 import { logAiCall } from "../_shared/ai-usage.ts";
+import { pickModel } from "../_shared/model-policy.ts";
 import {
   evaluateCapability,
   refineConnectorsGate,
@@ -1726,7 +1727,7 @@ async function analyzeTranscript(id: string) {
 Active lessons (these were already in force):
 ${lessonBlock}`;
 
-  const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+  const ANALYSIS_MODEL = pickModel("google/gemini-2.5-pro");
   const aiStart = Date.now();
   const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",

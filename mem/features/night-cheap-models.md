@@ -11,6 +11,10 @@ type: feature
 - `daily-plan` (was already flash-lite, now goes through helper)
 - `scheduled-code-review` (daytime gemini-2.5-flash → flash-lite at night)
 - `discussion-extract-actions` (daytime gemini-2.5-flash → flash-lite at night)
+- `companion-extract-actions`, `lessons-synthesize`, `awip-reviews-pull`, `snapshot-daily-report` (all daytime gemini-2.5-flash → flash-lite at night)
+- `route-operator-message:reply` (daytime gpt-5-mini → flash-lite at night)
+- `awip-api:analyze-transcript` (daytime gemini-2.5-pro → flash-lite at night)
+- `finding-discuss-copilot` (daytime gemini-2.5-pro → flash-lite at night)
 - `overnight-phase-runner` (always forced to flash-lite)
 
 **Overnight phase queue**:
