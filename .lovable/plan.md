@@ -1,101 +1,62 @@
-## Goal
+## Revised plan for today (overnight diff applied)
 
-Make "is this safe to let the Night Agent touch?" an explicit, structured decision instead of an operator hunch. Today `priority` is the only signal and it conflates "do soon" with "would hurt if wrong" — which is exactly the wrong knob to gate autonomy on.
+### What changed since yesterday's draft
 
-## Proposal: add `risk`, gate night eligibility on it
+- ✅ **`overnight-phase-runner-15m` recovered** — ran 05:45 UTC, sentinel finding auto-resolved. Drop from the day.
+- ⚠️ **`qa-validate` still flapping** — ran once at 22:00 UTC last night, then silent 495 min. Severity still **high**. Stays in Block 1.
+- 🆕 **`lessons-synthesize` never run** — new low-severity sentinel finding (cadence 7d, hasn't fired since the last attempt yesterday at 05:00). Add to Block 1 as a quick triage.
+- ⚠️ **`night-agent-close` did not run this morning** — `cron_last_seen` is still yesterday's timestamp. Not yet flagged by sentinel (cadence not in `SENTINEL_CADENCES`), but morning review shows it. Worth a 5-min look.
+- The 2 in-progress jobs (TaskJanitor logging + 13-closed-tasks audit) are **unchanged** since May 8 — same priority.
+- Open jobs count: still 15. AWIP-review intake (10 items from yesterday) is untouched.
 
-### 1. New field: `discussion_actions.risk`
+### Block 1 — Day shift only (≈ 75 min): finish unbreaking the crons
 
-- Enum: `low | med | high | critical` (mirrors priority for muscle memory).
-- Default `med` on insert (safe-ish middle).
-- Separate from `priority`. Priority = when, risk = blast radius if wrong.
-- Backfill: every existing row → `med`. Operator can re-tier from the drawer.
+1. **`qa-validate` — silent 495 min, ran 22:00 UTC then stopped.**
+   - Pattern (one run, then nothing) suggests the cron schedule itself is wrong, not auth. Check `cron.job` row for `qa-validate` — may be set to daily instead of hourly.
+   - If schedule is right, look at `automation_runs` for the 22:00 row — see whether it errored after insert.
 
-Rubric (shipped as tooltip + `docs/jobs-board.md`):
+2. **`night-agent-close` — last seen 2026-05-10 06:00, missed this morning.**
+   - 5-minute check: `cron.job` schedule + last edge-function log. May be the same root cause as `qa-validate` (cron drift).
 
-- **critical** — touches auth, billing, RLS, prod data migrations, or anything irreversible. Day shift, two-pair-of-eyes.
-- **high** — schema changes, edge-function contracts, cross-project surfaces, customer-visible UX. Day shift.
-- **med** — internal pages, copy, non-destructive refactors, doc updates with code touches. Night-shift OK.
-- **low** — pure docs, comments, lint fixes, dependency bumps inside semver-patch. Night-shift OK.
+3. **`lessons-synthesize` — never run.**
+   - Cadence is weekly (Mondays). Today **is** Monday. Either it'll fire later today (in which case the finding self-resolves) or the cron is missing. Confirm the schedule exists; do not panic-fix.
 
-### 2. Night-eligibility gate
+Exit criteria: `qa-validate` finding resolves on next sentinel tick OR a `discussion_action` is opened with the root cause. Night-agent-close runs tomorrow morning.
 
-- DB-level guard via trigger on `discussion_actions`:
-  - If `risk in ('high','critical')` then force `night_eligible = false` on insert/update.
-  - Operator can still flip the moon toggle, but the trigger reverts it and surfaces a toast: *"Risk = high — day shift only. Lower risk first."*
-- Hard override path: a new column `night_override_reason text`. If set (non-empty), the trigger respects `night_eligible = true` even at high/critical and writes a `discussion_action_events` row of type `night_override`. Critical risk **never** overrides — that one is a hard no.
-- Night Agent query stays `night_eligible = true` — the gate is enforced at write-time, so no edge-function changes needed.
+### Block 2 — Close the 2 stale in-progress jobs (≈ 2 h)
 
-### 3. Auto-classification on intake
+Unchanged from yesterday's plan, still the highest-leverage items:
 
-- The proposal extractor (`ProposalReviewSheet` / `awip-reviews-pull` / quarterly opener) already picks `priority`. Extend the same prompt to also pick `risk` with the rubric above. Default to `med` if unsure.
-- AWIP Reviews findings tagged severity `high`/`critical` map straight to `risk = high`/`critical` (severity ↔ risk is a clean mapping; severity ↔ priority is not).
+- `dfba3284…` **Audit 13 closed tasks** — define checklist, attach to a roadmap task, close.
+- `007b16bd…` **TaskJanitor: log closure reasons** — small edge-function change + `detail` jsonb field.
 
-### 4. UI surface
+Both are `priority=high, risk=med, night_eligible=true` but have sat untouched for 3 days — day-shift them to closure rather than hoping the night agent picks them up.
 
-- **Job drawer** (`JobDetailsDrawer`): second badge next to priority, same select pattern. Tooltip shows the rubric.
-- **Discussion Actions pane**: small colored dot before the priority chip — gray (low) → blue (med) → amber (high) → red (critical). Moon button greys out + tooltip "blocked by risk" when high/critical and no override.
-- **Jobs page** (`/jobs`): risk column + filter, plus a "Night queue" pill showing how many of today's open jobs are night-eligible.
-- **Audit log**: `risk_changed` and `night_override` events join the existing event stream.
+### Block 3 — Two cheap audit closes (≈ 60 min)
 
-### 5. Morning Review tie-in
+- `26beccf8…` **Unverified live count of open security findings** — run security scan, paste count into resolution note, close.
+- `7a61bdb5…` **Confirm `AWIP_SERVICE_TOKEN` in GitHub Actions** — no git remote yet, so reframe as "blocked: pending git remote", note in `mem://preferences/verification-discipline`, close.
 
-Aggregate "high/critical risk jobs still open" into the morning brief so day shift sees the queue they own. No new cron — just one extra section in `morning-review`.
+### Block 4 — Trim the night queue (≈ 10 min)
 
-### Out of scope
+Of the 9 night-eligible open jobs, two are not actually autonomous work and should be flipped off:
 
-- Touching `sentinel_findings.severity` or `/risk-dashboard` — those are platform-health risk, different concept, keep separate.
-- Renaming `priority` (would churn 30+ files for no behavioral win).
-- Auto-promoting risk based on file paths or diff size — too clever, save for later.
+- `ed62d90f…` "Define process for operator to view workstation work streams" — design conversation.
+- `8bdddd82…` "Define process for operator to monitor Lovable AI's current activity" — design conversation.
 
-## Technical detail
+Leaves 7 small-but-real jobs for tonight's run.
 
-Schema (one migration):
+### Explicitly NOT today
 
-```sql
-alter type job_risk add value if not exists ...  -- new enum
--- or text + check, matching how priority is stored today
-alter table public.discussion_actions
-  add column risk text not null default 'med',
-  add column night_override_reason text;
+- `3b26bcbb…` urgent **SHA-pin GitHub Actions** — pure churn, no git remote. Defer to W6.
+- `de472305…` **Scope accumulation beyond Phase 2** — needs a roadmap-level conversation, not a tomorrow task.
+- Any `risk=high|critical` work — none in queue.
 
-alter table public.discussion_actions
-  add constraint discussion_actions_risk_chk
-  check (risk in ('low','med','high','critical'));
+### End-of-day success check
 
--- Trigger: enforce gate
-create or replace function public.enforce_night_eligibility_by_risk()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if new.risk = 'critical' then
-    new.night_eligible := false;          -- never overridable
-    new.night_override_reason := null;
-  elsif new.risk = 'high' and coalesce(new.night_override_reason,'') = '' then
-    new.night_eligible := false;
-  end if;
-  return new;
-end $$;
-
-create trigger trg_enforce_night_eligibility
-before insert or update on public.discussion_actions
-for each row execute function public.enforce_night_eligibility_by_risk();
-```
-
-Files touched:
-
-- `supabase/migrations/<new>.sql` — column, check, trigger, backfill (all rows → `med`).
-- `src/components/discussions/JobDetailsDrawer.tsx` — risk select + tooltip + override input (when high).
-- `src/components/discussions/ProposalReviewSheet.tsx` — risk on each proposal row.
-- `src/components/panes/bodies/DiscussionActionsBody.tsx` — risk dot + disabled moon state.
-- `src/pages/Jobs.tsx` — column + filter + night-queue pill.
-- `supabase/functions/awip-reviews-pull/index.ts` — map severity → risk.
-- `supabase/functions/awip-api/...` (extractor prompt) — add risk to schema.
-- `docs/jobs-board.md` (new) — the rubric.
-- `mem/features/night-agent.md` — note the new gate.
-- `CHANGELOG.md`.
-
-## Open questions
-
-1. **Hard cap on critical** — agree critical is *never* night-shift, even with override?
-2. **Default for new rows** — `med` (my recommendation) or `low`?
-3. **Backfill** — bulk-set everything to `med`, or run a one-off AI pass over open jobs to guess risk from title/details? (I'd skip the AI pass — it'll mislabel and you'll spend more time correcting than just re-tiering as you encounter them.)
+- 0 open `high` sentinel findings (qa-validate resolved or owned).
+- `night-agent-close` root cause known.
+- 2 in-progress jobs → done.
+- 2 audit jobs → resolved.
+- Night queue ≤ 7 jobs, all genuinely autonomous.
+- Tomorrow's morning review shows `stuck_jobs ≤ 2`.
