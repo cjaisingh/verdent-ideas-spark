@@ -36,3 +36,20 @@ Manual:
 curl -X POST https://<ref>.supabase.co/functions/v1/morning-review \
   -H "x-service-token: $AWIP_SERVICE_TOKEN"
 ```
+
+## Triage chips
+
+Each row in every Yesterday-tab panel has a 4-state segmented control:
+
+- **Focus** — discuss now. Aggregated into the "Discuss next" strip at the top of the page.
+- **Revisit** — come back to it, not today.
+- **Done** — resolved, no discussion needed.
+- **Skip** — not actionable, ignore in future reviews.
+
+Click an active chip again to clear it back to neutral.
+
+State is **sticky on `(item_kind, item_ref)`** — the same finding keeps its triage state across review_dates until you change or clear it. Storage is `morning_review_triage` with an audit trail (each insert clears the prior active row via trigger, but old rows remain queryable).
+
+A `Hide cleared` toggle in the page header (default on, persisted in localStorage) hides Done + Skip rows. Cleared rows that remain visible dim to 50% opacity. Panel headers show `Focus N / Revisit N` count badges.
+
+See: `mem://features/morning-review-triage`.
