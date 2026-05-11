@@ -2802,6 +2802,66 @@ export type Database = {
         }
         Relationships: []
       }
+      overnight_recommendations: {
+        Row: {
+          acted_at: string | null
+          acted_by: string | null
+          blockers: Json
+          created_at: string
+          generated_at: string
+          id: string
+          phase_id: string
+          phase_key: string
+          reasons: Json
+          scheduled_for: string
+          score: number
+          status: string
+        }
+        Insert: {
+          acted_at?: string | null
+          acted_by?: string | null
+          blockers?: Json
+          created_at?: string
+          generated_at?: string
+          id?: string
+          phase_id: string
+          phase_key: string
+          reasons?: Json
+          scheduled_for: string
+          score?: number
+          status?: string
+        }
+        Update: {
+          acted_at?: string | null
+          acted_by?: string | null
+          blockers?: Json
+          created_at?: string
+          generated_at?: string
+          id?: string
+          phase_id?: string
+          phase_key?: string
+          reasons?: Json
+          scheduled_for?: string
+          score?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overnight_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "overnight_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_tasks: {
         Row: {
           area: string | null

@@ -140,6 +140,8 @@ export default function MorningReview() {
         <KpiTile label="Open findings" value={String(review.open_findings.length)} tone={review.open_findings.length ? "warn" : "ok"} />
       </div>
 
+      <OvernightRetroLine reviewDate={review.review_date} />
+
       <div className="grid md:grid-cols-2 gap-4">
         <Section title="Stuck cron jobs" empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
           {review.stuck_jobs.map((s) => (
@@ -264,5 +266,34 @@ function Section({ title, children, empty, emptyMsg }: { title: string; children
         ) : children}
       </CardContent>
     </Card>
+  );
+}
+
+function OvernightRetroLine({ reviewDate }: { reviewDate: string }) {
+  const [stats, setStats] = useState<{ total: number; queued: number; dismissed: number; open: number } | null>(null);
+  useEffect(() => {
+    (async () => {
+      // reviewDate is yesterday's date; recommendations covered the night that
+      // ENDED on reviewDate, so they were scheduled_for = reviewDate.
+      const { data } = await supabase
+        .from("overnight_recommendations")
+        .select("status")
+        .eq("scheduled_for", reviewDate);
+      const rows = (data ?? []) as Array<{ status: string }>;
+      setStats({
+        total: rows.length,
+        queued: rows.filter((r) => r.status === "queued").length,
+        dismissed: rows.filter((r) => r.status === "dismissed").length,
+        open: rows.filter((r) => r.status === "open").length,
+      });
+    })();
+  }, [reviewDate]);
+  if (!stats || stats.total === 0) return null;
+  return (
+    <div className="text-xs text-muted-foreground border-l-2 border-border pl-3">
+      Last night: {stats.total} overnight candidate{stats.total === 1 ? "" : "s"} suggested ·{" "}
+      {stats.queued} queued · {stats.dismissed} dismissed
+      {stats.open > 0 ? ` · ${stats.open} ignored` : ""}.
+    </div>
   );
 }
