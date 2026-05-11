@@ -100,10 +100,15 @@ const MasterPlan = () => {
           const sps = sprintsByPhase.get(phase.id) ?? [];
           return (
             <div key={phase.id} id={phase.key} className="space-y-3 scroll-mt-20 p-3 -mx-3 rounded transition">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg font-semibold">{phase.title}</h3>
                 {statusBadge(phase.status)}
                 <a href={`#${phase.key}`} className="text-xs text-muted-foreground hover:text-foreground">#{phase.key}</a>
+                {!["done", "shipped", "cancelled", "wont_do"].includes(phase.status) && (
+                  <div className="ml-auto">
+                    <OvernightRunControl phaseId={phase.id} phaseKey={phase.key} />
+                  </div>
+                )}
               </div>
               {phase.summary && <p className="text-sm text-muted-foreground italic">{phase.summary}</p>}
 
