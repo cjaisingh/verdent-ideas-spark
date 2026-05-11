@@ -1726,7 +1726,7 @@ async function analyzeTranscript(id: string) {
 Active lessons (these were already in force):
 ${lessonBlock}`;
 
-  const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+  const ANALYSIS_MODEL = pickModel("google/gemini-2.5-pro");
   const aiStart = Date.now();
   const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
