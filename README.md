@@ -11,7 +11,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
 - [Automation](docs/automation.md) — scheduled code review, nightly tests, QA probes, failure alerts
-- [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys
+- [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys; includes [Production deploy secrets reference](docs/ci-cd.md#production-deploy-secrets--where-to-find-each-value) (the three Supabase secrets needed to enable Deploy Production)
 - [Design system](docs/design-system.md) — page layout, spacing, semantic tints, pane source colours
 - [Deepgram voice](docs/deepgram-voice.md) — required key role, token grant flow, mic failure recovery
 - [Gemini TTS](docs/gemini-tts.md) — `gemini-tts` edge function, 8 voices, cost, logging
