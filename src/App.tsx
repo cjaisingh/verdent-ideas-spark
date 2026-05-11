@@ -85,6 +85,7 @@ const App = () => (
             <Route path="/night-shifts" element={<NightShifts />} />
             <Route path="/admin/night-shift" element={<NightShift />} />
             <Route path="/overnight" element={<OvernightOverview />} />
+            <Route path="/overnight-activity" element={<OvernightActivity />} />
             <Route path="/ai-usage" element={<AiUsage />} />
             <Route path="/runbook" element={<Runbook />} />
             <Route path="/memory" element={<Memory />} />
