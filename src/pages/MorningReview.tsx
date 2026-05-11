@@ -141,6 +141,8 @@ export default function MorningReview() {
       </div>
 
       <OvernightRetroLine reviewDate={review.review_date} />
+
+      <div className="grid md:grid-cols-2 gap-4">
         <Section title="Stuck cron jobs" empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
           {review.stuck_jobs.map((s) => (
             <div key={s.job} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
