@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import ontologyMd from "../../docs/ontology.md?raw";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DecisionAuthorityCard } from "@/components/ontology/DecisionAuthorityCard";
 
 // Lightweight markdown → HTML renderer (avoids adding a dep).
 // Handles: headings, bold, italics, inline code, code fences, lists,
@@ -223,6 +224,8 @@ export default function Ontology() {
           />
         </CardContent>
       </Card>
+
+      <DecisionAuthorityCard />
     </div>
   );
 }
