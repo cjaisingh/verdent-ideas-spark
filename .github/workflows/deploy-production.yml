@@ -45,23 +45,45 @@ jobs:
           VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
           VITE_APP_ENV: production
 
+      - name: Validate production deploy secrets
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROD_PROJECT_ID: ${{ secrets.SUPABASE_PROD_PROJECT_ID }}
+          SUPABASE_PROD_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+        run: |
+          missing=()
+          [ -z "$SUPABASE_ACCESS_TOKEN" ] && missing+=("SUPABASE_ACCESS_TOKEN")
+          [ -z "$SUPABASE_PROD_PROJECT_ID" ] && missing+=("SUPABASE_PROD_PROJECT_ID")
+          [ -z "$SUPABASE_PROD_DB_PASSWORD" ] && missing+=("SUPABASE_PROD_DB_PASSWORD")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required production secrets: ${missing[*]}"
+            echo "Add them in GitHub → Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "All required production secrets are present."
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Push database migrations (production)
-        run: supabase db push --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
+      - name: Link Supabase project (production)
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROD_PROJECT_ID }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
 
-      - name: Deploy edge functions (production)
-        run: supabase functions deploy awip-api --project-ref "$SUPABASE_PROJECT_ID"
+      - name: Push database migrations (production)
+        run: supabase db push --password "$SUPABASE_DB_PASSWORD"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROD_PROJECT_ID }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+
+      - name: Deploy edge functions (production)
+        run: supabase functions deploy awip-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
       - name: Deploy frontend (production)
         id: deploy
