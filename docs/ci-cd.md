@@ -97,6 +97,20 @@ Operator action — not enforceable from code. In **Settings → Branches → ma
 
 Mirror a relaxed version on `develop`: same checks but allow direct pushes from maintainers for fast-iteration spikes.
 
+## CodeQL: default vs advanced setup (must pick one)
+
+GitHub will reject SARIF uploads from `codeql.yml` with
+`CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled`
+if the repository has **both** the in-repo workflow **and** GitHub's built-in default setup turned on.
+
+This repo uses the in-repo `.github/workflows/codeql.yml` as the source of truth, so default setup must be **disabled**:
+
+1. Go to the repo on GitHub → **Settings → Code security**.
+2. Under **Code scanning → CodeQL analysis**, click **Set up** dropdown → **Switch to advanced** (or **Disable**, then rely on the workflow).
+3. Confirm. The next push or scheduled run of `codeql.yml` should now upload successfully.
+
+If you ever want to go back to default setup, delete `.github/workflows/codeql.yml` first — never run both.
+
 ## GitHub Actions secrets — at a glance
 
 What fails if each is missing:
