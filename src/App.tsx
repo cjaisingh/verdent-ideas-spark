@@ -52,6 +52,7 @@ import Audits from "./pages/Audits";
 import Walkthrough from "./pages/Walkthrough";
 import Reviews from "./pages/Reviews";
 import Ontology from "./pages/Ontology";
+import Governance from "./pages/Governance";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -113,6 +114,7 @@ const App = () => (
             <Route path="/walkthrough" element={<Walkthrough />} />
             <Route path="/reviews" element={<Reviews />} />
             <Route path="/ontology" element={<Ontology />} />
+            <Route path="/governance" element={<Governance />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
