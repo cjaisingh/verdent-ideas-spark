@@ -51,6 +51,7 @@ import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
 import Walkthrough from "./pages/Walkthrough";
 import Reviews from "./pages/Reviews";
+import Ontology from "./pages/Ontology";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -111,6 +112,7 @@ const App = () => (
             <Route path="/audits" element={<Audits />} />
             <Route path="/walkthrough" element={<Walkthrough />} />
             <Route path="/reviews" element={<Reviews />} />
+            <Route path="/ontology" element={<Ontology />} />
             <Route path="/status" element={<Status />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
