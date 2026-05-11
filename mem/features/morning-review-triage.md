@@ -15,4 +15,6 @@ type: feature
 
 **Sticky behavior:** triage state is keyed on `(item_kind, item_ref)` and persists across review_dates until the operator changes or clears it.
 
-**Out of scope:** does not feed Tomorrow Plan, no auto-suggest from severity, no UI for triage history.
+**Focus → discussion drawer:** clicking Focus also opens `PanelDiscussionDrawer` (right-side Sheet) backed by tables `morning_review_discussions` (unique-open per `(review_id, panel_ref)`, outcome stamped on close) and `morning_review_discussion_messages` (operator/admin RLS + realtime). Edge function `morning-review-discuss` streams via Lovable AI Gateway with `pickModel('google/gemini-2.5-pro')` (auto-falls to gemini-2.5-flash-lite in night window), wrapped with `withLogger`, logs to `ai_usage_log`. Footer has 4 resolution buttons that close the loop and stamp triage: **Mirror** (insert `discussion_actions` → revisit), **Defer** (insert `deferred_items` due tomorrow → revisit), **Done** (→ done), **Skip** (→ skip). Re-clicking Focus on a panel with an existing open discussion resumes the same thread.
+
+**Out of scope:** does not feed Tomorrow Plan, no auto-suggest from severity, no UI for triage history, no tool-calling in the chat (resolution actions are the 4 footer buttons).
