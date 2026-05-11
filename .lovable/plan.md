@@ -1,43 +1,35 @@
 
 ## Goal
+Add a clearly-titled section documenting the three production deploy secrets (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROD_PROJECT_ID`, `SUPABASE_PROD_DB_PASSWORD`) and where to find each value, so the next time someone wants to enable Deploy Production they have a single page to follow.
 
-Stop the noisy GitHub failure emails by:
-1. Removing the auto `push: main` trigger from **Deploy Production** (it has no production secrets and shouldn't run anyway).
-2. Making **CodeQL** robust on this Bun/Vite repo so it stops failing on every push.
-
-No production deploys will run automatically. You can still trigger one manually from the GitHub Actions tab when prod secrets are configured.
+## Scope
+Documentation only. No workflow edits, no code, no migrations.
 
 ## Changes
 
-### 1. `.github/workflows/deploy-production.yml`
-- Change trigger to **`workflow_dispatch` only** (drop `push: branches: [main]` and the `tags` trigger).
-- Keep the secrets precheck and the link/push/deploy steps as-is — they only run when you manually click "Run workflow".
-- Add a comment at the top: "Manual-only until SUPABASE_ACCESS_TOKEN / SUPABASE_PROD_PROJECT_ID / SUPABASE_PROD_DB_PASSWORD are configured in repo Settings → Secrets."
+### 1. `docs/ci-cd.md` — new section "Production deploy secrets — where to find each value"
+Inserted directly after the existing "Required GitHub secrets" list (around line 37). A 3-row table:
 
-Result: no more "Deploy Production: All jobs have failed" emails on every push.
+| Secret | Where to get it | Notes |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | supabase.com/dashboard/account/tokens → "Generate new token" | Personal access token, scoped to your account; rotate via the same page. One token works for both staging and prod. |
+| `SUPABASE_PROD_PROJECT_ID` | Production project → Project Settings → General → "Reference ID" (also visible as `agzkyzyzopcgeobofjaz`-style slug in the dashboard URL) | This is the **prod** project ref, not the dev/Lovable Cloud one. |
+| `SUPABASE_PROD_DB_PASSWORD` | Production project → Project Settings → Database → "Database password" → "Reset database password" if you've lost it | Resetting forces a `supabase link` re-run on next deploy. |
 
-### 2. `.github/workflows/codeql.yml`
-The CodeQL run is failing in 1m 41s with 3 annotations. Two likely root causes (both apply to Bun/Vite repos):
+Then a short "How to add them" block: GitHub → repo → Settings → Secrets and variables → Actions → New repository secret (or under environment `production` if you want approval gating).
 
-- The repo may still have **GitHub's default CodeQL setup enabled** alongside the in-repo workflow — GitHub then rejects SARIF uploads. `docs/ci-cd.md` already documents this. The plan adds a clear failure message in the workflow pointing at that doc so you know what to disable in repo settings.
-- Pin `github/codeql-action` to **v3** explicitly (already v3) and add `paths-ignore` for `dist`, `supabase/migrations`, `docs`, and `e2e-playwright` so CodeQL only scans real app code. This shrinks scan surface and removes false positives from generated/legacy files.
-- Make the workflow **non-blocking** by setting `continue-on-error: true` on the analyze step. CodeQL findings still appear under Security → Code scanning, but a transient analyzer failure no longer sends a red email.
+Reminder line: Deploy Production is currently `workflow_dispatch` only (see `deploy-production.yml` header) and won't run on push until these are set.
 
-### 3. `docs/ci-cd.md` + `CHANGELOG.md`
-- Add an entry under "GitHub Actions secrets" noting Deploy Production is now manual-only.
-- CHANGELOG `### Fixed`: "Deploy Production no longer auto-runs on push; CodeQL hardened with path filters + continue-on-error."
+### 2. `README.md` — one-line pointer
+Under the existing "CI/CD" docs link entry, add a sub-bullet: "Production deploy secrets reference — see [docs/ci-cd.md § Production deploy secrets](docs/ci-cd.md#production-deploy-secrets--where-to-find-each-value)".
 
-### 4. `mem://preferences/ci-cd-hardening`
-- Add note: "Deploy Production is `workflow_dispatch` only until prod Supabase secrets are wired. Don't re-add `push: main` without setting all three secrets first."
-
-## What I will NOT change
-- `ci.yml`, `lint-and-typecheck.yml`, `logger-validation.yml`, `security-audit.yml`, `rls-matrix.yml`, `gitleaks.yml` — your own logs say these are green.
-- Any Supabase migrations, edge functions, or app code.
-- ESLint config (already demoted to warn last loop).
+### 3. `CHANGELOG.md` — `### Documented` entry
+"Production deploy secrets reference — `docs/ci-cd.md` now has a 3-row table mapping each required prod secret (`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROD_PROJECT_ID`, `SUPABASE_PROD_DB_PASSWORD`) to its exact location in the Supabase dashboard."
 
 ## Verification
-After the push lands on the mirror repo (`cjaisingh/verdent-ideas-spark`), I'll poll the GitHub API with `GITHUB_REVIEWS_TOKEN` for the latest run of each workflow on the new SHA and report:
-- Deploy Production: should show **no run** triggered (manual-only).
-- CodeQL: should be green or, if the default-setup conflict still exists, fail with the new pointer message so you know exactly which checkbox to flip in GitHub settings.
+`rg -n "Production deploy secrets" docs/ci-cd.md README.md CHANGELOG.md` should return matches in all three files.
 
-If CodeQL still fails after the path/continue-on-error change, the next step is a one-click fix on your side in **GitHub → Settings → Code security → CodeQL analysis → Disable default setup** — I cannot toggle that from here.
+## What I will NOT do
+- Touch `deploy-production.yml` (already manual-only).
+- Add staging-secret docs (already covered).
+- Create new docs files — keeping prod-secret guidance co-located with the existing CI/CD doc avoids drift.

@@ -36,6 +36,25 @@ Set these in **Settings → Secrets and variables → Actions** (and per-environ
 
 Add hosting-provider tokens (Vercel/Netlify/Cloudflare) under each environment as you wire up the final deploy step in `deploy-staging.yml` / `deploy-production.yml`.
 
+## Production deploy secrets — where to find each value
+
+`deploy-production.yml` is currently `workflow_dispatch` only — it will not run on push until all three secrets below are configured. Once they are, you can either trigger it manually from **Actions → Deploy Production → Run workflow**, or re-add `push: branches: [main]` to its trigger.
+
+| Secret | Where to find it in the Supabase dashboard | Notes |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | https://supabase.com/dashboard/account/tokens → **Generate new token** | Personal access token scoped to your account. One token works for both staging and production. Rotate from the same page; CI will start failing until the GitHub secret is updated to match. |
+| `SUPABASE_PROD_PROJECT_ID` | Open the **production** project → **Project Settings → General → Reference ID** (also visible as the slug in the dashboard URL, e.g. `abcdwxyz12345`) | This is the production project ref, **not** the dev / Lovable Cloud ref. Copy the slug exactly — no `https://`, no trailing slash. |
+| `SUPABASE_PROD_DB_PASSWORD` | Open the **production** project → **Project Settings → Database → Database password** → **Reset database password** if you've lost the original | Resetting invalidates any existing pooler connections; the next `supabase link` in CI will pick up the new value. Store in a password manager — Supabase only shows it once. |
+
+### How to add them to GitHub
+
+1. GitHub → repo (`cjaisingh/verdent-ideas-spark`) → **Settings → Secrets and variables → Actions**.
+2. Click **New repository secret** (or, for approval-gated deploys, open the `production` environment under **Environments** and add them there instead).
+3. Paste the name exactly as listed above (case-sensitive) and the value from the Supabase dashboard.
+4. Trigger **Actions → Deploy Production → Run workflow** to verify. The `Validate production deploy secrets` step will fail fast with the names of any still-missing secrets.
+
+
+
 ## Environment protection
 
 In **Settings → Environments**, configure:
