@@ -48,9 +48,9 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
   try {
     const now = new Date();
     const since30m = new Date(now.getTime() - 30 * 60_000).toISOString();
-    const since24h = new Date(now.getTime() - 24 * 3600 * 1000).toISOString();
     // Cron-silence check needs to see runs older than 24h for weekly jobs
     // (threshold is 2× cadence, so weekly jobs need ~14 days of history).
+    // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
     const [runsRes, edgeRes, secretsRes, auditRes, feRes] = await Promise.all([
