@@ -686,6 +686,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "awip_review_findings_discussion_action_id_fkey"
+            columns: ["discussion_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "awip_review_findings_rag_doc_id_fkey"
             columns: ["rag_doc_id"]
             isOneToOne: false
@@ -1717,6 +1724,13 @@ export type Database = {
             referencedRelation: "discussion_actions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "discussion_action_events_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
         ]
       }
       discussion_actions: {
@@ -1737,6 +1751,7 @@ export type Database = {
           due_at: string | null
           extracted_confidence: number | null
           id: string
+          morning_review_panel_ref: string | null
           night_eligible: boolean
           night_override_reason: string | null
           owner: string | null
@@ -1768,6 +1783,7 @@ export type Database = {
           due_at?: string | null
           extracted_confidence?: number | null
           id?: string
+          morning_review_panel_ref?: string | null
           night_eligible?: boolean
           night_override_reason?: string | null
           owner?: string | null
@@ -1799,6 +1815,7 @@ export type Database = {
           due_at?: string | null
           extracted_confidence?: number | null
           id?: string
+          morning_review_panel_ref?: string | null
           night_eligible?: boolean
           night_override_reason?: string | null
           owner?: string | null
@@ -2582,6 +2599,52 @@ export type Database = {
             columns: ["source_observation_id"]
             isOneToOne: false
             referencedRelation: "night_observations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      night_shift_job_attempts: {
+        Row: {
+          action_id: string
+          attempted_at: string
+          id: string
+          night_shift_id: string | null
+          outcome: string
+        }
+        Insert: {
+          action_id: string
+          attempted_at?: string
+          id?: string
+          night_shift_id?: string | null
+          outcome?: string
+        }
+        Update: {
+          action_id?: string
+          attempted_at?: string
+          id?: string
+          night_shift_id?: string | null
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "night_shift_job_attempts_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "night_shift_job_attempts_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "night_shift_job_attempts_night_shift_id_fkey"
+            columns: ["night_shift_id"]
+            isOneToOne: false
+            referencedRelation: "night_shifts"
             referencedColumns: ["id"]
           },
         ]
@@ -4529,6 +4592,18 @@ export type Database = {
           slug: string | null
           title: string | null
           workstream_id: string | null
+        }
+        Relationships: []
+      }
+      discussion_actions_stuck_in_night: {
+        Row: {
+          attempts: number | null
+          id: string | null
+          last_attempt_at: string | null
+          priority: string | null
+          risk: string | null
+          short_num: number | null
+          title: string | null
         }
         Relationships: []
       }
