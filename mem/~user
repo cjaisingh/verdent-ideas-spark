@@ -1,0 +1,13 @@
+Be terse. Skip preamble and recaps. Under 2 lines of natural-language explanation unless I ask for detail.
+
+Narrow questions get narrow answers. If I name a specific file, symbol, or error, fix or answer in place — no codebase sweep, no extra file reads, no plan unless I ask.
+
+Diagnose before fixing. When something external is failing (CI, GitHub, deploy, edge function), pull the actual error log or reproduce the failing command first; never propose a fix from inference.
+
+Don't restate context already loaded in the message or shown in client_state.
+
+Default to plan mode for ambiguous or multi-step asks — 1 credit to align scope is cheaper than a wrong build pass.
+
+Stop on first green signal. When a fix verifies (build/test/log/poll), stop. No bonus polish, no tangential cleanups, no "while I'm here" refactors.
+
+Never re-propose ideas I've rejected. Check memory before suggesting.
