@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Sparkles, ArrowUpRight, Clock, CheckCircle2, MinusCircle, Loader2 } from "lucide-react";
+import { Send, Sparkles, Wrench, X, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { useMorningReviewTriage } from "@/hooks/useMorningReviewTriage";
 
@@ -167,52 +167,41 @@ export default function PanelDiscussionDrawer({
     }
   };
 
-  const resolve = async (
-    outcome: "mirrored" | "deferred" | "done" | "skipped",
-    nextTriage: "focus" | "revisit" | "done" | "skip" | null,
-  ) => {
-    if (!panelRef || !reviewDate) return;
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const callResolve = async (action: "fix" | "cancel" | "escalate", payload: Record<string, unknown> = {}) => {
+    if (!discussionId) return;
     setResolving(true);
     try {
-      if (outcome === "mirrored") {
-        const { error } = await supabase.from("discussion_actions").insert({
-          title: `[MR ${reviewDate}] ${panelTitle ?? panelRef}`.slice(0, 240),
-          status: "open",
-          priority: "med",
-          source: "manual",
-          subject_type: "morning_review",
-          subject_id: reviewId,
-        });
-        if (error) throw error;
-        toast.success("Mirrored as discussion action");
-      } else if (outcome === "deferred") {
-        const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-        const { error } = await supabase.from("deferred_items").insert({
-          title: `[MR ${reviewDate}] ${panelTitle ?? panelRef}`.slice(0, 240),
-          reason: `Deferred from morning review ${reviewDate} panel ${panelRef}`,
-          severity: "medium",
-          status: "deferred",
-          defer_until: tomorrow.toISOString().slice(0, 10),
-          originating_context: { source: "morning_review", review_id: reviewId, panel_ref: panelRef },
-        });
-        if (error) throw error;
-        toast.success("Deferred to tomorrow");
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/morning-review-resolve`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ discussion_id: discussionId, action, ...payload }),
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        toast.error(j?.error ?? `HTTP ${resp.status}`);
+        return;
       }
-
-      if (discussionId) {
-        await supabase.from("morning_review_discussions")
-          .update({ closed_at: new Date().toISOString(), outcome })
-          .eq("id", discussionId);
-        await supabase.from("morning_review_discussion_messages").insert({
-          discussion_id: discussionId,
-          role: "system",
-          body: `Resolved as ${outcome}.`,
+      if (action === "fix" || action === "escalate") {
+        const label = action === "escalate" ? "Escalated" : "Queued";
+        toast.success(`${label} as job #${j.short_num}`, {
+          action: { label: "Open", onClick: () => window.open(`/jobs?focus=${j.short_num}`, "_self") },
         });
+      } else {
+        toast.success("Cancelled");
       }
-      await triage.setState("panel", panelRef, nextTriage);
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "could not resolve");
+      setCancelOpen(false);
+      setCancelReason("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setResolving(false);
     }
