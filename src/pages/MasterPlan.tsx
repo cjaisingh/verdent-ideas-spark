@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft } from "lucide-react";
+import OvernightCandidatesCard from "@/components/roadmap/OvernightCandidatesCard";
 
 type Phase = { id: string; key: string; title: string; summary: string | null; order: number; status: string };
 type Sprint = { id: string; phase_id: string; key: string; title: string; goal: string | null; order: number; status: string };
@@ -84,6 +85,8 @@ const MasterPlan = () => {
           Single source of truth for what we're building. Live state — generated from the roadmap.
         </p>
       </div>
+
+      <OvernightCandidatesCard />
 
       <section id="vision" className="space-y-2">
         <h2 className="text-xl font-semibold">Vision</h2>
