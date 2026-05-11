@@ -72,7 +72,15 @@ export function DecisionAuthorityCard() {
         <div className="space-y-4">
           {Object.entries(grouped).map(([entity, list]) => (
             <div key={entity}>
-              <div className="text-sm font-semibold mb-1">{entity}</div>
+              <div className="text-sm font-semibold mb-1 flex items-center justify-between">
+                <span>{entity}</span>
+                <a
+                  href={`/governance?kind=entity&ref=${encodeURIComponent(entity)}`}
+                  className="text-xs text-primary hover:underline font-normal"
+                >
+                  View governance chain →
+                </a>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="text-muted-foreground">

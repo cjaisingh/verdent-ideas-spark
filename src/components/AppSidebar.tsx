@@ -57,6 +57,7 @@ const knowledgeItems: NavItem[] = [
   { url: "/runbooks", title: "Runbook library", icon: Library },
   { url: "/memory", title: "Memory", icon: Brain },
   { url: "/ontology", title: "Ontology", icon: BookOpen },
+  { url: "/governance", title: "Governance", icon: BookOpen },
   { url: "/admin/lessons", title: "Lessons Loop (weekly)", icon: GraduationCap },
 ];
 
