@@ -230,7 +230,7 @@ export default function PanelDiscussionDrawer({
 
           {messages.length === 0 && !streaming && (
             <p className="text-xs text-muted-foreground">
-              Ask a clarifying question, propose a fix, or jump straight to one of the four resolutions below.
+              Ask a clarifying question, or jump to <strong>Fix</strong> (queue a job), <strong>Cancel</strong> (with reason), or <strong>Escalate</strong> below.
             </p>
           )}
           {messages.map((m) => (
