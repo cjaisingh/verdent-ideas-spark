@@ -278,20 +278,39 @@ export default function PanelDiscussionDrawer({
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("mirrored", "revisit")}>
-              <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("deferred", "revisit")}>
-              <Clock className="h-3 w-3 mr-1" /> Defer
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("done", "done")}>
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Done
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("skipped", "skip")}>
-              <MinusCircle className="h-3 w-3 mr-1" /> Skip
-            </Button>
-          </div>
+          {cancelOpen ? (
+            <div className="rounded-md border bg-muted/30 p-2 space-y-2">
+              <div className="text-xs font-medium">Why cancel?</div>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="One-line reason — captured in the discussion log"
+                rows={2}
+                className="resize-none text-sm"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="ghost" onClick={() => { setCancelOpen(false); setCancelReason(""); }}>
+                  Back
+                </Button>
+                <Button size="sm" variant="destructive" disabled={resolving || !cancelReason.trim()}
+                        onClick={() => callResolve("cancel", { reason: cancelReason.trim() })}>
+                  Confirm cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              <Button size="sm" disabled={resolving} onClick={() => callResolve("fix")}>
+                <Wrench className="h-3 w-3 mr-1" /> Fix
+              </Button>
+              <Button size="sm" variant="outline" disabled={resolving} onClick={() => setCancelOpen(true)}>
+                <X className="h-3 w-3 mr-1" /> Cancel
+              </Button>
+              <Button size="sm" variant="destructive" disabled={resolving} onClick={() => callResolve("escalate")}>
+                <AlertTriangle className="h-3 w-3 mr-1" /> Escalate
+              </Button>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
