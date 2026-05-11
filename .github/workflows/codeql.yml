@@ -30,14 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Explicit setup for Bun + TypeScript instead of relying on autobuild,
+      # which is fragile on Bun/Vite repos and was the cause of CodeQL failing.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+          # Source-only build mode skips autobuild entirely; CodeQL analyses
+          # the JS/TS sources directly.
+          build-mode: none
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
