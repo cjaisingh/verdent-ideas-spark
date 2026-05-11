@@ -1,9 +1,10 @@
 name: Deploy Production
 
+# Manual-only until production secrets are configured in repo Settings → Secrets:
+#   SUPABASE_ACCESS_TOKEN, SUPABASE_PROD_PROJECT_ID, SUPABASE_PROD_DB_PASSWORD
+# Re-add `push: branches: [main]` only after all three are set, otherwise every
+# push to main will email a red workflow.
 on:
-  push:
-    branches: [main]
-    tags: ["v*.*.*"]
   workflow_dispatch:
 
 concurrency:
