@@ -1,36 +1,31 @@
+## Plan: Auto-update jobs board from GitHub workflow results
 
-## Items closeable now (this session's work landed)
+**1. Schema (migration)** — add CI linkage columns to `discussion_actions`:
+- `ci_workflow_file text` (e.g. `lint-and-typecheck.yml`) — null = no link
+- `ci_branch text default 'main'`
+- `ci_close_on_success boolean default false` — opt-in auto-close
+- `ci_last_status text`, `ci_last_conclusion text`, `ci_last_run_id bigint`, `ci_last_run_url text`, `ci_last_checked_at timestamptz`
+- `ci_last_run_sha text`
+- Index on `(ci_workflow_file) where ci_workflow_file is not null and status='open'`
 
-**Jobs board (`discussion_actions`):**
+Trigger extension: emit `ci_status_changed` and `ci_auto_closed` events into `discussion_action_events`.
 
-1. **#2164992f — "Security audit e2e missing GitHub Actions secrets"** (high, open)
-   → Close as `done`. All 4 secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `AWIP_SERVICE_TOKEN`) were pushed to `cjaisingh/verdent-ideas-spark` earlier in this loop and verified via the list endpoint.
+**2. Edge function `ci-status-sync`** (wrapped with `withLogger`):
+- Auth: `x-awip-service-token` (cron) or operator JWT
+- Loops every open action with `ci_workflow_file != null`
+- Polls `GET /repos/cjaisingh/verdent-ideas-spark/actions/workflows/{file}/runs?branch={branch}&per_page=1`
+- Updates the `ci_*` columns; if conclusion=`success` and `ci_close_on_success=true`, sets `status='done'` and inserts a `ci_auto_closed` event
+- Returns `{ checked, updated, auto_closed }` summary
 
-2. **#d438ff2b — "Enable Code Scanning or drop CodeQL workflow"** (low, open)
-   → Close as `done`. Repo is now public, CodeQL default setup PATCH returned `run_id 25675057019`. CodeQL is live (the previous turn confirmed an in_progress run on the latest commit).
+**3. Cron** — pg_cron every 30 min via `supabase--insert` (anon key + service token, follows existing pattern). Job name: `ci-status-sync-30m`.
 
-## Items that look closeable but need one verification step first
+**4. Backfill links** — wire the obvious open jobs to their workflows:
+- `#594fb59b` "Lint regression" → `lint-and-typecheck.yml`, `ci_close_on_success=true`
+- `#bf7df716` "Unverified Branch Protection" — no workflow; leave unlinked (it's a GitHub settings check, handled separately later)
+- Also link `#ee7937ce` "Replace ~480 no-explicit-any" → `lint-and-typecheck.yml` but `ci_close_on_success=false` (just track status, not auto-close — closure needs human review)
 
-3. **#62d74b0f — "Logger Validation red on verdent-ideas-spark@main"** (critical, open)
-   → Need to poll the latest Logger Validation workflow run. If green on the most recent commit, close as `done`. If still red, leave open (critical risk = hard block on night agent).
+**5. Surface (minimal)** — `JobDetailsDrawer.tsx` already shows the activity log; `ci_status_changed` events render automatically. No new UI.
 
-4. **#bf7df716 — "Unverified Branch Protection on `main`"** (med, open)
-   → One GitHub API call (`GET /repos/.../branches/main/protection`) confirms or denies. If protection is in place per the W6 checklist, close as `done`; otherwise leave open with the gap noted.
+**6. Docs + memory** — `docs/jobs-board.md` gets a new section "CI auto-sync"; mem entry under `mem://features/jobs-board-risk` updated with the linkage convention.
 
-## Items to leave open (not done despite recent activity)
-
-- **#594fb59b — "Lint regression: 491 errors"** — last check showed 40 errors remaining (including a real `rules-of-hooks` bug in `Copilot.tsx`). Keep open until the cleanup PR lands.
-- **#ee7937ce — "Replace ~480 no-explicit-any usages"** — separate, untouched.
-- **#05c9b55a, #115af67e, #3b26bcbb, #9f03655d, #a1443410, #ba296daa, #bff811f2, #de472305, #8bdddd82, #ed62d90f** — no work done this loop; leave open.
-
-## Roadmap (`roadmap_phases`)
-
-Nothing closeable. Phase 2 is the only `active` phase; Phases 1, 3, 4 are already `done`; the seven post-Phase-4 items are still `planned` and untouched. No phase work shipped this loop.
-
-## Proposed actions on your approval
-
-- Mark **#2164992f** and **#d438ff2b** as `done` immediately.
-- Run two GitHub API checks (Logger Validation status + branch protection on `main`) and conditionally close **#62d74b0f** and **#bf7df716** based on the actual response.
-- Leave everything else as-is.
-
-No code changes — only `discussion_actions.status` updates and read-only GitHub polling.
+Risk: `low`. Read-only on GitHub side; only writes are status updates on rows that explicitly opt in via `ci_close_on_success`. Safe to night-shift if ever needed.
