@@ -4,6 +4,14 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Changed
+- **Morning Review discussion drawer:** replaced confusing Mirror/Defer/Done/Skip buttons with **Fix · Cancel · Escalate**, all routed through new `morning-review-resolve` edge function. Fix queues a fully-detailed `discussion_actions` job (AI summary + last 6 turns + link back), deduped per panel; Cancel requires a reason; Escalate forces risk=high + sentinel finding.
+- Toast on Fix/Escalate now exposes an **Open** action linking to `/jobs?focus=<short_num>`.
+
+### Added
+- **3-strikes night auto-escalation:** night-agent records each audit into new `night_shift_job_attempts` table; new daily cron `scheduled-night-stuck-escalator` (06:05 UTC) → `night-stuck-escalator` edge function flips stuck jobs to `risk='high'`, clears night_eligible, and emits `sentinel_findings(kind='night_stuck_3x')`.
+- View `discussion_actions_stuck_in_night` and column `discussion_actions.morning_review_panel_ref` (with partial unique index for one open job per panel).
+
 ### Added
 - **Morning Review panel discussions** — clicking the **Focus** chip on any of the 6 Morning Review panels now opens a side discussion drawer pre-seeded with that panel's data and a system prompt that pushes toward one of four resolutions: **Mirror as action**, **Defer**, **Done**, or **Skip**. New tables `morning_review_discussions` (unique-open per `(review_id, panel_ref)`, outcome-stamped on close) and `morning_review_discussion_messages` (operator/admin RLS + realtime). New edge function `morning-review-discuss` (SSE streaming via Lovable AI Gateway, `pickModel('google/gemini-2.5-pro')` so night window auto-falls back to gemini-2.5-flash-lite, `withLogger`, ai_usage_log). Files: `supabase/functions/morning-review-discuss/index.ts`, `src/components/morning-review/PanelDiscussionDrawer.tsx`. Footer resolution buttons also stamp the panel triage (`mirrored→revisit`, `deferred→revisit`, `done→done`, `skipped→skip`) and close the discussion. Re-clicking Focus on a panel that already has an open discussion resumes the same thread.
 
