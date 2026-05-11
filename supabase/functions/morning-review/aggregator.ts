@@ -241,10 +241,12 @@ export function aggregate(input: AggregatorInput): AggregatorOutput {
 }
 
 // Default cadences (minutes) for known cron jobs. Anything older than 2× this
-// flags as stuck. Keep in sync with the actual pg_cron schedules.
+// flags as stuck. Keep in sync with the actual pg_cron schedules — note
+// the cron jobname can differ from the function/job name written to
+// automation_runs (e.g. cron `weekly-qa-validate` invokes function `qa-validate`).
 export const DEFAULT_JOB_CADENCES: Record<string, number> = {
-  "scheduled-code-review": 7 * 24 * 60,           // weekly
-  "qa-validate": 60,                              // hourly
+  "scheduled-code-review": 7 * 24 * 60,           // weekly (Mon 06:00 UTC, cron weekly-code-review)
+  "qa-validate": 7 * 24 * 60,                     // weekly (Fri 16:00 UTC, cron weekly-qa-validate)
   "record-test-run": 24 * 60,                     // daily
   "secrets-health-check": 24 * 60,                // daily
   "night-agent-open": 24 * 60,                    // daily
@@ -253,5 +255,5 @@ export const DEFAULT_JOB_CADENCES: Record<string, number> = {
   "overnight-prequeue": 24 * 60,                  // daily
   "morning-review": 24 * 60,                      // daily
   "sentinel-tick": 15,                            // every 15 min
-  "lessons-synthesize": 7 * 24 * 60,              // weekly
+  "lessons-synthesize": 7 * 24 * 60,              // weekly (Sun 05:00 UTC)
 };

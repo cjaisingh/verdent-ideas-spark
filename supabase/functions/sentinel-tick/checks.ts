@@ -181,12 +181,17 @@ export function checkJobErrorRate(
   return out;
 }
 
+// Cadences (minutes) MUST match the real pg_cron schedule, not the
+// edge-function name. Job names here are the strings written to
+// `automation_runs.job` by each function.
+//   weekly-qa-validate     → Fri 16:00 UTC, function logs as "qa-validate"
+//   scheduled-lessons-weekly → Sun 05:00 UTC, function logs as "lessons-synthesize"
 export const SENTINEL_CADENCES: Record<string, number> = {
-  "qa-validate": 60,
+  "qa-validate": 7 * 24 * 60,         // weekly (Fri 16:00 UTC)
   "overnight-phase-runner-15m": 15,
   "morning-review": 24 * 60,
   "sentinel-tick": 15,
-  "lessons-synthesize": 7 * 24 * 60,
+  "lessons-synthesize": 7 * 24 * 60,  // weekly (Sun 05:00 UTC)
 };
 
 // Pattern matchers for realtime / channel-lifecycle bugs we've actually hit.

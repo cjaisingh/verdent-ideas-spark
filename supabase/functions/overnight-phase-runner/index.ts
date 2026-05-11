@@ -165,7 +165,19 @@ Deno.serve(withLogger("overnight-phase-runner", async (req) => {
   const explicitRun = body?.run_id ? String(body.run_id) : null;
 
   // Cron: only act inside the night window unless an explicit run_id was supplied.
+  // Still log a heartbeat to automation_runs so sentinel-tick's cron-silence
+  // check sees the cron is alive (otherwise daytime ticks 06:00–22:00 UTC look
+  // like a 16-hour silence and trip a high finding).
   if (triggeredBySvc && !explicitRun && !isNightUTC()) {
+    await sb.from("automation_runs").insert({
+      job: "overnight-phase-runner-15m",
+      trigger: "cron",
+      status: "ok",
+      status_code: 200,
+      duration_ms: 0,
+      message: "skipped: outside_night_window",
+      detail: { utc_hour: new Date().getUTCHours(), skipped: true },
+    });
     return json({ skipped: "outside_night_window", utc_hour: new Date().getUTCHours() });
   }
 

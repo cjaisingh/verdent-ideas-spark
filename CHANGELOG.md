@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed
+- **Sentinel cadence + lookback mismatch** — `SENTINEL_CADENCES` and `DEFAULT_JOB_CADENCES` were keyed by edge-function name (`qa-validate`) but tagged with the wrong cadence (60m hourly) when the actual cron is `weekly-qa-validate` (Fri 16:00 UTC weekly). This produced a recurring false-positive `high` finding every few hours. Cadences corrected in `supabase/functions/sentinel-tick/checks.ts` and `supabase/functions/morning-review/aggregator.ts`, with comments noting the cron-name vs job-name distinction. Sentinel-tick's `automation_runs` lookback was also widened from 24h → 15d so weekly jobs (`qa-validate`, `lessons-synthesize`) are visible to the silence check (threshold is 2× cadence). Stale `qa-validate` (high) and `lessons-synthesize` (low) findings resolved manually with the root cause noted in `payload.resolution_note`.
+
 ### Added
 - **Risk-gated night shift** — new `discussion_actions.risk` field (`low|med|high|critical`, default `med`) separate from `priority`. A `BEFORE INSERT/UPDATE` trigger (`enforce_night_eligibility_by_risk`) hard-blocks `night_eligible=true` for `critical` and requires a non-empty `night_override_reason` for `high`. Risk dot + risk badge surface in the Jobs board card, the Discussion Actions right-pane, and `JobDetailsDrawer` (new "Risk & night shift" editor with risk select, override-reason textarea, and gated moon toggle). Audit log gains `risk_changed` and `night_override` event types. `ProposalReviewSheet` lets the extractor preview risk per proposal. Backfill: every existing job → `med`. Rubric: `docs/jobs-board.md`. Memory: `mem://features/jobs-board-risk`.
 
