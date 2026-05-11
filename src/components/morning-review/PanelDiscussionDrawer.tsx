@@ -4,7 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Sparkles, ArrowUpRight, Clock, CheckCircle2, MinusCircle, Loader2 } from "lucide-react";
+import { Send, Sparkles, Wrench, X, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { useMorningReviewTriage } from "@/hooks/useMorningReviewTriage";
 
@@ -167,52 +167,41 @@ export default function PanelDiscussionDrawer({
     }
   };
 
-  const resolve = async (
-    outcome: "mirrored" | "deferred" | "done" | "skipped",
-    nextTriage: "focus" | "revisit" | "done" | "skip" | null,
-  ) => {
-    if (!panelRef || !reviewDate) return;
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const callResolve = async (action: "fix" | "cancel" | "escalate", payload: Record<string, unknown> = {}) => {
+    if (!discussionId) return;
     setResolving(true);
     try {
-      if (outcome === "mirrored") {
-        const { error } = await supabase.from("discussion_actions").insert({
-          title: `[MR ${reviewDate}] ${panelTitle ?? panelRef}`.slice(0, 240),
-          status: "open",
-          priority: "med",
-          source: "manual",
-          subject_type: "morning_review",
-          subject_id: reviewId,
-        });
-        if (error) throw error;
-        toast.success("Mirrored as discussion action");
-      } else if (outcome === "deferred") {
-        const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-        const { error } = await supabase.from("deferred_items").insert({
-          title: `[MR ${reviewDate}] ${panelTitle ?? panelRef}`.slice(0, 240),
-          reason: `Deferred from morning review ${reviewDate} panel ${panelRef}`,
-          severity: "medium",
-          status: "deferred",
-          defer_until: tomorrow.toISOString().slice(0, 10),
-          originating_context: { source: "morning_review", review_id: reviewId, panel_ref: panelRef },
-        });
-        if (error) throw error;
-        toast.success("Deferred to tomorrow");
+      const { data: { session } } = await supabase.auth.getSession();
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/morning-review-resolve`;
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ discussion_id: discussionId, action, ...payload }),
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        toast.error(j?.error ?? `HTTP ${resp.status}`);
+        return;
       }
-
-      if (discussionId) {
-        await supabase.from("morning_review_discussions")
-          .update({ closed_at: new Date().toISOString(), outcome })
-          .eq("id", discussionId);
-        await supabase.from("morning_review_discussion_messages").insert({
-          discussion_id: discussionId,
-          role: "system",
-          body: `Resolved as ${outcome}.`,
+      if (action === "fix" || action === "escalate") {
+        const label = action === "escalate" ? "Escalated" : "Queued";
+        toast.success(`${label} as job #${j.short_num}`, {
+          action: { label: "Open", onClick: () => window.open(`/jobs?focus=${j.short_num}`, "_self") },
         });
+      } else {
+        toast.success("Cancelled");
       }
-      await triage.setState("panel", panelRef, nextTriage);
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e?.message ?? "could not resolve");
+      setCancelOpen(false);
+      setCancelReason("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setResolving(false);
     }
@@ -241,7 +230,7 @@ export default function PanelDiscussionDrawer({
 
           {messages.length === 0 && !streaming && (
             <p className="text-xs text-muted-foreground">
-              Ask a clarifying question, propose a fix, or jump straight to one of the four resolutions below.
+              Ask a clarifying question, or jump to <strong>Fix</strong> (queue a job), <strong>Cancel</strong> (with reason), or <strong>Escalate</strong> below.
             </p>
           )}
           {messages.map((m) => (
@@ -289,20 +278,39 @@ export default function PanelDiscussionDrawer({
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("mirrored", "revisit")}>
-              <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("deferred", "revisit")}>
-              <Clock className="h-3 w-3 mr-1" /> Defer
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("done", "done")}>
-              <CheckCircle2 className="h-3 w-3 mr-1" /> Done
-            </Button>
-            <Button size="sm" variant="outline" disabled={resolving} onClick={() => resolve("skipped", "skip")}>
-              <MinusCircle className="h-3 w-3 mr-1" /> Skip
-            </Button>
-          </div>
+          {cancelOpen ? (
+            <div className="rounded-md border bg-muted/30 p-2 space-y-2">
+              <div className="text-xs font-medium">Why cancel?</div>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="One-line reason — captured in the discussion log"
+                rows={2}
+                className="resize-none text-sm"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="ghost" onClick={() => { setCancelOpen(false); setCancelReason(""); }}>
+                  Back
+                </Button>
+                <Button size="sm" variant="destructive" disabled={resolving || !cancelReason.trim()}
+                        onClick={() => callResolve("cancel", { reason: cancelReason.trim() })}>
+                  Confirm cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              <Button size="sm" disabled={resolving} onClick={() => callResolve("fix")}>
+                <Wrench className="h-3 w-3 mr-1" /> Fix
+              </Button>
+              <Button size="sm" variant="outline" disabled={resolving} onClick={() => setCancelOpen(true)}>
+                <X className="h-3 w-3 mr-1" /> Cancel
+              </Button>
+              <Button size="sm" variant="destructive" disabled={resolving} onClick={() => callResolve("escalate")}>
+                <AlertTriangle className="h-3 w-3 mr-1" /> Escalate
+              </Button>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

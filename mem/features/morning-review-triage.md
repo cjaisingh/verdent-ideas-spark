@@ -1,20 +1,24 @@
 ---
 name: Morning Review triage chips
-description: Per-panel Focus/Revisit/Done/Skip chips on /morning-review with sticky state and Discuss-next strip
+description: Per-panel Focus/Revisit/Done/Skip chips on /morning-review with Fix/Cancel/Escalate discussion drawer + 3-strikes night auto-escalation
 type: feature
 ---
 **Granularity:** one chip per **panel** (not per row). Six panels: `stuck-cron-jobs`, `promotion-drift`, `night-throughput`, `open-findings`, `top-actions`, `revisit`. item_kind is `'panel'`, item_ref is the panel slug.
 
-**Table:** `morning_review_triage` (`item_kind`, `item_ref`, `state` in focus/revisit/done/skip, `note`, `set_by`, `set_at`, `cleared_at`). Unique partial index on `(item_kind, item_ref) where cleared_at is null` — at most one active row per (kind, ref). Trigger `morning_review_triage_clear_previous` auto-clears the prior active row on insert, preserving full audit history. View `morning_review_triage_active` (security_invoker). Operator/admin RLS via `has_role()`, realtime on. Schema accepts row-level kinds too (discussion_action / sentinel_finding / etc.) but UI currently only writes `'panel'`.
+**Table:** `morning_review_triage` — sticky on `(item_kind, item_ref)` across review_dates. Trigger auto-clears prior active row.
 
-**Frontend:**
-- `src/hooks/useMorningReviewTriage.ts` — loads active rows once, exposes `getState/setState`, realtime channel `mr-triage-<random>` (per-mount unique).
-- `src/components/morning-review/TriageChip.tsx` — 4-segment control. Click active chip again to clear.
-- `src/components/morning-review/DiscussNextStrip.tsx` — top card listing all panels currently in Focus or Revisit, anchor-linked to `#panel-<slug>`.
-- `src/pages/MorningReview.tsx` — chip in each panel header next to the title; small state badge in title; Done/Skip panels dim to ~60% opacity.
+**Focus → discussion drawer:** clicking Focus opens `PanelDiscussionDrawer` backed by `morning_review_discussions` + `morning_review_discussion_messages`. Streams via `morning-review-discuss` (`google/gemini-2.5-pro` → night-cheap fallback).
 
-**Sticky behavior:** triage state is keyed on `(item_kind, item_ref)` and persists across review_dates until the operator changes or clears it.
+**Footer = 3 actions, all routed through the `morning-review-resolve` edge function:**
+- **Fix** — primary. AI summarizes the chat (3 bullets), inserts a `discussion_actions` row with full details (panel, summary, last 6 turns, link back), `morning_review_panel_ref=<slug>` (unique partial index dedupes open jobs per panel — re-clicks append a note instead of duplicating). Toast: `Queued as job #<short_num>` with **Open** action linking `/jobs?focus=<short_num>`. Outcome=`fixed`, panel triage→`revisit`.
+- **Cancel** — destructive. Requires a one-line reason; writes it as a `system` message; outcome=`cancelled`, panel triage→`done`. **No suppression** — if the underlying detector fires again tomorrow it reappears.
+- **Escalate** — same as Fix but pre-sets `risk='high'`, `priority='high'`, `night_eligible=false`, AND upserts a `sentinel_findings` row (`kind='operator_escalation'`, `severity='high'`) so it surfaces top of tomorrow's morning review. Outcome=`escalated`.
 
-**Focus → discussion drawer:** clicking Focus also opens `PanelDiscussionDrawer` (right-side Sheet) backed by tables `morning_review_discussions` (unique-open per `(review_id, panel_ref)`, outcome stamped on close) and `morning_review_discussion_messages` (operator/admin RLS + realtime). Edge function `morning-review-discuss` streams via Lovable AI Gateway with `pickModel('google/gemini-2.5-pro')` (auto-falls to gemini-2.5-flash-lite in night window), wrapped with `withLogger`, logs to `ai_usage_log`. Footer has 4 resolution buttons that close the loop and stamp triage: **Mirror** (insert `discussion_actions` → revisit), **Defer** (insert `deferred_items` due tomorrow → revisit), **Done** (→ done), **Skip** (→ skip). Re-clicking Focus on a panel with an existing open discussion resumes the same thread.
+Defer/Done/Skip removed from the drawer. The panel-header chip strip still has all 4 quick-triage states (no discussion needed).
 
-**Out of scope:** does not feed Tomorrow Plan, no auto-suggest from severity, no UI for triage history, no tool-calling in the chat (resolution actions are the 4 footer buttons).
+**3-strikes night auto-escalation:**
+- `night-agent` (`open.ts`) inserts one row into `night_shift_job_attempts` per audited action per shift (`outcome='progressed'|'no_change'`).
+- View `discussion_actions_stuck_in_night` lists open `night_eligible` actions with `attempts >= 3`.
+- Cron `scheduled-night-stuck-escalator` runs daily at 06:05 UTC → calls `night-stuck-escalator` edge function (auth: `x-awip-service-token`) which: flips `risk='high'`, clears `night_eligible`, upserts `sentinel_findings(kind='night_stuck_3x', severity='high')` (idempotent on `dedupe_key=night_stuck_3x:<action_id>`), emits `discussion_action_events(event_type='auto_escalated')`.
+
+**Out of scope:** no suppressions table, no CI-failure auto-escalation (yet), no UI to change the 3-attempts threshold (hardcoded constant).
