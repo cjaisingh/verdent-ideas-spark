@@ -1,73 +1,66 @@
-## Morning Review Triage
+## Goal
 
-Add a 4-state triage chip (**Focus · Revisit · Done · Skip**) to every row in every panel on `/morning-review` (Yesterday tab). State is sticky per item across review dates — set it once and it carries forward until you flip it.
+Make Morning Review actionable: clicking **Focus** on a panel opens a side chat where you and the AI can discuss that panel's findings, agree a strategy, mirror an action, or dismiss.
 
-### How it feels
+## Behavior
 
-- Each row gets a small segmented control on the right (next to existing badges/Mirror buttons).
-- Default state is **unset** (neutral). Click sets Focus / Revisit / Done / Skip.
-- Each panel header gets a count chip: `Focus 3 · Revisit 1`.
-- A new top strip "**Discuss next**" pulls every Focus item across all 6 panels into one ordered list — that's your morning agenda.
-- "Done" and "Skip" rows dim to ~50% opacity so attention stays on Focus/Revisit/unset.
-- A header filter toggle: `Hide cleared` (hides Done + Skip rows) — on by default.
+1. Click **Focus** on any panel header → triage state still saves as `focus`, but a right-side **Discussion Drawer** also opens, scoped to that panel.
+2. Drawer header shows panel title + the panel's current data (stuck jobs / findings / actions / etc.) as a compact context card.
+3. Chat thread below: AI is pre-seeded with the panel's JSON payload + a system prompt ("you are reviewing the morning review panel X for date Y, help the operator decide: clarify, agree strategy, fix, or defer").
+4. Operator types freely. Streaming responses via Lovable AI Gateway (`google/gemini-3-flash-preview`, falls back to night-cheap model in night window via existing `pickModel`).
+5. Drawer footer has 4 quick-resolution buttons that close the loop:
+   - **Mirror as action** → inserts `discussion_actions` row (existing pattern), marks panel `revisit`.
+   - **Defer** → inserts `deferred_items`, marks panel `revisit`.
+   - **Mark done** → sets panel triage to `done`, closes drawer.
+   - **Skip** → sets panel triage to `skip`, closes drawer.
+6. Re-clicking Focus on a panel that already has a discussion re-opens the same thread (sticky on `(review_id, panel_ref)`).
+7. Other chips (Revisit / Done / Skip) keep current behavior — no drawer.
 
-### Color/semantic mapping
+## Storage
 
-- **Focus** — primary, solid. "Talk about this now."
-- **Revisit** — amber/warning. "Come back to it, not today."
-- **Done** — muted/success outline. "Resolved, no discussion needed."
-- **Skip** — muted outline. "Not actionable, ignore in future reviews too."
+New table `morning_review_discussions`:
+- `id`, `review_id` (fk `morning_reviews`), `panel_ref` (text, e.g. `stuck-cron-jobs`), `created_by`, `created_at`, `closed_at`, `outcome` (focus/mirrored/deferred/done/skipped/null).
+- Unique on `(review_id, panel_ref)` where `closed_at is null`.
 
-### Sticky behavior
+New table `morning_review_discussion_messages`:
+- `id`, `discussion_id` (fk), `role` (user/assistant/system), `content`, `created_at`, `model`, `tokens_in`, `tokens_out`.
 
-State is keyed on the underlying `item_ref` (e.g. `discussion_action:<id>`, `sentinel_finding:<id>`, `roadmap_review_finding:<id>`, `cron:<job>`, `deferred:<id>`, `drift:<action_id>`, `night_throughput:<shift_id>`). When tomorrow's review renders the same finding, its triage state is preserved. Flip it to a new value (or click the active chip again to clear) to reset.
+Operator-only RLS via `has_role()`, realtime on both. Standard timestamps trigger.
 
-### Technical section
+## Edge function
 
-**New table** `public.morning_review_triage`
-- `id uuid pk`
-- `item_kind text` — one of `discussion_action | sentinel_finding | code_review_finding | cron_stuck | deferred | promotion_drift | night_throughput`
-- `item_ref text` — stable id (uuid string, job name, etc.)
-- `state text` — `focus | revisit | done | skip`
-- `note text null` — optional one-liner
-- `set_by uuid` (auth.uid)
-- `set_at timestamptz default now()`
-- `cleared_at timestamptz null`
-- Unique partial index on `(item_kind, item_ref) where cleared_at is null` so each item has exactly one active state.
-- RLS: operator/admin only via `has_role()`, same pattern as other Morning Review tables.
-- Realtime: add to `supabase_realtime` publication.
-- Trigger: when a new state is inserted for an `(item_kind, item_ref)`, set `cleared_at = now()` on the previous active row (acts as audit history).
+`morning-review-discuss` (new, wrapped with `withLogger`):
+- Auth: operator JWT.
+- Input: `{ discussion_id, messages: UIMessage[] }`.
+- Loads panel context from `morning_reviews` + panel_ref, builds system prompt.
+- Streams via AI SDK `streamText` + `createLovableAiGatewayProvider` + `pickModel('google/gemini-3-flash-preview')`.
+- `onFinish` saves assistant message; user messages saved client-side before invoke.
+- Logs to `ai_usage_log` (existing pattern).
 
-**Helper view** `morning_review_triage_active` — `select distinct on (item_kind, item_ref) ...where cleared_at is null` for fast lookup.
+## Frontend
 
-**Frontend**
-- New component `src/components/morning-review/TriageChip.tsx` — 4-segment control + "clear" affordance on active. Uses semantic tokens (`primary`, `warning`, `muted`, `destructive`).
-- New hook `src/hooks/useMorningReviewTriage.ts` — fetches all active triage rows once (small table), exposes `getState(kind, ref)` + `setState(kind, ref, state)` with optimistic update + realtime channel `mr-triage-live` (unique per mount, per channel-naming preference).
-- New component `src/components/morning-review/DiscussNextStrip.tsx` — renders above the KPI grid; lists every Focus item with a one-line summary and a jump-to-panel anchor.
-- `src/pages/MorningReview.tsx` — render `<TriageChip kind="..." ref={item.id} />` on each row in all 6 `Section`s; render `<DiscussNextStrip />` between header and KPI tiles; add panel-header counts; add `Hide cleared` toggle in page header (persisted to localStorage).
-- No changes to `morning-review` edge function or aggregator — triage is pure operator UI state on top of the existing snapshot.
+- New `src/components/morning-review/PanelDiscussionDrawer.tsx` — Sheet from right, AI Elements primitives (`Conversation`, `Message`, `MessageResponse`, `PromptInput`, `Shimmer`), 4 footer resolution buttons.
+- New `src/hooks/useMorningReviewDiscussion.ts` — open/close, load history, send message via `useChat` with custom transport pointing at the edge function.
+- `useMorningReviewTriage.setState`: when new state is `focus`, also call `openDiscussion(panelRef)` (passed in via props).
+- `MorningReview.tsx` `Section`: pass `onFocus` callback; render the drawer once at page level keyed by active panel.
+- `DiscussNextStrip`: clicking a Focus chip opens the drawer for that panel instead of just scrolling.
 
-**Item-ref resolution per panel**
-- Stuck cron jobs → `cron_stuck` / `s.job`
-- Promotion drift → `promotion_drift` / `d.action_id`
-- Night throughput → `night_throughput` / `review.night_throughput.last_window_end || review.id` (single row)
-- Open findings → `sentinel_finding` or `code_review_finding` based on `f.source` / `f.id`
-- Top 5 actions → `discussion_action` / `a.action_id`
-- Revisit items → `deferred` / `r.id`
+## Out of scope
 
-**Out of scope** (explicit, per your answers)
-- No auto-population of Tomorrow Plan from Focus.
-- No auto-suggest from severity — operator chooses.
-- No editing UI for triage history; the audit row exists in the table but isn't surfaced.
+- No tool-calling in the chat (read-only context, action via the 4 footer buttons).
+- No per-row discussions — panel-level only, matches existing triage granularity.
+- No reuse across review_dates (each day's review gets its own discussions; sticky triage state is unchanged).
 
-### Files to add
-- `supabase/migrations/<ts>_morning_review_triage.sql`
-- `src/components/morning-review/TriageChip.tsx`
-- `src/components/morning-review/DiscussNextStrip.tsx`
-- `src/hooks/useMorningReviewTriage.ts`
-- `docs/morning-review.md` (append "Triage" section)
-- `mem/features/morning-review-triage.md` + index entry
+## Files
 
-### Files to edit
-- `src/pages/MorningReview.tsx` — wire chips, strip, counts, hide-cleared toggle
-- `CHANGELOG.md`
+**New**
+- `supabase/migrations/<ts>_morning_review_discussions.sql`
+- `supabase/functions/morning-review-discuss/index.ts`
+- `src/components/morning-review/PanelDiscussionDrawer.tsx`
+- `src/hooks/useMorningReviewDiscussion.ts`
+
+**Edited**
+- `src/pages/MorningReview.tsx` (wire drawer + onFocus)
+- `src/components/morning-review/DiscussNextStrip.tsx` (open drawer on click)
+- `src/hooks/useMorningReviewTriage.ts` (optional `onFocus` side-effect callback)
+- `docs/morning-review.md`, `mem/features/morning-review-triage.md`, `mem/index.md`, `CHANGELOG.md`
