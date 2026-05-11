@@ -3,6 +3,7 @@
 // Gemini TTS models are not exposed through the gateway).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { logAiUsage } from "../_shared/ai-usage.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,7 +37,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
   return new Uint8Array(buf);
 }
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("gemini-tts", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
@@ -150,4 +151,4 @@ Deno.serve(async (req) => {
       "X-Audio-Seconds": String(Math.round(audioSeconds * 10) / 10),
     },
   });
-});
+}));
