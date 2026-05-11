@@ -1930,6 +1930,87 @@ export type Database = {
         }
         Relationships: []
       }
+      governance_link_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          created_at: string
+          event_type: string
+          id: string
+          left_kind: string
+          left_ref: string
+          link_id: string | null
+          payload: Json
+          relation: string
+          right_kind: string
+          right_ref: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          left_kind: string
+          left_ref: string
+          link_id?: string | null
+          payload?: Json
+          relation: string
+          right_kind: string
+          right_ref: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          left_kind?: string
+          left_ref?: string
+          link_id?: string | null
+          payload?: Json
+          relation?: string
+          right_kind?: string
+          right_ref?: string
+        }
+        Relationships: []
+      }
+      governance_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          left_kind: string
+          left_ref: string
+          note: string | null
+          relation: string
+          right_kind: string
+          right_ref: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          left_kind: string
+          left_ref: string
+          note?: string | null
+          relation: string
+          right_kind: string
+          right_ref: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          left_kind?: string
+          left_ref?: string
+          note?: string | null
+          relation?: string
+          right_kind?: string
+          right_ref?: string
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           created_at: string
@@ -4378,6 +4459,11 @@ export type Database = {
         Args: { _limit?: number; _offset?: number; _table: string }
         Returns: Json
       }
+      governance_chain: {
+        Args: { _anchor_kind: string; _anchor_ref: string }
+        Returns: Json
+      }
+      governance_coverage: { Args: { _days?: number }; Returns: Json }
       grant_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
