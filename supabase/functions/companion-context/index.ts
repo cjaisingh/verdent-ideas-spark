@@ -2,6 +2,7 @@
 // per-turn so the model knows what Lovable is working on, the operator's queue, and platform health.
 // Auth: operator JWT only (read-only, never writes).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,7 +22,7 @@ const json = (b: unknown, s = 200) =>
 let cache: { at: number; data: unknown } | null = null;
 const TTL_MS = 30_000;
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("companion-context", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // Auth: must be a signed-in operator/admin.
@@ -177,4 +178,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : "snapshot_failed" }, 500);
   }
-});
+}));

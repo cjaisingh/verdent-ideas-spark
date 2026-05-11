@@ -3,6 +3,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { pickModel } from "../_shared/model-policy.ts";
 import { logAiUsage } from "../_shared/ai-usage.ts";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,7 +25,7 @@ const ALLOWED_MODELS = new Set([
   "openai/gpt-5.2",
 ]);
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("companion-cloud-chat", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
@@ -149,4 +150,4 @@ Deno.serve(async (req) => {
       "X-Companion-Model": model,
     },
   });
-});
+}));

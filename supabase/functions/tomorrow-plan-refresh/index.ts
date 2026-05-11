@@ -4,6 +4,7 @@
 // Auth: operator JWT or x-awip-service-token header.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { withLogger } from "../_shared/logger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,7 +34,7 @@ type Criterion = {
   met?: boolean;
 };
 
-Deno.serve(async (req) => {
+Deno.serve(withLogger("tomorrow-plan-refresh", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -188,4 +189,4 @@ Deno.serve(async (req) => {
     await recordRun("error", 500, e instanceof Error ? e.message : "unknown");
     return json({ error: e instanceof Error ? e.message : "unknown" }, 500);
   }
-});
+}));
