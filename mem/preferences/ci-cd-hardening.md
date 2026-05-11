@@ -25,4 +25,8 @@ GitHub Actions inventory (all in `.github/workflows/`):
 
 Branch protection on `main` is **operator action** (cannot ship from code). Checklist lives in `docs/ci-cd.md` § "Required branch protection on `main`".
 
+**Deploy Production (`deploy-production.yml`) is `workflow_dispatch` only** until `SUPABASE_ACCESS_TOKEN` / `SUPABASE_PROD_PROJECT_ID` / `SUPABASE_PROD_DB_PASSWORD` are configured in repo Settings → Secrets. Do NOT re-add `push: branches: [main]` without setting all three first — otherwise every push emails a red workflow.
+
+**CodeQL (`codeql.yml`)** uses `build-mode: none` + `paths-ignore` (dist/docs/migrations/e2e-playwright/*.md) + `continue-on-error: true` on the analyze step. If it fails red, the most common cause is GitHub's default CodeQL setup being enabled alongside the in-repo workflow — see `docs/ci-cd.md` § "CodeQL: default vs advanced setup".
+
 Bypass labels: `doc-drift-ok` on PR; `// @logger-exempt: <reason>` in edge function file.
