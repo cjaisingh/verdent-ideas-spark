@@ -39,6 +39,7 @@ import CopilotProfile from "./pages/CopilotProfile";
 import NightShifts from "./pages/NightShifts";
 import NightShift from "./pages/NightShift";
 import OvernightOverview from "./pages/OvernightOverview";
+import OvernightActivity from "./pages/OvernightActivity";
 import AiUsage from "./pages/AiUsage";
 import PromotionAudits from "./pages/PromotionAudits";
 import AdminCronHealth from "./pages/AdminCronHealth";
