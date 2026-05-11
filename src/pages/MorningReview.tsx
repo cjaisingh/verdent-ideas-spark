@@ -140,7 +140,7 @@ export default function MorningReview() {
         <KpiTile label="Open findings" value={String(review.open_findings.length)} tone={review.open_findings.length ? "warn" : "ok"} />
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <OvernightRetroLine reviewDate={review.review_date} />
         <Section title="Stuck cron jobs" empty={!review.stuck_jobs.length} emptyMsg="All crons fresh.">
           {review.stuck_jobs.map((s) => (
             <div key={s.job} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
