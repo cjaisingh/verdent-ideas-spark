@@ -293,6 +293,8 @@ function Section({
   children,
   empty,
   emptyMsg,
+  onFocus,
+  panelData,
 }: {
   title: string;
   anchor: string;
@@ -300,8 +302,14 @@ function Section({
   children: React.ReactNode;
   empty?: boolean;
   emptyMsg?: string;
+  onFocus?: (ref: string, title: string, data: unknown) => void;
+  panelData?: unknown;
 }) {
   const state = triage.getState("panel", anchor);
+  const handleChange = async (kind: typeof anchor extends string ? "panel" : never, ref: string, next: TriageState | null) => {
+    await triage.setState("panel", ref, next);
+    if (next === "focus" && onFocus) onFocus(ref, title, panelData);
+  };
   return (
     <Card
       id={`panel-${anchor}`}
@@ -317,12 +325,22 @@ function Section({
             {state && (
               <Badge className={cn("text-[10px] capitalize", stateBadgeCls[state])}>{state}</Badge>
             )}
+            {state === "focus" && onFocus && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => onFocus(anchor, title, panelData)}
+              >
+                Re-open chat
+              </Button>
+            )}
           </CardTitle>
           <TriageChip
             kind="panel"
             itemRef={anchor}
             current={state}
-            onChange={triage.setState}
+            onChange={handleChange as any}
           />
         </div>
       </CardHeader>
