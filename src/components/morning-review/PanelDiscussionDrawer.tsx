@@ -189,10 +189,11 @@ export default function PanelDiscussionDrawer({
         const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
         const { error } = await supabase.from("deferred_items").insert({
           title: `[MR ${reviewDate}] ${panelTitle ?? panelRef}`.slice(0, 240),
+          reason: `Deferred from morning review ${reviewDate} panel ${panelRef}`,
           severity: "medium",
-          source: "morning_review",
           status: "deferred",
           defer_until: tomorrow.toISOString().slice(0, 10),
+          originating_context: { source: "morning_review", review_id: reviewId, panel_ref: panelRef },
         });
         if (error) throw error;
         toast.success("Deferred to tomorrow");
