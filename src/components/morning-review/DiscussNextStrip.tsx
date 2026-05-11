@@ -1,70 +1,56 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target } from "lucide-react";
-import type { TriageKind, TriageState } from "@/hooks/useMorningReviewTriage";
+import type { TriageState } from "@/hooks/useMorningReviewTriage";
 
-export type FocusItem = {
-  kind: TriageKind;
+export type PanelEntry = {
   ref: string;
-  label: string;
-  sub?: string;
-  panel: string;
-};
-
-const KIND_LABELS: Record<TriageKind, string> = {
-  discussion_action: "Action",
-  sentinel_finding: "Sentinel",
-  code_review_finding: "Code review",
-  cron_stuck: "Cron",
-  deferred: "Deferred",
-  promotion_drift: "Drift",
-  night_throughput: "Night",
+  title: string;
+  count: number;
 };
 
 export default function DiscussNextStrip({
-  items,
+  panels,
   triageMap,
 }: {
-  items: FocusItem[];
+  panels: PanelEntry[];
   triageMap: Record<string, TriageState>;
 }) {
-  const focused = items.filter(
-    (i) => triageMap[`${i.kind}::${i.ref}`] === "focus",
-  );
-  if (focused.length === 0) return null;
+  const focused = panels.filter((p) => triageMap[`panel::${p.ref}`] === "focus");
+  const revisit = panels.filter((p) => triageMap[`panel::${p.ref}`] === "revisit");
+  if (focused.length === 0 && revisit.length === 0) return null;
   return (
     <Card className="border-primary/40 bg-primary/5">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Target className="h-4 w-4 text-primary" />
           Discuss next
-          <Badge variant="secondary" className="ml-1">{focused.length}</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1.5">
-        {focused.map((it) => (
+        {focused.map((p) => (
           <a
-            key={`${it.kind}-${it.ref}`}
-            href={`#panel-${slug(it.panel)}`}
-            className="flex items-start gap-2 text-sm py-1 border-b border-border/30 last:border-0 hover:bg-background/40 -mx-2 px-2 rounded"
+            key={p.ref}
+            href={`#panel-${p.ref}`}
+            className="flex items-center gap-2 text-sm py-1.5 border-b border-border/30 last:border-0 hover:bg-background/40 -mx-2 px-2 rounded"
           >
-            <Badge variant="outline" className="text-[10px] mt-0.5 shrink-0">
-              {KIND_LABELS[it.kind]}
-            </Badge>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium line-clamp-1">{it.label}</div>
-              {it.sub && (
-                <div className="text-xs text-muted-foreground line-clamp-1">{it.sub}</div>
-              )}
-            </div>
-            <span className="text-xs text-muted-foreground shrink-0">{it.panel}</span>
+            <Badge className="bg-primary text-primary-foreground text-[10px]">Focus</Badge>
+            <span className="font-medium flex-1">{p.title}</span>
+            <span className="text-xs text-muted-foreground">{p.count} item{p.count === 1 ? "" : "s"}</span>
+          </a>
+        ))}
+        {revisit.map((p) => (
+          <a
+            key={p.ref}
+            href={`#panel-${p.ref}`}
+            className="flex items-center gap-2 text-sm py-1.5 border-b border-border/30 last:border-0 hover:bg-background/40 -mx-2 px-2 rounded"
+          >
+            <Badge className="bg-amber-500 text-white text-[10px]">Revisit</Badge>
+            <span className="font-medium flex-1">{p.title}</span>
+            <span className="text-xs text-muted-foreground">{p.count} item{p.count === 1 ? "" : "s"}</span>
           </a>
         ))}
       </CardContent>
     </Card>
   );
-}
-
-function slug(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
