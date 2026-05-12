@@ -16,4 +16,4 @@ type: preference
 
 **Why:** lets us answer "is data sovereign?" honestly without committing to engineering work nobody has paid for yet.
 
-**How to apply:** when asked about sovereignty, link `docs/sovereignty.md`. When asked to *make* it a USP, point at the three positioning options + tier requirements rather than just agreeing.
+**How to apply:** when asked about sovereignty, link `docs/sovereignty.md` or send buyers to the in-app FAQ at `/sovereignty` (Tier 1/2/3 tagged Q&As, hand-curated, must stay consistent with the source doc). When asked to *make* it a USP, point at the three positioning options + tier requirements rather than just agreeing.
