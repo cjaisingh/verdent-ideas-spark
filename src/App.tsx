@@ -57,6 +57,7 @@ import Governance from "./pages/Governance";
 import Sovereignty from "./pages/Sovereignty";
 import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
+import EdgeHealth from "./pages/EdgeHealth";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -124,6 +125,7 @@ const App = () => (
             <Route path="/sovereignty" element={<Sovereignty />} />
             <Route path="/status" element={<Status />} />
             <Route path="/connections" element={<Connections />} />
+            <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
