@@ -27,6 +27,7 @@ import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
 import { OvernightRunBadge } from "@/components/roadmap/OvernightRunBadge";
 import { OvernightRunControl } from "@/components/roadmap/OvernightRunControl";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
