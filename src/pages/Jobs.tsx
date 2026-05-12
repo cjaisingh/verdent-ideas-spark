@@ -315,6 +315,15 @@ export default function Jobs() {
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               )}
+              <DiscussThisButton
+                subjectType="discussion_action"
+                subjectId={j.id}
+                title={j.title}
+                details={j.details}
+                shortNum={j.short_num}
+                subjectShortNum={finding?.short_num ?? null}
+                variant="icon"
+              />
               {!j.promoted_task_id && (
                 <button
                   onClick={(e) => { e.stopPropagation(); promote(j); }}
