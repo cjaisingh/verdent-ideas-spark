@@ -53,7 +53,13 @@ export default function DiscussNextStrip({
             <Badge className="bg-amber-500 text-white text-[10px]">Revisit</Badge>
             <a href={`#panel-${p.ref}`} className="font-medium flex-1 hover:underline">{p.title}</a>
             <span className="text-xs text-muted-foreground">{p.count} item{p.count === 1 ? "" : "s"}</span>
-          </a>
+            <DiscussThisButton
+              subjectType="morning_review_panel"
+              subjectId={p.ref}
+              title={p.title}
+              details={`Revisit panel · ${p.count} item${p.count === 1 ? "" : "s"}`}
+            />
+          </div>
         ))}
       </CardContent>
     </Card>
