@@ -221,7 +221,15 @@ export function SentinelStatusStrip() {
                         )}
                       </div>
                     </div>
-                    <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
+                      <DiscussThisButton
+                        subjectType="sentinel_finding"
+                        subjectId={f.id}
+                        title={f.summary}
+                        details={`kind ${f.kind} · severity ${f.severity} · last seen ${new Date(f.last_seen_at).toISOString()}`}
+                      />
+                    </div>
                   </li>
                   );
                 })}
