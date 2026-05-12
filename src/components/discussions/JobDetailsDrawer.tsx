@@ -452,6 +452,15 @@ export function JobDetailsDrawer({
                   Task: {taskMeta.key ?? "—"} · {taskMeta.status}
                 </Badge>
               )}
+              <DiscussThisButton
+                subjectType="discussion_action"
+                subjectId={job.id}
+                title={job.title}
+                details={job.details}
+                shortNum={job.short_num}
+                subjectShortNum={subjectShortNum ?? null}
+                variant="button"
+              />
               {!job.promoted_task_id && onPromote && (
                 <Button size="sm" onClick={() => onPromote(job)}>
                   <ArrowUpRightFromSquare className="h-3.5 w-3.5 mr-1" />
