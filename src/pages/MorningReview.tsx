@@ -12,6 +12,7 @@ import TriageChip from "@/components/morning-review/TriageChip";
 import DiscussNextStrip, { type PanelEntry } from "@/components/morning-review/DiscussNextStrip";
 import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDrawer";
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
 
 type Review = {
