@@ -4,7 +4,7 @@ This document is the honest, up-to-date statement of where AWIP Core data lives,
 
 It is not marketing copy. It is the source-of-truth that marketing copy (if we ever write any) must be consistent with.
 
-Cross-links: [`security.md`](./security.md) · [`architecture.md`](./architecture.md) · [`iso27001-controls.md`](./iso27001-controls.md)
+Cross-links: [`security.md`](./security.md) · [`architecture.md`](./architecture.md) · [`iso27001-controls.md`](./iso27001-controls.md) · in-app FAQ at `/sovereignty`.
 
 ---
 
