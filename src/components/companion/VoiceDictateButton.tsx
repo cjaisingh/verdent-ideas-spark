@@ -18,14 +18,18 @@ export function VoiceDictateButton({
   onPartial,
   onFinal,
   disabled,
+  autoStart,
 }: {
   onPartial?: (text: string) => void;
   onFinal: (text: string) => void;
   disabled?: boolean;
+  /** When flips true, the mic auto-starts once. Subsequent flips do nothing. */
+  autoStart?: boolean;
 }) {
   const [recording, setRecording] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const autoStartedRef = useRef(false);
 
   const mintToken = async (): Promise<string | null> => {
     const { data: { session } } = await supabase.auth.getSession();
