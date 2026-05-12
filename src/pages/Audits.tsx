@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, Play, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 
 type Severity = "info" | "low" | "medium" | "high" | "critical";
 
