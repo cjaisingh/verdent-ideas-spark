@@ -16,6 +16,8 @@
     "test:rls-coverage": "bun run scripts/rls-coverage-report.ts",
     "rls:generate": "bun run scripts/generate-rls-map.ts",
     "rls:verify": "bun run scripts/generate-rls-map.ts && git diff --exit-code -- e2e/rls-policy-map.generated.ts",
+    "subprocessors:generate": "bun run scripts/generate-subprocessor-list.ts",
+    "subprocessors:check": "bun run scripts/generate-subprocessor-list.ts --check",
     "test:pw": "playwright test",
     "test:pw:headed": "playwright test --headed"
   },

@@ -31,3 +31,6 @@ jobs:
           GITHUB_BASE_REF: ${{ github.base_ref || 'main' }}
           GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: bun run scripts/check-doc-drift.ts
+
+      - name: Verify sub-processor list is in sync
+        run: bun run subprocessors:check

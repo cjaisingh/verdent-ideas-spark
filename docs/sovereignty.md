@@ -77,7 +77,7 @@ The single biggest sovereignty leak is **AI calls**. Constraining or eliminating
 | Deepgram | Voice transcription (optional) | Deepgram US | Audio + transcripts |
 | Lovable | Hosting + preview environments | Lovable infra | All operator data |
 
-This list is the source of truth. Any new external service added to the codebase must update this table in the same change.
+This list is the source of truth. Any new external service added to the codebase must update this table in the same change. After editing, run `bun run subprocessors:generate` to refresh [`docs/legal/sub-processor-list.md`](./legal/sub-processor-list.md); CI (`doc-drift`) blocks the PR if it goes stale.
 
 ---
 
