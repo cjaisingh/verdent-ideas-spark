@@ -11,7 +11,8 @@ export type FindingCandidate = {
     | "job_error_rate"
     | "frontend_realtime_error"
     | "edge_function_error_rate"
-    | "client_transport_error";
+    | "client_transport_error"
+    | "voice_pipeline_red";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -330,3 +331,50 @@ export function checkClientTransportErrors(
   return out;
 }
 
+
+/**
+ * Voice pipeline red-state check (TTS / browser transport / Telegram voice).
+ * Bands: red when error_rate > 10% over 1h OR no successful call in last 60min
+ * (provided we've ever seen one — to avoid flapping on cold start).
+ */
+const VOICE_FUNCTIONS = ["gemini-tts", "companion-cloud-chat", "telegram-send-voice"] as const;
+
+export function checkVoicePipelineRed(
+  now: Date,
+  windowMin: number,
+  rows: EdgeLogRow[],
+): FindingCandidate[] {
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const inWindow = rows.filter((r) => +new Date(r.created_at) >= sinceMs);
+  const bucket = Math.floor(now.getTime() / (windowMin * 60_000));
+  const out: FindingCandidate[] = [];
+
+  for (const fn of VOICE_FUNCTIONS) {
+    const fnRows = inWindow.filter((r) => r.function_name === fn);
+    const total = fnRows.length;
+    const errors = fnRows.filter((r) => (r.status ?? 0) >= 500).length;
+    const lastSuccess = fnRows
+      .filter((r) => (r.status ?? 0) < 400)
+      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))[0];
+    const rate = total ? errors / total : 0;
+    const noSuccess = total > 0 && !lastSuccess;
+    const highRate = total >= 5 && rate > 0.1;
+    if (!noSuccess && !highRate) continue;
+
+    out.push({
+      kind: "voice_pipeline_red",
+      severity: "high",
+      summary:
+        `Voice ${fn}: ${errors}/${total} errors (${(rate * 100).toFixed(0)}%) in last ${windowMin}m` +
+        (noSuccess ? "; no successful call." : "."),
+      dedupe_key: `voice_pipeline_red:${fn}:${bucket}`,
+      subject_ref: { function_name: fn, window_minutes: windowMin },
+      payload: {
+        function_name: fn, window_minutes: windowMin,
+        total, errors, error_rate: rate,
+        no_success_in_window: noSuccess,
+      },
+    });
+  }
+  return out;
+}

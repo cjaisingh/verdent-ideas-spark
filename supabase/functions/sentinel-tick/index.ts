@@ -5,6 +5,7 @@ import { dispatchAlert } from "../_shared/alerts.ts";
 import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
+  checkVoicePipelineRed,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -48,16 +49,21 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
   try {
     const now = new Date();
     const since30m = new Date(now.getTime() - 30 * 60_000).toISOString();
+    const since60m = new Date(now.getTime() - 60 * 60_000).toISOString();
     // Cron-silence check needs to see runs older than 24h for weekly jobs
     // (threshold is 2× cadence, so weekly jobs need ~14 days of history).
     // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, secretsRes, auditRes, feRes, cliRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
         .gte("created_at", since30m).limit(2000),
+      sb.from("edge_request_logs")
+        .select("status,created_at,function_name")
+        .in("function_name", ["gemini-tts", "companion-cloud-chat", "telegram-send-voice"])
+        .gte("created_at", since60m).limit(2000),
       sb.from("app_secrets").select("key,updated_at"),
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
       sb.from("frontend_error_logs").select("message,url,created_at,kind").gte("created_at", since30m).limit(500),
@@ -71,6 +77,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkFiveXxSpike(now, 15, edgeLogs),
       ...checkEdgeFunctionErrorRate(now, 30, edgeLogs),
       ...checkClientTransportErrors(now, 30, cliRes.data ?? []),
+      ...checkVoicePipelineRed(now, 60, voiceEdgeRes.data ?? []),
       ...checkSecretAge(now, secretsRes.data ?? []),
       ...checkAdminGrants(now, 15, auditRes.data ?? []),
       ...checkJobErrorRate(now, runs),
