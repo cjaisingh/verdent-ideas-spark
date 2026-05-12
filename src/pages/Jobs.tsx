@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
 import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import {
   RISK_DOT_CLASS,
   RISK_RUBRIC,
@@ -314,6 +315,15 @@ export default function Jobs() {
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               )}
+              <DiscussThisButton
+                subjectType="discussion_action"
+                subjectId={j.id}
+                title={j.title}
+                details={j.details}
+                shortNum={j.short_num}
+                subjectShortNum={finding?.short_num ?? null}
+                variant="icon"
+              />
               {!j.promoted_task_id && (
                 <button
                   onClick={(e) => { e.stopPropagation(); promote(j); }}

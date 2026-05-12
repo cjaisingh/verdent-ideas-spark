@@ -1,90 +1,74 @@
-# Plan: Scope a data-sovereignty story for AWIP Core
+# Plan: Unblock the loop
 
-Goal: produce the artifacts and architectural changes that would let us *credibly* market sovereignty later, without committing to it as the USP today. AI egress is explicitly out of scope for this pass — we'll handle that as a separate workstream.
+Two parallel tracks. Track A clears the backlog so Phase 2 can close. Track B adds the one-click voice path you asked for.
 
-## Outcome
+---
 
-A new doc `docs/sovereignty.md` plus a tiered checklist in the master plan, so we can decide later whether to ship Tier 1, 2, or 3. Nothing is marketed externally until a tier is chosen.
+## Track A — Pragmatic cleanup (no new features)
 
-## Three tiers (the decision surface)
+**Goal:** drop everything that doesn't impact future phases. Stop re-auditing the same items.
 
-```text
-Tier 1 — POSTURE (what we already have, written down)
-  Region statement, RLS posture, audit trail, sub-processor list.
-  No code changes. ~0.5 sprint of docs.
+### A1. Bulk-close Phase 1 todos as `wontfix`
+- Query `roadmap_tasks` where `sprint.phase = Phase 1` and `status = 'todo'`.
+- For each: read title, decide one of:
+  - **Drop** (`status='wontfix'`, note: "Phase 1 sealed — pragmatic close 2026-05-12") — default
+  - **Keep** only if it's literally a Phase 2 blocker → move to Phase 2 sprint
+- One migration, one batch. No per-item discussion.
 
-Tier 2 — CONTRACTUAL (defensible claim)
-  Per-tenant region field, export/delete API, DPA template,
-  trust page, data-flow diagram, retention policy.
-  ~1 sprint. No AI egress changes.
+### A2. Phase 2 — same treatment for the 8 todos + 2 in_progress
+- Read all 10. For each, classify:
+  - **Done-by-evidence**: feature exists in code/db → mark `done` with evidence link
+  - **Drop**: not needed for Phase 2 sign-off → `wontfix`
+  - **Keep**: real blocker → leave as-is, assign owner + due date this week
+- Target: ≤3 KEEP. Everything else gone.
 
-Tier 3 — SOVEREIGN-GRADE (sellable to regulated buyers)
-  CMK/BYOK story, in-region AI mode, signed audit exports,
-  per-tenant sub-processor opt-in, ISO 27001 evidence pack.
-  Multi-sprint. Needs the AI egress workstream done first.
-```
+### A3. 14 open `discussion_actions`
+- For each: KEEP (owner + due_at within 7 days) / DROP (`status='cancelled'`).
+- No DEFER, no MERGE — those are loops.
 
-## Workstream A — Tier 1 (docs only, do now)
+### A4. 12 pending `night_proposals`
+- Bulk reject all 12 (`status='rejected'`, reason: "Pragmatic backlog reset").
+- Stops the night-shift repeat loop immediately.
+- If any look genuinely useful, you accept them manually first; the rest get rejected.
 
-- New `docs/sovereignty.md` with five sections:
-  1. **Where your data lives** — name the region (confirm from Lovable Cloud project info), state "single region, no replication".
-  2. **Who can read it** — link to `docs/security.md` (RLS, operator-only, service-token model).
-  3. **What we record** — link to `api_call_logs`, `*_events`, retention = forever (today).
-  4. **What leaves the region** — honest list: AI gateway calls (Gemini/OpenAI), GitHub mirror, Telegram. Mark each as "egress" with purpose.
-  5. **Sub-processors** — Lovable Cloud (Supabase), Google AI, OpenAI, GitHub, Telegram, Deepgram. Table with purpose + region + data class.
-- Update `README.md` and `docs/master-plan.md` to link `sovereignty.md` under "Module map".
-- Add `mem/preferences/sovereignty-posture.md` capturing the tier we're at and what's intentionally not claimed.
+### A5. Phase 2 sign-off attempt
+- After A1–A4, run the Phase 2 sign-off flow.
+- If a gate fails: fix only that gate. If multiple fail: write an ADR scope-cut and sign off.
+- Outcome: Phase 2 → done, Phase 5 → active.
 
-## Workstream B — Tier 2 scope (plan, don't build)
+---
 
-Document in `docs/sovereignty.md` as "Tier 2 backlog" with rough sizing:
+## Track B — "Discuss this" voice button (small build)
 
-- **Per-tenant region field** on `tenants` (`region text not null default '<current>'`) + a check that no cross-region writes happen. Today single-region, so it's a label; becomes meaningful when we add a second region.
-- **Export endpoint** `/awip-api/tenants/:id/export` — returns a signed zip of all rows for that tenant across every table. Need a `tenant_export_jobs` table and an edge function.
-- **Delete endpoint** `/awip-api/tenants/:id/purge` — hard-delete with a 30-day tombstone; emits `tenant_purged` event. Needs an admin approval gate.
-- **Retention policy** — per-table TTL (`api_call_logs` 365d, `ai_usage_log` 90d, `*_events` forever). New `retention_policies` table + nightly cron.
-- **Data-flow diagram** — single SVG in `docs/sovereignty.md` showing operator → edge function → DB, plus every egress arrow.
-- **DPA template** — markdown in `docs/legal/dpa-template.md`.
-- **Trust page** — public `/trust` route summarising region, sub-processors, last audit date.
+**Goal:** from any job/finding row, one click → Companion thread pre-loaded with that subject + voice mic already armed.
 
-## Workstream C — Tier 3 scope (research only)
+### B1. Shared component `DiscussThisButton`
+- Props: `subject_type`, `subject_id`, `title`, optional `discussion_id`.
+- On click: create/find a Companion thread tagged with the subject, navigate to `/companion?thread=<id>&voice=1`.
 
-Listed in `docs/sovereignty.md` as "Tier 3 backlog, not committed":
+### B2. Companion auto-arm voice
+- `/companion` reads `?voice=1` query param → auto-mounts `VoiceDictateButton` in record state.
+- Pre-seeds the thread with a system message: "Discussing {handle}: {title}\n\n{details}".
 
-- CMK/BYOK — needs Supabase enterprise tier; document the gap.
-- In-region AI mode — depends on the (separate) AI egress workstream; `pickModel()` would gain a `tenant.sovereignty='strict'` branch that refuses external models.
-- Signed audit exports — sign export zips with an AWIP key so customers can prove non-tampering.
-- Per-tenant sub-processor opt-in — `tenant_subprocessor_consents` table; service-token calls check it before invoking.
-- ISO 27001 evidence pack — auto-generate from `docs/iso27001-controls.md` + `api_call_logs` extracts.
+### B3. Wire it into 3 surfaces (no new pages)
+- `JobDetailsDrawer` — header button next to "Promote"
+- `Jobs.tsx` card row — small mic icon next to the existing icons
+- `MorningReview` panel rows — in the existing action chip strip
 
-## Workstream D — Positioning (decide later, after Tier 1)
+### B4. Out of scope (deliberately)
+- No bulk voice → bulk-action ("voice close 5 jobs") yet — wait until you've used B1–B3 for a week
+- No new Companion page, no new voice provider, no Deepgram realtime upgrade
+- TTS playback of the AI reply stays on existing Gemini TTS path
 
-Three positioning options stay in `docs/sovereignty.md` as an explicit "not decided" section:
+---
 
-- **A. The USP.** Rewrite homepage + `master-plan.md` vision. Only after Tier 3.
-- **B. One of three pillars.** Add to homepage alongside "operator-driven" and "capability-substrate". Viable after Tier 2.
-- **C. Posture only.** Keep architecture, don't market. Viable today after Tier 1.
-
-No homepage changes in this plan. The Index page stays as-is.
+## Order of execution
+1. A4 (kill night repeat — 1 migration, instant relief)
+2. A1 + A2 + A3 (one cleanup migration + one bulk update)
+3. B1 → B2 → B3 (build the button)
+4. A5 (Phase 2 sign-off attempt)
 
 ## Out of scope
-
-- Any AI egress controls (separate workstream, user explicitly deferred).
-- Any change to `pickModel()`, `ai_usage_log`, or model routing.
-- Any homepage / marketing copy change.
-- Any new RLS policies or auth flows.
-- Encryption-at-rest changes.
-
-## Deliverables of this plan, when implemented
-
-1. `docs/sovereignty.md` (new) — Tier 1 posture, Tier 2 backlog, Tier 3 research, positioning options.
-2. `docs/legal/` directory placeholder with a `README.md` explaining what goes there later.
-3. `mem/preferences/sovereignty-posture.md` (new) — current tier + what's not claimed.
-4. `README.md` + `docs/master-plan.md` link updates.
-5. `CHANGELOG.md` entry under Unreleased.
-
-No DB migrations. No edge functions. No UI.
-
-## How we'd decide the next move
-
-After Tier 1 ships, you have a doc you can show to a prospective buyer. Their reaction tells us whether to fund Tier 2. We don't speculatively build Tier 2/3 without that signal.
+- No new sovereignty work
+- No Phase 5+ planning until A5 lands
+- No refactors "while I'm here"

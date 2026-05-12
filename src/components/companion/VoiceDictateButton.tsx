@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,14 +18,18 @@ export function VoiceDictateButton({
   onPartial,
   onFinal,
   disabled,
+  autoStart,
 }: {
   onPartial?: (text: string) => void;
   onFinal: (text: string) => void;
   disabled?: boolean;
+  /** When flips true, the mic auto-starts once. Subsequent flips do nothing. */
+  autoStart?: boolean;
 }) {
   const [recording, setRecording] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const autoStartedRef = useRef(false);
 
   const mintToken = async (): Promise<string | null> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -138,6 +142,15 @@ export function VoiceDictateButton({
     try { mediaRef.current?.stop(); mediaRef.current?.stream.getTracks().forEach((t) => t.stop()); } catch {/**/}
     try { wsRef.current?.close(); } catch {/**/}
   };
+
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && !disabled && !recording) {
+      autoStartedRef.current = true;
+      // Defer one tick so the parent has finished mounting.
+      const t = setTimeout(() => { void start(); }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [autoStart, disabled, recording]);
 
   return (
     <Button
