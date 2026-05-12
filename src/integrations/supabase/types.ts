@@ -986,6 +986,39 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_test_results: {
+        Row: {
+          connector_id: string
+          env_var_name: string
+          error: string | null
+          latency_ms: number | null
+          outcome: string
+          scope_hint: Json | null
+          tested_at: string
+          tested_by: string | null
+        }
+        Insert: {
+          connector_id: string
+          env_var_name: string
+          error?: string | null
+          latency_ms?: number | null
+          outcome: string
+          scope_hint?: Json | null
+          tested_at?: string
+          tested_by?: string | null
+        }
+        Update: {
+          connector_id?: string
+          env_var_name?: string
+          error?: string | null
+          latency_ms?: number | null
+          outcome?: string
+          scope_hint?: Json | null
+          tested_at?: string
+          tested_by?: string | null
+        }
+        Relationships: []
+      }
       copilot_agent_overrides: {
         Row: {
           agent_id: string

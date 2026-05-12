@@ -1,98 +1,67 @@
 ## Goal
 
-A single operator-only page at `/connections` that answers three questions at a glance:
-
-1. What is **linked** to this project right now?
-2. What is **available** in the workspace but not yet linked?
-3. What needs my **action** (not linked, missing scopes, expired, or no access)?
-
-No new backend tables, no new edge functions. Pure read-only surface backed by the workspace's connector inventory + a tiny edge function that fans out to the existing connector verify-credentials endpoint.
+Promote the existing icon-only re-probe on `/connections` into a visible **Test connection** button on every integration row, and extend coverage so direct-API connectors (Perplexity, Firecrawl, ElevenLabs, Aikido) can also be tested — not just gateway ones.
 
 ## Scope
 
-- New page: `src/pages/Connections.tsx` (route `/connections`, gated by operator role like every other admin page).
-- New sidebar entry under the Admin group.
-- New edge function: `supabase/functions/connections-inventory/index.ts` — operator JWT only, `withLogger`-wrapped. Returns the connector inventory (calls the same Lovable API used by the workspace UI) plus a per-connection verify-credentials probe (latency + outcome).
-- Doc: `docs/connections.md`. Add to README index + CHANGELOG.
+- Edit `supabase/functions/connections-inventory/index.ts` to add a per-connector probe map for direct-API connectors and re-use the gateway `verify_credentials` path for the rest.
+- Edit `src/pages/Connections.tsx` to render a labelled `Test` button on every linked row, with success/failure toast and inline last-result chip.
+- Persist the last probe result to a new `connection_test_results` table so the chip survives a page reload (operator-only RLS, realtime off).
+- Doc: `docs/connections.md` (new) + CHANGELOG entry.
 
-Out of scope: linking/unlinking from the UI (Lovable's connector dialog handles that — page links out to it), MCP/chat connectors, secret rotation UI, credential editing.
+Out of scope: testing **unlinked** connectors (no secret to test with), scope/permission discovery beyond what each provider's cheapest call returns, alerting on failure, scheduled re-tests.
 
-## Page layout
+## Probe map
 
-```text
-/connections
-┌──────────────────────────────────────────────────────────────┐
-│ Connections                              [Refresh] [Open Cloud→Connectors] │
-│ N linked · M available · K need action                       │
-├──────────────────────────────────────────────────────────────┤
-│ Tabs: [Needs action (K)] [Linked (N)] [Available (M)] [All]  │
-├──────────────────────────────────────────────────────────────┤
-│ ▸ Telegram         linked   gateway   verified  120ms        │
-│   Chris's Telegram · used by: gemini-tts? telegram-bot?      │
-│   [Open in Cloud] [Test credentials] [Unlink…]               │
-│                                                              │
-│ ▸ Gmail            available  gateway  —                     │
-│   Chris's Gmail · not linked                                 │
-│   [Link to project]                                          │
-│                                                              │
-│ ▸ Perplexity       available  direct API  —                  │
-│   ...                                                        │
-└──────────────────────────────────────────────────────────────┘
+| Connector | Probe |
+|---|---|
+| All gateway connectors | `POST https://connector-gateway.lovable.dev/api/v1/verify_credentials` (already wired) |
+| `perplexity` | `POST https://api.perplexity.ai/chat/completions` with 1-token `sonar-small` request |
+| `firecrawl` | `GET https://api.firecrawl.dev/v1/team/credit-usage` (cheap, no scrape spend) |
+| `elevenlabs` | `GET https://api.elevenlabs.io/v1/user` |
+| `aikido` | `GET https://app.aikido.dev/api/public/v1/issues_count` |
+
+Each direct-API probe returns `{ outcome: "verified" | "failed", latency_ms, error?, scope_hint? }` where `scope_hint` is whatever permission detail the call returns (e.g. Perplexity tier, Firecrawl remaining credits, ElevenLabs subscription tier). Surfaced under the row.
+
+## Persistence
+
+```sql
+create table public.connection_test_results (
+  env_var_name text primary key,
+  connector_id text not null,
+  outcome text not null check (outcome in ('verified','skipped','failed','unknown')),
+  latency_ms integer,
+  error text,
+  scope_hint jsonb,
+  tested_at timestamptz not null default now(),
+  tested_by uuid references auth.users(id)
+);
+alter table public.connection_test_results enable row level security;
+create policy "operator read" on public.connection_test_results
+  for select to authenticated using (public.has_role(auth.uid(),'operator') or public.has_role(auth.uid(),'admin'));
+-- writes happen via the edge function with service role; no insert/update policy needed.
 ```
 
-Each row shows: connector name, status pill (linked / available / needs-action / no-access), transport pill (gateway / direct API), last verify outcome + latency, connection display name. Expanding a row shows: connection_id, connector_id, scopes (when gateway returns them), and the matching env-var name (e.g. `TELEGRAM_API_KEY`).
+`connections-inventory` writes one row per probe (upsert by `env_var_name`). The list endpoint joins `connection_test_results` so each row in the page renders with its last-known outcome on first paint.
 
-Filter chips: status, transport, has-access. Search box over connector + connection name.
+## UI
 
-## Status derivation
+Per row (linked tab and needs-action tab):
 
-| State           | Rule                                                                 | Pill                |
-|-----------------|----------------------------------------------------------------------|---------------------|
-| Linked, healthy | `linked && verify.outcome in {verified, skipped}`                    | green "Linked"      |
-| Needs action    | `linked && verify.outcome === 'failed'`                              | amber "Reconnect"   |
-| Available       | `!linked && has_access && linkable`                                  | grey "Available"    |
-| No access       | `!has_access`                                                        | grey "No access"    |
-| Blocked         | `!linkable` (e.g. workspace-only connector)                          | grey "Workspace only" |
+```
+[Plug] Telegram                          [Verified · 120ms · 2m ago] [Test connection]
+       telegram · TELEGRAM_API_KEY · gateway
+```
 
-The amber "Reconnect" row links to Lovable Cloud → Connectors with the relevant connection pre-selected (we just open the standard connectors panel — no inline reconnect, since we can't drive `standard_connectors--reconnect` from the runtime app).
-
-## Edge function: `connections-inventory`
-
-- Auth: operator JWT only (`requireOperator` helper). No service-token path.
-- Behaviour:
-  1. Calls the same workspace listing endpoint Lovable uses for the connector picker (the function runs server-side with the project's `LOVABLE_API_KEY`, so it sees everything `list_connections` would surface for the linked workspace).
-  2. For each `linked && uses_gateway` connection, fans out to `POST https://connector-gateway.lovable.dev/api/v1/verify_credentials` with `Authorization: Bearer ${LOVABLE_API_KEY}` and `X-Connection-Api-Key: ${<CONNECTOR>_API_KEY}` from `Deno.env`. Cache the result for 60 s in-memory to keep refresh cheap.
-  3. Returns:
-     ```json
-     {
-       "linked": [{ "connector_id", "connection_id", "name", "uses_gateway", "verify": { "outcome", "latency_ms", "error?" }, "env_var_name" }],
-       "available": [{ "connector_id", "connection_id", "name", "uses_gateway", "linkable", "has_access" }],
-       "fetched_at": "<iso>"
-     }
-     ```
-- Wrapped with `withLogger`. Writes nothing to the DB.
-
-If the workspace listing endpoint is not reachable from an edge function (the curl-the-Lovable-API path is the one risky assumption), the function falls back to: returning only the **linked** half by reading the connector env vars present in `Deno.env` (`*_API_KEY` matching the known connector list). The "Available" tab then shows an empty state with a link to Cloud → Connectors. We'll learn which path works on the first deploy.
-
-## Frontend file plan
-
-- `src/pages/Connections.tsx` — page shell, fetch via `supabase.functions.invoke('connections-inventory')`, tabs, search, row rendering.
-- `src/components/connections/ConnectionRow.tsx` — single row + expand panel.
-- `src/components/connections/StatusPill.tsx`, `TransportPill.tsx` — small visual atoms.
-- `src/components/connections/VerifyButton.tsx` — re-runs verify for one connection (calls a `?probe=<connection_id>` query on the same edge function).
-- Sidebar: add "Connections" link in `src/components/AppSidebar.tsx` under the existing Admin group, behind operator role.
-- Route registration in `src/App.tsx`.
+- Button: `<Button size="sm" variant="outline">Test connection</Button>`, spinner while running.
+- Result toast on click with outcome + latency + first 80 chars of error.
+- For `failed`, the row's status pill flips to amber **Reconnect** with a link to Cloud → Connectors.
+- For direct-API connectors with `scope_hint`, render a one-line `text-xs text-muted-foreground` summary under the row (e.g. "Plan: standard · 4,800 credits left").
 
 ## Verification
 
 - Build passes.
-- `/connections` loads as operator: shows ≥1 linked row (Telegram) and N available rows.
-- Telegram verify probe returns `verified` (or `skipped`) with a latency number.
-- Non-operator user gets redirected by `RequireAuth` like every other admin page.
-- Logger Validation workflow stays green (the new function is `withLogger`-wrapped).
-
-## Memory + docs
-
-- Add `mem://features/connections-page` describing route, edge function, and the status derivation table.
-- `docs/connections.md` mirrors the page contract for AWIP Reviews.
-- Update `README.md` admin index + `CHANGELOG.md`.
+- `/connections` shows a Test button on every linked row.
+- Click on Telegram → toast shows verified + ms; result persists across refresh.
+- Click on a direct-API connector if linked → returns verified with scope_hint, or failed with provider error.
+- Logger Validation workflow stays green.

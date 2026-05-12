@@ -8,7 +8,12 @@ import { Card } from "@/components/ui/card";
 import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, MinusCircle, Search, Plug } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-type Verify = { outcome: "verified" | "skipped" | "failed" | "unknown"; latency_ms?: number; error?: string };
+type Verify = {
+  outcome: "verified" | "skipped" | "failed" | "unknown";
+  latency_ms?: number;
+  error?: string;
+  scope_hint?: Record<string, unknown> | null;
+};
 
 type DirEntry = {
   connector_id: string;
@@ -19,7 +24,7 @@ type DirEntry = {
   linked: boolean;
 };
 
-type LinkedEntry = DirEntry & { verify: Verify };
+type LinkedEntry = DirEntry & { verify: Verify; tested_at?: string | null };
 
 type Extra = { key: string; name: string; purpose: string; present: boolean };
 
@@ -71,10 +76,17 @@ export default function Connections() {
         if (!cur) return cur;
         return {
           ...cur,
-          linked: cur.linked.map((l) => l.env_var_name === envVar ? { ...l, verify: body.verify } : l),
+          linked: cur.linked.map((l) => l.env_var_name === envVar ? { ...l, verify: body.verify, tested_at: body.fetched_at } : l),
         };
       });
-      toast({ title: `${envVar}: ${body.verify.outcome}`, description: body.verify.latency_ms ? `${body.verify.latency_ms} ms` : body.verify.error ?? "" });
+      const desc = body.verify.outcome === "failed"
+        ? (body.verify.error ?? "no detail")
+        : `${body.verify.latency_ms ?? "?"} ms${body.verify.scope_hint ? ` · ${Object.entries(body.verify.scope_hint).slice(0, 2).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")}` : ""}`;
+      toast({
+        title: `${envVar}: ${body.verify.outcome}`,
+        description: desc.slice(0, 160),
+        variant: body.verify.outcome === "failed" ? "destructive" : "default",
+      });
     } catch (e) {
       toast({ title: "Probe failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
@@ -96,13 +108,18 @@ export default function Connections() {
     return rows.filter((r) => r.name.toLowerCase().includes(needle) || r.connector_id.includes(needle) || r.env_var_name.toLowerCase().includes(needle));
   };
 
-  const Row = ({ entry, verify }: { entry: DirEntry; verify?: Verify }) => {
+  const Row = ({ entry, verify, testedAt }: { entry: DirEntry; verify?: Verify; testedAt?: string | null }) => {
     const s = statusOf(entry, verify);
     const Icon = s.icon;
+    const scopeLine = verify?.scope_hint && verify.outcome === "verified"
+      ? Object.entries(verify.scope_hint).slice(0, 3).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")
+      : null;
+    const ago = testedAt ? `${Math.max(0, Math.round((Date.now() - new Date(testedAt).getTime()) / 60000))}m ago` : null;
+    const isProbing = probing === entry.env_var_name;
     return (
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-b last:border-b-0">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <Plug className="h-4 w-4 text-muted-foreground shrink-0" />
+      <div className="flex items-start justify-between gap-3 px-3 py-2.5 border-b last:border-b-0">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <Plug className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
           <div className="min-w-0">
             <div className="text-sm font-medium truncate">{entry.name}</div>
             <div className="text-xs text-muted-foreground truncate">
@@ -112,22 +129,27 @@ export default function Connections() {
               {" · "}
               {entry.uses_gateway ? "gateway" : "direct API"}
               {verify?.latency_ms != null && ` · ${verify.latency_ms} ms`}
+              {ago && ` · tested ${ago}`}
               {verify?.error && verify.outcome === "failed" && ` · ${verify.error}`}
             </div>
+            {scopeLine && (
+              <div className="text-xs text-muted-foreground/80 truncate mt-0.5">{scopeLine}</div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant="secondary" className={`gap-1 ${s.cls}`}>
             <Icon className="h-3 w-3" /> {s.label}
           </Badge>
-          {entry.linked && entry.uses_gateway && (
+          {entry.linked && (
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               onClick={() => reprobe(entry.env_var_name)}
-              disabled={probing === entry.env_var_name}
+              disabled={isProbing}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${probing === entry.env_var_name ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isProbing ? "animate-spin" : ""}`} />
+              {isProbing ? "Testing…" : "Test connection"}
             </Button>
           )}
         </div>
@@ -171,7 +193,7 @@ export default function Connections() {
           <Card>
             {filter(merged.needsAction).length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Everything that's linked verifies cleanly.</div>
-            ) : filter(merged.needsAction).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} />)}
+            ) : filter(merged.needsAction).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} testedAt={l.tested_at} />)}
           </Card>
         </TabsContent>
 
@@ -179,7 +201,7 @@ export default function Connections() {
           <Card>
             {filter(merged.linked).length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Nothing linked yet.</div>
-            ) : filter(merged.linked).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} />)}
+            ) : filter(merged.linked).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} testedAt={l.tested_at} />)}
           </Card>
         </TabsContent>
 
