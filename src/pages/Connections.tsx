@@ -193,7 +193,7 @@ export default function Connections() {
           <Card>
             {filter(merged.needsAction).length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Everything that's linked verifies cleanly.</div>
-            ) : filter(merged.needsAction).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} />)}
+            ) : filter(merged.needsAction).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} testedAt={l.tested_at} />)}
           </Card>
         </TabsContent>
 
@@ -201,7 +201,7 @@ export default function Connections() {
           <Card>
             {filter(merged.linked).length === 0 ? (
               <div className="p-6 text-sm text-muted-foreground">Nothing linked yet.</div>
-            ) : filter(merged.linked).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} />)}
+            ) : filter(merged.linked).map((l) => <Row key={l.connector_id} entry={l} verify={l.verify} testedAt={l.tested_at} />)}
           </Card>
         </TabsContent>
 
