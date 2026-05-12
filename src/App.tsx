@@ -33,6 +33,7 @@ import Transcripts from "./pages/Transcripts";
 import MasterPlan from "./pages/MasterPlan";
 import Plan from "./pages/Plan";
 import Companion from "./pages/Companion";
+import VoiceSetup from "./pages/VoiceSetup";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
@@ -98,6 +99,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/plan" element={<Plan />} />
             <Route path="/companion" element={<Companion />} />
+            <Route path="/voice-setup" element={<VoiceSetup />} />
             <Route path="/copilot" element={<Copilot />} />
             <Route path="/copilot/agents" element={<CopilotAgents />} />
             <Route path="/copilot/profile" element={<CopilotProfile />} />

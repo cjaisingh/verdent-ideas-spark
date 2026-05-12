@@ -4564,6 +4564,48 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_config: {
+        Row: {
+          created_at: string
+          last_validated_at: string | null
+          last_validation: Json | null
+          mic_label: string | null
+          rork_enabled: boolean
+          stt_provider: string
+          transport: string
+          tts_provider: string
+          tts_voice: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_validated_at?: string | null
+          last_validation?: Json | null
+          mic_label?: string | null
+          rork_enabled?: boolean
+          stt_provider?: string
+          transport?: string
+          tts_provider?: string
+          tts_voice?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_validated_at?: string | null
+          last_validation?: Json | null
+          mic_label?: string | null
+          rork_enabled?: boolean
+          stt_provider?: string
+          transport?: string
+          tts_provider?: string
+          tts_voice?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       walkthrough_checks: {
         Row: {
           capability_id: string | null
