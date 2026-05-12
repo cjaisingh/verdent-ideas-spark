@@ -37,6 +37,7 @@ type Inventory = {
   directory: DirEntry[];
   extras: Extra[];
   fetched_at: string;
+  next_run_at?: string | null;
 };
 
 type AuditRow = {
