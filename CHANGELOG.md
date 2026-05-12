@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+- **Sovereignty FAQ page (`/sovereignty`)** — buyer-facing in-app FAQ with 13 hand-curated Q&As tagged Tier 1 / Tier 2 / Tier 3 (search + tier filter + accordion). Each answer links to the relevant section of `docs/sovereignty.md`, the sub-processor list, the DPA placeholder, the security model, or the ISO 27001 controls map. Tier legend card up top, reference-docs grid at the bottom. Pure UI on top of existing docs — no DB, no edge function, no new claims beyond what the docs say. Sidebar link added under Knowledge group. Files: `src/pages/Sovereignty.tsx`, route in `src/App.tsx`, sidebar entry in `src/components/AppSidebar.tsx`.
+
 ### Documented
 - **DPA template placeholder** — new `docs/legal/dpa-template.md` skeleton (parties, sub-processors, location, retention, security, breach, transfers, termination) marked clearly as PLACEHOLDER and not legally reviewed. Lists open items (legal review, processor entity, retention/deletion endpoints, SCC annex, etc.) that must be resolved before sending to a customer. Linked from `docs/legal/README.md`. No commitment to ship Tier 2 — this just gives procurement a shape to react to.
 - **Sub-processor list auto-generator** — new `scripts/generate-subprocessor-list.ts` parses `docs/sovereignty.md` §5 and emits `docs/legal/sub-processor-list.md` with a "do not edit by hand" banner + source sha. Wired into `package.json` as `subprocessors:generate` / `subprocessors:check`. The Doc Drift workflow (`.github/workflows/doc-drift.yml`) runs `--check` on every PR and weekly Monday sweep; PR fails if the legal file is stale relative to the sovereignty source. Sovereignty §5 footer now tells contributors to re-run the generator after editing the table.
