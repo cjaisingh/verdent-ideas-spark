@@ -9,7 +9,9 @@ export type FindingCandidate = {
     | "secret_age"
     | "role_grant"
     | "job_error_rate"
-    | "frontend_realtime_error";
+    | "frontend_realtime_error"
+    | "edge_function_error_rate"
+    | "client_transport_error";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -237,5 +239,94 @@ export function checkFrontendRealtimeErrors(
       sample_url: matches[0].url ?? null,
     },
   }];
+}
+
+/**
+ * Edge function error-rate watcher (per-function, rate-based).
+ * Fires per function when:
+ *   - >= 3 5xx in window AND error_rate >= 20%   → high
+ *   - >= 10 5xx in window                        → critical
+ */
+export function checkEdgeFunctionErrorRate(
+  now: Date,
+  windowMin: number,
+  logs: EdgeLogRow[],
+): FindingCandidate[] {
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const recent = logs.filter((l) => +new Date(l.created_at) >= sinceMs);
+  const byFn: Record<string, { total: number; errors: number }> = {};
+  for (const l of recent) {
+    const k = l.function_name || "unknown";
+    byFn[k] ||= { total: 0, errors: 0 };
+    byFn[k].total++;
+    if ((l.status ?? 0) >= 500) byFn[k].errors++;
+  }
+  const bucket = Math.floor(now.getTime() / (windowMin * 60_000));
+  const out: FindingCandidate[] = [];
+  for (const [fn, agg] of Object.entries(byFn)) {
+    const rate = agg.total ? agg.errors / agg.total : 0;
+    let sev: FindingCandidate["severity"] | null = null;
+    if (agg.errors >= 10) sev = "critical";
+    else if (agg.errors >= 3 && rate >= 0.2) sev = "high";
+    if (!sev) continue;
+    out.push({
+      kind: "edge_function_error_rate",
+      severity: sev,
+      summary:
+        `${fn}: ${agg.errors} server errors of ${agg.total} calls in ` +
+        `last ${windowMin}m (${(rate * 100).toFixed(0)}%).`,
+      dedupe_key: `edge_function_error_rate:${fn}:${bucket}`,
+      subject_ref: { function_name: fn, window_minutes: windowMin },
+      payload: {
+        function_name: fn, window_minutes: windowMin,
+        total: agg.total, errors: agg.errors, error_rate: rate,
+      },
+    });
+  }
+  return out;
+}
+
+export type ClientErrorRow = {
+  function_name: string | null;
+  message: string;
+  created_at: string;
+};
+
+/**
+ * Browser-side network failures captured by the client-error-beacon function.
+ * Fires when >= 5 transport errors targeting the same function in the window.
+ */
+export function checkClientTransportErrors(
+  now: Date,
+  windowMin: number,
+  rows: ClientErrorRow[],
+): FindingCandidate[] {
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const recent = rows.filter((r) => +new Date(r.created_at) >= sinceMs);
+  const byFn: Record<string, { count: number; sample: string }> = {};
+  for (const r of recent) {
+    const k = r.function_name || "unknown";
+    byFn[k] ||= { count: 0, sample: r.message };
+    byFn[k].count++;
+  }
+  const bucket = Math.floor(now.getTime() / (windowMin * 60_000));
+  const out: FindingCandidate[] = [];
+  for (const [fn, agg] of Object.entries(byFn)) {
+    if (agg.count < 5) continue;
+    out.push({
+      kind: "client_transport_error",
+      severity: agg.count >= 20 ? "high" : "medium",
+      summary:
+        `${agg.count} browser-side network failure(s) calling ${fn} in last ` +
+        `${windowMin}m: ${agg.sample.slice(0, 120)}`,
+      dedupe_key: `client_transport_error:${fn}:${bucket}`,
+      subject_ref: { function_name: fn, window_minutes: windowMin },
+      payload: {
+        function_name: fn, window_minutes: windowMin,
+        count: agg.count, sample_message: agg.sample.slice(0, 240),
+      },
+    });
+  }
+  return out;
 }
 

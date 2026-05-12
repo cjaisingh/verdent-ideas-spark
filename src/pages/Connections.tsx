@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { safeInvoke } from "@/integrations/supabase/safe-invoke";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -85,9 +86,9 @@ export default function Connections() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke("connections-inventory", { body: {} });
+    const { data, error } = await safeInvoke("connections-inventory", { body: {} });
     if (error) {
-      toast({ title: "Failed to load connections", description: error.message, variant: "destructive" });
+      toast({ title: "Failed to load connections", description: error instanceof Error ? error.message : String(error), variant: "destructive" });
     } else {
       setInv(data as Inventory);
     }

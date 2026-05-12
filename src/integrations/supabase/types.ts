@@ -900,6 +900,42 @@ export type Database = {
         }
         Relationships: []
       }
+      client_error_log: {
+        Row: {
+          created_at: string
+          function_name: string | null
+          id: string
+          message: string
+          meta: Json
+          request_id: string | null
+          url: string | null
+          user_agent: string | null
+          user_id_hash: string | null
+        }
+        Insert: {
+          created_at?: string
+          function_name?: string | null
+          id?: string
+          message: string
+          meta?: Json
+          request_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id_hash?: string | null
+        }
+        Update: {
+          created_at?: string
+          function_name?: string | null
+          id?: string
+          message?: string
+          meta?: Json
+          request_id?: string | null
+          url?: string | null
+          user_agent?: string | null
+          user_id_hash?: string | null
+        }
+        Relationships: []
+      }
       companion_messages: {
         Row: {
           content: string
@@ -4798,6 +4834,20 @@ export type Database = {
       db_preview_rows: {
         Args: { _limit?: number; _offset?: number; _table: string }
         Returns: Json
+      }
+      edge_function_health: {
+        Args: { _hours?: number }
+        Returns: {
+          error_rate: number
+          errors: number
+          function_name: string
+          last_error_at: string
+          last_error_class: string
+          last_error_message: string
+          last_error_status: number
+          p95_latency_ms: number
+          total: number
+        }[]
       }
       governance_chain: {
         Args: { _anchor_kind: string; _anchor_ref: string }
