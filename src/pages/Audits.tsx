@@ -314,6 +314,12 @@ export default function Audits() {
                               </pre>
                             )}
                           </div>
+                          <DiscussThisButton
+                            subjectType="audit_finding"
+                            subjectId={`${selected.id}:${i}`}
+                            title={f.title}
+                            details={`module ${f.module} · severity ${f.severity}${f.detail ? `\n\n${f.detail}` : ""}${f.evidence ? `\n\nevidence:\n${JSON.stringify(f.evidence, null, 2)}` : ""}`}
+                          />
                         </div>
                       ))
                     )}
