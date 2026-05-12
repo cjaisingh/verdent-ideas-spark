@@ -133,15 +133,15 @@ export default function VoiceSetup() {
       type SR = { lang: string; interimResults: boolean; maxAlternatives: number; start: () => void; stop: () => void; onresult: (e: { results: { 0: { 0: { transcript: string } } }[] & { [k: number]: { 0: { transcript: string } } } }) => void; onerror: (e: { error: string }) => void };
       const w = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
       const SRClass = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-      if (!SR) throw new Error("Browser Web Speech API not available (use Chrome/Edge).");
+      if (!SRClass) throw new Error("Browser Web Speech API not available (use Chrome/Edge).");
       if (!streamRef.current) await startMic();
 
       const transcript = await new Promise<string>((resolve, reject) => {
-        const r = new SR();
+        const r = new SRClass();
         r.lang = "en-GB"; r.interimResults = false; r.maxAlternatives = 1;
         const to = setTimeout(() => { try { r.stop(); } catch {/**/} reject(new Error("No speech detected (10s)")); }, 10000);
-        r.onresult = (e: SpeechRecognitionEvent) => { clearTimeout(to); resolve(e.results[0][0].transcript); };
-        r.onerror = (e: SpeechRecognitionErrorEvent) => { clearTimeout(to); reject(new Error(e.error)); };
+        r.onresult = (e) => { clearTimeout(to); resolve(e.results[0][0].transcript); };
+        r.onerror = (e) => { clearTimeout(to); reject(new Error(e.error)); };
         r.start();
       });
       setLoopText(`You: ${transcript}`);
