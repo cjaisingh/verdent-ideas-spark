@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Documented
+- **Data sovereignty posture (Tier 1)** — new `docs/sovereignty.md` is the honest source-of-truth for where AWIP Core data lives (`eu-west-1`), who can read it, what leaves the region (Gemini/OpenAI/GitHub/Telegram/Deepgram, listed explicitly), and the full sub-processor table. Adds Tier 2 (contractual: per-tenant region, export/delete API, retention policy, DPA template, `/trust` page) and Tier 3 (sovereign-grade: CMK/BYOK, in-region AI mode, signed audit exports) backlogs without committing to either. Three positioning options (USP / pillar / posture-only) recorded as "not decided". No code changes, no DB migrations, no UI. New `docs/legal/README.md` placeholder for future DPA + sub-processor artifacts. Memory: `mem://preferences/sovereignty-posture`. README + master-plan link in.
+
 ### Changed
 - **Morning Review discussion drawer:** replaced confusing Mirror/Defer/Done/Skip buttons with **Fix · Cancel · Escalate**, all routed through new `morning-review-resolve` edge function. Fix queues a fully-detailed `discussion_actions` job (AI summary + last 6 turns + link back), deduped per panel; Cancel requires a reason; Escalate forces risk=high + sentinel finding.
 - Toast on Fix/Escalate now exposes an **Open** action linking to `/jobs?focus=<short_num>`.

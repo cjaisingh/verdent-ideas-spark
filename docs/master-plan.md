@@ -50,6 +50,7 @@ Stable contract surface, versioning, generated SDK, docs site.
 - **capability registry** — `capabilities`, `capability_connectors`, `capability_events`
 - **observability** — `api_call_logs`, `telegram_gateway_logs`, `roadmap_work_log`
 - **governance** — `user_roles`, `role_change_audit`, `activity_policies`, `approval_queue`
+- **sovereignty posture** — see [`docs/sovereignty.md`](sovereignty.md); currently Tier 1 (posture only, no marketed claim)
 
 See `docs/modules.md` for current module boundaries and `docs/architecture.md` for system shape.
 

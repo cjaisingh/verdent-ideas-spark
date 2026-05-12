@@ -10,6 +10,7 @@ Operator console + contract API for the AWIP constellation. Owns the OKR tree, t
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
 - [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones
 - [Security](docs/security.md) — RLS policies, operator roles, service-token validation
+- [Data sovereignty](docs/sovereignty.md) — region (`eu-west-1`), sub-processors, egress, tier roadmap
 - [Automation](docs/automation.md) — scheduled code review, nightly tests, QA probes, failure alerts
 - [CI/CD](docs/ci-cd.md) — GitHub Actions pipelines for quality gates and deploys; includes [Production deploy secrets reference](docs/ci-cd.md#production-deploy-secrets--where-to-find-each-value) (the three Supabase secrets needed to enable Deploy Production)
 - [Design system](docs/design-system.md) — page layout, spacing, semantic tints, pane source colours
