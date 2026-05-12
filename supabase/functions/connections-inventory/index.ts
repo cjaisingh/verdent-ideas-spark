@@ -102,19 +102,21 @@ const EXTRA_RUNTIME_SECRETS: Array<{ key: string; name: string; purpose: string 
   { key: "GITHUB_REVIEWS_TOKEN", name: "GitHub reviews token", purpose: "AWIP weekly reviews pull" },
 ];
 
-type Verify = { outcome: "verified" | "skipped" | "failed" | "unknown"; latency_ms?: number; error?: string };
+type Verify = {
+  outcome: "verified" | "skipped" | "failed" | "unknown";
+  latency_ms?: number;
+  error?: string;
+  scope_hint?: Record<string, unknown>;
+};
 
-async function verify(envVarName: string, lovableKey: string): Promise<Verify> {
+async function verifyGateway(envVarName: string, lovableKey: string): Promise<Verify> {
   const apiKey = Deno.env.get(envVarName);
   if (!apiKey) return { outcome: "unknown", error: "no_secret_in_env" };
   const t0 = Date.now();
   try {
     const r = await fetch("https://connector-gateway.lovable.dev/api/v1/verify_credentials", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "X-Connection-Api-Key": apiKey,
-      },
+      headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": apiKey },
     });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -130,6 +132,68 @@ async function verify(envVarName: string, lovableKey: string): Promise<Verify> {
   }
 }
 
+// Direct-API probes — cheapest "is the key valid?" call per provider.
+async function verifyDirect(connectorId: string, envVarName: string): Promise<Verify> {
+  const apiKey = Deno.env.get(envVarName);
+  if (!apiKey) return { outcome: "unknown", error: "no_secret_in_env" };
+  const t0 = Date.now();
+  const elapsed = () => Date.now() - t0;
+  try {
+    if (connectorId === "perplexity") {
+      const r = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "sonar", max_tokens: 1, messages: [{ role: "user", content: "ok" }] }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return { outcome: "failed", latency_ms: elapsed(), error: body?.error?.message ?? `HTTP ${r.status}` };
+      return { outcome: "verified", latency_ms: elapsed(), scope_hint: { model: body?.model } };
+    }
+    if (connectorId === "firecrawl") {
+      const r = await fetch("https://api.firecrawl.dev/v1/team/credit-usage", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return { outcome: "failed", latency_ms: elapsed(), error: body?.error ?? `HTTP ${r.status}` };
+      return { outcome: "verified", latency_ms: elapsed(), scope_hint: body?.data ?? body };
+    }
+    if (connectorId === "elevenlabs") {
+      const r = await fetch("https://api.elevenlabs.io/v1/user", { headers: { "xi-api-key": apiKey } });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return { outcome: "failed", latency_ms: elapsed(), error: body?.detail?.message ?? `HTTP ${r.status}` };
+      return { outcome: "verified", latency_ms: elapsed(), scope_hint: { tier: body?.subscription?.tier, character_count: body?.subscription?.character_count, character_limit: body?.subscription?.character_limit } };
+    }
+    if (connectorId === "aikido") {
+      const r = await fetch("https://app.aikido.dev/api/public/v1/issues_count", { headers: { Authorization: `Bearer ${apiKey}` } });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return { outcome: "failed", latency_ms: elapsed(), error: body?.error ?? `HTTP ${r.status}` };
+      return { outcome: "verified", latency_ms: elapsed(), scope_hint: body };
+    }
+    return { outcome: "skipped", error: "no_direct_probe_implemented" };
+  } catch (e) {
+    return { outcome: "failed", latency_ms: elapsed(), error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function verifyEntry(entry: Entry, lovableKey: string): Promise<Verify> {
+  return entry.uses_gateway ? verifyGateway(entry.env_var_name, lovableKey) : verifyDirect(entry.connector_id, entry.env_var_name);
+}
+
+async function persistResult(entry: Entry, verify: Verify, userId: string) {
+  try {
+    await admin.from("connection_test_results").upsert({
+      env_var_name: entry.env_var_name,
+      connector_id: entry.connector_id,
+      outcome: verify.outcome,
+      latency_ms: verify.latency_ms ?? null,
+      error: verify.error ?? null,
+      scope_hint: verify.scope_hint ?? null,
+      tested_at: new Date().toISOString(),
+      tested_by: userId,
+    }, { onConflict: "env_var_name" });
+  } catch { /* swallow */ }
+}
+
 Deno.serve(withLogger("connections-inventory", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   if (req.method !== "GET" && req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -143,29 +207,33 @@ Deno.serve(withLogger("connections-inventory", async (req) => {
   const probe = url.searchParams.get("probe");
   if (probe) {
     const entry = DIRECTORY.find((d) => d.env_var_name === probe);
-    if (!entry || !entry.uses_gateway) return json({ error: "not_probeable" }, 400);
-    const v = await verify(entry.env_var_name, lovable);
+    if (!entry) return json({ error: "unknown_connector" }, 400);
+    const v = await verifyEntry(entry, lovable);
+    await persistResult(entry, v, who.uid);
     return json({ env_var_name: probe, verify: v, fetched_at: new Date().toISOString() });
   }
 
   const linkedEntries = DIRECTORY.filter((d) => Boolean(Deno.env.get(d.env_var_name)));
-  const verifies = await Promise.all(
-    linkedEntries.map(async (d) => ({
-      ...d,
-      linked: true,
-      verify: d.uses_gateway ? await verify(d.env_var_name, lovable) : ({ outcome: "skipped", error: "direct_api_no_probe" } as Verify),
-    })),
-  );
+
+  // Read cached last-known results so the page paints fast and persists across reloads.
+  const { data: cached } = await admin
+    .from("connection_test_results")
+    .select("env_var_name,outcome,latency_ms,error,scope_hint,tested_at");
+  const cacheByVar = new Map<string, { outcome: string; latency_ms: number | null; error: string | null; scope_hint: unknown; tested_at: string }>();
+  for (const c of cached ?? []) cacheByVar.set(c.env_var_name as string, c as never);
+
+  const linked = linkedEntries.map((d) => {
+    const c = cacheByVar.get(d.env_var_name);
+    const verify: Verify = c
+      ? { outcome: c.outcome as Verify["outcome"], latency_ms: c.latency_ms ?? undefined, error: c.error ?? undefined, scope_hint: (c.scope_hint as Record<string, unknown>) ?? undefined }
+      : { outcome: "unknown" };
+    return { ...d, linked: true, verify, tested_at: c?.tested_at ?? null };
+  });
 
   const linkedSet = new Set(linkedEntries.map((d) => d.connector_id));
   const directory = DIRECTORY.map((d) => ({ ...d, linked: linkedSet.has(d.connector_id) }));
-
   const extras = EXTRA_RUNTIME_SECRETS.map((e) => ({ ...e, present: Boolean(Deno.env.get(e.key)) }));
 
-  return json({
-    linked: verifies,
-    directory,
-    extras,
-    fetched_at: new Date().toISOString(),
-  });
+  return json({ linked, directory, extras, fetched_at: new Date().toISOString() });
 }));
+
