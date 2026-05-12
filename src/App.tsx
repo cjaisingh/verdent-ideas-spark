@@ -55,6 +55,7 @@ import Reviews from "./pages/Reviews";
 import Ontology from "./pages/Ontology";
 import Governance from "./pages/Governance";
 import Sovereignty from "./pages/Sovereignty";
+import Trust from "./pages/Trust";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -70,6 +71,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/trust" element={<Trust />} />
           <Route element={<RequireAuth><OperatorLayout /></RequireAuth>}>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tenants" element={<Tenants />} />
