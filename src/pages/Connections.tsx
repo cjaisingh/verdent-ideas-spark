@@ -76,10 +76,17 @@ export default function Connections() {
         if (!cur) return cur;
         return {
           ...cur,
-          linked: cur.linked.map((l) => l.env_var_name === envVar ? { ...l, verify: body.verify } : l),
+          linked: cur.linked.map((l) => l.env_var_name === envVar ? { ...l, verify: body.verify, tested_at: body.fetched_at } : l),
         };
       });
-      toast({ title: `${envVar}: ${body.verify.outcome}`, description: body.verify.latency_ms ? `${body.verify.latency_ms} ms` : body.verify.error ?? "" });
+      const desc = body.verify.outcome === "failed"
+        ? (body.verify.error ?? "no detail")
+        : `${body.verify.latency_ms ?? "?"} ms${body.verify.scope_hint ? ` · ${Object.entries(body.verify.scope_hint).slice(0, 2).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")}` : ""}`;
+      toast({
+        title: `${envVar}: ${body.verify.outcome}`,
+        description: desc.slice(0, 160),
+        variant: body.verify.outcome === "failed" ? "destructive" : "default",
+      });
     } catch (e) {
       toast({ title: "Probe failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
