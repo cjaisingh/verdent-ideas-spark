@@ -561,8 +561,6 @@ const Roadmap = () => {
                                       details={`status ${task.status}${task.module ? ` · module ${task.module}` : ""}`}
                                     />
                                   </span>
-                                  {false && (
-                                    <span />)}{(() => null)()}
                                   {task.module && (
                                     <span className="text-[10px] font-mono text-muted-foreground">· {task.module}</span>
                                   )}
