@@ -1,5 +1,10 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ShieldCheck, ExternalLink, FileText, MapPin, Database, Send } from "lucide-react";
+
+const TITLE = "Trust & data residency · AWIP Core";
+const DESCRIPTION =
+  "AWIP Core data lives in eu-west-1 (AWS Ireland). Honest list of egress destinations, sub-processors, and what we deliberately do not yet claim.";
 
 const SOURCE_DOC = "https://github.com/cjaisingh/verdent-ideas-spark/blob/main/docs/sovereignty.md";
 
@@ -22,6 +27,32 @@ const EGRESS = [
 ];
 
 export default function Trust() {
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = TITLE;
+    const ensureMeta = (name: string, content: string) => {
+      let tag = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null;
+      if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute("name", name);
+        document.head.appendChild(tag);
+      }
+      const prev = tag.getAttribute("content");
+      tag.setAttribute("content", content);
+      return () => {
+        if (prev === null) tag?.remove();
+        else tag?.setAttribute("content", prev);
+      };
+    };
+    const restoreDesc = ensureMeta("description", DESCRIPTION);
+    const restoreRobots = ensureMeta("robots", "index,follow");
+    return () => {
+      document.title = prevTitle;
+      restoreDesc();
+      restoreRobots();
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
