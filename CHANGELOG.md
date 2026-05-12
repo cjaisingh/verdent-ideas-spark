@@ -5,6 +5,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ## [Unreleased]
 
 ### Documented
+- **Sub-processor list auto-generator** — new `scripts/generate-subprocessor-list.ts` parses `docs/sovereignty.md` §5 and emits `docs/legal/sub-processor-list.md` with a "do not edit by hand" banner + source sha. Wired into `package.json` as `subprocessors:generate` / `subprocessors:check`. The Doc Drift workflow (`.github/workflows/doc-drift.yml`) runs `--check` on every PR and weekly Monday sweep; PR fails if the legal file is stale relative to the sovereignty source. Sovereignty §5 footer now tells contributors to re-run the generator after editing the table.
 - **Data sovereignty posture (Tier 1)** — new `docs/sovereignty.md` is the honest source-of-truth for where AWIP Core data lives (`eu-west-1`), who can read it, what leaves the region (Gemini/OpenAI/GitHub/Telegram/Deepgram, listed explicitly), and the full sub-processor table. Adds Tier 2 (contractual: per-tenant region, export/delete API, retention policy, DPA template, `/trust` page) and Tier 3 (sovereign-grade: CMK/BYOK, in-region AI mode, signed audit exports) backlogs without committing to either. Three positioning options (USP / pillar / posture-only) recorded as "not decided". No code changes, no DB migrations, no UI. New `docs/legal/README.md` placeholder for future DPA + sub-processor artifacts. Memory: `mem://preferences/sovereignty-posture`. README + master-plan link in.
 
 ### Changed
