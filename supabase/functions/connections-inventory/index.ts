@@ -26,14 +26,29 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
-async function authorize(req: Request): Promise<{ uid: string } | null> {
+const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+
+// Probe cadence: every 30 min via scheduled-connections-probe cron.
+const PROBE_INTERVAL_MS = 30 * 60 * 1000;
+
+function nextRunAt(): string {
+  const now = Date.now();
+  const next = Math.ceil(now / PROBE_INTERVAL_MS) * PROBE_INTERVAL_MS;
+  return new Date(next).toISOString();
+}
+
+async function authorize(req: Request): Promise<{ uid: string; service: boolean } | null> {
+  const svc = req.headers.get("x-awip-service-token");
+  if (svc && SERVICE_TOKEN && svc === SERVICE_TOKEN) {
+    return { uid: "00000000-0000-0000-0000-000000000000", service: true };
+  }
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return null;
   const { data, error } = await admin.auth.getUser(auth.slice(7));
   if (error || !data.user) return null;
   const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", data.user.id);
   if (!roles?.some((r) => r.role === "operator" || r.role === "admin")) return null;
-  return { uid: data.user.id };
+  return { uid: data.user.id, service: false };
 }
 
 // Curated directory of gateway-enabled connectors. Keep in sync with the
