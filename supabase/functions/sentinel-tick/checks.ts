@@ -11,7 +11,8 @@ export type FindingCandidate = {
     | "job_error_rate"
     | "frontend_realtime_error"
     | "edge_function_error_rate"
-    | "client_transport_error";
+    | "client_transport_error"
+    | "voice_pipeline_red";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
