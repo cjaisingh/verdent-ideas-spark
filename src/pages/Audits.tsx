@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, Play, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 
 type Severity = "info" | "low" | "medium" | "high" | "critical";
 
@@ -313,6 +314,12 @@ export default function Audits() {
                               </pre>
                             )}
                           </div>
+                          <DiscussThisButton
+                            subjectType="audit_finding"
+                            subjectId={`${selected.id}:${i}`}
+                            title={f.title}
+                            details={`module ${f.module} · severity ${f.severity}${f.detail ? `\n\n${f.detail}` : ""}${f.evidence ? `\n\nevidence:\n${JSON.stringify(f.evidence, null, 2)}` : ""}`}
+                          />
                         </div>
                       ))
                     )}

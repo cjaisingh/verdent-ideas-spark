@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Copy, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { FindingRunsDrawer } from "@/components/admin/FindingRunsDrawer";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 
 type Finding = {
   id: string;
@@ -220,7 +221,15 @@ export function SentinelStatusStrip() {
                         )}
                       </div>
                     </div>
-                    <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={sevColor[f.severity]}>{f.severity}</Badge>
+                      <DiscussThisButton
+                        subjectType="sentinel_finding"
+                        subjectId={f.id}
+                        title={f.summary}
+                        details={`kind ${f.kind} · severity ${f.severity} · last seen ${new Date(f.last_seen_at).toISOString()}`}
+                      />
+                    </div>
                   </li>
                   );
                 })}
