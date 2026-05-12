@@ -59,6 +59,7 @@ import Sovereignty from "./pages/Sovereignty";
 import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
+import VoiceHealth from "./pages/VoiceHealth";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
