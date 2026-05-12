@@ -220,12 +220,22 @@ Deno.serve(withLogger("connections-inventory", async (req) => {
 
   const url = new URL(req.url);
   const probe = url.searchParams.get("probe");
+  if (probe === "all") {
+    const linkedEntries = DIRECTORY.filter((d) => Boolean(Deno.env.get(d.env_var_name)));
+    const results: Array<{ env_var_name: string; outcome: string; latency_ms?: number; error?: string }> = [];
+    for (const entry of linkedEntries) {
+      const v = await verifyEntry(entry, lovable);
+      await persistResult(entry, v, who.uid);
+      results.push({ env_var_name: entry.env_var_name, outcome: v.outcome, latency_ms: v.latency_ms, error: v.error });
+    }
+    return json({ probed: results.length, results, next_run_at: nextRunAt(), fetched_at: new Date().toISOString() });
+  }
   if (probe) {
     const entry = DIRECTORY.find((d) => d.env_var_name === probe);
     if (!entry) return json({ error: "unknown_connector" }, 400);
     const v = await verifyEntry(entry, lovable);
     await persistResult(entry, v, who.uid);
-    return json({ env_var_name: probe, verify: v, fetched_at: new Date().toISOString() });
+    return json({ env_var_name: probe, verify: v, next_run_at: nextRunAt(), fetched_at: new Date().toISOString() });
   }
 
   const linkedEntries = DIRECTORY.filter((d) => Boolean(Deno.env.get(d.env_var_name)));
@@ -249,6 +259,6 @@ Deno.serve(withLogger("connections-inventory", async (req) => {
   const directory = DIRECTORY.map((d) => ({ ...d, linked: linkedSet.has(d.connector_id) }));
   const extras = EXTRA_RUNTIME_SECRETS.map((e) => ({ ...e, present: Boolean(Deno.env.get(e.key)) }));
 
-  return json({ linked, directory, extras, fetched_at: new Date().toISOString() });
+  return json({ linked, directory, extras, next_run_at: nextRunAt(), fetched_at: new Date().toISOString() });
 }));
 
