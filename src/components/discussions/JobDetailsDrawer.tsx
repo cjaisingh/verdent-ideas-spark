@@ -11,6 +11,7 @@ import { ArrowUpRightFromSquare, Copy, ExternalLink, MessagesSquare, Moon } from
 import { toast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
 import { JobOwnerDueEditor } from "./JobOwnerDueEditor";
+import { DiscussThisButton } from "./DiscussThisButton";
 import { cn } from "@/lib/utils";
 import {
   JOB_RISKS,
