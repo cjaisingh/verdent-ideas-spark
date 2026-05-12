@@ -33,6 +33,7 @@ import Transcripts from "./pages/Transcripts";
 import MasterPlan from "./pages/MasterPlan";
 import Plan from "./pages/Plan";
 import Companion from "./pages/Companion";
+import VoiceSetup from "./pages/VoiceSetup";
 import Copilot from "./pages/Copilot";
 import CopilotAgents from "./pages/CopilotAgents";
 import CopilotProfile from "./pages/CopilotProfile";
