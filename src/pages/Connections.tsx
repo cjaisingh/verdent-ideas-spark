@@ -323,6 +323,7 @@ export default function Connections() {
               ? `${merged.linked.length} linked · ${merged.available.length} available · ${merged.needsAction.length} need action`
               : "Loading inventory…"}
             {inv?.fetched_at && ` · refreshed ${new Date(inv.fetched_at).toLocaleTimeString()}`}
+            {inv?.next_run_at && ` · next auto-probe ${new Date(inv.next_run_at).toLocaleTimeString()}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
