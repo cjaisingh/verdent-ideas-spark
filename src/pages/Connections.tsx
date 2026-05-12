@@ -8,7 +8,12 @@ import { Card } from "@/components/ui/card";
 import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, MinusCircle, Search, Plug } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-type Verify = { outcome: "verified" | "skipped" | "failed" | "unknown"; latency_ms?: number; error?: string };
+type Verify = {
+  outcome: "verified" | "skipped" | "failed" | "unknown";
+  latency_ms?: number;
+  error?: string;
+  scope_hint?: Record<string, unknown> | null;
+};
 
 type DirEntry = {
   connector_id: string;
@@ -19,7 +24,7 @@ type DirEntry = {
   linked: boolean;
 };
 
-type LinkedEntry = DirEntry & { verify: Verify };
+type LinkedEntry = DirEntry & { verify: Verify; tested_at?: string | null };
 
 type Extra = { key: string; name: string; purpose: string; present: boolean };
 
