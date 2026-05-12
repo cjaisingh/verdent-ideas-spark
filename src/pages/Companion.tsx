@@ -1092,6 +1092,7 @@ export default function Companion() {
                     </Button>
                     <VoiceDictateButton
                       disabled={sending}
+                      autoStart={autoVoiceArmed}
                       onPartial={setVoicePartial}
                       onFinal={(text) => setInput((prev) => (prev ? `${prev} ${text}` : text))}
                     />
