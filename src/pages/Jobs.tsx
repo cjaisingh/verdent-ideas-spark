@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { jobHandle, subjectHandle, discussionHandle } from "@/lib/discussionHandles";
 import { Link } from "react-router-dom";
 import { JobDetailsDrawer, type JobDetailsRecord } from "@/components/discussions/JobDetailsDrawer";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import {
   RISK_DOT_CLASS,
   RISK_RUBRIC,
