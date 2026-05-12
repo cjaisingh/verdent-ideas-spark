@@ -12,6 +12,7 @@ import TriageChip from "@/components/morning-review/TriageChip";
 import DiscussNextStrip, { type PanelEntry } from "@/components/morning-review/DiscussNextStrip";
 import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDrawer";
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
 
 type Review = {
@@ -185,7 +186,15 @@ export default function MorningReview() {
                     cadence {s.expected_within_minutes}m · {s.silent_for_minutes == null ? "never run" : `silent ${s.silent_for_minutes}m`}
                   </div>
                 </div>
-                <Badge variant="destructive">stuck</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="destructive">stuck</Badge>
+                  <DiscussThisButton
+                    subjectType="cron_stuck"
+                    subjectId={s.job}
+                    title={`Stuck cron: ${s.job}`}
+                    details={`cadence ${s.expected_within_minutes}m · ${s.silent_for_minutes == null ? "never run" : `silent ${s.silent_for_minutes}m`}`}
+                  />
+                </div>
               </div>
             ))}
           </Section>
@@ -197,9 +206,18 @@ export default function MorningReview() {
                   <div className="font-medium">#{d.short_num} {d.title}</div>
                   <div className="text-xs text-muted-foreground">task {d.task_status ?? "?"} · {d.promoted_age_hours}h since promotion</div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => mirrorAction(`Drift: ${d.title}`)}>
-                  <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => mirrorAction(`Drift: ${d.title}`)}>
+                    <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
+                  </Button>
+                  <DiscussThisButton
+                    subjectType="promotion_drift"
+                    subjectId={d.action_id}
+                    subjectShortNum={d.short_num}
+                    title={`#${d.short_num} ${d.title}`}
+                    details={`task ${d.task_status ?? "?"} · ${d.promoted_age_hours}h since promotion`}
+                  />
+                </div>
               </div>
             ))}
           </Section>
@@ -211,6 +229,14 @@ export default function MorningReview() {
               <pre className="text-xs bg-muted/40 p-2 rounded overflow-x-auto max-h-40">
 {JSON.stringify(review.night_throughput?.summary ?? {}, null, 2)}
               </pre>
+              <div className="flex justify-end pt-1">
+                <DiscussThisButton
+                  subjectType="night_throughput"
+                  subjectId={review.review_date}
+                  title={`Night throughput ${review.review_date}`}
+                  details={`shifts: ${review.night_throughput?.shifts ?? 0} (${review.night_throughput?.completed_shifts ?? 0} completed)\nsummary: ${JSON.stringify(review.night_throughput?.summary ?? {})}`}
+                />
+              </div>
             </div>
           </Section>
 
@@ -221,7 +247,15 @@ export default function MorningReview() {
                   <div className="font-medium line-clamp-2">{f.title}</div>
                   <div className="text-xs text-muted-foreground">{f.source ?? "code_review"} · {f.category ?? "—"}</div>
                 </div>
-                <Badge className={sevColor[f.severity] ?? "bg-muted"}>{f.severity}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className={sevColor[f.severity] ?? "bg-muted"}>{f.severity}</Badge>
+                  <DiscussThisButton
+                    subjectType={f.source === "sentinel" ? "sentinel_finding" : "roadmap_finding"}
+                    subjectId={f.id}
+                    title={f.title}
+                    details={`${f.source ?? "code_review"} · ${f.category ?? "—"} · severity ${f.severity}`}
+                  />
+                </div>
               </div>
             ))}
           </Section>
@@ -233,9 +267,18 @@ export default function MorningReview() {
                   <div className="font-medium">#{a.short_num} {a.title}</div>
                   <div className="text-xs text-muted-foreground">{a.priority} · {a.age_hours}h old</div>
                 </div>
-                <Button size="sm" variant="ghost" onClick={() => mirrorAction(`Action: ${a.title}`)}>
-                  <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => mirrorAction(`Action: ${a.title}`)}>
+                    <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
+                  </Button>
+                  <DiscussThisButton
+                    subjectType="discussion_action"
+                    subjectId={a.action_id}
+                    subjectShortNum={a.short_num}
+                    title={`#${a.short_num} ${a.title}`}
+                    details={`${a.priority} · ${a.age_hours}h old`}
+                  />
+                </div>
               </div>
             ))}
           </Section>
@@ -247,7 +290,15 @@ export default function MorningReview() {
                   <div className="font-medium">{r.title}</div>
                   <div className="text-xs text-muted-foreground">due {r.defer_until}</div>
                 </div>
-                <Badge className={sevColor[r.severity] ?? "bg-muted"}>{r.severity}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className={sevColor[r.severity] ?? "bg-muted"}>{r.severity}</Badge>
+                  <DiscussThisButton
+                    subjectType="deferred_item"
+                    subjectId={r.id}
+                    title={r.title}
+                    details={`due ${r.defer_until} · severity ${r.severity}`}
+                  />
+                </div>
               </div>
             ))}
           </Section>

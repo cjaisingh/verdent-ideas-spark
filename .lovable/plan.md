@@ -1,74 +1,37 @@
-# Plan: Unblock the loop
+## Goal
 
-Two parallel tracks. Track A clears the backlog so Phase 2 can close. Track B adds the one-click voice path you asked for.
+Make every row in the `/morning-review` Yesterday-tab panels one click away from a voice-armed Companion thread, using the existing `DiscussThisButton` (icon variant).
 
----
+## Scope
 
-## Track A — Pragmatic cleanup (no new features)
+`src/pages/MorningReview.tsx` only. No backend/schema changes. No new components.
 
-**Goal:** drop everything that doesn't impact future phases. Stop re-auditing the same items.
+## Row-by-row wiring
 
-### A1. Bulk-close Phase 1 todos as `wontfix`
-- Query `roadmap_tasks` where `sprint.phase = Phase 1` and `status = 'todo'`.
-- For each: read title, decide one of:
-  - **Drop** (`status='wontfix'`, note: "Phase 1 sealed — pragmatic close 2026-05-12") — default
-  - **Keep** only if it's literally a Phase 2 blocker → move to Phase 2 sprint
-- One migration, one batch. No per-item discussion.
+For each row in the six panel `Section`s, append `<DiscussThisButton variant="icon" .../>` next to the existing right-side badge/button. Subject mapping:
 
-### A2. Phase 2 — same treatment for the 8 todos + 2 in_progress
-- Read all 10. For each, classify:
-  - **Done-by-evidence**: feature exists in code/db → mark `done` with evidence link
-  - **Drop**: not needed for Phase 2 sign-off → `wontfix`
-  - **Keep**: real blocker → leave as-is, assign owner + due date this week
-- Target: ≤3 KEEP. Everything else gone.
+| Panel | subjectType | subjectId | title | details |
+|---|---|---|---|---|
+| stuck-cron-jobs | `cron_stuck` | `s.job` | `Stuck cron: ${s.job}` | cadence + silent-for line |
+| promotion-drift | `promotion_drift` | `d.action_id` | `#${d.short_num} ${d.title}` | `task ${d.task_status} · ${d.promoted_age_hours}h since promotion`; pass `subjectShortNum=d.short_num` |
+| night-throughput | `night_throughput` | `review.review_date` | `Night throughput ${review.review_date}` | shifts + summary JSON snippet (one row, placed under the `<pre>`) |
+| open-findings | `roadmap_finding` (if `f.source==='code_review'`) else `sentinel_finding` | `f.id` | `f.title` | `${f.source} · ${f.category} · severity ${f.severity}` |
+| top-actions | `discussion_action` | `a.action_id` | `#${a.short_num} ${a.title}` | `${a.priority} · ${a.age_hours}h old`; pass `subjectShortNum=a.short_num` |
+| revisit | `deferred_item` | `r.id` | `r.title` | `due ${r.defer_until} · severity ${r.severity}` |
 
-### A3. 14 open `discussion_actions`
-- For each: KEEP (owner + due_at within 7 days) / DROP (`status='cancelled'`).
-- No DEFER, no MERGE — those are loops.
+Place the icon button immediately to the right of (or just before) the existing trailing element so layout doesn't shift; click handler already does `e.stopPropagation()`.
 
-### A4. 12 pending `night_proposals`
-- Bulk reject all 12 (`status='rejected'`, reason: "Pragmatic backlog reset").
-- Stops the night-shift repeat loop immediately.
-- If any look genuinely useful, you accept them manually first; the rest get rejected.
+## Discuss-next strip enhancement (optional, in same edit)
 
-### A5. Phase 2 sign-off attempt
-- After A1–A4, run the Phase 2 sign-off flow.
-- If a gate fails: fix only that gate. If multiple fail: write an ADR scope-cut and sign off.
-- Outcome: Phase 2 → done, Phase 5 → active.
-
----
-
-## Track B — "Discuss this" voice button (small build)
-
-**Goal:** from any job/finding row, one click → Companion thread pre-loaded with that subject + voice mic already armed.
-
-### B1. Shared component `DiscussThisButton`
-- Props: `subject_type`, `subject_id`, `title`, optional `discussion_id`.
-- On click: create/find a Companion thread tagged with the subject, navigate to `/companion?thread=<id>&voice=1`.
-
-### B2. Companion auto-arm voice
-- `/companion` reads `?voice=1` query param → auto-mounts `VoiceDictateButton` in record state.
-- Pre-seeds the thread with a system message: "Discussing {handle}: {title}\n\n{details}".
-
-### B3. Wire it into 3 surfaces (no new pages)
-- `JobDetailsDrawer` — header button next to "Promote"
-- `Jobs.tsx` card row — small mic icon next to the existing icons
-- `MorningReview` panel rows — in the existing action chip strip
-
-### B4. Out of scope (deliberately)
-- No bulk voice → bulk-action ("voice close 5 jobs") yet — wait until you've used B1–B3 for a week
-- No new Companion page, no new voice provider, no Deepgram realtime upgrade
-- TTS playback of the AI reply stays on existing Gemini TTS path
-
----
-
-## Order of execution
-1. A4 (kill night repeat — 1 migration, instant relief)
-2. A1 + A2 + A3 (one cleanup migration + one bulk update)
-3. B1 → B2 → B3 (build the button)
-4. A5 (Phase 2 sign-off attempt)
+In `DiscussNextStrip`, add a small `DiscussThisButton variant="icon" subjectType="morning_review_panel" subjectId={p.ref} title={p.title}` at the end of each focused/revisit row, so an operator can jump straight to a voice thread for the whole panel without opening the per-panel discussion drawer first. The existing anchor-link behaviour stays.
 
 ## Out of scope
-- No new sovereignty work
-- No Phase 5+ planning until A5 lands
-- No refactors "while I'm here"
+
+- No changes to `PanelDiscussionDrawer` (the in-page chat) — Discuss-this is the lightweight escape hatch to Companion.
+- No new tables, no triage interaction, no auto-Focus when clicking Discuss-this.
+- No Roadmap / Sentinel / Audits placement — separate ask.
+
+## Verification
+
+- Build passes.
+- Manual: load `/morning-review`, click a row's chat icon → routes to `/companion?thread=…&voice=1`, mic auto-arms, seed message contains the panel context.
