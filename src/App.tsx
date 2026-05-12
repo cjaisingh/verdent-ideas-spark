@@ -129,6 +129,7 @@ const App = () => (
             <Route path="/status" element={<Status />} />
             <Route path="/connections" element={<Connections />} />
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
+            <Route path="/admin/voice-health" element={<VoiceHealth />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
