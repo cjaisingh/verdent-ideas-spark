@@ -72,6 +72,7 @@ const copilotChildren: NavItem[] = [
 
 const automationItems: NavItem[] = [
   { url: "/companion", title: "Companion", icon: Bot },
+  { url: "/voice-setup", title: "Voice setup", icon: Mic },
   { url: "/overnight", title: "Overnight overview", icon: Activity },
   { url: "/night-shifts", title: "Night shifts", icon: Moon },
   { url: "/walkthrough", title: "App walkthrough", icon: Footprints },
