@@ -5,6 +5,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ## [Unreleased]
 
 ### Added
+- **Public `/trust` page (Tier 1)** — unauthenticated trust/data-residency summary at `/trust` (sits outside `RequireAuth`). Lists region (`eu-west-1`), egress destinations, sub-processors, and an explicit "what we do not claim today" panel covering in-region AI / CMK-BYOK / per-tenant region / export-delete API / signed audits / sub-processor opt-in / ISO 27001 / executed DPA. Sets `<title>`, meta description, and `robots: index,follow` for procurement-team discoverability. Mirrors the operator-only `/sovereignty` FAQ but with no auth and no internal links. Sovereignty doc Tier 2 trust-page bullet updated to record what landed at Tier 1 vs what's still backlog (per-tenant attestation, last audit date, sub-processor change-log).
 - **Sovereignty FAQ page (`/sovereignty`)** — buyer-facing in-app FAQ with 13 hand-curated Q&As tagged Tier 1 / Tier 2 / Tier 3 (search + tier filter + accordion). Each answer links to the relevant section of `docs/sovereignty.md`, the sub-processor list, the DPA placeholder, the security model, or the ISO 27001 controls map. Tier legend card up top, reference-docs grid at the bottom. Pure UI on top of existing docs — no DB, no edge function, no new claims beyond what the docs say. Sidebar link added under Knowledge group. Files: `src/pages/Sovereignty.tsx`, route in `src/App.tsx`, sidebar entry in `src/components/AppSidebar.tsx`.
 
 ### Documented
