@@ -319,6 +319,11 @@ Your job:
 You do NOT execute code, edit files, or run migrations. You discuss and propose.`;
 
 export default function Companion() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedThreadId = searchParams.get("thread");
+  const wantsVoice = searchParams.get("voice") === "1";
+  const [autoVoiceArmed, setAutoVoiceArmed] = useState(false);
+
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -333,6 +338,19 @@ export default function Companion() {
   const [pendingLessons, setPendingLessons] = useState<PendingLesson[]>([]);
   const [envSize, setEnvSize] = useState<number | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+
+  // Honour ?thread=<id>&voice=1 deep-links from "Discuss this" buttons.
+  useEffect(() => {
+    if (wantedThreadId && activeId !== wantedThreadId) setActiveId(wantedThreadId);
+    if (wantsVoice) setAutoVoiceArmed(true);
+    if (wantedThreadId || wantsVoice) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("thread"); next.delete("voice");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // Filters / search
   const [search, setSearch] = useState("");
