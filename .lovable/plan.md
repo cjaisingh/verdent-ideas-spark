@@ -1,67 +1,62 @@
 ## Goal
 
-Promote the existing icon-only re-probe on `/connections` into a visible **Test connection** button on every integration row, and extend coverage so direct-API connectors (Perplexity, Firecrawl, ElevenLabs, Aikido) can also be tested — not just gateway ones.
+Give the operator a clear, confirmed flow on `/connections` to unlink Telegram and relink it, with explicit consequences shown before the destructive step.
 
-## Scope
+## Why deep-link instead of a direct API call
 
-- Edit `supabase/functions/connections-inventory/index.ts` to add a per-connector probe map for direct-API connectors and re-use the gateway `verify_credentials` path for the rest.
-- Edit `src/pages/Connections.tsx` to render a labelled `Test` button on every linked row, with success/failure toast and inline last-result chip.
-- Persist the last probe result to a new `connection_test_results` table so the chip survives a page reload (operator-only RLS, realtime off).
-- Doc: `docs/connections.md` (new) + CHANGELOG entry.
+The actual link/unlink happens in Lovable Cloud → Connectors (that's where the workspace-level connection lives and where OAuth/credential entry happens). The app cannot programmatically remove a connection from the runtime, so the in-app flow's job is:
+1. Make the consequences obvious before the user leaves the page.
+2. Open Cloud → Connectors in a new tab on the right screen.
+3. Re-probe on return so the UI reflects reality.
 
-Out of scope: testing **unlinked** connectors (no secret to test with), scope/permission discovery beyond what each provider's cheapest call returns, alerting on failure, scheduled re-tests.
+## UX flow
 
-## Probe map
+On the Telegram row in `/connections` (and any gateway connector flagged `supports_unlink`), add two new actions next to "Test connection":
 
-| Connector | Probe |
-|---|---|
-| All gateway connectors | `POST https://connector-gateway.lovable.dev/api/v1/verify_credentials` (already wired) |
-| `perplexity` | `POST https://api.perplexity.ai/chat/completions` with 1-token `sonar-small` request |
-| `firecrawl` | `GET https://api.firecrawl.dev/v1/team/credit-usage` (cheap, no scrape spend) |
-| `elevenlabs` | `GET https://api.elevenlabs.io/v1/user` |
-| `aikido` | `GET https://app.aikido.dev/api/public/v1/issues_count` |
+- **Unlink** (red ghost button) — opens an `AlertDialog`:
+  - Title: "Unlink Telegram?"
+  - Body lists what will stop working: Companion alerts, AWIP service notifications, any cron job that posts to Telegram. Pulled from a small static `impact` map keyed by `connector_id`.
+  - Shows the env var that will disappear (`TELEGRAM_API_KEY`).
+  - Two buttons: "Cancel" and "Open Connectors to unlink" (opens `https://lovable.dev/projects` in a new tab, then sets a local "awaiting unlink" badge on the row).
+  - On dialog confirm we also write a row to a new `connection_audit_log` table so we have a record of intent.
 
-Each direct-API probe returns `{ outcome: "verified" | "failed", latency_ms, error?, scope_hint? }` where `scope_hint` is whatever permission detail the call returns (e.g. Perplexity tier, Firecrawl remaining credits, ElevenLabs subscription tier). Surfaced under the row.
+- **Relink** (only shown when row is in "Reconnect" / failed state, OR when an "awaiting unlink" badge is set) — opens a similar dialog:
+  - Title: "Relink Telegram"
+  - Body explains: pick the existing connection in Cloud → Connectors and link it again to this project; credentials don't need to be re-entered if the workspace connection still exists.
+  - Buttons: "Cancel" and "Open Connectors to relink".
+  - On confirm, log to `connection_audit_log` and start polling `connections-inventory` every 5s for up to 60s; when the row flips to linked + verified, toast "Telegram relinked" and stop polling.
 
-## Persistence
+After either dialog, when the tab regains focus we automatically re-run `load()` so the inventory refreshes without a manual click.
 
-```sql
-create table public.connection_test_results (
-  env_var_name text primary key,
-  connector_id text not null,
-  outcome text not null check (outcome in ('verified','skipped','failed','unknown')),
-  latency_ms integer,
-  error text,
-  scope_hint jsonb,
-  tested_at timestamptz not null default now(),
-  tested_by uuid references auth.users(id)
-);
-alter table public.connection_test_results enable row level security;
-create policy "operator read" on public.connection_test_results
-  for select to authenticated using (public.has_role(auth.uid(),'operator') or public.has_role(auth.uid(),'admin'));
--- writes happen via the edge function with service role; no insert/update policy needed.
-```
+## Data
 
-`connections-inventory` writes one row per probe (upsert by `env_var_name`). The list endpoint joins `connection_test_results` so each row in the page renders with its last-known outcome on first paint.
+New table `connection_audit_log` (operator-only RLS, insert via the page using the user's JWT):
 
-## UI
+- `connector_id text not null`
+- `env_var_name text not null`
+- `action text not null check (action in ('unlink_intent','relink_intent','verified_after_relink'))`
+- `actor_user_id uuid not null default auth.uid()`
+- `note text`
+- `created_at timestamptz not null default now()`
 
-Per row (linked tab and needs-action tab):
+Indexes on `(connector_id, created_at desc)`. RLS: `select`/`insert` only for users with `operator` or `admin` role via existing `has_role()`.
 
-```
-[Plug] Telegram                          [Verified · 120ms · 2m ago] [Test connection]
-       telegram · TELEGRAM_API_KEY · gateway
-```
+A small "History" disclosure under the Telegram row shows the last 3 audit entries (timestamp + action) so the user can see the trail without leaving the page.
 
-- Button: `<Button size="sm" variant="outline">Test connection</Button>`, spinner while running.
-- Result toast on click with outcome + latency + first 80 chars of error.
-- For `failed`, the row's status pill flips to amber **Reconnect** with a link to Cloud → Connectors.
-- For direct-API connectors with `scope_hint`, render a one-line `text-xs text-muted-foreground` summary under the row (e.g. "Plan: standard · 4,800 credits left").
+## Files to touch
 
-## Verification
+- `supabase/migrations/<new>.sql` — `connection_audit_log` table + RLS.
+- `src/pages/Connections.tsx`:
+  - Add `IMPACT` map (Telegram entry only for now; structured so other connectors can be added).
+  - Add `UnlinkDialog` and `RelinkDialog` components (use existing `AlertDialog` from `@/components/ui/alert-dialog`).
+  - Render the new buttons on rows where `IMPACT[connector_id]` exists.
+  - Add `useEffect` that listens for `visibilitychange` to call `load()` on tab refocus.
+  - Add the post-relink polling loop and "Telegram relinked" toast.
+  - Add the inline "History" disclosure that queries `connection_audit_log`.
+- No edge function changes; no change to `connections-inventory`.
 
-- Build passes.
-- `/connections` shows a Test button on every linked row.
-- Click on Telegram → toast shows verified + ms; result persists across refresh.
-- Click on a direct-API connector if linked → returns verified with scope_hint, or failed with provider error.
-- Logger Validation workflow stays green.
+## Out of scope
+
+- Programmatic unlink/relink without leaving the app (not supported by the Connectors surface).
+- Other connectors — only Telegram gets the `IMPACT` entry now; the structure makes it trivial to add Aikido/Perplexity/etc later.
+- Any change to how `TELEGRAM_API_KEY` is consumed by edge functions.

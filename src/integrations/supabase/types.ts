@@ -986,6 +986,36 @@ export type Database = {
         }
         Relationships: []
       }
+      connection_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string
+          connector_id: string
+          created_at: string
+          env_var_name: string
+          id: string
+          note: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string
+          connector_id: string
+          created_at?: string
+          env_var_name: string
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          connector_id?: string
+          created_at?: string
+          env_var_name?: string
+          id?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
       connection_test_results: {
         Row: {
           connector_id: string

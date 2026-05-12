@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, MinusCircle, Search, Plug } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { RefreshCw, ExternalLink, CheckCircle2, AlertTriangle, MinusCircle, Search, Plug, Unplug, Link2, History } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type Verify = {
@@ -35,6 +39,28 @@ type Inventory = {
   fetched_at: string;
 };
 
+type AuditRow = {
+  id: string;
+  connector_id: string;
+  action: "unlink_intent" | "relink_intent" | "verified_after_relink";
+  created_at: string;
+  note: string | null;
+};
+
+const CONNECTORS_URL = "https://lovable.dev/projects";
+
+// Per-connector impact copy. Add entries here to enable unlink/relink for more connectors.
+const IMPACT: Record<string, { label: string; impacts: string[] }> = {
+  telegram: {
+    label: "Telegram",
+    impacts: [
+      "Companion mobile alerts will stop sending",
+      "AWIP service notifications routed via Telegram will fail",
+      "Any cron job posting to Telegram chats will error",
+    ],
+  },
+};
+
 function statusOf(e: DirEntry, verify?: Verify): { label: string; cls: string; icon: typeof CheckCircle2 } {
   if (!e.linked) return { label: "Available", cls: "bg-muted text-muted-foreground", icon: MinusCircle };
   if (!e.uses_gateway) return { label: "Linked (direct API)", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", icon: CheckCircle2 };
@@ -50,6 +76,11 @@ export default function Connections() {
   const [loading, setLoading] = useState(true);
   const [probing, setProbing] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [pending, setPending] = useState<Record<string, "unlink" | "relink" | undefined>>({});
+  const [audit, setAudit] = useState<Record<string, AuditRow[]>>({});
+  const [showHistory, setShowHistory] = useState<Record<string, boolean>>({});
+  const [dialog, setDialog] = useState<{ kind: "unlink" | "relink"; entry: DirEntry } | null>(null);
+  const pollRef = useRef<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -62,7 +93,26 @@ export default function Connections() {
     setLoading(false);
   };
 
+  const loadAudit = async (connectorId: string) => {
+    const { data, error } = await supabase
+      .from("connection_audit_log")
+      .select("id, connector_id, action, created_at, note")
+      .eq("connector_id", connectorId)
+      .order("created_at", { ascending: false })
+      .limit(3);
+    if (!error && data) setAudit((cur) => ({ ...cur, [connectorId]: data as AuditRow[] }));
+  };
+
   useEffect(() => { void load(); }, []);
+
+  // Refresh on tab focus so returning from Cloud → Connectors updates the UI.
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === "visible") void load(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  useEffect(() => () => { if (pollRef.current) window.clearInterval(pollRef.current); }, []);
 
   const reprobe = async (envVar: string) => {
     setProbing(envVar);
@@ -87,11 +137,60 @@ export default function Connections() {
         description: desc.slice(0, 160),
         variant: body.verify.outcome === "failed" ? "destructive" : "default",
       });
+      return body.verify as Verify;
     } catch (e) {
       toast({ title: "Probe failed", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+      return null;
     } finally {
       setProbing(null);
     }
+  };
+
+  const writeAudit = async (connectorId: string, envVar: string, action: AuditRow["action"], note?: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from("connection_audit_log").insert({
+      connector_id: connectorId,
+      env_var_name: envVar,
+      action,
+      actor_user_id: user.id,
+      note: note ?? null,
+    });
+    if (error) {
+      toast({ title: "Audit log failed", description: error.message, variant: "destructive" });
+    } else {
+      void loadAudit(connectorId);
+    }
+  };
+
+  const startRelinkPoll = (entry: DirEntry) => {
+    if (pollRef.current) window.clearInterval(pollRef.current);
+    const start = Date.now();
+    pollRef.current = window.setInterval(async () => {
+      if (Date.now() - start > 60_000) {
+        if (pollRef.current) window.clearInterval(pollRef.current);
+        pollRef.current = null;
+        return;
+      }
+      const v = await reprobe(entry.env_var_name);
+      if (v && v.outcome === "verified") {
+        if (pollRef.current) window.clearInterval(pollRef.current);
+        pollRef.current = null;
+        setPending((p) => ({ ...p, [entry.connector_id]: undefined }));
+        await writeAudit(entry.connector_id, entry.env_var_name, "verified_after_relink");
+        toast({ title: `${IMPACT[entry.connector_id]?.label ?? entry.name} relinked`, description: "Connection verified." });
+      }
+    }, 5000) as unknown as number;
+  };
+
+  const confirmDialog = async () => {
+    if (!dialog) return;
+    const { kind, entry } = dialog;
+    setPending((p) => ({ ...p, [entry.connector_id]: kind }));
+    await writeAudit(entry.connector_id, entry.env_var_name, kind === "unlink" ? "unlink_intent" : "relink_intent");
+    window.open(CONNECTORS_URL, "_blank", "noopener,noreferrer");
+    if (kind === "relink") startRelinkPoll(entry);
+    setDialog(null);
   };
 
   const merged = useMemo(() => {
@@ -116,46 +215,85 @@ export default function Connections() {
       : null;
     const ago = testedAt ? `${Math.max(0, Math.round((Date.now() - new Date(testedAt).getTime()) / 60000))}m ago` : null;
     const isProbing = probing === entry.env_var_name;
+    const impact = IMPACT[entry.connector_id];
+    const pendingState = pending[entry.connector_id];
+    const showRelink = entry.linked && impact && (verify?.outcome === "failed" || pendingState === "unlink");
+    const showUnlink = entry.linked && impact && pendingState !== "unlink";
+    const history = audit[entry.connector_id] ?? [];
+    const isHistoryOpen = !!showHistory[entry.connector_id];
+
     return (
-      <div className="flex items-start justify-between gap-3 px-3 py-2.5 border-b last:border-b-0">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <Plug className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{entry.name}</div>
-            <div className="text-xs text-muted-foreground truncate">
-              <code className="font-mono">{entry.connector_id}</code>
-              {" · "}
-              <code className="font-mono">{entry.env_var_name}</code>
-              {" · "}
-              {entry.uses_gateway ? "gateway" : "direct API"}
-              {verify?.latency_ms != null && ` · ${verify.latency_ms} ms`}
-              {ago && ` · tested ${ago}`}
-              {verify?.error && verify.outcome === "failed" && ` · ${verify.error}`}
+      <div className="border-b last:border-b-0">
+        <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <Plug className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <div className="text-sm font-medium truncate">{entry.name}</div>
+              <div className="text-xs text-muted-foreground truncate">
+                <code className="font-mono">{entry.connector_id}</code>
+                {" · "}
+                <code className="font-mono">{entry.env_var_name}</code>
+                {" · "}
+                {entry.uses_gateway ? "gateway" : "direct API"}
+                {verify?.latency_ms != null && ` · ${verify.latency_ms} ms`}
+                {ago && ` · tested ${ago}`}
+                {verify?.error && verify.outcome === "failed" && ` · ${verify.error}`}
+              </div>
+              {scopeLine && (
+                <div className="text-xs text-muted-foreground/80 truncate mt-0.5">{scopeLine}</div>
+              )}
+              {pendingState === "unlink" && (
+                <div className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">Awaiting unlink in Cloud → Connectors</div>
+              )}
+              {pendingState === "relink" && (
+                <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Awaiting relink — polling every 5s for up to 1 min</div>
+              )}
             </div>
-            {scopeLine && (
-              <div className="text-xs text-muted-foreground/80 truncate mt-0.5">{scopeLine}</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="secondary" className={`gap-1 ${s.cls}`}>
+              <Icon className="h-3 w-3" /> {s.label}
+            </Badge>
+            {entry.linked && (
+              <Button size="sm" variant="outline" onClick={() => reprobe(entry.env_var_name)} disabled={isProbing}>
+                <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isProbing ? "animate-spin" : ""}`} />
+                {isProbing ? "Testing…" : "Test"}
+              </Button>
+            )}
+            {showRelink && (
+              <Button size="sm" variant="default" onClick={() => { void loadAudit(entry.connector_id); setDialog({ kind: "relink", entry }); }}>
+                <Link2 className="h-3.5 w-3.5 mr-1" /> Relink
+              </Button>
+            )}
+            {showUnlink && (
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => { void loadAudit(entry.connector_id); setDialog({ kind: "unlink", entry }); }}>
+                <Unplug className="h-3.5 w-3.5 mr-1" /> Unlink
+              </Button>
+            )}
+            {impact && (
+              <Button size="sm" variant="ghost" onClick={() => { setShowHistory((h) => ({ ...h, [entry.connector_id]: !isHistoryOpen })); if (!isHistoryOpen) void loadAudit(entry.connector_id); }}>
+                <History className="h-3.5 w-3.5" />
+              </Button>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="secondary" className={`gap-1 ${s.cls}`}>
-            <Icon className="h-3 w-3" /> {s.label}
-          </Badge>
-          {entry.linked && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => reprobe(entry.env_var_name)}
-              disabled={isProbing}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isProbing ? "animate-spin" : ""}`} />
-              {isProbing ? "Testing…" : "Test connection"}
-            </Button>
-          )}
-        </div>
+        {isHistoryOpen && (
+          <div className="px-3 pb-2.5 pl-10 text-xs text-muted-foreground space-y-0.5">
+            {history.length === 0 ? (
+              <div>No audit entries yet.</div>
+            ) : history.map((a) => (
+              <div key={a.id}>
+                <span className="font-mono">{new Date(a.created_at).toLocaleString()}</span> · {a.action.replace(/_/g, " ")}
+                {a.note ? ` · ${a.note}` : ""}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
+
+  const dialogImpact = dialog ? IMPACT[dialog.entry.connector_id] : null;
 
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
@@ -209,12 +347,7 @@ export default function Connections() {
           <Card className="overflow-hidden">
             <div className="px-3 py-2.5 border-b bg-muted/40 text-xs text-muted-foreground flex items-center justify-between">
               <span>Curated directory of common connectors. Manage in Lovable Cloud → Connectors.</span>
-              <a
-                href="https://lovable.dev/projects"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 hover:underline"
-              >
+              <a href={CONNECTORS_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
                 Open Connectors <ExternalLink className="h-3 w-3" />
               </a>
             </div>
@@ -238,6 +371,53 @@ export default function Connections() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!dialog} onOpenChange={(o) => { if (!o) setDialog(null); }}>
+        <AlertDialogContent>
+          {dialog && dialogImpact && (
+            <>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {dialog.kind === "unlink" ? `Unlink ${dialogImpact.label}?` : `Relink ${dialogImpact.label}`}
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3 text-sm">
+                    {dialog.kind === "unlink" ? (
+                      <>
+                        <p>The following will stop working until you relink:</p>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {dialogImpact.impacts.map((i) => <li key={i}>{i}</li>)}
+                        </ul>
+                        <p className="text-muted-foreground">
+                          <code className="font-mono">{dialog.entry.env_var_name}</code> will be removed from this project's runtime.
+                        </p>
+                        <p>
+                          The unlink itself happens in Lovable Cloud → Connectors. We'll log the intent now and re-check the connection when you return.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Pick the existing {dialogImpact.label} connection in Cloud → Connectors and link it to this project again.</p>
+                        <p className="text-muted-foreground">If the workspace connection still exists, you don't need to re-enter credentials.</p>
+                        <p>We'll poll the connection every 5 seconds for up to a minute and confirm when it verifies.</p>
+                      </>
+                    )}
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={confirmDialog}
+                  className={dialog.kind === "unlink" ? "bg-destructive hover:bg-destructive/90" : ""}
+                >
+                  {dialog.kind === "unlink" ? "Open Connectors to unlink" : "Open Connectors to relink"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
