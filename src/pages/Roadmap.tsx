@@ -439,6 +439,12 @@ const Roadmap = () => {
                                 <MessageSquare className="h-3 w-3" />{cs.length}
                               </span>
                             )}
+                            <DiscussThisButton
+                              subjectType="roadmap_task"
+                              subjectId={task.id}
+                              title={task.title}
+                              details={`status ${task.status}${task.module ? ` · module ${task.module}` : ""}`}
+                            />
                           </div>
                         );
                       })}
