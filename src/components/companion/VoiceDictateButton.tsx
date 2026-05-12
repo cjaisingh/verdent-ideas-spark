@@ -143,6 +143,15 @@ export function VoiceDictateButton({
     try { wsRef.current?.close(); } catch {/**/}
   };
 
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && !disabled && !recording) {
+      autoStartedRef.current = true;
+      // Defer one tick so the parent has finished mounting.
+      const t = setTimeout(() => { void start(); }, 100);
+      return () => clearTimeout(t);
+    }
+  }, [autoStart, disabled, recording]);
+
   return (
     <Button
       type="button"
