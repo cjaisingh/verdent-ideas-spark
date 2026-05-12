@@ -37,6 +37,7 @@ type Inventory = {
   directory: DirEntry[];
   extras: Extra[];
   fetched_at: string;
+  next_run_at?: string | null;
 };
 
 type AuditRow = {
@@ -214,6 +215,10 @@ export default function Connections() {
       ? Object.entries(verify.scope_hint).slice(0, 3).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")
       : null;
     const ago = testedAt ? `${Math.max(0, Math.round((Date.now() - new Date(testedAt).getTime()) / 60000))}m ago` : null;
+    const nextRun = inv?.next_run_at ? (() => {
+      const mins = Math.max(0, Math.round((new Date(inv.next_run_at!).getTime() - Date.now()) / 60000));
+      return mins === 0 ? "any moment" : `in ${mins}m`;
+    })() : null;
     const isProbing = probing === entry.env_var_name;
     const impact = IMPACT[entry.connector_id];
     const pendingState = pending[entry.connector_id];
@@ -235,10 +240,23 @@ export default function Connections() {
                 <code className="font-mono">{entry.env_var_name}</code>
                 {" · "}
                 {entry.uses_gateway ? "gateway" : "direct API"}
-                {verify?.latency_ms != null && ` · ${verify.latency_ms} ms`}
-                {ago && ` · tested ${ago}`}
-                {verify?.error && verify.outcome === "failed" && ` · ${verify.error}`}
               </div>
+              {entry.linked && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs mt-1">
+                  <span className="text-muted-foreground">
+                    Last sync: <span className="text-foreground">{ago ?? "never"}</span>
+                    {verify?.latency_ms != null && ` (${verify.latency_ms} ms)`}
+                  </span>
+                  {verify?.error && verify.outcome === "failed" ? (
+                    <span className="text-destructive truncate max-w-md">Error: {verify.error}</span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400">No errors</span>
+                  )}
+                  {nextRun && (
+                    <span className="text-muted-foreground">Next run: {nextRun}</span>
+                  )}
+                </div>
+              )}
               {scopeLine && (
                 <div className="text-xs text-muted-foreground/80 truncate mt-0.5">{scopeLine}</div>
               )}
@@ -305,6 +323,7 @@ export default function Connections() {
               ? `${merged.linked.length} linked · ${merged.available.length} available · ${merged.needsAction.length} need action`
               : "Loading inventory…"}
             {inv?.fetched_at && ` · refreshed ${new Date(inv.fetched_at).toLocaleTimeString()}`}
+            {inv?.next_run_at && ` · next auto-probe ${new Date(inv.next_run_at).toLocaleTimeString()}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
