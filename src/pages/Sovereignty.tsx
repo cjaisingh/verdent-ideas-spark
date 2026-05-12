@@ -180,7 +180,7 @@ export default function Sovereignty() {
           >
             docs/sovereignty.md <ExternalLink className="h-3 w-3" />
           </a>
-          . If something here looks marketed beyond what we actually ship, treat the doc as authoritative and raise it.
+          . If something here looks marketed beyond what we actually ship, treat the doc as authoritative and raise it. The public-facing summary lives at <a href="/trust" className="underline text-primary">/trust</a>.
         </p>
       </header>
 

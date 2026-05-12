@@ -91,7 +91,7 @@ What we'd add to make a defensible sovereignty claim that survives a procurement
 - **Retention policy.** New `retention_policies` table + nightly cron prunes `api_call_logs` (365d), `ai_usage_log` (90d). `*_events` stay forever (they are the audit log of record).
 - **Data-flow diagram.** Single SVG embedded in this doc showing operator → edge function → DB plus every egress arrow.
 - **DPA template.** Markdown in `docs/legal/dpa-template.md`.
-- **Trust page.** Public `/trust` route summarising region, sub-processors, last audit date.
+- **Trust page.** Public `/trust` route summarising region, sub-processors, and last audit date. Tier 1 version shipped (region + egress + sub-processors + "what we don't claim"); Tier 2 additions still pending: per-tenant region attestation, last audit date, change-log of sub-processor moves.
 
 Rough size: ~1 sprint, no AI egress changes.
 
