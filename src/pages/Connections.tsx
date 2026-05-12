@@ -236,10 +236,23 @@ export default function Connections() {
                 <code className="font-mono">{entry.env_var_name}</code>
                 {" · "}
                 {entry.uses_gateway ? "gateway" : "direct API"}
-                {verify?.latency_ms != null && ` · ${verify.latency_ms} ms`}
-                {ago && ` · tested ${ago}`}
-                {verify?.error && verify.outcome === "failed" && ` · ${verify.error}`}
               </div>
+              {entry.linked && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs mt-1">
+                  <span className="text-muted-foreground">
+                    Last sync: <span className="text-foreground">{ago ?? "never"}</span>
+                    {verify?.latency_ms != null && ` (${verify.latency_ms} ms)`}
+                  </span>
+                  {verify?.error && verify.outcome === "failed" ? (
+                    <span className="text-destructive truncate max-w-md">Error: {verify.error}</span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400">No errors</span>
+                  )}
+                  {nextRun && (
+                    <span className="text-muted-foreground">Next run: {nextRun}</span>
+                  )}
+                </div>
+              )}
               {scopeLine && (
                 <div className="text-xs text-muted-foreground/80 truncate mt-0.5">{scopeLine}</div>
               )}
