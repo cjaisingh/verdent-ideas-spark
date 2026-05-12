@@ -99,6 +99,7 @@ const App = () => (
             <Route path="/master-plan" element={<MasterPlan />} />
             <Route path="/plan" element={<Plan />} />
             <Route path="/companion" element={<Companion />} />
+            <Route path="/voice-setup" element={<VoiceSetup />} />
             <Route path="/copilot" element={<Copilot />} />
             <Route path="/copilot/agents" element={<CopilotAgents />} />
             <Route path="/copilot/profile" element={<CopilotProfile />} />
