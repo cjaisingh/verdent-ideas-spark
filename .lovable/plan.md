@@ -1,62 +1,48 @@
-## Goal
+## What's actually broken
 
-Give the operator a clear, confirmed flow on `/connections` to unlink Telegram and relink it, with explicit consequences shown before the destructive step.
+`connections-inventory` itself is fine — current direct curl returns 200, and `edge_request_logs` has zero 4xx/5xx rows for any function in the last 6 hours. The browser shows "Failed to fetch" on three calls between 16:58 and 17:01, which is the request being torn down before it left the network stack (CORS preflight, transient TLS, or page navigation). Those never reach the server, so no server log exists.
 
-## Why deep-link instead of a direct API call
+## Why I missed it
 
-The actual link/unlink happens in Lovable Cloud → Connectors (that's where the workspace-level connection lives and where OAuth/credential entry happens). The app cannot programmatically remove a connection from the runtime, so the in-app flow's job is:
-1. Make the consequences obvious before the user leaves the page.
-2. Open Cloud → Connectors in a new tab on the right screen.
-3. Re-probe on return so the UI reflects reality.
+We already capture every server-side edge function call into `public.edge_request_logs` via the `withLogger` middleware, including `status`, `latency_ms`, `classified_error`, and `error_message`. Nothing watches that table. The Sentinel Agent runs every 15 minutes but its checks don't include edge function health, so 5xx spikes can sit silent until someone opens the page.
 
-## UX flow
+## Plan
 
-On the Telegram row in `/connections` (and any gateway connector flagged `supports_unlink`), add two new actions next to "Test connection":
+Two pieces, both small.
 
-- **Unlink** (red ghost button) — opens an `AlertDialog`:
-  - Title: "Unlink Telegram?"
-  - Body lists what will stop working: Companion alerts, AWIP service notifications, any cron job that posts to Telegram. Pulled from a small static `impact` map keyed by `connector_id`.
-  - Shows the env var that will disappear (`TELEGRAM_API_KEY`).
-  - Two buttons: "Cancel" and "Open Connectors to unlink" (opens `https://lovable.dev/projects` in a new tab, then sets a local "awaiting unlink" badge on the row).
-  - On dialog confirm we also write a row to a new `connection_audit_log` table so we have a record of intent.
+### 1. Sentinel watch for edge-function errors
 
-- **Relink** (only shown when row is in "Reconnect" / failed state, OR when an "awaiting unlink" badge is set) — opens a similar dialog:
-  - Title: "Relink Telegram"
-  - Body explains: pick the existing connection in Cloud → Connectors and link it again to this project; credentials don't need to be re-entered if the workspace connection still exists.
-  - Buttons: "Cancel" and "Open Connectors to relink".
-  - On confirm, log to `connection_audit_log` and start polling `connections-inventory` every 5s for up to 60s; when the row flips to linked + verified, toast "Telegram relinked" and stop polling.
+Extend `supabase/functions/sentinel-tick/index.ts` with a new module `edge_function_errors`:
 
-After either dialog, when the tab regains focus we automatically re-run `load()` so the inventory refreshes without a manual click.
+- Window: last 30 minutes.
+- Query `edge_request_logs` grouped by `function_name`, computing `error_rate = 5xx / total` and `error_count`.
+- Emit a `sentinel_findings` row when:
+  - `error_count >= 3` and `error_rate >= 0.2` (high), OR
+  - any single function has `error_count >= 10` in the window (critical).
+- Finding payload includes function name, count, top `classified_error`, sample `error_message`, last `request_id`, deep link to `/admin/edge-health`.
+- High/critical findings already roll into the daily Morning Review and the existing alert webhook — no new plumbing.
 
-## Data
+### 2. Operator-facing edge function health panel
 
-New table `connection_audit_log` (operator-only RLS, insert via the page using the user's JWT):
+New page `/admin/edge-health` (linked from sidebar Admin section, next to Connections):
 
-- `connector_id text not null`
-- `env_var_name text not null`
-- `action text not null check (action in ('unlink_intent','relink_intent','verified_after_relink'))`
-- `actor_user_id uuid not null default auth.uid()`
-- `note text`
-- `created_at timestamptz not null default now()`
+- Top: 24-hour summary table per function — total calls, error count, error rate, p95 latency, last error (timestamp + classified_error + 120-char message), pulled from `edge_request_logs`.
+- Click a function → drawer with the 50 most recent failing rows (timestamp, status, request_id, classified_error, error_message, user_id_hash).
+- Auto-refresh every 60s.
+- Operator-only access via existing `has_role('operator'|'admin')` pattern.
 
-Indexes on `(connector_id, created_at desc)`. RLS: `select`/`insert` only for users with `operator` or `admin` role via existing `has_role()`.
+Backed by a single SECURITY DEFINER RPC `public.edge_function_health(_hours int default 24)` returning the aggregate, plus direct `select` on `edge_request_logs` (RLS already operator-only) for the drawer.
 
-A small "History" disclosure under the Telegram row shows the last 3 audit entries (timestamp + action) so the user can see the trail without leaving the page.
+### 3. Browser-side network failures
 
-## Files to touch
+These (the "Failed to fetch" the user saw) never reach the server, so they can't go in `edge_request_logs`. Add a tiny client wrapper in `src/integrations/supabase/safe-invoke.ts` that catches transport errors from `supabase.functions.invoke` and posts them to a new lightweight edge function `client-error-beacon` → row in `client_error_log`. Sentinel includes those in the same finding when count >= 5 in 30 min.
 
-- `supabase/migrations/<new>.sql` — `connection_audit_log` table + RLS.
-- `src/pages/Connections.tsx`:
-  - Add `IMPACT` map (Telegram entry only for now; structured so other connectors can be added).
-  - Add `UnlinkDialog` and `RelinkDialog` components (use existing `AlertDialog` from `@/components/ui/alert-dialog`).
-  - Render the new buttons on rows where `IMPACT[connector_id]` exists.
-  - Add `useEffect` that listens for `visibilitychange` to call `load()` on tab refocus.
-  - Add the post-relink polling loop and "Telegram relinked" toast.
-  - Add the inline "History" disclosure that queries `connection_audit_log`.
-- No edge function changes; no change to `connections-inventory`.
+Out of scope for this turn unless you want it now: paging integrations beyond the existing webhook, rolling window aggregates beyond 24h, per-user error budgets.
 
-## Out of scope
+## Files
 
-- Programmatic unlink/relink without leaving the app (not supported by the Connectors surface).
-- Other connectors — only Telegram gets the `IMPACT` entry now; the structure makes it trivial to add Aikido/Perplexity/etc later.
-- Any change to how `TELEGRAM_API_KEY` is consumed by edge functions.
+- `supabase/migrations/<new>.sql` — `edge_function_health()` RPC, `client_error_log` table + RLS.
+- `supabase/functions/sentinel-tick/index.ts` — add `edge_function_errors` check.
+- `supabase/functions/client-error-beacon/index.ts` (new).
+- `src/integrations/supabase/safe-invoke.ts` (new) + use it in `Connections.tsx` and other invoke sites incrementally.
+- `src/pages/EdgeHealth.tsx` (new) + route + sidebar entry.
