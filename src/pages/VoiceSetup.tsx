@@ -130,8 +130,9 @@ export default function VoiceSetup() {
   const runFullLoop = async () => {
     setLoopBusy(true); setLoopText("");
     try {
-      const w = window as unknown as { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition };
-      const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+      type SR = { lang: string; interimResults: boolean; maxAlternatives: number; start: () => void; stop: () => void; onresult: (e: { results: { 0: { 0: { transcript: string } } }[] & { [k: number]: { 0: { transcript: string } } } }) => void; onerror: (e: { error: string }) => void };
+      const w = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
+      const SRClass = w.SpeechRecognition ?? w.webkitSpeechRecognition;
       if (!SR) throw new Error("Browser Web Speech API not available (use Chrome/Edge).");
       if (!streamRef.current) await startMic();
 
