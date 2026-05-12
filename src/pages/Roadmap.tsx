@@ -27,6 +27,7 @@ import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
 import { OvernightRunBadge } from "@/components/roadmap/OvernightRunBadge";
 import { OvernightRunControl } from "@/components/roadmap/OvernightRunControl";
 import { useRoadmapGates } from "@/hooks/useRoadmapGates";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import {
   ChevronDown, ChevronRight, Check, Minus, Clock, CircleAlert, Circle,
   MessageSquare, ExternalLink, Timer, Coins,
@@ -438,6 +439,12 @@ const Roadmap = () => {
                                 <MessageSquare className="h-3 w-3" />{cs.length}
                               </span>
                             )}
+                            <DiscussThisButton
+                              subjectType="roadmap_task"
+                              subjectId={task.id}
+                              title={task.title}
+                              details={`status ${task.status}${task.module ? ` · module ${task.module}` : ""}`}
+                            />
                           </div>
                         );
                       })}
@@ -546,6 +553,14 @@ const Roadmap = () => {
                                   ) : (
                                     <span className="text-sm font-medium">{task.title}</span>
                                   )}
+                                  <span onClick={(e) => e.stopPropagation()}>
+                                    <DiscussThisButton
+                                      subjectType="roadmap_task"
+                                      subjectId={task.id}
+                                      title={task.title}
+                                      details={`status ${task.status}${task.module ? ` · module ${task.module}` : ""}`}
+                                    />
+                                  </span>
                                   {task.module && (
                                     <span className="text-[10px] font-mono text-muted-foreground">· {task.module}</span>
                                   )}
