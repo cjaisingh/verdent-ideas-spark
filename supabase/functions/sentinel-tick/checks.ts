@@ -9,7 +9,9 @@ export type FindingCandidate = {
     | "secret_age"
     | "role_grant"
     | "job_error_rate"
-    | "frontend_realtime_error";
+    | "frontend_realtime_error"
+    | "edge_function_error_rate"
+    | "client_transport_error";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;

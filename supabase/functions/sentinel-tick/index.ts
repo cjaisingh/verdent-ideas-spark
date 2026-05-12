@@ -4,7 +4,7 @@ import { withLogger } from "../_shared/logger.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
-  checkFrontendRealtimeErrors,
+  checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -53,20 +53,24 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, secretsRes, auditRes, feRes] = await Promise.all([
+    const [runsRes, edgeRes, secretsRes, auditRes, feRes, cliRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
-        .gte("created_at", since30m).limit(1000),
+        .gte("created_at", since30m).limit(2000),
       sb.from("app_secrets").select("key,updated_at"),
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
       sb.from("frontend_error_logs").select("message,url,created_at,kind").gte("created_at", since30m).limit(500),
+      sb.from("client_error_log").select("function_name,message,created_at").gte("created_at", since30m).limit(500),
     ]);
 
     const runs = runsRes.data ?? [];
+    const edgeLogs = edgeRes.data ?? [];
     const candidates: FindingCandidate[] = [
       ...checkCronSilence(now, SENTINEL_CADENCES, runs),
-      ...checkFiveXxSpike(now, 15, edgeRes.data ?? []),
+      ...checkFiveXxSpike(now, 15, edgeLogs),
+      ...checkEdgeFunctionErrorRate(now, 30, edgeLogs),
+      ...checkClientTransportErrors(now, 30, cliRes.data ?? []),
       ...checkSecretAge(now, secretsRes.data ?? []),
       ...checkAdminGrants(now, 15, auditRes.data ?? []),
       ...checkJobErrorRate(now, runs),
