@@ -12,7 +12,7 @@ type: preference
 
 **Not claimed today (do not market):** in-region AI, CMK/BYOK, per-tenant region, export/delete endpoints, signed audit exports, sub-processor opt-in, ISO 27001 evidence pack, DPA template, `/trust` page.
 
-**Source of truth:** `docs/sovereignty.md`. Any new external service must update §5 sub-processor table in the same change. Any tier escalation must update both that doc's "Current tier" line and this memory.
+**Source of truth:** `docs/sovereignty.md`. Any new external service must update §5 sub-processor table in the same change, then run `bun run subprocessors:generate` to refresh `docs/legal/sub-processor-list.md` (CI `doc-drift` blocks PR if stale). Any tier escalation must update both the doc's "Current tier" line and this memory.
 
 **Why:** lets us answer "is data sovereign?" honestly without committing to engineering work nobody has paid for yet.
 
