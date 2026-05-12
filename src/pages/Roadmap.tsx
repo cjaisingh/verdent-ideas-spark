@@ -553,6 +553,16 @@ const Roadmap = () => {
                                   ) : (
                                     <span className="text-sm font-medium">{task.title}</span>
                                   )}
+                                  <span onClick={(e) => e.stopPropagation()}>
+                                    <DiscussThisButton
+                                      subjectType="roadmap_task"
+                                      subjectId={task.id}
+                                      title={task.title}
+                                      details={`status ${task.status}${task.module ? ` · module ${task.module}` : ""}`}
+                                    />
+                                  </span>
+                                  {false && (
+                                    <span />)}{(() => null)()}
                                   {task.module && (
                                     <span className="text-[10px] font-mono text-muted-foreground">· {task.module}</span>
                                   )}
