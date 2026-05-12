@@ -215,6 +215,10 @@ export default function Connections() {
       ? Object.entries(verify.scope_hint).slice(0, 3).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(" · ")
       : null;
     const ago = testedAt ? `${Math.max(0, Math.round((Date.now() - new Date(testedAt).getTime()) / 60000))}m ago` : null;
+    const nextRun = inv?.next_run_at ? (() => {
+      const mins = Math.max(0, Math.round((new Date(inv.next_run_at!).getTime() - Date.now()) / 60000));
+      return mins === 0 ? "any moment" : `in ${mins}m`;
+    })() : null;
     const isProbing = probing === entry.env_var_name;
     const impact = IMPACT[entry.connector_id];
     const pendingState = pending[entry.connector_id];
