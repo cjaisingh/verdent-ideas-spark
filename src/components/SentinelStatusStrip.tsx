@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Copy, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { FindingRunsDrawer } from "@/components/admin/FindingRunsDrawer";
+import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 
 type Finding = {
   id: string;
