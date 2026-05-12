@@ -131,6 +131,7 @@ const App = () => (
             <Route path="/connections" element={<Connections />} />
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
+            <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
