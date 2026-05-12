@@ -5,6 +5,7 @@ import { dispatchAlert } from "../_shared/alerts.ts";
 import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
+  checkVoicePipelineRed,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
