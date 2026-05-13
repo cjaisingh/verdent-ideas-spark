@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, RefreshCcw, BookOpen, ArrowLeft } from "lucide-react";
+import { Loader2, RefreshCcw, BookOpen, ArrowLeft, Sparkles, MessageSquare } from "lucide-react";
 
 type Lesson = {
   id: string;
@@ -15,8 +15,11 @@ type Lesson = {
   severity: string;
   title: string;
   recommendation: string;
-  evidence: any[];
+  evidence: unknown[];
   status: "proposed" | "applied" | "deferred" | "rejected" | "reopened";
+  cadence: "daily" | "weekly";
+  source: "discussion" | "chat" | "triage" | "event" | "automation" | "review" | "mixed" | null;
+  occurrences: number;
   created_at: string;
   updated_at: string;
   source_window_start: string | null;
@@ -24,6 +27,9 @@ type Lesson = {
 };
 
 const STATUSES = ["proposed", "applied", "deferred", "rejected"] as const;
+const SOURCES = ["discussion", "chat", "triage", "event", "automation", "review", "mixed"] as const;
+const CLIENT_SOURCES = new Set(["chat", "triage", "discussion"]);
+
 const sevColor: Record<string, string> = {
   critical: "bg-destructive text-destructive-foreground",
   high: "bg-destructive/80 text-destructive-foreground",
@@ -31,24 +37,36 @@ const sevColor: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
 };
 
+const sourceColor: Record<string, string> = {
+  chat: "bg-blue-500/20 text-blue-700 dark:text-blue-300",
+  triage: "bg-purple-500/20 text-purple-700 dark:text-purple-300",
+  discussion: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+  event: "bg-orange-500/20 text-orange-700 dark:text-orange-300",
+  automation: "bg-muted text-muted-foreground",
+  review: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300",
+  mixed: "bg-pink-500/20 text-pink-700 dark:text-pink-300",
+};
+
 export default function LessonsLoop() {
   const [rows, setRows] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState<null | "daily" | "weekly">(null);
   const [tab, setTab] = useState<typeof STATUSES[number]>("proposed");
   const [search, setSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "client" | typeof SOURCES[number]>("all");
+  const [cadenceFilter, setCadenceFilter] = useState<"all" | "daily" | "weekly">("all");
 
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from("lessons")
-      .select("*").order("created_at", { ascending: false }).limit(200);
+      .select("*").order("created_at", { ascending: false }).limit(300);
     setRows((data as Lesson[]) ?? []);
     setLoading(false);
   };
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("lessons-loop")
+    const ch = supabase.channel(`lessons-loop-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "lessons" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -57,8 +75,14 @@ export default function LessonsLoop() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
     return rows.filter((r) => r.status === tab)
+      .filter((r) => {
+        if (sourceFilter === "all") return true;
+        if (sourceFilter === "client") return r.source && CLIENT_SOURCES.has(r.source);
+        return r.source === sourceFilter;
+      })
+      .filter((r) => cadenceFilter === "all" || r.cadence === cadenceFilter)
       .filter((r) => !q || r.title.toLowerCase().includes(q) || r.recommendation.toLowerCase().includes(q) || r.category.toLowerCase().includes(q));
-  }, [rows, tab, search]);
+  }, [rows, tab, search, sourceFilter, cadenceFilter]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -66,19 +90,32 @@ export default function LessonsLoop() {
     return c;
   }, [rows]);
 
-  const runSynthesis = async () => {
-    setRunning(true);
+  const sourceCounts = useMemo(() => {
+    const c: Record<string, number> = { all: 0, client: 0 };
+    for (const r of rows.filter((r) => r.status === tab)) {
+      c.all++;
+      if (r.source && CLIENT_SOURCES.has(r.source)) c.client++;
+      if (r.source) c[r.source] = (c[r.source] ?? 0) + 1;
+    }
+    return c;
+  }, [rows, tab]);
+
+  const runSynthesis = async (mode: "daily" | "weekly") => {
+    setRunning(mode);
     try {
-      const { data, error } = await supabase.functions.invoke("lessons-synthesize", { body: {} });
+      const fn = mode === "daily" ? "lessons-daily-synth" : "lessons-synthesize";
+      const { data, error } = await supabase.functions.invoke(fn, { body: {} });
       if (error) throw error;
-      toast.success(`Synthesis complete: +${data?.inserted ?? 0} / ~${data?.updated ?? 0}`);
+      toast.success(`${mode} synth: +${data?.inserted ?? 0} / ~${data?.updated ?? 0}${data?.promoted ? ` / ↑${data.promoted}` : ""}`);
       load();
-    } catch (e: any) { toast.error(e.message ?? "failed"); }
-    finally { setRunning(false); }
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "failed");
+    }
+    finally { setRunning(null); }
   };
 
   const updateStatus = async (l: Lesson, status: Lesson["status"]) => {
-    const patch: any = { status };
+    const patch: { status: Lesson["status"]; applied_at?: string } = { status };
     if (status === "applied") { patch.applied_at = new Date().toISOString(); }
     const { error } = await supabase.from("lessons").update(patch).eq("id", l.id);
     if (error) { toast.error(error.message); return; }
@@ -96,21 +133,25 @@ export default function LessonsLoop() {
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2"><BookOpen className="h-5 w-5" /> Lessons Loop</h1>
           <p className="text-sm text-muted-foreground">
-            Weekly AI synthesis of operational signals into durable rules.
+            Daily 05:30 UTC across discussions, chats, triage + events. Weekly Sun 05:00 UTC promotes recurring daily lessons.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button asChild variant="outline" size="sm">
             <Link to="/morning-review"><ArrowLeft className="h-4 w-4 mr-1" /> Morning Review</Link>
           </Button>
-          <Button onClick={runSynthesis} disabled={running} size="sm">
-            {running ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
-            Synthesize now
+          <Button onClick={() => runSynthesis("daily")} disabled={running !== null} size="sm" variant="secondary">
+            {running === "daily" ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+            Run daily now
+          </Button>
+          <Button onClick={() => runSynthesis("weekly")} disabled={running !== null} size="sm">
+            {running === "weekly" ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
+            Run weekly roll-up
           </Button>
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as typeof STATUSES[number])}>
         <TabsList>
           {STATUSES.map((s) => (
             <TabsTrigger key={s} value={s}>{s} ({counts[s] ?? 0})</TabsTrigger>
@@ -118,12 +159,54 @@ export default function LessonsLoop() {
         </TabsList>
       </Tabs>
 
-      <Input placeholder="Search title, category, recommendation…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-md" />
+      <Card>
+        <CardContent className="py-3 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground mr-1">Source:</span>
+            <Button size="sm" variant={sourceFilter === "all" ? "default" : "outline"} onClick={() => setSourceFilter("all")}>
+              All <Badge variant="secondary" className="ml-1.5">{sourceCounts.all ?? 0}</Badge>
+            </Button>
+            <Button
+              size="sm"
+              variant={sourceFilter === "client" ? "default" : "outline"}
+              onClick={() => setSourceFilter("client")}
+              className={sourceFilter === "client" ? "" : "border-blue-500/40"}
+            >
+              <MessageSquare className="h-3 w-3 mr-1" />
+              Client signals <Badge variant="secondary" className="ml-1.5">{sourceCounts.client ?? 0}</Badge>
+            </Button>
+            {SOURCES.map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={sourceFilter === s ? "default" : "outline"}
+                onClick={() => setSourceFilter(s)}
+              >
+                {s} <Badge variant="secondary" className="ml-1.5">{sourceCounts[s] ?? 0}</Badge>
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground mr-1">Cadence:</span>
+            {(["all", "daily", "weekly"] as const).map((c) => (
+              <Button key={c} size="sm" variant={cadenceFilter === c ? "default" : "outline"} onClick={() => setCadenceFilter(c)}>
+                {c}
+              </Button>
+            ))}
+            <Input
+              placeholder="Search title, category, recommendation…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-xs ml-auto"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" />Loading…</div>
       ) : filtered.length === 0 ? (
-        <Card><CardContent className="py-8 text-sm text-muted-foreground text-center">No {tab} lessons.</CardContent></Card>
+        <Card><CardContent className="py-8 text-sm text-muted-foreground text-center">No {tab} lessons match these filters.</CardContent></Card>
       ) : (
         <div className="grid gap-3">
           {filtered.map((l) => (
@@ -131,15 +214,24 @@ export default function LessonsLoop() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <CardTitle className="text-base">{l.title}</CardTitle>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-1.5 items-center flex-wrap">
                     <Badge className={sevColor[l.severity] ?? "bg-muted"}>{l.severity}</Badge>
                     <Badge variant="outline">{l.category}</Badge>
+                    {l.source && (
+                      <Badge className={sourceColor[l.source] ?? "bg-muted"} variant="secondary">
+                        {l.source}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">{l.cadence}</Badge>
+                    {l.occurrences > 1 && (
+                      <Badge variant="secondary" className="text-xs">×{l.occurrences}</Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <p>{l.recommendation}</p>
-                {l.evidence?.length > 0 && (
+                {Array.isArray(l.evidence) && l.evidence.length > 0 && (
                   <details className="text-xs">
                     <summary className="cursor-pointer text-muted-foreground">{l.evidence.length} evidence ref(s)</summary>
                     <pre className="bg-muted/40 p-2 rounded mt-2 overflow-x-auto">{JSON.stringify(l.evidence, null, 2)}</pre>

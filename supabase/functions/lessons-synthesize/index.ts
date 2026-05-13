@@ -115,32 +115,39 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
     const raw = Array.isArray(parsed.lessons) ? parsed.lessons : [];
     const norm = dedupeLessons(raw as Parameters<typeof dedupeLessons>[0]);
 
-    let inserted = 0, updated = 0;
+    let inserted = 0, updated = 0, promoted = 0;
     for (const l of norm) {
       const { data: existing } = await sb.from("lessons")
-        .select("id,status").eq("dedupe_key", l.dedupe_key).maybeSingle();
+        .select("id,status,occurrences,cadence").eq("dedupe_key", l.dedupe_key).maybeSingle();
       if (existing) {
+        const occ = (existing.occurrences ?? 1) + 1;
+        // Promote daily lessons that recur ≥3 times across the week to cadence='weekly'.
+        const shouldPromote = existing.cadence === "daily" && occ >= 3;
         await sb.from("lessons").update({
           severity: l.severity, recommendation: l.recommendation, evidence: l.evidence,
           source_window_start: since, source_window_end: now.toISOString(),
+          occurrences: occ,
+          cadence: shouldPromote ? "weekly" : existing.cadence,
           status: existing.status === "rejected" ? "rejected" : existing.status,
         }).eq("id", existing.id);
         updated++;
+        if (shouldPromote) promoted++;
       } else {
         await sb.from("lessons").insert({
           category: l.category, severity: l.severity, title: l.title,
           recommendation: l.recommendation, evidence: l.evidence,
           dedupe_key: l.dedupe_key, status: "proposed",
+          cadence: "weekly", source: "automation", occurrences: 1,
           source_window_start: since, source_window_end: now.toISOString(),
         });
         inserted++;
       }
     }
 
-    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated})`, {
-      signals: totalSignals, inserted, updated, model,
+    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated}/p${promoted})`, {
+      signals: totalSignals, inserted, updated, promoted, model,
     });
-    return json({ ok: true, inserted, updated, total: norm.length, model });
+    return json({ ok: true, inserted, updated, promoted, total: norm.length, model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun("error", 500, msg);

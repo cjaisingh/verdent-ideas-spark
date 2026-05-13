@@ -2287,13 +2287,16 @@ export type Database = {
           applied_as: Json | null
           applied_at: string | null
           applied_by: string | null
+          cadence: string
           category: string
           created_at: string
           dedupe_key: string
           evidence: Json
           id: string
+          occurrences: number
           recommendation: string
           severity: string
+          source: string | null
           source_window_end: string | null
           source_window_start: string | null
           status: string
@@ -2304,13 +2307,16 @@ export type Database = {
           applied_as?: Json | null
           applied_at?: string | null
           applied_by?: string | null
+          cadence?: string
           category: string
           created_at?: string
           dedupe_key: string
           evidence?: Json
           id?: string
+          occurrences?: number
           recommendation: string
           severity: string
+          source?: string | null
           source_window_end?: string | null
           source_window_start?: string | null
           status?: string
@@ -2321,13 +2327,16 @@ export type Database = {
           applied_as?: Json | null
           applied_at?: string | null
           applied_by?: string | null
+          cadence?: string
           category?: string
           created_at?: string
           dedupe_key?: string
           evidence?: Json
           id?: string
+          occurrences?: number
           recommendation?: string
           severity?: string
+          source?: string | null
           source_window_end?: string | null
           source_window_start?: string | null
           status?: string
