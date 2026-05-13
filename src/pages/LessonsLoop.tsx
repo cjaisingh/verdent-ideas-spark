@@ -115,7 +115,7 @@ export default function LessonsLoop() {
   };
 
   const updateStatus = async (l: Lesson, status: Lesson["status"]) => {
-    const patch: Record<string, unknown> = { status };
+    const patch: { status: Lesson["status"]; applied_at?: string } = { status };
     if (status === "applied") { patch.applied_at = new Date().toISOString(); }
     const { error } = await supabase.from("lessons").update(patch).eq("id", l.id);
     if (error) { toast.error(error.message); return; }
