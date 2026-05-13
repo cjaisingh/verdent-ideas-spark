@@ -144,10 +144,10 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
       }
     }
 
-    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated})`, {
-      signals: totalSignals, inserted, updated, model,
+    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated}/p${promoted})`, {
+      signals: totalSignals, inserted, updated, promoted, model,
     });
-    return json({ ok: true, inserted, updated, total: norm.length, model });
+    return json({ ok: true, inserted, updated, promoted, total: norm.length, model });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun("error", 500, msg);
