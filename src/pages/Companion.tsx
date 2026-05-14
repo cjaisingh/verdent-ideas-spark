@@ -1213,7 +1213,7 @@ export default function Companion() {
                     }}
                   />
                   <div className="flex flex-col gap-2">
-                    <Button onClick={sendMessage} disabled={sending || !input.trim()}>
+                    <Button onClick={() => sendMessage()} disabled={sending || !input.trim()}>
                       <Send className="h-4 w-4" />
                     </Button>
                     <VoiceDictateButton
