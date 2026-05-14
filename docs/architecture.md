@@ -163,7 +163,28 @@ If any future change to Core breaks one of these, the Control Plane breaks too. 
 
 No project reaches into another's database. Everything is HTTPS + service tokens. That's the whole architecture.
 
+## Sentinel triage activity (notification stream)
+
+Sentinel findings are grouped into `discussion_actions` via the junction table **`discussion_action_findings`** (`action_id`, `finding_id`, `linked_by`, `linked_by_label`, `note`). Operator/admin RLS, realtime, and a unique `(action_id, finding_id)` constraint so the same finding can't be linked twice.
+
+When a row is inserted, trigger **`trg_log_sentinel_triage_group`** counts the action's links: at the 1→2 transition it writes a `group_formed` event into **`sentinel_triage_activity`**; every subsequent insert writes `group_grew`. Each activity row carries `action_id`, `action_short_num`, `action_title`, `event_kind`, `finding_count`, `finding_ids[]`, `triggered_by`, `triggered_by_label`, plus a per-operator `acknowledged_by uuid[]` so notifications dismiss independently per user.
+
+Three SECURITY DEFINER functions back the UI:
+
+- `sentinel_triage_unacked_count()` → integer the sidebar badge polls.
+- `acknowledge_triage_activity(_id)` → marks one row read for the caller.
+- `acknowledge_all_triage_activity()` → marks every unacked row read.
+
+Surfaces:
+
+- **`LinkFindingButton`** on the Sentinel status strip lets operators search open `discussion_actions` by `#short_num` or title and attach the current finding (with optional note). This is the only write path; insertion fires the trigger.
+- **Sidebar badge** on the Morning Review nav row (amber count of unacked rows for the current operator), realtime-subscribed via a unique-per-mount channel name.
+- **`SentinelTriageActivityPanel`** on `/morning-review` shows the feed + per-row and bulk acknowledge controls.
+
+There is no external delivery (no email/Telegram/webhook) — in-app only. The activity stream is purely a notification surface; it does not change action state, status, or risk.
+
 ## See also
 
 - [api.md](./api.md) — endpoint reference with examples
 - [`../.lovable/plan.md`](../.lovable/plan.md) — v1 plan + status
+
