@@ -18,10 +18,39 @@ interface Props {
 function blockerLines(g: PhaseGate): string[] {
   const lines: string[] = [];
   if (!g.structural_ok) lines.push(`${g.open_tasks} open task(s)`);
-  if (!g.qa_ok) lines.push(g.qa_total === 0 ? "No QA checks defined for phase" : `${g.qa_total - g.qa_pass} QA check(s) not passing`);
+  if (!g.qa_ok) {
+    if (g.qa_total === 0) lines.push("No QA checks defined for phase");
+    if (g.qa_failed > 0) lines.push(`${g.qa_failed} QA check(s) failing`);
+    if (g.qa_unknown > 0) lines.push(`${g.qa_unknown} QA check(s) never evaluated`);
+  }
   if (!g.night_ok) lines.push(`${g.night_high_open} high-severity night audit(s)`);
   if (!g.approvals_ok) lines.push(`${g.pending_signoffs} pending sign-off(s)`);
   return lines;
+}
+
+/** Decide which "Done · …" label to show for a done phase that doesn't pass all gates. */
+function doneFailLabel(g: PhaseGate): { label: string; severe: boolean } {
+  // Severe = something concrete is wrong (failing checks, blocked tasks, pending sign-offs, high-night audits).
+  // Non-severe = only "untested": qa_unknown or qa_total=0, no other blocker.
+  const hasReal =
+    !g.structural_ok ||
+    !g.night_ok ||
+    !g.approvals_ok ||
+    (!g.qa_ok && g.qa_failed > 0);
+  if (hasReal) {
+    if (!g.structural_ok && g.qa_ok && g.night_ok && g.approvals_ok)
+      return { label: `Done · ${g.open_tasks} task(s) open`, severe: true };
+    if (g.qa_failed > 0 && g.structural_ok && g.night_ok && g.approvals_ok)
+      return { label: `Done · QA failing`, severe: true };
+    if (!g.night_ok && g.structural_ok && g.qa_ok && g.approvals_ok)
+      return { label: `Done · night audits`, severe: true };
+    if (!g.approvals_ok && g.structural_ok && g.qa_ok && g.night_ok)
+      return { label: `Done · sign-off pending`, severe: true };
+    return { label: `Done · gates fail`, severe: true };
+  }
+  // Only QA-unknown or no QA defined → label as untested, not failing
+  if (g.qa_total === 0) return { label: `Done · QA not defined`, severe: false };
+  return { label: `Done · QA pending`, severe: false };
 }
 
 export function PhaseGateBadge({ phaseStatus, gate, override }: Props) {
@@ -62,18 +91,25 @@ export function PhaseGateBadge({ phaseStatus, gate, override }: Props) {
     );
   }
 
-  // DONE but not all gates pass (no recorded override) → legacy warn variant
+  // DONE but not all gates pass (no recorded override) → split severe vs untested
   if (phaseStatus === "done" && gate && !gate.all_ok) {
+    const { label, severe } = doneFailLabel(gate);
+    const tone = severe
+      ? "border-amber-500 text-amber-600 dark:text-amber-400"
+      : "border-muted-foreground/40 text-muted-foreground";
+    const Icon = severe ? AlertTriangle : ShieldAlert;
     return (
       <TooltipProvider delayDuration={150}>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Badge variant="outline" className="text-[10px] uppercase border-amber-500 text-amber-600 dark:text-amber-400 gap-1">
-              <AlertTriangle className="h-3 w-3" /> Done · gates fail
+            <Badge variant="outline" className={`text-[10px] uppercase gap-1 ${tone}`}>
+              <Icon className="h-3 w-3" /> {label}
             </Badge>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs">
-            <p className="font-medium mb-1">Phase marked done but gates fail:</p>
+            <p className="font-medium mb-1">
+              {severe ? "Phase marked done but gates fail:" : "Phase marked done; QA not yet evaluated:"}
+            </p>
             <ul className="text-xs space-y-0.5 list-disc pl-4">
               {blockerLines(gate).map((l) => <li key={l}>{l}</li>)}
             </ul>
