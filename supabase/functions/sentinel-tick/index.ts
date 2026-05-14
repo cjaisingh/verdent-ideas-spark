@@ -56,7 +56,10 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes] = await Promise.all([
+    const since24h = new Date(now.getTime() - 24 * 3600_000).toISOString();
+    const since5mAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
+
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
@@ -72,13 +75,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("edge_request_logs")
         .select("function_name,classified_error,created_at")
         .eq("classified_error", "allowlist_reject")
-        .gte("created_at", new Date(now.getTime() - 24 * 3600 * 1000).toISOString())
+        .gte("created_at", since24h)
         .limit(2000),
       sb.from("whats_new_entries").select("id,created_at").eq("status", "draft").limit(500),
       sb.from("lint_delta_runs")
         .select("id,created_at,caller,file_path,error_class")
         .eq("status", "failed")
         .gte("created_at", since60m).limit(500),
+      sb.from("companion_messages")
+        .select("id,thread_id,streamed_at,created_at")
+        .eq("status", "streaming")
+        .gte("created_at", since24h)
+        .lt("streamed_at", since5mAgo)
+        .limit(500),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
