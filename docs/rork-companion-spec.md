@@ -58,7 +58,7 @@ Everything works in both **voice** and **text** input modes.
 | POST   | `/functions/v1/companion-cloud-chat`            | Cloud chat turn (Lovable AI)     |
 | POST   | `/functions/v1/companion-extract-actions`       | Pull actions out of a thread     |
 | POST   | `/functions/v1/awip-rag` (`/search`)            | RAG search over project docs     |
-| —      | Direct Supabase reads/writes (RLS-gated)        | `approval_queue`, `discussion_actions`, `morning_reviews`, `night_shifts`, `companion_threads`, `companion_messages` |
+| —      | Direct Supabase reads/writes (RLS-gated)        | `approval_queue`, `discussion_actions`, `morning_reviews`, `night_shifts`, `companion_threads`, `companion_messages` (carries `status` + `streamed_at` for live stream rendering — see [companion auto-resume](../mem/features/companion-resume.md)) |
 
 Full endpoint reference: [`api.md`](./api.md).
 
