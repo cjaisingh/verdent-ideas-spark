@@ -23,6 +23,7 @@ import { IphoneInstallHelpCard } from "@/components/companion/IphoneInstallHelpC
 import { CompanionVoiceDock } from "@/components/companion/CompanionVoiceDock";
 import { fetchLiveState, formatLiveStateBlock, liveStateAge, seedLovableFocus, seedOperatorQueue, type LiveState } from "@/lib/companion-live-state";
 import { PendingLessonsTray, type PendingLesson } from "@/components/companion/PendingLessonsTray";
+import { ResumeBanner } from "@/components/companion/ResumeBanner";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
@@ -264,6 +265,8 @@ type Msg = {
   escalated_action_id: string | null;
   rag_chunk_ids: any;
   created_at: string;
+  status?: "pending" | "streaming" | "complete" | "interrupted" | "error";
+  streamed_at?: string | null;
 };
 
 type CompanionSettings = {
@@ -390,7 +393,18 @@ export default function Companion() {
     if (error) { toast({ title: "Failed to load threads", description: error.message, variant: "destructive" }); return; }
     const rows = (data ?? []) as Thread[];
     setThreads(rows);
-    if (!activeId && rows.length > 0) setActiveId(rows[0].id);
+    if (!activeId && rows.length > 0 && !wantedThreadId) {
+      // Prefer the operator's last-active thread (cross-device resume),
+      // otherwise fall back to newest by updated_at.
+      const { data: state } = await supabase
+        .from("companion_session_state")
+        .select("last_thread_id")
+        .maybeSingle();
+      const restored = state?.last_thread_id && rows.find((r) => r.id === state.last_thread_id);
+      setActiveId(restored ? restored.id : rows[0].id);
+    } else if (!activeId && rows.length > 0) {
+      setActiveId(rows[0].id);
+    }
     // Per-thread stats: message + escalation counts (single query)
     if (rows.length > 0) {
       const ids = rows.map((t) => t.id);
@@ -451,7 +465,23 @@ export default function Companion() {
   const clearFilters = () => { setSearch(""); setFilterKind("all"); setFilterRange("all"); setFilterEscalated(false); };
 
 
-  // Load messages for active thread + realtime
+  // Persist active thread per-operator (cross-device resume on next mount)
+  useEffect(() => {
+    if (!activeId) return;
+    const t = window.setTimeout(async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      await supabase.from("companion_session_state").upsert({
+        user_id: u.user.id,
+        last_thread_id: activeId,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [activeId]);
+
+  // Load messages for active thread + realtime (INSERT and UPDATE so streaming
+  // heartbeats from another tab/device replay live).
   useEffect(() => {
     if (!activeId) { setMessages([]); return; }
     let cancelled = false;
@@ -461,16 +491,72 @@ export default function Companion() {
         .select("*").eq("thread_id", activeId).order("created_at", { ascending: true });
       if (!cancelled) setMessages((data ?? []) as Msg[]);
     })();
-    const ch = supabase.channel(`companion-${activeId}`)
+    const ch = supabase.channel(`companion-${activeId}-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "companion_messages", filter: `thread_id=eq.${activeId}` },
         (p) => {
           const m = p.new as Msg;
           setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
         })
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "companion_messages", filter: `thread_id=eq.${activeId}` },
+        (p) => {
+          const m = p.new as Msg;
+          setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+        })
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [activeId]);
+
+  // Detect interrupted assistant streams in the loaded thread.
+  const interruptedMsg = useMemo(() => {
+    const lastAsst = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAsst) return null;
+    const status = lastAsst.status ?? "complete";
+    if (status === "interrupted" || status === "error") return lastAsst;
+    if (status === "streaming") {
+      const hb = lastAsst.streamed_at ? Date.parse(lastAsst.streamed_at) : 0;
+      if (!hb || Date.now() - hb > 30_000) return lastAsst;
+    }
+    return null;
+  }, [messages]);
+
+  // Idempotently mark a stale streaming row as interrupted.
+  useEffect(() => {
+    if (!interruptedMsg) return;
+    if (interruptedMsg.status !== "streaming") return;
+    void supabase
+      .from("companion_messages")
+      .update({ status: "interrupted" })
+      .eq("id", interruptedMsg.id)
+      .eq("status", "streaming");
+  }, [interruptedMsg]);
+
+  const [resuming, setResuming] = useState(false);
+  const handleResume = async () => {
+    if (!interruptedMsg || !active || resuming) return;
+    const idx = messages.findIndex((m) => m.id === interruptedMsg.id);
+    const prevUser = idx > 0 ? [...messages.slice(0, idx)].reverse().find((m) => m.role === "user") : null;
+    if (!prevUser) {
+      toast({ title: "Cannot resume", description: "No prior user message found.", variant: "destructive" });
+      return;
+    }
+    setResuming(true);
+    try {
+      await supabase.from("companion_messages").delete().eq("id", interruptedMsg.id);
+      setMessages((prev) => prev.filter((m) => m.id !== interruptedMsg.id));
+      setInput(prevUser.content);
+      await new Promise((r) => setTimeout(r, 0));
+      await sendMessage({ skipUserInsert: true });
+    } finally {
+      setResuming(false);
+    }
+  };
+  const handleDiscardResume = async () => {
+    if (!interruptedMsg) return;
+    await supabase.from("companion_messages")
+      .update({ status: "interrupted" }).eq("id", interruptedMsg.id);
+  };
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
@@ -617,8 +703,10 @@ export default function Companion() {
     } catch { /* silent */ }
   };
 
-  // Send a message — streams from Ollama (local) or AI Gateway (cloud)
-  const sendMessage = async () => {
+  // Send a message — streams from Ollama (local) or AI Gateway (cloud).
+  // Persists the assistant row up-front as `status='streaming'` and heartbeats
+  // content + streamed_at every ~1s so a refresh / disconnect can resume it.
+  const sendMessage = async (opts?: { skipUserInsert?: boolean }) => {
     if (!input.trim() || !active || sending) return;
     const userText = input.trim();
     setInput("");
@@ -628,12 +716,17 @@ export default function Companion() {
     const t0 = performance.now();
     let ragIds: string[] = [];
     let ragBlob = "";
+    let asstId: string | null = null;
     try {
-      // 1. Persist user message (realtime will echo it)
-      const { data: u } = await supabase.from("companion_messages").insert({
-        thread_id: active.id, role: "user", content: userText,
-      }).select("*").single();
-      if (u) setMessages((prev) => prev.some((x) => x.id === u.id) ? prev : [...prev, u as Msg]);
+      // 1. Persist user message (skipped on resume — we re-use the prior one).
+      let u: Msg | null = null;
+      if (!opts?.skipUserInsert) {
+        const { data } = await supabase.from("companion_messages").insert({
+          thread_id: active.id, role: "user", content: userText, status: "complete",
+        }).select("*").single();
+        u = (data ?? null) as Msg | null;
+        if (u) setMessages((prev) => prev.some((x) => x.id === u!.id) ? prev : [...prev, u as Msg]);
+      }
 
       // 2. RAG + live env snapshot in parallel
       const [rag, envBlob] = await Promise.all([fetchRagContext(userText), fetchEnvContext()]);
@@ -641,7 +734,7 @@ export default function Companion() {
       ragBlob = rag.blob;
 
       // 3. Build messages
-      const history = [...messages, u as Msg].filter(Boolean).slice(-20);
+      const history = [...messages, u].filter(Boolean).slice(-20) as Msg[];
       const llmMessages = [
         { role: "system", content: SYSTEM_PROMPT },
         ...(envBlob ? [{ role: "system" as const, content: envBlob }] : []),
@@ -649,11 +742,25 @@ export default function Companion() {
         ...history.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       ];
 
-      // 4. Call LLM (stream) — cloud via edge proxy, local via Ollama directly
       const useCloud = settings.use_cloud || healthOk === false;
       const model = useCloud ? settings.cloud_model : settings.ollama_model;
       let acc = "";
 
+      // 4. Insert assistant row up-front with status='streaming' so it survives
+      //    a page refresh / disconnect.
+      {
+        const { data: a0 } = await supabase.from("companion_messages").insert({
+          thread_id: active.id, role: "assistant", content: "",
+          model, status: "streaming", streamed_at: new Date().toISOString(),
+          rag_chunk_ids: ragIds,
+        }).select("*").single();
+        if (a0) {
+          asstId = a0.id;
+          setMessages((prev) => prev.some((x) => x.id === a0.id) ? prev : [...prev, a0 as Msg]);
+        }
+      }
+
+      // 5. Call LLM (stream) — cloud via edge proxy, local via Ollama directly
       let resp: Response;
       if (useCloud) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -689,6 +796,14 @@ export default function Companion() {
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let lastBeat = 0;
+      const flushHeartbeat = async () => {
+        if (!asstId) return;
+        lastBeat = Date.now();
+        await supabase.from("companion_messages")
+          .update({ content: acc, streamed_at: new Date().toISOString() })
+          .eq("id", asstId);
+      };
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -707,21 +822,32 @@ export default function Companion() {
             if (typeof delta === "string") { acc += delta; setStreaming(acc); }
           } catch { /* partial */ }
         }
+        if (Date.now() - lastBeat > 1000) void flushHeartbeat();
       }
 
       const latency = Math.round(performance.now() - t0);
-      // 5. Persist assistant message
-      const { data: a } = await supabase.from("companion_messages").insert({
-        thread_id: active.id, role: "assistant", content: acc,
-        model, latency_ms: latency, rag_chunk_ids: ragIds,
-      }).select("*").single();
-      if (a) setMessages((prev) => prev.some((x) => x.id === a.id) ? prev : [...prev, a as Msg]);
-      // bump thread updated_at
+      // 6. Finalise assistant row.
+      if (asstId) {
+        const { data: a } = await supabase.from("companion_messages")
+          .update({
+            content: acc, latency_ms: latency, rag_chunk_ids: ragIds,
+            status: "complete", streamed_at: new Date().toISOString(),
+          })
+          .eq("id", asstId).select("*").single();
+        if (a) setMessages((prev) => prev.map((x) => x.id === a.id ? (a as Msg) : x));
+      }
       await supabase.from("companion_threads").update({ updated_at: new Date().toISOString() }).eq("id", active.id);
       setStreaming("");
-      // 6. Best-effort lesson extraction (does not block UI)
       if (acc.trim()) void extractLessons(userText, acc);
     } catch (e) {
+      // Mark the assistant row as `error` (preserve whatever streamed) so the
+      // resume banner can offer a retry.
+      if (asstId) {
+        try {
+          await supabase.from("companion_messages")
+            .update({ status: "error" }).eq("id", asstId);
+        } catch { /* swallow */ }
+      }
       toast({
         title: "Companion error",
         description: e instanceof Error ? e.message : String(e),
@@ -1068,6 +1194,15 @@ export default function Companion() {
                 )}
               </div>
 
+              {interruptedMsg && (
+                <ResumeBanner
+                  chars={interruptedMsg.content?.length ?? 0}
+                  onResume={handleResume}
+                  onDiscard={handleDiscardResume}
+                  busy={resuming}
+                />
+              )}
+
               <div className="border-t p-3">
                 <PendingLessonsTray pending={pendingLessons} onChange={setPendingLessons} />
                 {voicePartial && (
@@ -1087,7 +1222,7 @@ export default function Companion() {
                     }}
                   />
                   <div className="flex flex-col gap-2">
-                    <Button onClick={sendMessage} disabled={sending || !input.trim()}>
+                    <Button onClick={() => sendMessage()} disabled={sending || !input.trim()}>
                       <Send className="h-4 w-4" />
                     </Button>
                     <VoiceDictateButton

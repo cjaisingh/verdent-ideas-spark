@@ -1,102 +1,89 @@
-Slice 2 of the Hermes import: a delta-lint that runs `deno check` / JSON parse on changed files **inside the edge-function tool call**, before the response goes out — so syntax/type breakage never reaches the GitHub mirror.
+# Hermes slice 3 — Companion session auto-resume
 
-This is server-side infrastructure with a thin admin surface. No "who acts when" routing — Core just records the lint events.
+Today, `/companion` streams assistant replies into transient state (`setStreaming(acc)`) and only writes the final assistant row when the stream finishes. If the operator refreshes, switches device, or the connection drops mid-stream, the partial answer is lost and the user message is left stranded. There's also no per-operator memory of which thread was last active — on load we just pick "newest by `updated_at`".
+
+Slice 3 fixes both: persist assistant streams as they happen, detect interrupted ones, offer a one-click resume, and remember the last-active thread per operator across devices.
 
 ## Schema (1 migration)
 
-New table `lint_delta_runs`:
+**Extend `companion_messages`:**
 
 | column | type | note |
 |---|---|---|
-| `id` | uuid pk | |
-| `created_at` | timestamptz default now() | |
-| `caller` | text | edge function name that requested the lint |
-| `request_id` | text | from `x-request-id` so we can join `edge_request_logs` |
-| `file_path` | text | repo-relative |
-| `language` | text | `ts` \| `tsx` \| `json` \| `md` \| `other` |
-| `status` | text | `ok` \| `failed` \| `skipped` \| `error` |
-| `duration_ms` | int | |
-| `bytes` | int | size of the input |
-| `error_class` | text null | `syntax` \| `type` \| `parse` \| `timeout` \| `runtime` |
-| `error_message` | text null | first 500 chars |
-| `meta` | jsonb default `{}` | exit code, command, etc |
+| `status` | text default `'complete'` check in (`pending`,`streaming`,`complete`,`interrupted`,`error`) | new |
+| `streamed_at` | timestamptz null | new — heartbeat timestamp during stream |
 
-Operator-only RLS, realtime on, retention via `retention_settings` (30 days).
+Backfill: existing rows → `status='complete'`. Index `(thread_id, status)` for the resume scan.
 
-Indexes: `(created_at desc)`, `(caller, created_at desc)`, `(status, created_at desc)`.
+**New table `companion_session_state`** (operator-only RLS, realtime on):
 
-## Shared module: `supabase/functions/_shared/delta-lint.ts`
+| column | type |
+|---|---|
+| `user_id` uuid pk references auth.users | |
+| `last_thread_id` uuid null references companion_threads on delete set null | |
+| `last_seen_at` timestamptz default now() | |
+| `updated_at` timestamptz default now() | |
 
-Pure helper, no HTTP. Exports `lintDelta(files: { path: string; content: string }[], opts?: { caller?: string; requestId?: string }) → Promise<LintResult[]>`.
+RLS: `created_by = auth.uid() AND has_role(auth.uid(), 'operator')` for select/insert/update; no delete policy. Trigger on update to bump `updated_at`.
 
-Per file:
-- `.ts` / `.tsx` → write to `Deno.makeTempFile`, run `deno check --no-lock --quiet <tmp>` with 5s timeout. Parse stderr → `error_class = 'type' | 'syntax'`.
-- `.json` → `JSON.parse`. Failure → `error_class = 'parse'`.
-- `.md` / unknown → `status = 'skipped'`, no work.
+## Client changes — `src/pages/Companion.tsx`
 
-After each file, insert a row into `lint_delta_runs` (best-effort, never throws). Returns array so callers can short-circuit.
+**Streaming persistence (replaces current "insert on completion" logic in `sendMessage`):**
 
-## Edge function: `supabase/functions/lint-delta/index.ts`
+1. After the user message INSERT, immediately INSERT the assistant row with `content=''`, `status='streaming'`, `model`, `streamed_at=now()` and keep the returned `id` (`asstId`).
+2. While reading the SSE stream, throttle (1s window) UPDATEs to `companion_messages` setting `content=acc` and `streamed_at=now()`.
+3. On stream end → UPDATE `status='complete'`, `content=acc`, `latency_ms`, `rag_chunk_ids`. Bump `companion_threads.updated_at` (existing).
+4. On thrown error → UPDATE `status='error'`, `content=acc` (whatever streamed so far). Surface toast as today.
 
-Thin HTTP wrapper around the shared helper. Wrapped with `withLogger`. Accepts service token OR operator JWT.
+**Resume detection (new effect, runs on `activeId` change after messages load):**
 
-Body schema (Zod):
-```ts
-{ files: [{ path: string, content: string }], caller?: string }
-```
+- Find the latest message in the thread. If `role='assistant'` AND (`status='streaming'` AND `streamed_at < now()-30s`) OR `status='interrupted'` → mark it `interrupted` (idempotent UPDATE) and render a `<ResumeBanner />` above the composer.
+- Banner: "Last reply was interrupted (showed N chars). [Resume] [Discard]".
+  - **Resume** → reuse the prior user message as the prompt, delete the interrupted assistant row, re-enter `sendMessage` flow with that text pre-loaded (skipping a duplicate user-row insert by passing an internal `_resumeFromUserMsgId` arg).
+  - **Discard** → leave the row as `interrupted`; banner dismisses.
 
-Returns `{ ok: boolean, results: LintResult[] }`. `ok = false` if any file failed. CORS enabled.
+**Session state (last-active thread):**
 
-Default-deny gate is N/A here — this is internal-only, gated by service token / operator JWT.
+- New helper `useCompanionSessionState()` that on mount upserts `companion_session_state` and reads `last_thread_id`.
+- The current `loadThreads()` initial-pick logic changes: if no `?thread=` deep-link and no current `activeId`, prefer `last_thread_id` (when it exists in the loaded set), else fall back to "newest by updated_at" (today's behavior).
+- Whenever `activeId` changes (user clicks a thread), debounce-upsert `last_thread_id` + `last_seen_at`.
 
-## Wiring
-
-The two existing edge paths that write generated code are:
-- `companion-cloud-chat` (when it returns code blocks the client writes)
-- `night-agent/open` (when audits suggest patches)
-
-For this slice we only **expose** the helper + endpoint and add the admin UI. Wiring those two callers to actually call `lintDelta` before responding is a follow-up note in `.lovable/plan.md` — not in scope, since they need their own response-shape changes.
+**Cleanup on unmount:** if a stream is in-flight and the user closes the tab, the `streaming` row simply ages out — the resume scan on next mount will catch it. Do NOT try to mark it interrupted on `beforeunload` (best-effort and racy).
 
 ## Sentinel check
 
-New finding `lint_delta_failures` (medium): fires when `lint_delta_runs` has >5 `failed` rows in the last 60 minutes. Wired into `sentinel-tick/checks.ts` next to the existing edge-health checks. Not auto-promoted.
+New finding `companion_streams_stalled` (medium) in `sentinel-tick/checks.ts`:
 
-## Admin UI: `/admin/edge-health` (extend, don't add a new route)
+- Fires when `companion_messages.status='streaming' AND streamed_at < now()-5min` count > 5 in the last 24h.
+- Same shape as the existing `lint_delta_failures` check from slice 2. Not auto-promoted.
 
-- New "Delta Lint" card at the top of the page showing 24h totals: `total / failed / skipped`, plus `lint_delta_failures` 24h count + last failure summary.
-- New "Recent failures" table beneath the existing edge-health table: `created_at`, `caller`, `file_path`, `error_class`, `error_message` (truncated), `duration_ms`. Click row → side panel with full message and meta JSON.
-- Realtime subscription on `lint_delta_runs` filtered to `status=failed`.
+## Out of scope
 
-No new sidebar entry; this lives inside the existing Edge Function Health page.
+- Server-side stream persistence inside `companion-cloud-chat` (client-side heartbeat is enough for v1; server-side adds complexity without solving the disconnect case any better).
+- Scroll-position restoration (just lands at bottom as today).
+- Cross-thread "what were we doing?" summary on resume — single-message granularity only.
+- Voice mode auto-resume (the voice dock has its own state machine; slice it separately).
+- Rork iPhone integration — that app already reads `companion_messages`, so streamed rows just appear there once shipped; no new endpoint needed.
+- Slice 5 onward.
 
 ## Files
 
 | File | Change |
 |---|---|
-| `supabase/migrations/<ts>_lint_delta_runs.sql` | new — table + RLS + indexes + retention row |
-| `supabase/functions/_shared/delta-lint.ts` | new — pure helper |
-| `supabase/functions/lint-delta/index.ts` | new — HTTP endpoint, `withLogger`-wrapped |
-| `supabase/functions/sentinel-tick/checks.ts` | edit — add `lint_delta_failures` check |
-| `supabase/functions/sentinel-tick/index.ts` | edit — call new check |
-| `src/pages/EdgeHealth.tsx` | edit — add Delta Lint card + failures table + realtime |
-| `src/components/admin/DeltaLintCard.tsx` | new — small dashboard card |
-| `src/components/admin/DeltaLintFailures.tsx` | new — table + side panel |
-| `mem/features/delta-lint.md` | new — feature memory |
-| `mem/index.md` | edit — append memory link |
-| `CHANGELOG.md` | edit — Hermes slice 2 entry |
-| `docs/automation.md` (if present) | edit — note new sentinel check |
-
-## Out of scope
-
-- Wiring `companion-cloud-chat` and `night-agent/open` to actually call `lintDelta` before responding — separate slice (needs response-shape work in each caller).
-- Auto-revert of failing edits — this is a tripwire, not a guard.
-- ESLint / Prettier — `deno check` and `JSON.parse` only.
-- Lint of non-edge code (`src/**`) — that stays in the GH Actions pipeline.
-- Slice 3 (companion session auto-resume) — separate ship.
+| `supabase/migrations/<ts>_companion_session_resume.sql` | new — `companion_messages` columns + `companion_session_state` table + RLS + index + trigger |
+| `src/pages/Companion.tsx` | edit — streaming persistence, resume scan, session-state restore + persist |
+| `src/components/companion/ResumeBanner.tsx` | new — small banner with Resume / Discard |
+| `supabase/functions/sentinel-tick/checks.ts` | edit — `companion_streams_stalled` |
+| `supabase/functions/sentinel-tick/index.ts` | edit — wire new check |
+| `mem/features/companion-resume.md` | new — feature memory |
+| `mem/index.md` | edit — append link |
+| `CHANGELOG.md` | edit — Hermes slice 3 entry |
+| `docs/rork-companion-spec.md` | edit — note new `status` field on `companion_messages` |
 
 ## Verification
 
-- `supabase--migration` for the new table.
-- `supabase--test_edge_functions` against `lint-delta` with a known-good `.ts` file (expect `ok=true`) and a deliberately broken one (expect `ok=false`, `error_class='syntax'`).
-- Open `/admin/edge-health`, hit "Lint sample" button (operator-only) → row appears in real time.
-- Sentinel: insert 6 failed rows via service token, wait one tick, confirm `sentinel_findings` row.
+1. `supabase--migration` applies cleanly; `bun run rls:verify` (if present) green.
+2. Manual: open `/companion`, send a message, refresh mid-stream → on reload the partial assistant message is visible with the resume banner; click Resume → completes correctly.
+3. Switch threads, refresh page (no `?thread=` param) → lands on the previously-active thread, not "newest by updated_at".
+4. Insert 6 fake stalled streaming rows via SQL, force `sentinel-tick` → `companion_streams_stalled` finding appears in `/admin/sentinel`.
+5. RLS: confirm a second operator can't read another operator's `companion_session_state` row.
