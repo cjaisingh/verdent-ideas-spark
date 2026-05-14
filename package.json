@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:security": "vitest run --config vitest.e2e.config.ts e2e/security-audit.test.ts e2e/rls-matrix.test.ts e2e/rls-role-matrix.test.ts",
+    "test:security": "vitest run --config vitest.e2e.config.ts e2e/security-audit.test.ts e2e/security-definer-gating.test.ts e2e/rls-matrix.test.ts e2e/rls-role-matrix.test.ts",
     "test:rls-coverage": "bun run scripts/rls-coverage-report.ts",
     "rls:generate": "bun run scripts/generate-rls-map.ts",
     "rls:verify": "bun run scripts/generate-rls-map.ts && git diff --exit-code -- e2e/rls-policy-map.generated.ts",
