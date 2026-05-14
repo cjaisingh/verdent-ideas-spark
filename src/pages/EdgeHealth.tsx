@@ -379,6 +379,39 @@ export default function EdgeHealth() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Sheet open={!!openLint} onOpenChange={(o) => !o && setOpenLint(null)}>
+        <SheetContent className="w-[min(720px,100vw)] sm:max-w-none overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-mono text-sm break-all">{openLint?.file_path}</SheetTitle>
+          </SheetHeader>
+          {openLint && (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="destructive">{openLint.error_class ?? openLint.status}</Badge>
+                <Badge variant="secondary">{openLint.language}</Badge>
+                <Badge variant="outline">{openLint.caller}</Badge>
+                <span className="text-xs text-muted-foreground self-center">
+                  {openLint.duration_ms}ms ·{" "}
+                  {formatDistanceToNow(new Date(openLint.created_at), { addSuffix: true })}
+                </span>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mb-1">Error</div>
+                <pre className="text-xs bg-muted p-3 rounded whitespace-pre-wrap break-words">
+                  {openLint.error_message ?? "(no message)"}
+                </pre>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mb-1">Meta</div>
+                <pre className="text-xs bg-muted p-3 rounded whitespace-pre-wrap break-words">
+                  {JSON.stringify(openLint.meta ?? {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
