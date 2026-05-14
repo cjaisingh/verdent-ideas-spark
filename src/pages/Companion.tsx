@@ -264,6 +264,8 @@ type Msg = {
   escalated_action_id: string | null;
   rag_chunk_ids: any;
   created_at: string;
+  status?: "pending" | "streaming" | "complete" | "interrupted" | "error";
+  streamed_at?: string | null;
 };
 
 type CompanionSettings = {
