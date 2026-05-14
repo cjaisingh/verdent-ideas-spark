@@ -7,6 +7,7 @@ import {
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
+  checkTruthConflictsUnresolved,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
