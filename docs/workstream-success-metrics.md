@@ -165,16 +165,45 @@ Targets are reviewed quarterly. All metrics are queryable from Lovable Cloud (`s
 
 ---
 
+## WS7 — Governance Substrate
+
+**Goal:** truth about every shipped task is anchored to a canonical entity, a justifying notebook, and a decision-authority rule, with all conflicting claims resolvable through `resolve_truth()`.
+
+### Acceptance criteria
+1. `/ontology` page renders the 11 canonical entities from `docs/ontology.md`.
+2. `decision_authorities` table populated and `resolve_truth(entity, entity_id, field)` returns ranked rules + winner.
+3. `governance_links` table + `/governance` page render the chain (depth-2 + gaps) and coverage panel.
+4. `claims` pipeline live with **at least two real (non-operator) claim sources** writing rows: CI test runs (`source='ci'`) and roadmap-task activity (`source='system'`).
+
+### Success metrics
+| KPI | Target | Source |
+|---|---|---|
+| Governance coverage | `governance_coverage(30).with_authority_rule / tasks_shipped ≥ 0.60` | `select * from governance_coverage(30)` |
+| Real-claim ratio | ≥ 70% of `claims` rows in last 30d carry `source in ('ci','system')` (i.e. not hand-typed) | `claims where created_at > now()-interval '30 days'` group by source |
+| Truth-conflict MTTR | p50 ≤ 7 days | `truth_conflicts` joined to resolution events |
+
+### Health SLOs
+- `truth_conflicts_unresolved` open > 7 days → Sentinel (already wired).
+- Coverage drops below 0.40 for 2 consecutive weekly samples → Sentinel `governance-coverage-regression`.
+
+### Out of scope (deferred)
+- **W7.3 — Confidence decay.** Revisit when a domain module produces stale claims that need automatic down-weighting.
+- **W7.4 — Operator reliability history.** Revisit when ≥ 3 distinct human claimants exist and conflict triage is non-trivial.
+- **W7.5+ — TBD.** Substrate is frozen at W7.2 + closeout wiring. New governance work needs a domain-module justification.
+
+---
+
 ## Cross-workstream rollup
 
 A composite **Operational Maturity Index (OMI)** computed weekly, rendered on the Plan dashboard:
 
 ```text
-OMI = 0.20 * WS1_health + 0.15 * WS2_health + 0.20 * WS3_health
-    + 0.20 * WS4_health + 0.15 * WS5_health + 0.10 * WS6_health
+OMI = 0.18 * WS1_health + 0.13 * WS2_health + 0.18 * WS3_health
+    + 0.18 * WS4_health + 0.13 * WS5_health + 0.08 * WS6_health
+    + 0.12 * WS7_health
 ```
 
-Each `WSn_health` is the % of that workstream's KPIs hitting target over the trailing 4 weeks. Target: **OMI ≥ 0.85** by end of W6, **≥ 0.90** sustained from W8 onward.
+Each `WSn_health` is the % of that workstream's KPIs hitting target over the trailing 4 weeks. Target: **OMI ≥ 0.85** by end of W7, **≥ 0.90** sustained from W8 onward.
 
 A workstream is considered "shipped" when:
 - 100% of its acceptance criteria pass, AND

@@ -43,6 +43,12 @@ Per-tenant RLS audit, quota, isolation tests, tenant admin surface. *(Phase 10 r
 ### Phase 11 — Public API & SDK (planned)
 Stable contract surface, versioning, generated SDK, docs site.
 
+### W7 — Governance Substrate (closing)
+Ontology, decision authorities, governance links, claims pipeline. **Frozen at W7.2 + closeout wiring**; see `docs/w7-closeout.md` and `docs/workstream-success-metrics.md` §WS7 for acceptance.
+- **W7.3 (confidence decay)** — deferred. Revisit only when a domain module produces stale claims that need automatic down-weighting.
+- **W7.4 (operator reliability history)** — deferred. Revisit when ≥ 3 distinct human claimants exist and conflict triage is non-trivial.
+- **No further W7.x work** without a domain-module justification.
+
 ## Module map
 
 - **awip-api** — central capability invocation surface (edge function)

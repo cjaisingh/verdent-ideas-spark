@@ -5368,6 +5368,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      infer_task_entity: {
+        Args: { _module: string; _title: string }
+        Returns: string
+      }
       is_principal_allowed: {
         Args: { _platform: string; _principal: string }
         Returns: boolean
