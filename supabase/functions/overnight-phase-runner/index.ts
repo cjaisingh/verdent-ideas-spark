@@ -145,14 +145,15 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
     clearInterval(hbTimer);
     const msg = err instanceof Error ? err.message : String(err);
     const willRetry = attempts < (run.max_retries ?? 3);
-    await sb.from("roadmap_phase_overnight_runs").update({
+    const patch: Record<string, unknown> = {
       status: willRetry ? "queued" : "auto_blocked",
-      finished_at: willRetry ? null : new Date().toISOString(),
-      started_at: willRetry ? null : run ? undefined : null,
       heartbeat_at: null,
       last_error: msg.slice(0, 500),
       error: msg.slice(0, 500),
-    }).eq("id", runId);
+    };
+    if (willRetry) patch.started_at = null;
+    else patch.finished_at = new Date().toISOString();
+    await sb.from("roadmap_phase_overnight_runs").update(patch).eq("id", runId);
     return { run_id: runId, status: willRetry ? "requeued" : "auto_blocked", attempts, error: msg };
   }
 }
