@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, Video, Sparkles, AlertTriangle } from "lucide-react";
+import { RefreshCw, Video, Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
 import { GenerateVideoDialog } from "@/components/heygen/GenerateVideoDialog";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
