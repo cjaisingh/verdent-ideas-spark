@@ -313,6 +313,7 @@ export default function MorningReview() {
         <h1 className="text-2xl font-semibold">Morning Review</h1>
         <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
       </div>
+      <SentinelTriageActivityPanel />
       <Tabs defaultValue="yesterday" className="w-full">
         <TabsList>
           <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
