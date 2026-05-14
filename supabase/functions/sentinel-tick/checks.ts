@@ -16,7 +16,8 @@ export type FindingCandidate = {
     | "night_jobs_stalled"
     | "allowlist_rejects"
     | "whats_new_drafts_stale"
-    | "lint_delta_failures";
+    | "lint_delta_failures"
+    | "companion_streams_stalled";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
