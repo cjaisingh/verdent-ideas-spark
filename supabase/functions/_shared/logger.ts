@@ -119,6 +119,10 @@ export function withLogger(functionName: string, handler: Handler): (req: Reques
         if (!sb) return;
         const url = new URL(req.url);
         const userIdHash = await hashUser(extractUserId(req));
+        const overrideClass = typeof meta.__classified_error === "string"
+          ? (meta.__classified_error as string)
+          : null;
+        if ("__classified_error" in meta) delete meta.__classified_error;
         await sb.from("edge_request_logs").insert({
           request_id: requestId,
           function_name: functionName,
@@ -127,7 +131,7 @@ export function withLogger(functionName: string, handler: Handler): (req: Reques
           status: resp.status,
           latency_ms: Math.round(performance.now() - startedAt),
           user_id_hash: userIdHash,
-          classified_error: classifyError(resp.status, errMessage),
+          classified_error: overrideClass ?? classifyError(resp.status, errMessage),
           error_message: errMessage,
           meta,
         });
