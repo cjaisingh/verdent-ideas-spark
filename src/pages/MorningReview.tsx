@@ -14,6 +14,7 @@ import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDr
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
 import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
+import { SentinelTriageActivityPanel } from "@/components/SentinelTriageActivityPanel";
 
 type Review = {
   id: string;
