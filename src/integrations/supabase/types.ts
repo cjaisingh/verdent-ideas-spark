@@ -947,6 +947,8 @@ export type Database = {
           parts: Json
           rag_chunk_ids: Json
           role: string
+          status: string
+          streamed_at: string | null
           thread_id: string
         }
         Insert: {
@@ -959,6 +961,8 @@ export type Database = {
           parts?: Json
           rag_chunk_ids?: Json
           role: string
+          status?: string
+          streamed_at?: string | null
           thread_id: string
         }
         Update: {
@@ -971,12 +975,43 @@ export type Database = {
           parts?: Json
           rag_chunk_ids?: Json
           role?: string
+          status?: string
+          streamed_at?: string | null
           thread_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "companion_messages_thread_id_fkey"
             columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "companion_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companion_session_state: {
+        Row: {
+          last_seen_at: string
+          last_thread_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_seen_at?: string
+          last_thread_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_seen_at?: string
+          last_thread_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companion_session_state_last_thread_id_fkey"
+            columns: ["last_thread_id"]
             isOneToOne: false
             referencedRelation: "companion_threads"
             referencedColumns: ["id"]
