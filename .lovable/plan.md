@@ -1,48 +1,108 @@
-## What's actually broken
+# Import 4 Hermes-agent patterns into AWIP
 
-`connections-inventory` itself is fine — current direct curl returns 200, and `edge_request_logs` has zero 4xx/5xx rows for any function in the last 6 hours. The browser shows "Failed to fetch" on three calls between 16:58 and 17:01, which is the request being torn down before it left the network stack (CORS preflight, transient TLS, or page navigation). Those never reach the server, so no server log exists.
+Four independent slices, shippable in order. Each gets its own migration + edge-function change + sentinel hook so partial rollout is safe.
 
-## Why I missed it
+---
 
-We already capture every server-side edge function call into `public.edge_request_logs` via the `withLogger` middleware, including `status`, `latency_ms`, `classified_error`, and `error_message`. Nothing watches that table. The Sentinel Agent runs every 15 minutes but its checks don't include edge function health, so 5xx spikes can sit silent until someone opens the page.
+## 1. Worker heartbeat / reclaim / zombie / auto-block
 
-## Plan
+**Problem:** `roadmap_phase_overnight_runs` and night-eligible `discussion_actions` runs can die mid-flight (edge timeout, cold start, crash). We re-enter on the next 15-min cron and hope. No retry cap, no "exited without completing" signal.
 
-Two pieces, both small.
+**Schema (migration):**
+- `roadmap_phase_overnight_runs`: add `heartbeat_at timestamptz`, `attempts int default 0`, `max_retries int default 3`, `last_error text`.
+- New status values allowed: `'reclaimed'`, `'auto_blocked'`.
+- `discussion_actions`: add `night_run_started_at`, `night_run_heartbeat_at`, `night_run_attempts int default 0`, `night_run_max_retries int default 3`, `night_run_last_error text`.
+- New SQL function `public.reclaim_stale_night_jobs(_stale_minutes int default 10)` — flips `running` rows whose `heartbeat_at < now() - interval` back to `queued` and bumps `attempts`; if `attempts >= max_retries` flips to `auto_blocked` instead. Operator-only.
 
-### 1. Sentinel watch for edge-function errors
+**Edge functions:**
+- `overnight-phase-runner-15m`: on pickup, set `status='running'`, `started_at=now()`, `heartbeat_at=now()`, `attempts=attempts+1`. Heartbeat every ~30s during long work. On clean finish, status→`done`. On thrown error, write `last_error`, status→`queued` if `attempts<max_retries` else `auto_blocked`.
+- `night-agent-open` / `night-agent-close`: same pattern on the discussion_actions side.
+- `sentinel-tick`: new check `night_jobs_stalled` — counts rows with `status='running' AND heartbeat_at < now() - interval '10 min'`. Emits `sentinel_finding` (severity high) and calls `reclaim_stale_night_jobs()` itself so reclaim happens within 15 min even if the runner is down.
 
-Extend `supabase/functions/sentinel-tick/index.ts` with a new module `edge_function_errors`:
+**UI:**
+- `/master-plan` overnight card and `/morning-review` night audit row: show `attempts/max_retries` chip and red "auto-blocked" pill with `last_error` tooltip.
 
-- Window: last 30 minutes.
-- Query `edge_request_logs` grouped by `function_name`, computing `error_rate = 5xx / total` and `error_count`.
-- Emit a `sentinel_findings` row when:
-  - `error_count >= 3` and `error_rate >= 0.2` (high), OR
-  - any single function has `error_count >= 10` in the window (critical).
-- Finding payload includes function name, count, top `classified_error`, sample `error_message`, last `request_id`, deep link to `/admin/edge-health`.
-- High/critical findings already roll into the daily Morning Review and the existing alert webhook — no new plumbing.
+---
 
-### 2. Operator-facing edge function health panel
+## 2. Post-write delta lint at the tool-call level
 
-New page `/admin/edge-health` (linked from sidebar Admin section, next to Connections):
+**Problem:** Companion edits (and any future agent edits) ship syntax errors that only surface in CI 2–10 min later. doc-drift / logger-coverage scripts run too late.
 
-- Top: 24-hour summary table per function — total calls, error count, error rate, p95 latency, last error (timestamp + classified_error + 120-char message), pulled from `edge_request_logs`.
-- Click a function → drawer with the 50 most recent failing rows (timestamp, status, request_id, classified_error, error_message, user_id_hash).
-- Auto-refresh every 60s.
-- Operator-only access via existing `has_role('operator'|'admin')` pattern.
+**Implementation:**
+- New shared module `supabase/functions/_shared/delta-lint.ts` exposing `lintFiles(changes: {path: string; content: string}[])`. For each file:
+  - `.ts` / `.tsx` → spawn `deno check --no-lock` against a tmp file (Deno is the runtime, free).
+  - `.json` → `JSON.parse`.
+  - `.md` / others → skip.
+  Returns `{ok: boolean, errors: {path, message}[]}`.
+- Wire into any edge function that produces file diffs back to the operator (currently `companion-cloud-chat` returns text only, so the immediate consumer is the next "agent that writes files" function). For now, expose as a callable `lint-delta` edge function so Companion can call it before claiming a fix.
+- Add a `lint_delta_failures` 24h count to `edge_function_health()` view → surface on `/admin/edge-health`.
 
-Backed by a single SECURITY DEFINER RPC `public.edge_function_health(_hours int default 24)` returning the aggregate, plus direct `select` on `edge_request_logs` (RLS already operator-only) for the drawer.
+No DB changes needed beyond optional logging via existing `edge_request_logs`.
 
-### 3. Browser-side network failures
+---
 
-These (the "Failed to fetch" the user saw) never reach the server, so they can't go in `edge_request_logs`. Add a tiny client wrapper in `src/integrations/supabase/safe-invoke.ts` that catches transport errors from `supabase.functions.invoke` and posts them to a new lightweight edge function `client-error-beacon` → row in `client_error_log`. Sentinel includes those in the same finding when count >= 5 in 30 min.
+## 3. Companion session auto-resume across gateway restart
 
-Out of scope for this turn unless you want it now: paging integrations beyond the existing webhook, rolling window aggregates beyond 24h, per-user error budgets.
+**Problem:** Companion drops chat state on edge cold-start. `companion_messages` exists but as audit trail, not source of truth.
 
-## Files
+**Schema (migration):**
+- New table `public.companion_sessions`:
+  - `id uuid pk`, `user_id uuid not null`, `title text`, `last_message_at timestamptz`, `created_at`, `updated_at`.
+  - RLS: `user_id = auth.uid()` for all CRUD.
+- `companion_messages`: add `session_id uuid references companion_sessions(id) on delete cascade`, index `(session_id, created_at)`. Backfill: create one session per existing user, attach all their messages.
+- Realtime on `companion_messages` already exists; add `companion_sessions` to publication.
 
-- `supabase/migrations/<new>.sql` — `edge_function_health()` RPC, `client_error_log` table + RLS.
-- `supabase/functions/sentinel-tick/index.ts` — add `edge_function_errors` check.
-- `supabase/functions/client-error-beacon/index.ts` (new).
-- `src/integrations/supabase/safe-invoke.ts` (new) + use it in `Connections.tsx` and other invoke sites incrementally.
-- `src/pages/EdgeHealth.tsx` (new) + route + sidebar entry.
+**Edge functions:**
+- `companion-cloud-chat`: accept `session_id` in body (required for new requests, auto-create if missing). After streaming finishes (in `flush()`), insert user message + assistant message rows with `session_id`. Update `companion_sessions.last_message_at`.
+- New `companion-session-load` GET endpoint: returns last N messages for `session_id` (operator JWT).
+
+**UI:**
+- `/companion`: on mount, read `?session=<id>` from URL or create a new session, fetch history via `companion-session-load`, hydrate chat. Persist `session_id` in URL so refresh preserves thread. Add session list dropdown (last 10 by `last_message_at`).
+
+---
+
+## 4. Default-deny allowlists + redaction-on-by-default
+
+**Problem:** Telegram + Companion + Rork accept anything from anyone holding the service token / a logged-in JWT. Matches our `chat-first-policy-requests` memory but currently aspirational.
+
+**Schema (migration):**
+- New table `public.platform_allowlist`:
+  - `id`, `platform text check (platform in ('telegram','rork','companion_web'))`, `principal text` (chat_id / user_id / email), `note text`, `created_by uuid`, `created_at`.
+  - Unique `(platform, principal)`.
+  - RLS: operator/admin only.
+- New table `public.platform_allowlist_audit` for grant/revoke events (insert via trigger).
+- Seed: insert your own Telegram chat_id + email so you don't lock yourself out on deploy.
+
+**Helper SQL function:** `public.is_principal_allowed(_platform text, _principal text) returns boolean` — `security definer`, returns true if row exists.
+
+**Edge functions:**
+- `telegram-webhook`: before any processing, call `is_principal_allowed('telegram', chat_id::text)`. If false → log to `edge_request_logs` with `classified_error='allowlist_reject'` and return 200 (silent drop). No reply.
+- `companion-cloud-chat`: after JWT validation, call `is_principal_allowed('companion_web', user.email)`. If false → 403 `{error:'not_allowlisted'}`.
+- `gemini-tts` (Rork path): same check on the bearer principal.
+- Default-on redaction: `_shared/logger.ts` already redacts; flip the env-driven opt-out (`LOGGER_REDACT=off`) to opt-out only — confirm by reading the file before edit.
+
+**Sentinel:** new check `allowlist_rejects_24h` — if >50 rejects in 24h on any single platform, file high finding ("possible probing or stale config").
+
+**UI:**
+- `/admin` → new "Allowlist" panel: list rows per platform, add/remove with note. Operator-only.
+
+---
+
+## Sequencing
+
+Ship in this order so each can soak overnight before the next lands:
+
+1. **Day 1** — slice 1 (heartbeat). Highest leverage, lowest risk.
+2. **Day 2** — slice 4 (allowlists). Pure additive, default-deny seeded with your own principals.
+3. **Day 3** — slice 2 (delta-lint). Standalone edge function, no schema.
+4. **Day 4** — slice 3 (session resume). Largest UI change; do last when the rest is stable.
+
+## Out of scope (deliberately)
+
+- `/goal` Ralph loop — duplicates existing focus surfaces.
+- `no_agent` cron mode — cosmetic.
+- Kanban dashboard — too large a paradigm shift for now.
+
+## Memory updates
+
+After each slice ships, append to `mem://features/` with a one-liner + reference, and update `mem://index.md` Memories list. No Core changes (the substrate principle still holds — these are reliability + safety, not new "who acts when" logic).
