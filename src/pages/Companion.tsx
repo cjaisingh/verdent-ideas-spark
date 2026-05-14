@@ -23,6 +23,7 @@ import { IphoneInstallHelpCard } from "@/components/companion/IphoneInstallHelpC
 import { CompanionVoiceDock } from "@/components/companion/CompanionVoiceDock";
 import { fetchLiveState, formatLiveStateBlock, liveStateAge, seedLovableFocus, seedOperatorQueue, type LiveState } from "@/lib/companion-live-state";
 import { PendingLessonsTray, type PendingLesson } from "@/components/companion/PendingLessonsTray";
+import { ResumeBanner } from "@/components/companion/ResumeBanner";
 
 // Build a list of loopback variants to probe. macOS Ollama often listens on
 // IPv6 only, so a browser hitting `localhost` (which can resolve to 127.0.0.1)
