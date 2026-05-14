@@ -127,7 +127,7 @@ const allOkGate: PhaseGate = {
   phase_key: "P1",
   phase_status: "active",
   total_tasks: 3, open_tasks: 0,
-  qa_total: 2, qa_pass: 2,
+  qa_total: 2, qa_pass: 2, qa_failed: 0, qa_unknown: 0,
   night_high_open: 0,
   pending_signoffs: 0,
   structural_ok: true, qa_ok: true, night_ok: true, approvals_ok: true, all_ok: true,
