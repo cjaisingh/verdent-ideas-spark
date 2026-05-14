@@ -72,6 +72,8 @@ export default function AdminVideos() {
     }
   };
 
+  const quotaFull = (used ?? 0) >= 3;
+
   const retryFailed = async (row: Row) => {
     if (quotaFull) {
       toast.error("Monthly quota reached (3/3). Cannot retry until next month.");
@@ -93,8 +95,6 @@ export default function AdminVideos() {
       setRetryingId(null);
     }
   };
-
-  const quotaFull = (used ?? 0) >= 3;
 
   return (
     <div className="container py-6 max-w-6xl">
