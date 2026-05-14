@@ -462,3 +462,35 @@ export function checkAllowlistRejects(
   }
   return out;
 }
+
+/**
+ * What's New: drafts queue going stale.
+ * Fires medium when > 20 unreviewed drafts OR oldest draft > 7 days.
+ */
+export type WhatsNewDraftRow = { id: string; created_at: string };
+
+export function checkWhatsNewDraftsStale(
+  now: Date,
+  drafts: WhatsNewDraftRow[],
+): FindingCandidate[] {
+  if (drafts.length === 0) return [];
+  const oldest = drafts.reduce(
+    (m, d) => Math.min(m, +new Date(d.created_at)),
+    now.getTime(),
+  );
+  const ageDays = (now.getTime() - oldest) / (24 * 3600_000);
+  const tooMany = drafts.length > 20;
+  const tooOld = ageDays > 7;
+  if (!tooMany && !tooOld) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
+  return [{
+    kind: "whats_new_drafts_stale",
+    severity: "medium",
+    summary:
+      `What's New: ${drafts.length} unreviewed draft${drafts.length === 1 ? "" : "s"}` +
+      (tooOld ? `, oldest ${Math.floor(ageDays)}d old` : "") + ".",
+    dedupe_key: `whats_new_drafts_stale:${dayBucket}`,
+    subject_ref: {},
+    payload: { drafts: drafts.length, oldest_age_days: Math.floor(ageDays) },
+  }];
+}

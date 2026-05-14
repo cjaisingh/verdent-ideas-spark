@@ -5,7 +5,7 @@ import { dispatchAlert } from "../_shared/alerts.ts";
 import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
-  checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects,
+  checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -55,7 +55,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
@@ -73,6 +73,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .eq("classified_error", "allowlist_reject")
         .gte("created_at", new Date(now.getTime() - 24 * 3600 * 1000).toISOString())
         .limit(2000),
+      sb.from("whats_new_entries").select("id,created_at").eq("status", "draft").limit(500),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
@@ -98,6 +99,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkFrontendRealtimeErrors(now, 30, feRes.data ?? []),
       ...checkNightJobsStalled(now, reclaimResult),
       ...checkAllowlistRejects(now, allowRes.data ?? []),
+      ...checkWhatsNewDraftsStale(now, (draftRes.data ?? []) as { id: string; created_at: string }[]),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;
