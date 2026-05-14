@@ -9,6 +9,8 @@ export interface PhaseGate {
   open_tasks: number;
   qa_total: number;
   qa_pass: number;
+  qa_failed: number;
+  qa_unknown: number;
   night_high_open: number;
   pending_signoffs: number;
   structural_ok: boolean;
