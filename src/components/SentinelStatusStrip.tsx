@@ -8,6 +8,7 @@ import { ArrowUpRight, Copy, Loader2, RefreshCcw, Shield, ShieldAlert, ShieldChe
 import { toast } from "sonner";
 import { FindingRunsDrawer } from "@/components/admin/FindingRunsDrawer";
 import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
+import { LinkFindingButton } from "@/components/sentinel/LinkFindingButton";
 
 type Finding = {
   id: string;
