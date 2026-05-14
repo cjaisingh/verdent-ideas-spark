@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Security
+- **Phase 2 closeout — Supabase linter cleanup.** Locked `infer_task_entity` `search_path` (was the lone mutable-search_path warn); tightened the `frontend_error_logs` anonymous INSERT policy with size guards (`message` 1–8000, `stack` ≤16000, `url` ≤2000) so it stops tripping the always-true RLS rule; and revoked `EXECUTE` on every public SECURITY DEFINER function from `anon`/`public`, regranting only to `authenticated` and `service_role` (eliminates all 24 anon-callable warnings). `COMMENT ON SCHEMA public` documents the deliberate posture: the remaining 52 warnings are 0029 (authenticated → SECURITY DEFINER) and intentional — every such function gates internally via `has_role()`. Linter went 63 → 52 WARNs, 0 ERRORs. Acceptance for roadmap task "Fix outstanding Supabase security linter warnings" met.
+
 ### Re-scoped
 - **W7 Governance — closeout boundary set.** `docs/workstream-success-metrics.md` now includes **WS7 — Governance Substrate** with 4 binary acceptance checks, 3 KPIs (coverage ≥ 60% over 30d, real-claim ratio ≥ 70%, truth-conflict MTTR p50 ≤ 7d) and 2 SLOs. Master plan flags **W7.3 (confidence decay)** and **W7.4 (operator reliability history)** as **deferred** — revisited only on domain-module demand. OMI weights rebalanced to include WS7 at 0.12. Closeout doc lands at `docs/w7-closeout.md`.
 
