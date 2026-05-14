@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw, Check, X, RotateCcw, Search } from "lucide-react";
-import { Helmet } from "react-helmet-async";
 
 type Entry = {
   id: string;
@@ -96,7 +95,7 @@ function EntryCard({ entry, mode, onAction }: {
   onAction: (action: "publish" | "dismiss" | "regenerate" | "save" | "unpublish", patch?: Partial<Entry>) => void;
 }) {
   const [local, setLocal] = useState(entry);
-  useEffect(() => setLocal(entry), [entry.id, entry.updated_at as unknown]);
+  useEffect(() => setLocal(entry), [entry.id]);
   const dirty = JSON.stringify(local) !== JSON.stringify(entry);
 
   return (
@@ -223,22 +222,17 @@ export default function WhatsNew() {
       await scan();
       return;
     }
-    const update: Partial<Entry> = { ...(patch ?? {}) };
+    const update: Record<string, unknown> = { ...(patch ?? {}) };
     if (action === "publish") { update.status = "published"; update.published_at = new Date().toISOString(); }
     if (action === "dismiss") update.status = "dismissed";
     if (action === "save") { /* just save patch */ }
     if (action === "unpublish") update.status = "draft";
-    const { error } = await supabase.from("whats_new_entries").update(update).eq("id", entry.id);
+    const { error } = await supabase.from("whats_new_entries").update(update as never).eq("id", entry.id);
     if (error) toast({ title: "Update failed", description: error.message, variant: "destructive" });
   };
 
   return (
     <div className="container max-w-5xl py-6 space-y-4">
-      <Helmet>
-        <title>What's New — AWIP Operator Console</title>
-        <meta name="description" content="AI-drafted, operator-approved change journal for AWIP Core." />
-      </Helmet>
-
       <header className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-semibold">What's New</h1>
