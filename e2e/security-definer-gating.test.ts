@@ -56,7 +56,31 @@ const PROJECT_REF = process.env.SUPABASE_PROJECT_REF;
 
 beforeAll(() => requireEnv());
 
-type AuditRow = { proname: string; is_trigger: boolean; has_authz_check: boolean };
+type AuditRow = {
+  proname: string;
+  is_trigger: boolean;
+  has_authz_check: boolean;
+  has_has_role: boolean;
+  has_not_authorized_raise: boolean;
+  has_uid_null_guard: boolean;
+  arg_signature: string;
+  source_preview: string;
+};
+
+function formatOffender(o: AuditRow): string {
+  const missing: string[] = [];
+  if (!o.has_has_role) missing.push("has_role(auth.uid(), ...)");
+  if (!o.has_not_authorized_raise) missing.push("RAISE EXCEPTION 'not authorized'");
+  if (!o.has_uid_null_guard) missing.push("auth.uid() IS NULL guard");
+  const preview = (o.source_preview ?? "").replace(/\s+/g, " ").trim().slice(0, 220);
+  return [
+    `  ✗ ${o.proname}(${o.arg_signature ?? ""})`,
+    `      missing ALL of: ${missing.join(", ")}`,
+    `      is_trigger=${o.is_trigger}  has_authz_check=${o.has_authz_check}`,
+    `      source[0..220]: ${preview}…`,
+    `      fix: add a role gate, OR add to ALLOWED_NON_GATED with justification`,
+  ].join("\n");
+}
 
 describe("SECURITY DEFINER gating", () => {
   it("every public SECURITY DEFINER function is trigger / gated / allow-listed", async () => {
@@ -69,10 +93,18 @@ describe("SECURITY DEFINER gating", () => {
     const offenders = rows.filter(
       (r) => !r.is_trigger && !r.has_authz_check && !ALLOWED_NON_GATED.has(r.proname),
     );
+    if (offenders.length > 0) {
+      // Surface rich evidence in test output so failures are immediately actionable.
+      // eslint-disable-next-line no-console
+      console.error(
+        `\n[security-definer-gating] ${offenders.length} ungated SECURITY DEFINER function(s):\n` +
+          offenders.map(formatOffender).join("\n\n") +
+          "\n",
+      );
+    }
     expect(
-      offenders,
-      "SECURITY DEFINER functions that are neither triggers, authz-gated, nor allow-listed:\n" +
-        offenders.map((o) => `  - ${o.proname}`).join("\n"),
+      offenders.map((o) => o.proname),
+      "Ungated SECURITY DEFINER functions (see console output above for missing-evidence detail).",
     ).toEqual([]);
   });
 
