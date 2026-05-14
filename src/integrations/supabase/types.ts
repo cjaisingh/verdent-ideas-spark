@@ -2381,6 +2381,51 @@ export type Database = {
         }
         Relationships: []
       }
+      lint_delta_runs: {
+        Row: {
+          bytes: number
+          caller: string
+          created_at: string
+          duration_ms: number
+          error_class: string | null
+          error_message: string | null
+          file_path: string
+          id: string
+          language: string
+          meta: Json
+          request_id: string | null
+          status: string
+        }
+        Insert: {
+          bytes?: number
+          caller: string
+          created_at?: string
+          duration_ms?: number
+          error_class?: string | null
+          error_message?: string | null
+          file_path: string
+          id?: string
+          language: string
+          meta?: Json
+          request_id?: string | null
+          status: string
+        }
+        Update: {
+          bytes?: number
+          caller?: string
+          created_at?: string
+          duration_ms?: number
+          error_class?: string | null
+          error_message?: string | null
+          file_path?: string
+          id?: string
+          language?: string
+          meta?: Json
+          request_id?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       memory_audit_log: {
         Row: {
           action: string

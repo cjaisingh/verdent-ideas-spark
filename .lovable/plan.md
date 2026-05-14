@@ -1,46 +1,102 @@
-Document the two shipped Hermes slices as durable project memory so future agents respect the patterns without re-deriving them.
+Slice 2 of the Hermes import: a delta-lint that runs `deno check` / JSON parse on changed files **inside the edge-function tool call**, before the response goes out — so syntax/type breakage never reaches the GitHub mirror.
 
-## Files to create
+This is server-side infrastructure with a thin admin surface. No "who acts when" routing — Core just records the lint events.
 
-### 1. `mem/features/worker-reliability.md` (Slice 1 — heartbeat/reclaim/retry caps)
+## Schema (1 migration)
 
-Frontmatter: `type: feature`, `name: worker-reliability`, description: "Heartbeat + reclaim + retry caps for overnight jobs and night shifts".
+New table `lint_delta_runs`:
 
-Body covers:
-- Tables that carry `heartbeat_at`, `attempts`, `max_retries`, `last_error`: `roadmap_phase_overnight_runs`, `night_shifts`. New jobs of the same shape MUST follow.
-- `overnight-phase-runner` contract: bump `attempts` on pickup, heartbeat every 30s while `status='running'`, on failure requeue until `attempts >= max_retries` then set `status='auto_blocked'` with `last_error`.
-- `night-agent/open` heartbeats per audited candidate.
-- Reclaim path: `public.reclaim_stale_night_jobs(_stale_minutes int)` reverts `running` rows with stale heartbeat to `queued` (or `auto_blocked` if cap hit). Called by `sentinel-tick` every tick — do not call from the runner.
-- Sentinel finding `night_jobs_stalled` (medium) fires on reclaimed rows.
-- Anti-patterns: silent catch in the runner, skipping `attempts` bump, hand-resetting `auto_blocked` rows without recording why.
+| column | type | note |
+|---|---|---|
+| `id` | uuid pk | |
+| `created_at` | timestamptz default now() | |
+| `caller` | text | edge function name that requested the lint |
+| `request_id` | text | from `x-request-id` so we can join `edge_request_logs` |
+| `file_path` | text | repo-relative |
+| `language` | text | `ts` \| `tsx` \| `json` \| `md` \| `other` |
+| `status` | text | `ok` \| `failed` \| `skipped` \| `error` |
+| `duration_ms` | int | |
+| `bytes` | int | size of the input |
+| `error_class` | text null | `syntax` \| `type` \| `parse` \| `timeout` \| `runtime` |
+| `error_message` | text null | first 500 chars |
+| `meta` | jsonb default `{}` | exit code, command, etc |
 
-### 2. `mem/features/platform-allowlist.md` (Slice 4 — default-deny allowlists)
+Operator-only RLS, realtime on, retention via `retention_settings` (30 days).
 
-Frontmatter: `type: feature`, `name: platform-allowlist`, description: "Default-deny allowlist gating Telegram, Companion, Rork TTS".
+Indexes: `(created_at desc)`, `(caller, created_at desc)`, `(status, created_at desc)`.
 
-Body covers:
-- Tables: `platform_allowlist (platform, principal, note, …)` unique on `(platform, principal)`, plus `platform_allowlist_audit` written by trigger.
-- Helper: `public.is_principal_allowed(_platform text, _principal text) → boolean`. Default-deny — empty allowlist means nobody gets in.
-- Gated edge functions: `telegram-webhook` (chat_id), `companion-cloud-chat` (operator email after JWT), `gemini-tts` (operator email after JWT). Any new external-facing function MUST gate on this helper before doing work.
-- Rejection path: log via `withLogger` with `__classified_error: 'allowlist_reject'` so logger meta override classifies the row.
-- Sentinel: `allowlist_rejects` finding fires at >50/24h per platform.
-- Seeded principals: `chris.jaisingh@me.com` for `companion_web` + `rork`. Telegram chat_id must be inserted manually before the bot will reply.
-- Admin UI: `/admin` allowlist panel (operator-only RLS) — use it instead of raw SQL where possible.
-- Anti-patterns: bypassing the helper "just for diagnostics", storing principals on `profiles`, removing audit trigger.
+## Shared module: `supabase/functions/_shared/delta-lint.ts`
 
-## Index update
+Pure helper, no HTTP. Exports `lintDelta(files: { path: string; content: string }[], opts?: { caller?: string; requestId?: string }) → Promise<LintResult[]>`.
 
-Append to `mem/index.md` under `## Memories`:
+Per file:
+- `.ts` / `.tsx` → write to `Deno.makeTempFile`, run `deno check --no-lock --quiet <tmp>` with 5s timeout. Parse stderr → `error_class = 'type' | 'syntax'`.
+- `.json` → `JSON.parse`. Failure → `error_class = 'parse'`.
+- `.md` / unknown → `status = 'skipped'`, no work.
 
+After each file, insert a row into `lint_delta_runs` (best-effort, never throws). Returns array so callers can short-circuit.
+
+## Edge function: `supabase/functions/lint-delta/index.ts`
+
+Thin HTTP wrapper around the shared helper. Wrapped with `withLogger`. Accepts service token OR operator JWT.
+
+Body schema (Zod):
+```ts
+{ files: [{ path: string, content: string }], caller?: string }
 ```
-- [Worker reliability](mem://features/worker-reliability) — heartbeat/attempts/max_retries on roadmap_phase_overnight_runs + night_shifts; reclaim_stale_night_jobs called from sentinel-tick
-- [Platform allowlist](mem://features/platform-allowlist) — default-deny is_principal_allowed() gating telegram-webhook, companion-cloud-chat, gemini-tts; allowlist_rejects sentinel >50/24h
-```
 
-Preserve every existing line in `mem/index.md` (write-tool replaces full file).
+Returns `{ ok: boolean, results: LintResult[] }`. `ok = false` if any file failed. CORS enabled.
+
+Default-deny gate is N/A here — this is internal-only, gated by service token / operator JWT.
+
+## Wiring
+
+The two existing edge paths that write generated code are:
+- `companion-cloud-chat` (when it returns code blocks the client writes)
+- `night-agent/open` (when audits suggest patches)
+
+For this slice we only **expose** the helper + endpoint and add the admin UI. Wiring those two callers to actually call `lintDelta` before responding is a follow-up note in `.lovable/plan.md` — not in scope, since they need their own response-shape changes.
+
+## Sentinel check
+
+New finding `lint_delta_failures` (medium): fires when `lint_delta_runs` has >5 `failed` rows in the last 60 minutes. Wired into `sentinel-tick/checks.ts` next to the existing edge-health checks. Not auto-promoted.
+
+## Admin UI: `/admin/edge-health` (extend, don't add a new route)
+
+- New "Delta Lint" card at the top of the page showing 24h totals: `total / failed / skipped`, plus `lint_delta_failures` 24h count + last failure summary.
+- New "Recent failures" table beneath the existing edge-health table: `created_at`, `caller`, `file_path`, `error_class`, `error_message` (truncated), `duration_ms`. Click row → side panel with full message and meta JSON.
+- Realtime subscription on `lint_delta_runs` filtered to `status=failed`.
+
+No new sidebar entry; this lives inside the existing Edge Function Health page.
+
+## Files
+
+| File | Change |
+|---|---|
+| `supabase/migrations/<ts>_lint_delta_runs.sql` | new — table + RLS + indexes + retention row |
+| `supabase/functions/_shared/delta-lint.ts` | new — pure helper |
+| `supabase/functions/lint-delta/index.ts` | new — HTTP endpoint, `withLogger`-wrapped |
+| `supabase/functions/sentinel-tick/checks.ts` | edit — add `lint_delta_failures` check |
+| `supabase/functions/sentinel-tick/index.ts` | edit — call new check |
+| `src/pages/EdgeHealth.tsx` | edit — add Delta Lint card + failures table + realtime |
+| `src/components/admin/DeltaLintCard.tsx` | new — small dashboard card |
+| `src/components/admin/DeltaLintFailures.tsx` | new — table + side panel |
+| `mem/features/delta-lint.md` | new — feature memory |
+| `mem/index.md` | edit — append memory link |
+| `CHANGELOG.md` | edit — Hermes slice 2 entry |
+| `docs/automation.md` (if present) | edit — note new sentinel check |
 
 ## Out of scope
 
-- Slices 2 (delta-lint) and 3 (companion session auto-resume) — not yet shipped, no memory yet.
-- Skills framework — `AGENTS.md` already documents it; no separate memory entry needed.
-- Code changes — memory only.
+- Wiring `companion-cloud-chat` and `night-agent/open` to actually call `lintDelta` before responding — separate slice (needs response-shape work in each caller).
+- Auto-revert of failing edits — this is a tripwire, not a guard.
+- ESLint / Prettier — `deno check` and `JSON.parse` only.
+- Lint of non-edge code (`src/**`) — that stays in the GH Actions pipeline.
+- Slice 3 (companion session auto-resume) — separate ship.
+
+## Verification
+
+- `supabase--migration` for the new table.
+- `supabase--test_edge_functions` against `lint-delta` with a known-good `.ts` file (expect `ok=true`) and a deliberately broken one (expect `ok=false`, `error_class='syntax'`).
+- Open `/admin/edge-health`, hit "Lint sample" button (operator-only) → row appears in real time.
+- Sentinel: insert 6 failed rows via service token, wait one tick, confirm `sentinel_findings` row.

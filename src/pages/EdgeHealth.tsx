@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle, FileCode2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 type Health = {
   function_name: string;
@@ -36,12 +37,30 @@ type ClientErr = {
   created_at: string;
 };
 
+type LintRow = {
+  id: string;
+  created_at: string;
+  caller: string;
+  file_path: string;
+  language: string;
+  status: string;
+  duration_ms: number;
+  error_class: string | null;
+  error_message: string | null;
+  meta: Record<string, unknown> | null;
+};
+
 const HOUR_OPTIONS = [1, 6, 24, 72] as const;
 
 export default function EdgeHealth() {
+  const channelId = useId();
   const [hours, setHours] = useState<number>(24);
   const [rows, setRows] = useState<Health[]>([]);
   const [client, setClient] = useState<ClientErr[]>([]);
+  const [lintRows, setLintRows] = useState<LintRow[]>([]);
+  const [lintTotals, setLintTotals] = useState({ total: 0, failed: 0, skipped: 0 });
+  const [lintProbeBusy, setLintProbeBusy] = useState(false);
+  const [openLint, setOpenLint] = useState<LintRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [openFn, setOpenFn] = useState<string | null>(null);
   const [drawerRows, setDrawerRows] = useState<FailRow[]>([]);
@@ -49,17 +68,31 @@ export default function EdgeHealth() {
 
   const load = async () => {
     setLoading(true);
-    const [{ data: health }, { data: cli }] = await Promise.all([
+    const since = new Date(Date.now() - hours * 3600_000).toISOString();
+    const [{ data: health }, { data: cli }, { data: lints }] = await Promise.all([
       supabase.rpc("edge_function_health", { _hours: hours }),
       supabase
         .from("client_error_log")
         .select("function_name,message,url,created_at")
-        .gte("created_at", new Date(Date.now() - hours * 3600_000).toISOString())
+        .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(50),
+      supabase
+        .from("lint_delta_runs")
+        .select("id,created_at,caller,file_path,language,status,duration_ms,error_class,error_message,meta")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(200),
     ]);
     setRows((health as Health[]) ?? []);
     setClient((cli as ClientErr[]) ?? []);
+    const allLints = (lints as LintRow[]) ?? [];
+    setLintRows(allLints.filter((r) => r.status === "failed").slice(0, 50));
+    setLintTotals({
+      total: allLints.length,
+      failed: allLints.filter((r) => r.status === "failed").length,
+      skipped: allLints.filter((r) => r.status === "skipped").length,
+    });
     setFetchedAt(new Date());
     setLoading(false);
   };
@@ -70,6 +103,43 @@ export default function EdgeHealth() {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours]);
+
+  // Realtime: refresh on new failed lint rows.
+  useEffect(() => {
+    const ch = supabase
+      .channel(`edge-health-lint-${channelId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "lint_delta_runs", filter: "status=eq.failed" },
+        () => load(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId]);
+
+  const lintProbe = async () => {
+    setLintProbeBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("lint-delta", {
+        body: {
+          caller: "edge-health-probe",
+          files: [
+            { path: "probe-ok.ts", content: "export const x: number = 1;\n" },
+            { path: "probe-bad.ts", content: "export const x: number = 'oops';\n" },
+          ],
+        },
+      });
+      if (error) throw error;
+      const failed = (data as { results?: { status: string }[] })?.results?.filter((r) => r.status === "failed").length ?? 0;
+      toast.success(`Lint probe ran: ${failed} failure(s) recorded`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Lint probe failed");
+    } finally {
+      setLintProbeBusy(false);
+    }
+  };
 
   const openDrawer = async (fn: string) => {
     setOpenFn(fn);
@@ -124,6 +194,65 @@ export default function EdgeHealth() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileCode2 className="h-4 w-4" />
+            Delta lint — last {hours}h
+            <span className="text-xs font-normal text-muted-foreground ml-2">
+              {lintTotals.total} runs · {lintTotals.failed} failed · {lintTotals.skipped} skipped
+            </span>
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={lintProbe} disabled={lintProbeBusy}>
+            {lintProbeBusy ? "Probing…" : "Lint sample"}
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {lintRows.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">
+              No failed lint runs in the selected window.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase text-muted-foreground border-b">
+                  <tr>
+                    <th className="text-left px-4 py-2">When</th>
+                    <th className="text-left px-4 py-2">Caller</th>
+                    <th className="text-left px-4 py-2">File</th>
+                    <th className="text-left px-4 py-2">Class</th>
+                    <th className="text-left px-4 py-2">Error</th>
+                    <th className="text-right px-4 py-2">ms</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lintRows.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-b hover:bg-muted/30 cursor-pointer"
+                      onClick={() => setOpenLint(r)}
+                    >
+                      <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs">{r.caller}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{r.file_path}</td>
+                      <td className="px-4 py-2">
+                        <Badge variant="destructive">{r.error_class ?? "failed"}</Badge>
+                      </td>
+                      <td className="px-4 py-2 text-xs">
+                        {r.error_message?.slice(0, 90) ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">{r.duration_ms}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -248,6 +377,39 @@ export default function EdgeHealth() {
               <p className="text-sm text-muted-foreground">No failing rows in the window.</p>
             )}
           </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!openLint} onOpenChange={(o) => !o && setOpenLint(null)}>
+        <SheetContent className="w-[min(720px,100vw)] sm:max-w-none overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="font-mono text-sm break-all">{openLint?.file_path}</SheetTitle>
+          </SheetHeader>
+          {openLint && (
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="destructive">{openLint.error_class ?? openLint.status}</Badge>
+                <Badge variant="secondary">{openLint.language}</Badge>
+                <Badge variant="outline">{openLint.caller}</Badge>
+                <span className="text-xs text-muted-foreground self-center">
+                  {openLint.duration_ms}ms ·{" "}
+                  {formatDistanceToNow(new Date(openLint.created_at), { addSuffix: true })}
+                </span>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mb-1">Error</div>
+                <pre className="text-xs bg-muted p-3 rounded whitespace-pre-wrap break-words">
+                  {openLint.error_message ?? "(no message)"}
+                </pre>
+              </div>
+              <div>
+                <div className="text-xs uppercase text-muted-foreground mb-1">Meta</div>
+                <pre className="text-xs bg-muted p-3 rounded whitespace-pre-wrap break-words">
+                  {JSON.stringify(openLint.meta ?? {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
         </SheetContent>
       </Sheet>
     </div>
