@@ -6,7 +6,7 @@ import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
-  checkLintDeltaFailures, checkCompanionStreamsStalled,
+  checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -59,7 +59,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since24h = new Date(now.getTime() - 24 * 3600_000).toISOString();
     const since5mAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
 
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
@@ -88,6 +88,11 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .gte("created_at", since24h)
         .lt("streamed_at", since5mAgo)
         .limit(500),
+      sb.from("heygen_videos")
+        .select("id,kind,error,created_at")
+        .eq("status", "failed")
+        .gte("created_at", since24h)
+        .limit(50),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
@@ -116,6 +121,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkWhatsNewDraftsStale(now, (draftRes.data ?? []) as { id: string; created_at: string }[]),
       ...checkLintDeltaFailures(now, (lintRes.data ?? []) as { id: string; created_at: string; caller: string | null; file_path: string | null; error_class: string | null }[]),
       ...checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[]),
+      ...checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[]),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;

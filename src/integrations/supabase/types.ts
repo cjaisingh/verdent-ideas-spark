@@ -2162,6 +2162,60 @@ export type Database = {
         }
         Relationships: []
       }
+      heygen_videos: {
+        Row: {
+          created_at: string
+          duration_s: number | null
+          error: string | null
+          heygen_video_id: string | null
+          id: string
+          kind: string
+          requested_by: string | null
+          script: string
+          status: string
+          subject_kind: string | null
+          subject_ref: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_s?: number | null
+          error?: string | null
+          heygen_video_id?: string | null
+          id?: string
+          kind: string
+          requested_by?: string | null
+          script: string
+          status?: string
+          subject_kind?: string | null
+          subject_ref?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_s?: number | null
+          error?: string | null
+          heygen_video_id?: string | null
+          id?: string
+          kind?: string
+          requested_by?: string | null
+          script?: string
+          status?: string
+          subject_kind?: string | null
+          subject_ref?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
       idempotency_keys: {
         Row: {
           created_at: string
@@ -5019,6 +5073,14 @@ export type Database = {
           risk: string | null
           short_num: number | null
           title: string | null
+        }
+        Relationships: []
+      }
+      heygen_videos_month_count: {
+        Row: {
+          month_start: string | null
+          monthly_quota: number | null
+          used: number | null
         }
         Relationships: []
       }

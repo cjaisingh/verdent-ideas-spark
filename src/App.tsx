@@ -59,6 +59,7 @@ import Sovereignty from "./pages/Sovereignty";
 import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
+import AdminVideos from "./pages/AdminVideos";
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
@@ -132,6 +133,7 @@ const App = () => (
             <Route path="/connections" element={<Connections />} />
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
+            <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
