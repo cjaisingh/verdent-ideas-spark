@@ -159,6 +159,12 @@ export function PhaseGateChip({ gate }: { gate?: PhaseGate }) {
         <ul className="space-y-0.5">
           {lines.map((l) => <li key={l}>· {l}</li>)}
         </ul>
+        <Link
+          to="/roadmap/gate-diagnostics"
+          className="inline-block mt-1 text-[11px] underline hover:text-foreground"
+        >
+          Diagnose →
+        </Link>
       </div>
     </div>
   );
