@@ -380,3 +380,84 @@ export function checkVoicePipelineRed(
   }
   return out;
 }
+
+/**
+ * Night-jobs stalled (slice 1 — Hermes worker reclaim pattern).
+ * Caller passes the result of public.reclaim_stale_night_jobs(); we surface
+ * a finding whenever anything was reclaimed or auto-blocked in this tick.
+ */
+export type ReclaimResult = {
+  overnight_runs_reclaimed?: number;
+  overnight_runs_auto_blocked?: number;
+  night_shifts_reclaimed?: number;
+  night_shifts_auto_blocked?: number;
+};
+
+export function checkNightJobsStalled(
+  now: Date,
+  reclaim: ReclaimResult,
+): FindingCandidate[] {
+  const blocked =
+    (reclaim.overnight_runs_auto_blocked ?? 0) +
+    (reclaim.night_shifts_auto_blocked ?? 0);
+  const reclaimed =
+    (reclaim.overnight_runs_reclaimed ?? 0) +
+    (reclaim.night_shifts_reclaimed ?? 0);
+  if (blocked === 0 && reclaimed === 0) return [];
+  const bucket = Math.floor(now.getTime() / (60 * 60_000));
+  const sev: FindingCandidate["severity"] = blocked > 0 ? "high" : "medium";
+  return [{
+    kind: "night_jobs_stalled",
+    severity: sev,
+    summary:
+      `Night worker reclaim: ${reclaimed} requeued, ${blocked} auto-blocked ` +
+      `(retry cap reached).`,
+    dedupe_key: `night_jobs_stalled:${bucket}`,
+    subject_ref: {},
+    payload: { ...reclaim, hour_bucket: bucket },
+  }];
+}
+
+/**
+ * Allowlist rejects (slice 4 — default-deny watchdog).
+ * Fires when a single platform sees > threshold rejects in 24h.
+ */
+export type AllowlistRejectRow = {
+  function_name: string | null;
+  classified_error: string | null;
+  created_at: string;
+  request_meta?: Record<string, unknown> | null;
+};
+
+export function checkAllowlistRejects(
+  now: Date,
+  rows: AllowlistRejectRow[],
+  threshold = 50,
+): FindingCandidate[] {
+  const since = now.getTime() - 24 * 3600 * 1000;
+  const filtered = rows.filter(
+    (r) =>
+      r.classified_error === "allowlist_reject" &&
+      +new Date(r.created_at) >= since,
+  );
+  if (filtered.length === 0) return [];
+  const byFn: Record<string, number> = {};
+  for (const r of filtered) {
+    const k = r.function_name || "unknown";
+    byFn[k] = (byFn[k] ?? 0) + 1;
+  }
+  const out: FindingCandidate[] = [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 3600 * 1000));
+  for (const [fn, count] of Object.entries(byFn)) {
+    if (count < threshold) continue;
+    out.push({
+      kind: "allowlist_rejects",
+      severity: count >= threshold * 4 ? "critical" : "high",
+      summary: `${fn}: ${count} allowlist rejects in last 24h — possible probing or stale config.`,
+      dedupe_key: `allowlist_rejects:${fn}:${dayBucket}`,
+      subject_ref: { function_name: fn },
+      payload: { function_name: fn, count, threshold, window_hours: 24 },
+    });
+  }
+  return out;
+}
