@@ -117,22 +117,37 @@ describe("SECURITY DEFINER gating", () => {
 });
 
 describe("Linter pipeline", () => {
-  it.skipIf(!MGMT_TOKEN || !PROJECT_REF)(
-    "reports zero ERROR-level findings",
-    async () => {
-      const res = await fetch(
-        `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/lints`,
-        { headers: { Authorization: `Bearer ${MGMT_TOKEN}` } },
-      );
-      expect(res.ok, `linter API ${res.status}`).toBe(true);
-      const lints = (await res.json()) as Array<{ name: string; level: string; title?: string }>;
-      const errors = lints.filter((l) => l.level === "ERROR");
-      expect(
-        errors,
-        "ERROR-level linter findings:\n" +
-          errors.map((e) => `  - ${e.name}${e.title ? ` (${e.title})` : ""}`).join("\n"),
-      ).toEqual([]);
-    },
-    30_000,
-  );
+  it("reports zero ERROR-level findings", async (ctx) => {
+    const missing: string[] = [];
+    if (!MGMT_TOKEN) missing.push("SUPABASE_ACCESS_TOKEN");
+    if (!PROJECT_REF) missing.push("SUPABASE_PROJECT_REF");
+
+    if (missing.length > 0) {
+      const msg =
+        `Linter assertion skipped — missing env: ${missing.join(", ")}. ` +
+        `Set both in the GitHub 'staging' environment (workflow .github/workflows/security-audit.yml) ` +
+        `to enable. Locally, export them before running 'bun run test:security'.`;
+      // Hard-fail in CI so the gate cannot silently disappear; skip locally.
+      if (process.env.CI === "true") {
+        throw new Error(`[security-definer-gating] ${msg}`);
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[security-definer-gating] ${msg}`);
+      ctx.skip();
+      return;
+    }
+
+    const res = await fetch(
+      `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/lints`,
+      { headers: { Authorization: `Bearer ${MGMT_TOKEN}` } },
+    );
+    expect(res.ok, `linter API ${res.status}`).toBe(true);
+    const lints = (await res.json()) as Array<{ name: string; level: string; title?: string }>;
+    const errors = lints.filter((l) => l.level === "ERROR");
+    expect(
+      errors,
+      "ERROR-level linter findings:\n" +
+        errors.map((e) => `  - ${e.name}${e.title ? ` (${e.title})` : ""}`).join("\n"),
+    ).toEqual([]);
+  }, 30_000);
 });
