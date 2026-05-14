@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import { Trash2, Plus, ArrowRight } from "lucide-react";
 import { ClaimsPanel } from "@/components/governance/ClaimsPanel";
+import { W7SignoffChecklist } from "@/components/governance/W7SignoffChecklist";
 
 type Kind = "task" | "notebook" | "entity" | "authority_rule";
 type Relation = "touches" | "justifies" | "governs" | "supersedes";
