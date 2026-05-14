@@ -37,7 +37,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate = 24000): Uint8Array {
   return new Uint8Array(buf);
 }
 
-Deno.serve(withLogger("gemini-tts", async (req) => {
+Deno.serve(withLogger("gemini-tts", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
@@ -60,6 +60,27 @@ Deno.serve(withLogger("gemini-tts", async (req) => {
   if (uErr || !u.user) return new Response(JSON.stringify({ error: "unauthorized" }), {
     status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+
+  // Slice 4: default-deny allowlist (rork). Email is the principal.
+  {
+    const sbAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } },
+    );
+    const principal = u.user.email ?? u.user.id;
+    const { data: allowed } = await sbAdmin.rpc("is_principal_allowed", {
+      _platform: "rork",
+      _principal: principal,
+    });
+    if (allowed !== true) {
+      ctx.attach("__classified_error", "allowlist_reject");
+      return new Response(JSON.stringify({ error: "not_allowlisted" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
+
 
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return new Response(JSON.stringify({ error: "google_ai_key_missing" }), {
