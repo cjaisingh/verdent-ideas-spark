@@ -68,17 +68,31 @@ export default function EdgeHealth() {
 
   const load = async () => {
     setLoading(true);
-    const [{ data: health }, { data: cli }] = await Promise.all([
+    const since = new Date(Date.now() - hours * 3600_000).toISOString();
+    const [{ data: health }, { data: cli }, { data: lints }] = await Promise.all([
       supabase.rpc("edge_function_health", { _hours: hours }),
       supabase
         .from("client_error_log")
         .select("function_name,message,url,created_at")
-        .gte("created_at", new Date(Date.now() - hours * 3600_000).toISOString())
+        .gte("created_at", since)
         .order("created_at", { ascending: false })
         .limit(50),
+      supabase
+        .from("lint_delta_runs")
+        .select("id,created_at,caller,file_path,language,status,duration_ms,error_class,error_message,meta")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(200),
     ]);
     setRows((health as Health[]) ?? []);
     setClient((cli as ClientErr[]) ?? []);
+    const allLints = (lints as LintRow[]) ?? [];
+    setLintRows(allLints.filter((r) => r.status === "failed").slice(0, 50));
+    setLintTotals({
+      total: allLints.length,
+      failed: allLints.filter((r) => r.status === "failed").length,
+      skipped: allLints.filter((r) => r.status === "skipped").length,
+    });
     setFetchedAt(new Date());
     setLoading(false);
   };
@@ -89,6 +103,43 @@ export default function EdgeHealth() {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hours]);
+
+  // Realtime: refresh on new failed lint rows.
+  useEffect(() => {
+    const ch = supabase
+      .channel(`edge-health-lint-${channelId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "lint_delta_runs", filter: "status=eq.failed" },
+        () => load(),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId]);
+
+  const lintProbe = async () => {
+    setLintProbeBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("lint-delta", {
+        body: {
+          caller: "edge-health-probe",
+          files: [
+            { path: "probe-ok.ts", content: "export const x: number = 1;\n" },
+            { path: "probe-bad.ts", content: "export const x: number = 'oops';\n" },
+          ],
+        },
+      });
+      if (error) throw error;
+      const failed = (data as { results?: { status: string }[] })?.results?.filter((r) => r.status === "failed").length ?? 0;
+      toast.success(`Lint probe ran: ${failed} failure(s) recorded`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Lint probe failed");
+    } finally {
+      setLintProbeBusy(false);
+    }
+  };
 
   const openDrawer = async (fn: string) => {
     setOpenFn(fn);
