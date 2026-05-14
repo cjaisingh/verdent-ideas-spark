@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RefreshCw, Video, Sparkles, AlertTriangle } from "lucide-react";
+import { RefreshCw, Video, Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
 import { GenerateVideoDialog } from "@/components/heygen/GenerateVideoDialog";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -35,6 +35,7 @@ export default function AdminVideos() {
   const [loading, setLoading] = useState(true);
   const [dialogKind, setDialogKind] = useState<Row["kind"] | null>(null);
   const [polling, setPolling] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const channelName = useMemo(() => `heygen_videos:${crypto.randomUUID()}`, []);
 
   const load = async () => {
@@ -72,6 +73,28 @@ export default function AdminVideos() {
   };
 
   const quotaFull = (used ?? 0) >= 3;
+
+  const retryFailed = async (row: Row) => {
+    if (quotaFull) {
+      toast.error("Monthly quota reached (3/3). Cannot retry until next month.");
+      return;
+    }
+    setRetryingId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("heygen-create-video", {
+        body: { kind: row.kind, title: row.title, script: row.script },
+      });
+      if (error) throw error;
+      const r = data as { id?: string; heygen_video_id?: string; error?: string };
+      if (r?.error) throw new Error(r.error);
+      toast.success("Re-queued — new row created, polling will pick it up.");
+      await load();
+    } catch (e: any) {
+      toast.error(`Retry failed: ${e?.message ?? e}`);
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   return (
     <div className="container py-6 max-w-6xl">
@@ -177,6 +200,16 @@ export default function AdminVideos() {
                       {row.video_url ? (
                         <Button asChild size="sm" variant="outline">
                           <a href={row.video_url} target="_blank" rel="noreferrer">Watch</a>
+                        </Button>
+                      ) : row.status === "failed" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => retryFailed(row)}
+                          disabled={retryingId === row.id || quotaFull}
+                        >
+                          <RotateCcw className={`h-3 w-3 mr-1 ${retryingId === row.id ? "animate-spin" : ""}`} />
+                          Retry
                         </Button>
                       ) : null}
                     </TableCell>
