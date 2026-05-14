@@ -148,7 +148,7 @@ export function W7SignoffChecklist() {
       .select("*")
       .eq("workstream", WORKSTREAM)
       .maybeSingle();
-    setSignoff((so as SignoffRow | null) ?? null);
+    setSignoff((so as unknown as SignoffRow | null) ?? null);
 
     // Admin check
     const { data: { user } } = await supabase.auth.getUser();
