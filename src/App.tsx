@@ -22,6 +22,7 @@ import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import RiskDashboard from "./pages/RiskDashboard";
+import GateDiagnostics from "./pages/GateDiagnostics";
 import ApprovalPack from "./pages/ApprovalPack";
 import Jobs from "./pages/Jobs";
 import Runbook from "./pages/Runbook";
@@ -90,6 +91,7 @@ const App = () => (
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/roadmap/risks" element={<RiskDashboard />} />
+            <Route path="/roadmap/gate-diagnostics" element={<GateDiagnostics />} />
             <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/night-shifts" element={<NightShifts />} />
