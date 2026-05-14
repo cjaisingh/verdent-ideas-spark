@@ -5433,9 +5433,11 @@ export type Database = {
           phase_id: string | null
           phase_key: string | null
           phase_status: string | null
+          qa_failed: number | null
           qa_ok: boolean | null
           qa_pass: number | null
           qa_total: number | null
+          qa_unknown: number | null
           structural_ok: boolean | null
           total_tasks: number | null
         }
