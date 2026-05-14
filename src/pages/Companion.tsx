@@ -465,7 +465,23 @@ export default function Companion() {
   const clearFilters = () => { setSearch(""); setFilterKind("all"); setFilterRange("all"); setFilterEscalated(false); };
 
 
-  // Load messages for active thread + realtime
+  // Persist active thread per-operator (cross-device resume on next mount)
+  useEffect(() => {
+    if (!activeId) return;
+    const t = window.setTimeout(async () => {
+      const { data: u } = await supabase.auth.getUser();
+      if (!u.user) return;
+      await supabase.from("companion_session_state").upsert({
+        user_id: u.user.id,
+        last_thread_id: activeId,
+        last_seen_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [activeId]);
+
+  // Load messages for active thread + realtime (INSERT and UPDATE so streaming
+  // heartbeats from another tab/device replay live).
   useEffect(() => {
     if (!activeId) { setMessages([]); return; }
     let cancelled = false;
@@ -475,16 +491,72 @@ export default function Companion() {
         .select("*").eq("thread_id", activeId).order("created_at", { ascending: true });
       if (!cancelled) setMessages((data ?? []) as Msg[]);
     })();
-    const ch = supabase.channel(`companion-${activeId}`)
+    const ch = supabase.channel(`companion-${activeId}-${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "companion_messages", filter: `thread_id=eq.${activeId}` },
         (p) => {
           const m = p.new as Msg;
           setMessages((prev) => prev.some((x) => x.id === m.id) ? prev : [...prev, m]);
         })
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "companion_messages", filter: `thread_id=eq.${activeId}` },
+        (p) => {
+          const m = p.new as Msg;
+          setMessages((prev) => prev.map((x) => x.id === m.id ? { ...x, ...m } : x));
+        })
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [activeId]);
+
+  // Detect interrupted assistant streams in the loaded thread.
+  const interruptedMsg = useMemo(() => {
+    const lastAsst = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAsst) return null;
+    const status = lastAsst.status ?? "complete";
+    if (status === "interrupted" || status === "error") return lastAsst;
+    if (status === "streaming") {
+      const hb = lastAsst.streamed_at ? Date.parse(lastAsst.streamed_at) : 0;
+      if (!hb || Date.now() - hb > 30_000) return lastAsst;
+    }
+    return null;
+  }, [messages]);
+
+  // Idempotently mark a stale streaming row as interrupted.
+  useEffect(() => {
+    if (!interruptedMsg) return;
+    if (interruptedMsg.status !== "streaming") return;
+    void supabase
+      .from("companion_messages")
+      .update({ status: "interrupted" })
+      .eq("id", interruptedMsg.id)
+      .eq("status", "streaming");
+  }, [interruptedMsg]);
+
+  const [resuming, setResuming] = useState(false);
+  const handleResume = async () => {
+    if (!interruptedMsg || !active || resuming) return;
+    const idx = messages.findIndex((m) => m.id === interruptedMsg.id);
+    const prevUser = idx > 0 ? [...messages.slice(0, idx)].reverse().find((m) => m.role === "user") : null;
+    if (!prevUser) {
+      toast({ title: "Cannot resume", description: "No prior user message found.", variant: "destructive" });
+      return;
+    }
+    setResuming(true);
+    try {
+      await supabase.from("companion_messages").delete().eq("id", interruptedMsg.id);
+      setMessages((prev) => prev.filter((m) => m.id !== interruptedMsg.id));
+      setInput(prevUser.content);
+      await new Promise((r) => setTimeout(r, 0));
+      await sendMessage({ skipUserInsert: true });
+    } finally {
+      setResuming(false);
+    }
+  };
+  const handleDiscardResume = async () => {
+    if (!interruptedMsg) return;
+    await supabase.from("companion_messages")
+      .update({ status: "interrupted" }).eq("id", interruptedMsg.id);
+  };
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: "smooth" });
