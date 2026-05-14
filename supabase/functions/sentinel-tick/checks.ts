@@ -17,7 +17,9 @@ export type FindingCandidate = {
     | "allowlist_rejects"
     | "whats_new_drafts_stale"
     | "lint_delta_failures"
-    | "companion_streams_stalled";
+    | "companion_streams_stalled"
+    | "heygen_videos_failed"
+    | "truth_conflicts_unresolved";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
