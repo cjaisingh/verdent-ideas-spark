@@ -5149,6 +5149,75 @@ export type Database = {
           },
         ]
       }
+      workstream_signoff_events: {
+        Row: {
+          actor: string | null
+          actor_label: string
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          workstream: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label: string
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          workstream: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          workstream?: string
+        }
+        Relationships: []
+      }
+      workstream_signoffs: {
+        Row: {
+          created_at: string
+          evidence: Json
+          locked: boolean
+          notes: string | null
+          overrides: Json
+          signed_off_at: string
+          signed_off_by: string | null
+          signed_off_by_label: string
+          updated_at: string
+          workstream: string
+        }
+        Insert: {
+          created_at?: string
+          evidence?: Json
+          locked?: boolean
+          notes?: string | null
+          overrides?: Json
+          signed_off_at?: string
+          signed_off_by?: string | null
+          signed_off_by_label: string
+          updated_at?: string
+          workstream: string
+        }
+        Update: {
+          created_at?: string
+          evidence?: Json
+          locked?: boolean
+          notes?: string | null
+          overrides?: Json
+          signed_off_at?: string
+          signed_off_by?: string | null
+          signed_off_by_label?: string
+          updated_at?: string
+          workstream?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       cost_actuals_30d: {
@@ -5376,6 +5445,7 @@ export type Database = {
         Args: { _platform: string; _principal: string }
         Returns: boolean
       }
+      is_workstream_locked: { Args: { _workstream: string }; Returns: boolean }
       list_all_nightly_jobs: {
         Args: never
         Returns: {
@@ -5451,6 +5521,19 @@ export type Database = {
       }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
+        Returns: undefined
+      }
+      sign_off_workstream: {
+        Args: {
+          _evidence: Json
+          _notes?: string
+          _overrides?: Json
+          _workstream: string
+        }
+        Returns: Json
+      }
+      unlock_workstream: {
+        Args: { _reason: string; _workstream: string }
         Returns: undefined
       }
       update_managed_cron_schedule: {
