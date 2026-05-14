@@ -25,7 +25,7 @@ const ALLOWED_MODELS = new Set([
   "openai/gpt-5.2",
 ]);
 
-Deno.serve(withLogger("companion-cloud-chat", async (req) => {
+Deno.serve(withLogger("companion-cloud-chat", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "method_not_allowed" }), {
@@ -54,6 +54,24 @@ Deno.serve(withLogger("companion-cloud-chat", async (req) => {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+  }
+
+  // Slice 4: default-deny allowlist (companion_web). Email is the principal.
+  {
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const sbAdmin = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const principal = userData.user.email ?? userData.user.id;
+    const { data: allowed } = await sbAdmin.rpc("is_principal_allowed", {
+      _platform: "companion_web",
+      _principal: principal,
+    });
+    if (allowed !== true) {
+      ctx.attach("__classified_error", "allowlist_reject");
+      ctx.attach("rejected_principal_kind", "companion_web");
+      return new Response(JSON.stringify({ error: "not_allowlisted" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   let body: { model?: string; messages?: Array<{ role: string; content: string }> };
