@@ -179,6 +179,7 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
           <NavLink to={it.url} className="flex items-center gap-2">
             <it.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
             {!collapsed && <span className="flex-1 truncate">{it.title}</span>}
+            {!collapsed && it.url === "/governance" && <CoverageChip />}
             {!collapsed && dot && <StatusDot color={DOT_CLASSES[dot]} label={`${it.title}: ${DOT_LABELS[dot]}`} />}
           </NavLink>
         </SidebarMenuButton>
@@ -454,6 +455,7 @@ function CollapsibleSubgroup({
                   <NavLink to={c.url} className="flex items-center gap-2">
                     <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
                     <span className="flex-1 truncate">{c.title}</span>
+                    {c.url === "/governance" && <CoverageChip />}
                     {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
                   </NavLink>
                 </SidebarMenuSubButton>
