@@ -12,7 +12,9 @@ export type FindingCandidate = {
     | "frontend_realtime_error"
     | "edge_function_error_rate"
     | "client_transport_error"
-    | "voice_pipeline_red";
+    | "voice_pipeline_red"
+    | "night_jobs_stalled"
+    | "allowlist_rejects";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
