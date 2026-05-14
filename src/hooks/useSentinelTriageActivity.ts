@@ -25,7 +25,7 @@ export function useTriageUnackedCount() {
   useEffect(() => {
     refresh();
     const ch = supabase
-      .channel("sentinel-triage-badge")
+      .channel(`sentinel-triage-badge-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sentinel_triage_activity" },
@@ -59,7 +59,7 @@ export function useTriageActivity(limit = 50) {
   useEffect(() => {
     refresh();
     const ch = supabase
-      .channel("sentinel-triage-feed")
+      .channel(`sentinel-triage-feed-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "sentinel_triage_activity" },
