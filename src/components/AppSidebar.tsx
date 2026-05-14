@@ -11,7 +11,7 @@ import {
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target, Bot,
-  ShieldCheck, FileSpreadsheet, Footprints, Newspaper, Plug,
+  ShieldCheck, FileSpreadsheet, Footprints, Newspaper, Plug, Video,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
@@ -95,6 +95,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/night-shift", title: "Night Shift (all jobs)", icon: Moon },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
   { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
+  { url: "/admin/videos", title: "HeyGen videos", icon: Video },
   { url: "/connections", title: "Connections", icon: Plug },
 ];
 
