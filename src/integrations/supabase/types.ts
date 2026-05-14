@@ -900,6 +900,116 @@ export type Database = {
         }
         Relationships: []
       }
+      claim_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          claim_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string
+          event_type: string
+          field: string
+          id: string
+          payload: Json
+          source: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          claim_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id: string
+          event_type: string
+          field: string
+          id?: string
+          payload?: Json
+          source: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          claim_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string
+          event_type?: string
+          field?: string
+          id?: string
+          payload?: Json
+          source?: string
+        }
+        Relationships: []
+      }
+      claims: {
+        Row: {
+          claimed_by: string | null
+          claimed_by_label: string | null
+          confidence: number
+          created_at: string
+          entity: string
+          entity_id: string
+          evidence_ref: Json
+          field: string
+          id: string
+          note: string | null
+          source: string
+          supersedes_id: string | null
+          valid_from: string
+          valid_to: string | null
+          value: Json
+          voided_at: string | null
+          voided_reason: string | null
+        }
+        Insert: {
+          claimed_by?: string | null
+          claimed_by_label?: string | null
+          confidence?: number
+          created_at?: string
+          entity: string
+          entity_id: string
+          evidence_ref?: Json
+          field?: string
+          id?: string
+          note?: string | null
+          source: string
+          supersedes_id?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value: Json
+          voided_at?: string | null
+          voided_reason?: string | null
+        }
+        Update: {
+          claimed_by?: string | null
+          claimed_by_label?: string | null
+          confidence?: number
+          created_at?: string
+          entity?: string
+          entity_id?: string
+          evidence_ref?: Json
+          field?: string
+          id?: string
+          note?: string | null
+          source?: string
+          supersedes_id?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value?: Json
+          voided_at?: string | null
+          voided_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "claims_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_error_log: {
         Row: {
           created_at: string
@@ -5164,6 +5274,18 @@ export type Database = {
           task_key: string | null
           task_status: string | null
           task_title: string | null
+        }
+        Relationships: []
+      }
+      truth_conflicts: {
+        Row: {
+          entity: string | null
+          entity_id: string | null
+          field: string | null
+          next_score: number | null
+          next_source: string | null
+          top_score: number | null
+          top_source: string | null
         }
         Relationships: []
       }
