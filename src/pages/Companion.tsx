@@ -393,7 +393,18 @@ export default function Companion() {
     if (error) { toast({ title: "Failed to load threads", description: error.message, variant: "destructive" }); return; }
     const rows = (data ?? []) as Thread[];
     setThreads(rows);
-    if (!activeId && rows.length > 0) setActiveId(rows[0].id);
+    if (!activeId && rows.length > 0 && !wantedThreadId) {
+      // Prefer the operator's last-active thread (cross-device resume),
+      // otherwise fall back to newest by updated_at.
+      const { data: state } = await supabase
+        .from("companion_session_state")
+        .select("last_thread_id")
+        .maybeSingle();
+      const restored = state?.last_thread_id && rows.find((r) => r.id === state.last_thread_id);
+      setActiveId(restored ? restored.id : rows[0].id);
+    } else if (!activeId && rows.length > 0) {
+      setActiveId(rows[0].id);
+    }
     // Per-thread stats: message + escalation counts (single query)
     if (rows.length > 0) {
       const ids = rows.map((t) => t.id);
