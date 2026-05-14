@@ -5471,6 +5471,10 @@ export type Database = {
     Functions: {
       acknowledge_all_triage_activity: { Args: never; Returns: number }
       acknowledge_triage_activity: { Args: { _id: string }; Returns: undefined }
+      auto_link_finding_to_action: {
+        Args: { _finding_id: string }
+        Returns: string
+      }
       auto_purge_if_enabled: { Args: never; Returns: number }
       awip_rag_search: {
         Args: { _limit?: number; _q: string }

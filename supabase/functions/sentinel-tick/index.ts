@@ -129,7 +129,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkTruthConflictsUnresolved(now, (truthConflictsRes.data ?? []) as { entity: string; entity_id: string; field: string; top_source: string | null; next_source: string | null }[]),
     ];
 
-    let inserted = 0, updated = 0, alerts = 0;
+    let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
     for (const c of candidates) {
       const { data: existing } = await sb.from("sentinel_findings")
         .select("id,status,severity").eq("dedupe_key", c.dedupe_key).maybeSingle();
@@ -145,12 +145,18 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         }).eq("id", existing.id);
         updated++;
       } else {
-        await sb.from("sentinel_findings").insert({
+        const { data: ins } = await sb.from("sentinel_findings").insert({
           kind: c.kind, severity: c.severity, summary: c.summary,
           dedupe_key: c.dedupe_key, subject_ref: c.subject_ref, payload: c.payload,
           status: "open",
-        });
+        }).select("id").maybeSingle();
         inserted++;
+        if (ins?.id) {
+          try {
+            const { data: linked } = await sb.rpc("auto_link_finding_to_action", { _finding_id: ins.id });
+            if (linked) autoLinked++;
+          } catch (e) { console.error("auto_link_finding_to_action failed", e); }
+        }
         if (c.severity === "high" || c.severity === "critical") {
           await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
           alerts++;
@@ -173,10 +179,10 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       resolved++;
     }
 
-    await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓`, {
-      inserted, updated, resolved, alerts, candidates: candidates.length,
+    await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓ ${autoLinked}🔗`, {
+      inserted, updated, resolved, alerts, autoLinked, candidates: candidates.length,
     });
-    return json({ ok: true, inserted, updated, resolved, alerts });
+    return json({ ok: true, inserted, updated, resolved, alerts, autoLinked });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun("error", 500, msg);
