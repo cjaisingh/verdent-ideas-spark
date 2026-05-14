@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Re-scoped
+- **W7 Governance — closeout boundary set.** `docs/workstream-success-metrics.md` now includes **WS7 — Governance Substrate** with 4 binary acceptance checks, 3 KPIs (coverage ≥ 60% over 30d, real-claim ratio ≥ 70%, truth-conflict MTTR p50 ≤ 7d) and 2 SLOs. Master plan flags **W7.3 (confidence decay)** and **W7.4 (operator reliability history)** as **deferred** — revisited only on domain-module demand. OMI weights rebalanced to include WS7 at 0.12. Closeout doc lands at `docs/w7-closeout.md`.
+
 ### Added
 - **W7.2 — Claims pipeline.** New `claims` table (entity, entity_id, field, source, value jsonb, confidence 0–1, evidence_ref jsonb, supersedes_id self-fk, valid_from/valid_to, voided_at/voided_reason, claimed_by/_label) with operator/admin RLS and realtime. New `claim_events` audit log + `log_claim_event` trigger emits `created`/`superseded`/`voided`/`expired` events and auto-voids the predecessor when `supersedes_id` is set. New `truth_conflicts` security-invoker view groups active claims by entity/field where the top two competing sources share precedence and the score gap is < 10%. `resolve_truth()` rewritten to actually pick a winner: lowest `decision_authorities.precedence`, then `weight × confidence`, then `created_at desc`; returns `status` of `resolved` / `conflict` / `no-claims` plus winner, rules, and active claims. New `claims-ingest` edge function (operator JWT or `x-awip-service-token`, zod-validated) for system/CI ingest. New `ClaimsPanel` on `/governance` lets operators resolve truth for any entity/field and file claims (value as JSON, confidence, evidence pointer, supersedes link). New sentinel check `truth_conflicts_unresolved` (low/medium/high by count) auto-resolves when conflicts drain. Memory: `mem://features/claims-pipeline`. Doc: `docs/claims-pipeline.md`.
 
