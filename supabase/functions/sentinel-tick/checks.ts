@@ -17,7 +17,9 @@ export type FindingCandidate = {
     | "allowlist_rejects"
     | "whats_new_drafts_stale"
     | "lint_delta_failures"
-    | "companion_streams_stalled";
+    | "companion_streams_stalled"
+    | "heygen_videos_failed"
+    | "truth_conflicts_unresolved";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -578,6 +580,39 @@ export function checkHeygenVideosFailed(now: Date, rows: HeygenFailedRow[]): Fin
       window_h: 24,
       sample_error: rows[0]?.error ?? null,
       kinds: Array.from(new Set(rows.map((r) => r.kind))),
+    },
+  }];
+}
+
+// ── truth_conflicts_unresolved ──────────────────────────────────────────────
+// Flags entity/field rows in public.truth_conflicts (top two competing
+// claims share precedence and the score gap is < 10%). Persistent state, so
+// auto-resolves when the operator files a tie-breaking claim.
+export type TruthConflictRow = {
+  entity: string;
+  entity_id: string;
+  field: string;
+  top_source: string | null;
+  next_source: string | null;
+};
+
+export function checkTruthConflictsUnresolved(
+  _now: Date,
+  rows: TruthConflictRow[],
+): FindingCandidate[] {
+  if (rows.length === 0) return [];
+  const sample = rows[0];
+  const sev: FindingCandidate["severity"] =
+    rows.length >= 5 ? "high" : rows.length >= 2 ? "medium" : "low";
+  return [{
+    kind: "truth_conflicts_unresolved",
+    severity: sev,
+    summary: `Truth: ${rows.length} entity/field row(s) have competing claims within 10% (e.g. ${sample.entity}.${sample.field}: ${sample.top_source} vs ${sample.next_source}).`,
+    dedupe_key: `truth_conflicts_unresolved`,
+    subject_ref: { sample_entity: sample.entity, sample_field: sample.field, sample_id: sample.entity_id },
+    payload: {
+      conflict_count: rows.length,
+      sample: rows.slice(0, 5),
     },
   }];
 }
