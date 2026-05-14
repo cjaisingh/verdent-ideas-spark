@@ -72,6 +72,28 @@ export default function AdminVideos() {
     }
   };
 
+  const retryFailed = async (row: Row) => {
+    if (quotaFull) {
+      toast.error("Monthly quota reached (3/3). Cannot retry until next month.");
+      return;
+    }
+    setRetryingId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("heygen-create-video", {
+        body: { kind: row.kind, title: row.title, script: row.script },
+      });
+      if (error) throw error;
+      const r = data as { id?: string; heygen_video_id?: string; error?: string };
+      if (r?.error) throw new Error(r.error);
+      toast.success("Re-queued — new row created, polling will pick it up.");
+      await load();
+    } catch (e: any) {
+      toast.error(`Retry failed: ${e?.message ?? e}`);
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   const quotaFull = (used ?? 0) >= 3;
 
   return (
