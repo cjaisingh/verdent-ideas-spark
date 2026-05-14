@@ -22,7 +22,7 @@ import { ReviewChecklistEditor } from "@/components/ReviewChecklistEditor";
 import { TaskApprovalPanel } from "@/components/TaskApprovalPanel";
 import { ProceedAction } from "@/components/roadmap/ProceedAction";
 import { PhaseSignoffAudit } from "@/components/roadmap/PhaseSignoffAudit";
-import { PhaseGateBadge, PhaseGateChip } from "@/components/roadmap/PhaseGateChip";
+import { PhaseGateBadge, PhaseGateChip, PhaseGateStrip } from "@/components/roadmap/PhaseGateChip";
 import { PhaseOverrideButton } from "@/components/roadmap/PhaseOverrideButton";
 import { OvernightRunBadge } from "@/components/roadmap/OvernightRunBadge";
 import { OvernightRunControl } from "@/components/roadmap/OvernightRunControl";
@@ -494,6 +494,7 @@ const Roadmap = () => {
                       placeholder="Add an epic description…"
                       textClassName="text-muted-foreground italic"
                     />
+                    <PhaseGateStrip gate={gates.get(phase.id)} />
                     <PhaseGateChip gate={gates.get(phase.id)} />
                   </div>
                   {sps.map((sprint) => {
