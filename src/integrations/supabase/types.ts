@@ -2759,10 +2759,14 @@ export type Database = {
       }
       night_shifts: {
         Row: {
+          attempts: number
           commit_sha: string | null
           created_at: string
           ended_at: string | null
+          heartbeat_at: string | null
           id: string
+          last_error: string | null
+          max_retries: number
           started_at: string
           status: string
           summary: Json
@@ -2770,10 +2774,14 @@ export type Database = {
           window_start: string
         }
         Insert: {
+          attempts?: number
           commit_sha?: string | null
           created_at?: string
           ended_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number
           started_at?: string
           status?: string
           summary?: Json
@@ -2781,10 +2789,14 @@ export type Database = {
           window_start: string
         }
         Update: {
+          attempts?: number
           commit_sha?: string | null
           created_at?: string
           ended_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number
           started_at?: string
           status?: string
           summary?: Json
@@ -3559,10 +3571,14 @@ export type Database = {
       }
       roadmap_phase_overnight_runs: {
         Row: {
+          attempts: number
           created_at: string
           error: string | null
           finished_at: string | null
+          heartbeat_at: string | null
           id: string
+          last_error: string | null
+          max_retries: number
           model: string | null
           phase_id: string
           phase_key: string
@@ -3574,10 +3590,14 @@ export type Database = {
           status: string
         }
         Insert: {
+          attempts?: number
           created_at?: string
           error?: string | null
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number
           model?: string | null
           phase_id: string
           phase_key: string
@@ -3589,10 +3609,14 @@ export type Database = {
           status?: string
         }
         Update: {
+          attempts?: number
           created_at?: string
           error?: string | null
           finished_at?: string | null
+          heartbeat_at?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number
           model?: string | null
           phase_id?: string
           phase_key?: string
@@ -4960,6 +4984,10 @@ export type Database = {
           deleted: number
           table_name: string
         }[]
+      }
+      reclaim_stale_night_jobs: {
+        Args: { _stale_minutes?: number }
+        Returns: Json
       }
       resolve_truth: {
         Args: { _entity: string; _entity_id: string; _field?: string }
