@@ -143,15 +143,97 @@ export function PhaseGateChip({ gate }: { gate?: PhaseGate }) {
   }
   const lines = blockerLines(gate);
   if (lines.length === 0) return null;
+  // Tone: muted when only "untested" QA, amber when any real blocker
+  const severe =
+    !gate.structural_ok || !gate.night_ok || !gate.approvals_ok || gate.qa_failed > 0;
+  const Icon = severe ? AlertTriangle : ShieldAlert;
+  const iconClass = severe ? "text-amber-500" : "text-muted-foreground";
   return (
     <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" />
+      <Icon className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${iconClass}`} />
       <div>
-        <div className="font-medium text-foreground/80 mb-0.5">Gate blockers</div>
+        <div className="font-medium text-foreground/80 mb-0.5">
+          {severe ? "Gate blockers" : "Gates not yet evaluated"}
+        </div>
         <ul className="space-y-0.5">
           {lines.map((l) => <li key={l}>· {l}</li>)}
         </ul>
       </div>
     </div>
+  );
+}
+
+/**
+ * Compact per-gate status strip (structural / QA / night / approvals).
+ * Shown alongside the phase header so operators see gate state distinct
+ * from the open-task count.
+ */
+export function PhaseGateStrip({ gate }: { gate?: PhaseGate }) {
+  if (!gate) return null;
+  const items: { label: string; ok: boolean; mild?: boolean; tip: string }[] = [
+    {
+      label: `Tasks ${gate.total_tasks - gate.open_tasks}/${gate.total_tasks}`,
+      ok: gate.structural_ok,
+      tip: gate.structural_ok
+        ? "All tasks closed"
+        : `${gate.open_tasks} task(s) still open`,
+    },
+    {
+      label:
+        gate.qa_total === 0
+          ? "QA n/a"
+          : `QA ${gate.qa_pass}/${gate.qa_total}`,
+      ok: gate.qa_ok,
+      // "mild" = only untested, not failing
+      mild: !gate.qa_ok && gate.qa_failed === 0,
+      tip: gate.qa_ok
+        ? "All QA checks passing"
+        : gate.qa_failed > 0
+        ? `${gate.qa_failed} failing, ${gate.qa_unknown} not yet evaluated`
+        : gate.qa_total === 0
+        ? "No QA checks defined for this phase"
+        : `${gate.qa_unknown} QA check(s) never evaluated`,
+    },
+    {
+      label: `Night ${gate.night_high_open === 0 ? "ok" : gate.night_high_open}`,
+      ok: gate.night_ok,
+      tip: gate.night_ok
+        ? "No high-severity night audits"
+        : `${gate.night_high_open} high-severity night audit(s)`,
+    },
+    {
+      label: `Sign-off ${gate.pending_signoffs === 0 ? "ok" : gate.pending_signoffs}`,
+      ok: gate.approvals_ok,
+      tip: gate.approvals_ok
+        ? "No pending sign-offs"
+        : `${gate.pending_signoffs} pending sign-off(s)`,
+    },
+  ];
+  return (
+    <TooltipProvider delayDuration={150}>
+      <div className="flex flex-wrap items-center gap-1">
+        {items.map((it) => {
+          const tone = it.ok
+            ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+            : it.mild
+            ? "border-muted-foreground/40 text-muted-foreground"
+            : "border-amber-500/60 text-amber-600 dark:text-amber-400";
+          return (
+            <Tooltip key={it.label}>
+              <TooltipTrigger asChild>
+                <span
+                  className={`inline-flex items-center rounded border px-1.5 py-px text-[10px] font-medium uppercase tracking-tight ${tone}`}
+                >
+                  {it.label}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {it.tip}
+              </TooltipContent>
+            </Tooltip>
+          );
+        })}
+      </div>
+    </TooltipProvider>
   );
 }
