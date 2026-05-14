@@ -121,6 +121,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkWhatsNewDraftsStale(now, (draftRes.data ?? []) as { id: string; created_at: string }[]),
       ...checkLintDeltaFailures(now, (lintRes.data ?? []) as { id: string; created_at: string; caller: string | null; file_path: string | null; error_class: string | null }[]),
       ...checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[]),
+      ...checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[]),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;
