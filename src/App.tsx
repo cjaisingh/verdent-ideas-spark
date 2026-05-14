@@ -91,6 +91,7 @@ const App = () => (
             <Route path="/control-plane" element={<ControlPlane />} />
             <Route path="/roadmap" element={<Roadmap />} />
             <Route path="/roadmap/risks" element={<RiskDashboard />} />
+            <Route path="/roadmap/gate-diagnostics" element={<GateDiagnostics />} />
             <Route path="/roadmap/approval-pack" element={<ApprovalPack />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/night-shifts" element={<NightShifts />} />
