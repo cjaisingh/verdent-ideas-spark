@@ -201,6 +201,16 @@ export default function AdminVideos() {
                         <Button asChild size="sm" variant="outline">
                           <a href={row.video_url} target="_blank" rel="noreferrer">Watch</a>
                         </Button>
+                      ) : row.status === "failed" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => retryFailed(row)}
+                          disabled={retryingId === row.id || quotaFull}
+                        >
+                          <RotateCcw className={`h-3 w-3 mr-1 ${retryingId === row.id ? "animate-spin" : ""}`} />
+                          Retry
+                        </Button>
                       ) : null}
                     </TableCell>
                   </TableRow>
