@@ -196,6 +196,65 @@ export default function EdgeHealth() {
       </div>
 
       <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileCode2 className="h-4 w-4" />
+            Delta lint — last {hours}h
+            <span className="text-xs font-normal text-muted-foreground ml-2">
+              {lintTotals.total} runs · {lintTotals.failed} failed · {lintTotals.skipped} skipped
+            </span>
+          </CardTitle>
+          <Button size="sm" variant="outline" onClick={lintProbe} disabled={lintProbeBusy}>
+            {lintProbeBusy ? "Probing…" : "Lint sample"}
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {lintRows.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">
+              No failed lint runs in the selected window.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase text-muted-foreground border-b">
+                  <tr>
+                    <th className="text-left px-4 py-2">When</th>
+                    <th className="text-left px-4 py-2">Caller</th>
+                    <th className="text-left px-4 py-2">File</th>
+                    <th className="text-left px-4 py-2">Class</th>
+                    <th className="text-left px-4 py-2">Error</th>
+                    <th className="text-right px-4 py-2">ms</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lintRows.map((r) => (
+                    <tr
+                      key={r.id}
+                      className="border-b hover:bg-muted/30 cursor-pointer"
+                      onClick={() => setOpenLint(r)}
+                    >
+                      <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs">{r.caller}</td>
+                      <td className="px-4 py-2 font-mono text-xs">{r.file_path}</td>
+                      <td className="px-4 py-2">
+                        <Badge variant="destructive">{r.error_class ?? "failed"}</Badge>
+                      </td>
+                      <td className="px-4 py-2 text-xs">
+                        {r.error_message?.slice(0, 90) ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs">{r.duration_ms}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">
             Last {hours}h — {totals.calls.toLocaleString()} calls, {totals.errors} server errors
