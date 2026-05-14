@@ -32,20 +32,32 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function heartbeat(sb: ReturnType<typeof createClient>, runId: string) {
+  await sb.from("roadmap_phase_overnight_runs")
+    .update({ heartbeat_at: new Date().toISOString() })
+    .eq("id", runId).eq("status", "running");
+}
+
 async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
   const { data: run } = await sb
     .from("roadmap_phase_overnight_runs")
-    .select("id, phase_id, phase_key, status")
+    .select("id, phase_id, phase_key, status, attempts, max_retries")
     .eq("id", runId).maybeSingle();
   if (!run) return { run_id: runId, skipped: "not_found" };
   if (run.status !== "queued") return { run_id: runId, skipped: `status_${run.status}` };
 
   const model = pickModel("google/gemini-2.5-flash-lite", { force: true });
+  const nowIso = new Date().toISOString();
+  const attempts = (run.attempts ?? 0) + 1;
 
-  // Mark running
+  // Mark running + bump attempts + initial heartbeat
   await sb.from("roadmap_phase_overnight_runs").update({
-    status: "running", started_at: new Date().toISOString(), model,
+    status: "running", started_at: nowIso, heartbeat_at: nowIso,
+    attempts, model,
   }).eq("id", runId).eq("status", "queued");
+
+  // Periodic heartbeat while AI call is in flight
+  const hbTimer = setInterval(() => { heartbeat(sb, runId).catch(() => {}); }, 30_000);
 
   try {
     // Defense in depth: require an existing signoff
@@ -114,9 +126,11 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
       request_ref: { run_id: runId, phase_key: run.phase_key, night_mode: isNightUTC() },
     });
 
+    clearInterval(hbTimer);
     await sb.from("roadmap_phase_overnight_runs").update({
       status: "done",
       finished_at: new Date().toISOString(),
+      heartbeat_at: new Date().toISOString(),
       result: {
         summary: String(parsed.summary ?? "").slice(0, 4000),
         risks: Array.isArray(parsed.risks) ? parsed.risks.slice(0, 10) : [],
@@ -128,11 +142,19 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
 
     return { run_id: runId, status: "done", model, cost_usd: Number(cost.toFixed(6)) };
   } catch (err) {
+    clearInterval(hbTimer);
     const msg = err instanceof Error ? err.message : String(err);
-    await sb.from("roadmap_phase_overnight_runs").update({
-      status: "failed", finished_at: new Date().toISOString(), error: msg.slice(0, 500),
-    }).eq("id", runId);
-    return { run_id: runId, status: "failed", error: msg };
+    const willRetry = attempts < (run.max_retries ?? 3);
+    const patch: Record<string, unknown> = {
+      status: willRetry ? "queued" : "auto_blocked",
+      heartbeat_at: null,
+      last_error: msg.slice(0, 500),
+      error: msg.slice(0, 500),
+    };
+    if (willRetry) patch.started_at = null;
+    else patch.finished_at = new Date().toISOString();
+    await sb.from("roadmap_phase_overnight_runs").update(patch).eq("id", runId);
+    return { run_id: runId, status: willRetry ? "requeued" : "auto_blocked", attempts, error: msg };
   }
 }
 

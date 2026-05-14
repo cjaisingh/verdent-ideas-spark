@@ -61,6 +61,8 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     window_start: windowStart.toISOString(),
     window_end: windowEnd.toISOString(),
     status: "running",
+    heartbeat_at: new Date().toISOString(),
+    attempts: 1,
     summary: {
       tz,
       window: `${winStart}-${winEnd}`,
@@ -106,6 +108,9 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
   const openedAt = new Date().toISOString();
 
   for (const job of candidates ?? []) {
+    // Heartbeat: mark shift alive between job audits so reclaim_stale_night_jobs
+    // doesn't think we're a zombie during long batches.
+    await sb.from("night_shifts").update({ heartbeat_at: new Date().toISOString() }).eq("id", shiftId);
     const { risk, reason } = classifyJob(job as any);
     if (risk === "high") {
       const reasonStr = `risk=high (${reason})`;
