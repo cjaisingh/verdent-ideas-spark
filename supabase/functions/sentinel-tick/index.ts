@@ -6,7 +6,7 @@ import {
   checkCronSilence, checkFiveXxSpike, checkSecretAge, checkAdminGrants, checkJobErrorRate,
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
-  checkLintDeltaFailures,
+  checkLintDeltaFailures, checkCompanionStreamsStalled,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
