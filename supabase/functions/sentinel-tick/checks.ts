@@ -14,7 +14,8 @@ export type FindingCandidate = {
     | "client_transport_error"
     | "voice_pipeline_red"
     | "night_jobs_stalled"
-    | "allowlist_rejects";
+    | "allowlist_rejects"
+    | "whats_new_drafts_stale";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
