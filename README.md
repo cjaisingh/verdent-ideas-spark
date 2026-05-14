@@ -2,6 +2,17 @@
 
 Operator console + contract API for the AWIP constellation. Owns the OKR tree, the capability manifest, and the event streams every other AWIP project subscribes to.
 
+## Why AWIP exists
+
+AWIP exists to prevent the four conditions that kill FM AI projects:
+
+1. **Nobody understands the problem** — the OKR tree and capability manifest make explicit what is being solved, why it matters, and how progress is tracked. No vague pilots.
+2. **The conditions have changed** — every OKR mutation is recorded with full event history. Priorities can be superseded without losing the trail. The system always reflects current reality.
+3. **The cost outweighs the value** — the demand board surfaces which capabilities are actually used, which KRs drive them, and which are dead weight. Cost/value decisions become data-driven.
+4. **The team has lost belief** — AWIP is designed to feel like a smart colleague, not a form to fill in. The assistant layer (Capica) exists specifically to maintain engagement and belief.
+
+Full framing in [`docs/why-awip.md`](docs/why-awip.md) — share this with FM stakeholders and new contributors before the architecture docs.
+
 **Docs**
 
 - [Master plan](docs/master-plan.md) — vision, phases, working agreements (live state at `/roadmap`)
