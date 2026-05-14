@@ -1,0 +1,1 @@
+ALTER VIEW public.roadmap_phase_gate_status SET (security_invoker = true);
