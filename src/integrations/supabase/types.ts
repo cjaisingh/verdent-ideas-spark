@@ -5473,6 +5473,14 @@ export type Database = {
     Functions: {
       acknowledge_all_triage_activity: { Args: never; Returns: number }
       acknowledge_triage_activity: { Args: { _id: string }; Returns: undefined }
+      audit_security_definer_gating: {
+        Args: never
+        Returns: {
+          has_authz_check: boolean
+          is_trigger: boolean
+          proname: string
+        }[]
+      }
       auto_link_finding_to_action: {
         Args: { _finding_id: string }
         Returns: string

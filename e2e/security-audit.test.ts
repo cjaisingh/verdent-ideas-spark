@@ -19,9 +19,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { anonClient, operatorClient, requireEnv } from "./helpers";
 
-const BASELINE_WARN_COUNT = 7; // documented in security memory
+const BASELINE_WARN_COUNT = 8; // 7 prior + audit_security_definer_gating helper
 const ALLOWED_WARN_LINTS = new Set<string>([
-  // 7 self-checking SECURITY DEFINER functions intentionally callable by authenticated.
+  // Self-checking SECURITY DEFINER functions intentionally callable by authenticated.
   "0029_authenticated_security_definer_function_executable",
 ]);
 
