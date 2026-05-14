@@ -194,6 +194,7 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
             <it.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
             {!collapsed && <span className="flex-1 truncate">{it.title}</span>}
             {!collapsed && it.url === "/governance" && <CoverageChip />}
+            {!collapsed && it.url === "/morning-review" && <TriageBadge />}
             {!collapsed && dot && <StatusDot color={DOT_CLASSES[dot]} label={`${it.title}: ${DOT_LABELS[dot]}`} />}
           </NavLink>
         </SidebarMenuButton>
