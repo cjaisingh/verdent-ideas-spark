@@ -170,7 +170,7 @@ async function transcribeAudio(base64: string, mime: string): Promise<string | n
   }
 }
 
-Deno.serve(withLogger("telegram-webhook", async (req) => {
+Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
@@ -187,6 +187,28 @@ Deno.serve(withLogger("telegram-webhook", async (req) => {
 
   let update: any;
   try { update = await req.json(); } catch { return new Response('Bad JSON', { status: 400 }); }
+
+  // Slice 4: default-deny allowlist. Silently drop messages from any chat_id
+  // not present in public.platform_allowlist (platform='telegram'). Telegram
+  // expects 200 from webhooks; returning 4xx would cause retries.
+  const incomingChatId =
+    update.callback_query?.message?.chat?.id ??
+    update.message?.chat?.id ??
+    update.edited_message?.chat?.id ??
+    null;
+  if (incomingChatId != null) {
+    const { data: allowed } = await supabase.rpc('is_principal_allowed', {
+      _platform: 'telegram',
+      _principal: String(incomingChatId),
+    });
+    if (allowed !== true) {
+      ctx.attach('__classified_error', 'allowlist_reject');
+      ctx.attach('rejected_chat_id', String(incomingChatId));
+      return new Response(JSON.stringify({ ok: true, ignored: 'not_allowlisted' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   // Handle inline-button callback (approval decisions) — route through awip-api so
   // callback_url + capability_events fire consistently with the contract surface.
