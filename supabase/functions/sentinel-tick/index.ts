@@ -55,7 +55,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     // checkJobErrorRate filters down to 24h internally.
     const since15d = new Date(now.getTime() - 15 * 24 * 3600 * 1000).toISOString();
 
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
@@ -68,7 +68,21 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
       sb.from("frontend_error_logs").select("message,url,created_at,kind").gte("created_at", since30m).limit(500),
       sb.from("client_error_log").select("function_name,message,created_at").gte("created_at", since30m).limit(500),
+      sb.from("edge_request_logs")
+        .select("function_name,classified_error,created_at")
+        .eq("classified_error", "allowlist_reject")
+        .gte("created_at", new Date(now.getTime() - 24 * 3600 * 1000).toISOString())
+        .limit(2000),
     ]);
+
+    // Slice 1: reclaim stalled night workers (10-min staleness threshold).
+    let reclaimResult: Record<string, number> = {};
+    try {
+      const { data: r } = await sb.rpc("reclaim_stale_night_jobs", { _stale_minutes: 10 });
+      reclaimResult = (r as Record<string, number>) ?? {};
+    } catch (e) {
+      console.error("reclaim_stale_night_jobs failed", e);
+    }
 
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
@@ -82,6 +96,8 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkAdminGrants(now, 15, auditRes.data ?? []),
       ...checkJobErrorRate(now, runs),
       ...checkFrontendRealtimeErrors(now, 30, feRes.data ?? []),
+      ...checkNightJobsStalled(now, reclaimResult),
+      ...checkAllowlistRejects(now, allowRes.data ?? []),
     ];
 
     let inserted = 0, updated = 0, alerts = 0;
