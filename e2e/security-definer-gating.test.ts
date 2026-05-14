@@ -29,9 +29,20 @@ const ALLOWED_NON_GATED = new Set<string>([
   "db_list_columns",
   "db_list_all_columns",
 
-  // Maintenance: ANALYZE only, no data exposure. Wired to cron, not user-callable
-  // in practice; revoke from authenticated if it ever leaks beyond ops UI.
+  // Maintenance: ANALYZE only, no data exposure.
   "db_analyze_public",
+
+  // Strict SELECT-only validator with regex deny-list and statement_timeout.
+  "run_capability_sql_check",
+
+  // Cron-only retention purge; reads memory_settings flag, no user input.
+  "auto_purge_if_enabled",
+
+  // Internal helper invoked by sentinel-tick (service token) and triggers.
+  "auto_link_finding_to_action",
+
+  // Returns count scoped via `auth.uid()` — implicit per-user gating.
+  "sentinel_triage_unacked_count",
 ]);
 
 const MGMT_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
