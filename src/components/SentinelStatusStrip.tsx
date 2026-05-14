@@ -230,6 +230,7 @@ export function SentinelStatusStrip() {
                         title={f.summary}
                         details={`kind ${f.kind} · severity ${f.severity} · last seen ${new Date(f.last_seen_at).toISOString()}`}
                       />
+                      <LinkFindingButton findingId={f.id} findingSummary={f.summary} />
                     </div>
                   </li>
                   );
