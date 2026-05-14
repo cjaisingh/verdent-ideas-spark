@@ -559,3 +559,25 @@ export function checkCompanionStreamsStalled(
     payload: { stalled: rows.length, threshold, window_h: 24 },
   }];
 }
+
+// ── heygen_videos_failed ────────────────────────────────────────────────────
+// Flags any HeyGen video creation/processing failures in the last 24h.
+export type HeygenFailedRow = { id: string; kind: string; error: string | null; created_at: string };
+
+export function checkHeygenVideosFailed(now: Date, rows: HeygenFailedRow[]): FindingCandidate[] {
+  if (rows.length === 0) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
+  return [{
+    kind: "heygen_videos_failed",
+    severity: rows.length >= 2 ? "high" : "medium",
+    summary: `HeyGen: ${rows.length} video(s) failed in last 24h.`,
+    dedupe_key: `heygen_videos_failed:${dayBucket}`,
+    subject_ref: { sample_id: rows[0]?.id ?? null },
+    payload: {
+      failures: rows.length,
+      window_h: 24,
+      sample_error: rows[0]?.error ?? null,
+      kinds: Array.from(new Set(rows.map((r) => r.kind))),
+    },
+  }];
+}
