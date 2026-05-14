@@ -1194,6 +1194,15 @@ export default function Companion() {
                 )}
               </div>
 
+              {interruptedMsg && (
+                <ResumeBanner
+                  chars={interruptedMsg.content?.length ?? 0}
+                  onResume={handleResume}
+                  onDiscard={handleDiscardResume}
+                  busy={resuming}
+                />
+              )}
+
               <div className="border-t p-3">
                 <PendingLessonsTray pending={pendingLessons} onChange={setPendingLessons} />
                 {voicePartial && (
