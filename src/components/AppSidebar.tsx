@@ -17,6 +17,24 @@ import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
   useCopilotOpen, useFavorites, useGroupOpen, useStatusDots,
 } from "@/lib/sidebar-state";
+import { useGovernanceCoverage } from "@/hooks/useGovernanceCoverage";
+
+function CoverageChip() {
+  const cov = useGovernanceCoverage(30);
+  if (!cov || cov.pct === null) return null;
+  const tone =
+    cov.pct >= 60 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+    : cov.pct >= 30 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+    : "bg-red-500/15 text-red-600 dark:text-red-400";
+  return (
+    <span
+      className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium tabular-nums ${tone}`}
+      title={`Governance coverage (30d): ${cov.withEntity}/${cov.total} tasks linked to an entity`}
+    >
+      {cov.pct}%
+    </span>
+  );
+}
 
 type NavItem = {
   url: string;
@@ -161,6 +179,7 @@ export const AppSidebar = ({ collapsible = "icon" }: { collapsible?: "icon" | "o
           <NavLink to={it.url} className="flex items-center gap-2">
             <it.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
             {!collapsed && <span className="flex-1 truncate">{it.title}</span>}
+            {!collapsed && it.url === "/governance" && <CoverageChip />}
             {!collapsed && dot && <StatusDot color={DOT_CLASSES[dot]} label={`${it.title}: ${DOT_LABELS[dot]}`} />}
           </NavLink>
         </SidebarMenuButton>
@@ -436,6 +455,7 @@ function CollapsibleSubgroup({
                   <NavLink to={c.url} className="flex items-center gap-2">
                     <c.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : "text-sidebar-foreground/70"}`} />
                     <span className="flex-1 truncate">{c.title}</span>
+                    {c.url === "/governance" && <CoverageChip />}
                     {dot && <StatusDot color={DOT_CLASSES[dot]} label={`${c.title}: ${DOT_LABELS[dot]}`} />}
                   </NavLink>
                 </SidebarMenuSubButton>
