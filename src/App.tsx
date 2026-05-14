@@ -61,6 +61,7 @@ import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
+import WhatsNew from "./pages/WhatsNew";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -132,6 +133,7 @@ const App = () => (
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
+            <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />

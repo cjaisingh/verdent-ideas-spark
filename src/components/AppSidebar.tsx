@@ -43,6 +43,7 @@ const operateLogsItems: NavItem[] = [
 
 const planTopItems: NavItem[] = [
   { url: "/morning-review", title: "Morning Review", icon: Sparkles },
+  { url: "/whats-new", title: "What's New", icon: Newspaper },
   { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },
   { url: "/roadmap/approval-pack", title: "Approval pack", icon: FileCheck2 },
