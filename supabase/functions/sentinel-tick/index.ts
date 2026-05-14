@@ -179,10 +179,10 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       resolved++;
     }
 
-    await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓`, {
-      inserted, updated, resolved, alerts, candidates: candidates.length,
+    await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓ ${autoLinked}🔗`, {
+      inserted, updated, resolved, alerts, autoLinked, candidates: candidates.length,
     });
-    return json({ ok: true, inserted, updated, resolved, alerts });
+    return json({ ok: true, inserted, updated, resolved, alerts, autoLinked });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun("error", 500, msg);
