@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { RefreshCw, AlertTriangle } from "lucide-react";
+import { RefreshCw, AlertTriangle, FileCode2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 type Health = {
   function_name: string;
@@ -36,12 +37,30 @@ type ClientErr = {
   created_at: string;
 };
 
+type LintRow = {
+  id: string;
+  created_at: string;
+  caller: string;
+  file_path: string;
+  language: string;
+  status: string;
+  duration_ms: number;
+  error_class: string | null;
+  error_message: string | null;
+  meta: Record<string, unknown> | null;
+};
+
 const HOUR_OPTIONS = [1, 6, 24, 72] as const;
 
 export default function EdgeHealth() {
+  const channelId = useId();
   const [hours, setHours] = useState<number>(24);
   const [rows, setRows] = useState<Health[]>([]);
   const [client, setClient] = useState<ClientErr[]>([]);
+  const [lintRows, setLintRows] = useState<LintRow[]>([]);
+  const [lintTotals, setLintTotals] = useState({ total: 0, failed: 0, skipped: 0 });
+  const [lintProbeBusy, setLintProbeBusy] = useState(false);
+  const [openLint, setOpenLint] = useState<LintRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [openFn, setOpenFn] = useState<string | null>(null);
   const [drawerRows, setDrawerRows] = useState<FailRow[]>([]);
