@@ -2,6 +2,17 @@
 
 Non-negotiable rules. Any change to Core that violates one of these is wrong, regardless of how reasonable it looks in isolation. If a request appears to require breaking a rule, stop and surface the conflict — do not "just this once" it.
 
+## Why AWIP exists
+
+AWIP exists to prevent the four conditions that kill FM AI projects. Every architectural decision in Core defuses one of them — if a change doesn't, it probably doesn't belong here.
+
+1. **Nobody understands the problem** — the OKR tree and capability manifest make explicit what is being solved, why it matters, and how progress is tracked. No vague pilots.
+2. **The conditions have changed** — every OKR mutation is recorded with full event history. Priorities can be superseded without losing the trail. The system always reflects current reality.
+3. **The cost outweighs the value** — the demand board surfaces which capabilities are actually used, which KRs drive them, and which are dead weight. Cost/value decisions become data-driven.
+4. **The team has lost belief** — AWIP is designed to feel like a smart colleague, not a form to fill in. The assistant layer (Capica) exists specifically to maintain engagement and belief.
+
+Full framing in [`docs/why-awip.md`](./docs/why-awip.md). Read it before the rules below — the rules only make sense once you understand the "why".
+
 ## The five rules
 
 1. **Every OKR mutation emits an `okr_node_events` row.**
