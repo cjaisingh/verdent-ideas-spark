@@ -35,6 +35,7 @@ export default function AdminVideos() {
   const [loading, setLoading] = useState(true);
   const [dialogKind, setDialogKind] = useState<Row["kind"] | null>(null);
   const [polling, setPolling] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const channelName = useMemo(() => `heygen_videos:${crypto.randomUUID()}`, []);
 
   const load = async () => {
