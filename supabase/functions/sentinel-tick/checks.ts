@@ -532,3 +532,30 @@ export function checkLintDeltaFailures(
     payload: { failures: rows.length, threshold, by_caller: byCaller, window_min: 60 },
   }];
 }
+
+// ── companion_streams_stalled ────────────────────────────────────────────────
+// Flags when assistant streams in companion_messages stay in `streaming` state
+// past their heartbeat deadline (>5 min stale). >5 in 24h → medium.
+export type CompanionStreamRow = {
+  id: string;
+  thread_id: string | null;
+  streamed_at: string | null;
+  created_at: string;
+};
+
+export function checkCompanionStreamsStalled(
+  now: Date,
+  rows: CompanionStreamRow[],
+  threshold = 5,
+): FindingCandidate[] {
+  if (rows.length <= threshold) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
+  return [{
+    kind: "companion_streams_stalled",
+    severity: rows.length > threshold * 4 ? "high" : "medium",
+    summary: `Companion: ${rows.length} assistant streams stalled in last 24h.`,
+    dedupe_key: `companion_streams_stalled:${dayBucket}`,
+    subject_ref: { sample_thread: rows[0]?.thread_id ?? null },
+    payload: { stalled: rows.length, threshold, window_h: 24 },
+  }];
+}
