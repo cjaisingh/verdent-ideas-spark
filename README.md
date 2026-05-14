@@ -80,6 +80,25 @@ bun run dev
 
 Database changes go through migrations only — never edit `src/integrations/supabase/types.ts`. Edge function code lives in `supabase/functions/awip-api/index.ts` and deploys automatically on save.
 
+## Agent Skills
+
+This repo uses [Matt Pocock's skills framework](https://github.com/mattpocock/skills) so AI agents (Lovable, Claude Code, Cursor, Codex) load the right context for the task at hand. The five non-negotiable rules live in [`CONTEXT.md`](./CONTEXT.md); per-agent operating instructions live in [`AGENTS.md`](./AGENTS.md).
+
+Install the upstream skill pack once:
+
+```bash
+npx skills add https://github.com/mattpocock/skills
+```
+
+Engineering skills available after install: `grill-me`, `grill-with-docs`, `tdd`, `diagnose`, `triage`, `to-issues`, `to-prd`, `request-refactor-plan`.
+
+AWIP-specific skills live in [`docs/agents/`](./docs/agents/):
+
+- [`awip-core-rules`](./docs/agents/awip-core-rules.md) — recap the five Core rules before any API or schema change.
+- [`awip-module-register`](./docs/agents/awip-module-register.md) — correct flow for registering a new module/capability.
+
+Invoke a skill by referencing it in your prompt, e.g. *"Use `awip-core-rules` and `tdd` to add the new `/okr/archive` endpoint"*.
+
 ## Related projects
 
 - **Discovery AI** (separate Lovable project) — calls `GET /capabilities` during drafting and `POST /okr/ingest` to hand off finished trees
