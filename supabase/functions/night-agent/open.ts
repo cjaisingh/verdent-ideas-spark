@@ -61,6 +61,8 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     window_start: windowStart.toISOString(),
     window_end: windowEnd.toISOString(),
     status: "running",
+    heartbeat_at: new Date().toISOString(),
+    attempts: 1,
     summary: {
       tz,
       window: `${winStart}-${winEnd}`,
