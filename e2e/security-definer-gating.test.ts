@@ -43,6 +43,12 @@ const ALLOWED_NON_GATED = new Set<string>([
 
   // Returns count scoped via `auth.uid()` — implicit per-user gating.
   "sentinel_triage_unacked_count",
+
+  // NOTE: `db_preview_rows` was previously considered for this list but was
+  // instead hardened with an explicit `has_role(auth.uid(), 'operator'|'admin')`
+  // gate (migration 20260514192535). It is now detected as authz-gated and
+  // must NOT be re-added here — doing so would mask a regression if the gate
+  // is ever removed.
 ]);
 
 const MGMT_TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
