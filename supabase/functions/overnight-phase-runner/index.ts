@@ -126,9 +126,11 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
       request_ref: { run_id: runId, phase_key: run.phase_key, night_mode: isNightUTC() },
     });
 
+    clearInterval(hbTimer);
     await sb.from("roadmap_phase_overnight_runs").update({
       status: "done",
       finished_at: new Date().toISOString(),
+      heartbeat_at: new Date().toISOString(),
       result: {
         summary: String(parsed.summary ?? "").slice(0, 4000),
         risks: Array.isArray(parsed.risks) ? parsed.risks.slice(0, 10) : [],
@@ -140,11 +142,18 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
 
     return { run_id: runId, status: "done", model, cost_usd: Number(cost.toFixed(6)) };
   } catch (err) {
+    clearInterval(hbTimer);
     const msg = err instanceof Error ? err.message : String(err);
+    const willRetry = attempts < (run.max_retries ?? 3);
     await sb.from("roadmap_phase_overnight_runs").update({
-      status: "failed", finished_at: new Date().toISOString(), error: msg.slice(0, 500),
+      status: willRetry ? "queued" : "auto_blocked",
+      finished_at: willRetry ? null : new Date().toISOString(),
+      started_at: willRetry ? null : run ? undefined : null,
+      heartbeat_at: null,
+      last_error: msg.slice(0, 500),
+      error: msg.slice(0, 500),
     }).eq("id", runId);
-    return { run_id: runId, status: "failed", error: msg };
+    return { run_id: runId, status: willRetry ? "requeued" : "auto_blocked", attempts, error: msg };
   }
 }
 
