@@ -703,8 +703,10 @@ export default function Companion() {
     } catch { /* silent */ }
   };
 
-  // Send a message — streams from Ollama (local) or AI Gateway (cloud)
-  const sendMessage = async () => {
+  // Send a message — streams from Ollama (local) or AI Gateway (cloud).
+  // Persists the assistant row up-front as `status='streaming'` and heartbeats
+  // content + streamed_at every ~1s so a refresh / disconnect can resume it.
+  const sendMessage = async (opts?: { skipUserInsert?: boolean }) => {
     if (!input.trim() || !active || sending) return;
     const userText = input.trim();
     setInput("");
@@ -714,12 +716,17 @@ export default function Companion() {
     const t0 = performance.now();
     let ragIds: string[] = [];
     let ragBlob = "";
+    let asstId: string | null = null;
     try {
-      // 1. Persist user message (realtime will echo it)
-      const { data: u } = await supabase.from("companion_messages").insert({
-        thread_id: active.id, role: "user", content: userText,
-      }).select("*").single();
-      if (u) setMessages((prev) => prev.some((x) => x.id === u.id) ? prev : [...prev, u as Msg]);
+      // 1. Persist user message (skipped on resume — we re-use the prior one).
+      let u: Msg | null = null;
+      if (!opts?.skipUserInsert) {
+        const { data } = await supabase.from("companion_messages").insert({
+          thread_id: active.id, role: "user", content: userText, status: "complete",
+        }).select("*").single();
+        u = (data ?? null) as Msg | null;
+        if (u) setMessages((prev) => prev.some((x) => x.id === u!.id) ? prev : [...prev, u as Msg]);
+      }
 
       // 2. RAG + live env snapshot in parallel
       const [rag, envBlob] = await Promise.all([fetchRagContext(userText), fetchEnvContext()]);
@@ -727,7 +734,7 @@ export default function Companion() {
       ragBlob = rag.blob;
 
       // 3. Build messages
-      const history = [...messages, u as Msg].filter(Boolean).slice(-20);
+      const history = [...messages, u].filter(Boolean).slice(-20) as Msg[];
       const llmMessages = [
         { role: "system", content: SYSTEM_PROMPT },
         ...(envBlob ? [{ role: "system" as const, content: envBlob }] : []),
@@ -735,11 +742,25 @@ export default function Companion() {
         ...history.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content })),
       ];
 
-      // 4. Call LLM (stream) — cloud via edge proxy, local via Ollama directly
       const useCloud = settings.use_cloud || healthOk === false;
       const model = useCloud ? settings.cloud_model : settings.ollama_model;
       let acc = "";
 
+      // 4. Insert assistant row up-front with status='streaming' so it survives
+      //    a page refresh / disconnect.
+      {
+        const { data: a0 } = await supabase.from("companion_messages").insert({
+          thread_id: active.id, role: "assistant", content: "",
+          model, status: "streaming", streamed_at: new Date().toISOString(),
+          rag_chunk_ids: ragIds,
+        }).select("*").single();
+        if (a0) {
+          asstId = a0.id;
+          setMessages((prev) => prev.some((x) => x.id === a0.id) ? prev : [...prev, a0 as Msg]);
+        }
+      }
+
+      // 5. Call LLM (stream) — cloud via edge proxy, local via Ollama directly
       let resp: Response;
       if (useCloud) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -775,6 +796,14 @@ export default function Companion() {
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let lastBeat = 0;
+      const flushHeartbeat = async () => {
+        if (!asstId) return;
+        lastBeat = Date.now();
+        await supabase.from("companion_messages")
+          .update({ content: acc, streamed_at: new Date().toISOString() })
+          .eq("id", asstId);
+      };
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -793,21 +822,32 @@ export default function Companion() {
             if (typeof delta === "string") { acc += delta; setStreaming(acc); }
           } catch { /* partial */ }
         }
+        if (Date.now() - lastBeat > 1000) void flushHeartbeat();
       }
 
       const latency = Math.round(performance.now() - t0);
-      // 5. Persist assistant message
-      const { data: a } = await supabase.from("companion_messages").insert({
-        thread_id: active.id, role: "assistant", content: acc,
-        model, latency_ms: latency, rag_chunk_ids: ragIds,
-      }).select("*").single();
-      if (a) setMessages((prev) => prev.some((x) => x.id === a.id) ? prev : [...prev, a as Msg]);
-      // bump thread updated_at
+      // 6. Finalise assistant row.
+      if (asstId) {
+        const { data: a } = await supabase.from("companion_messages")
+          .update({
+            content: acc, latency_ms: latency, rag_chunk_ids: ragIds,
+            status: "complete", streamed_at: new Date().toISOString(),
+          })
+          .eq("id", asstId).select("*").single();
+        if (a) setMessages((prev) => prev.map((x) => x.id === a.id ? (a as Msg) : x));
+      }
       await supabase.from("companion_threads").update({ updated_at: new Date().toISOString() }).eq("id", active.id);
       setStreaming("");
-      // 6. Best-effort lesson extraction (does not block UI)
       if (acc.trim()) void extractLessons(userText, acc);
     } catch (e) {
+      // Mark the assistant row as `error` (preserve whatever streamed) so the
+      // resume banner can offer a retry.
+      if (asstId) {
+        try {
+          await supabase.from("companion_messages")
+            .update({ status: "error" }).eq("id", asstId);
+        } catch { /* swallow */ }
+      }
       toast({
         title: "Companion error",
         description: e instanceof Error ? e.message : String(e),
