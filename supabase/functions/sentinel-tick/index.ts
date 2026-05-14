@@ -60,6 +60,9 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since24h = new Date(now.getTime() - 24 * 3600_000).toISOString();
     const since5mAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
 
+    const truthConflictsRes = await sb.from("truth_conflicts")
+      .select("entity,entity_id,field,top_source,next_source").limit(200);
+
     const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
