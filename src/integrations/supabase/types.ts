@@ -5476,9 +5476,14 @@ export type Database = {
       audit_security_definer_gating: {
         Args: never
         Returns: {
+          arg_signature: string
           has_authz_check: boolean
+          has_has_role: boolean
+          has_not_authorized_raise: boolean
+          has_uid_null_guard: boolean
           is_trigger: boolean
           proname: string
+          source_preview: string
         }[]
       }
       auto_link_finding_to_action: {
