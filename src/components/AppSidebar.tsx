@@ -95,6 +95,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/night-shift", title: "Night Shift (all jobs)", icon: Moon },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
   { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
+  { url: "/admin/videos", title: "HeyGen videos", icon: Video },
   { url: "/connections", title: "Connections", icon: Plug },
 ];
 
