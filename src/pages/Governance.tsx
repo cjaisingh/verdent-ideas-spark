@@ -373,6 +373,8 @@ export default function Governance() {
           </p>
         </CardContent>
       </Card>
+
+      <ClaimsPanel />
     </div>
   );
 }
