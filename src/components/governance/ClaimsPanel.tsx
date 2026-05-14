@@ -88,7 +88,7 @@ export function ClaimsPanel() {
     const { error } = await supabase.from("claims").insert({
       entity, entity_id: entityId, field: field || "*",
       source, value: value as never, confidence,
-      evidence_ref: evidence,
+      evidence_ref: evidence as never,
       supersedes_id: supersedesId.trim() && isUuid(supersedesId) ? supersedesId : null,
       note: note || null,
     });
