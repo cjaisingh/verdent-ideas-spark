@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Trash2, Plus, ArrowRight } from "lucide-react";
+import { ClaimsPanel } from "@/components/governance/ClaimsPanel";
 
 type Kind = "task" | "notebook" | "entity" | "authority_rule";
 type Relation = "touches" | "justifies" | "governs" | "supersedes";
