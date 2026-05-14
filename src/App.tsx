@@ -22,6 +22,7 @@ import Status from "./pages/Status";
 import ApprovalDetail from "./pages/ApprovalDetail";
 import Roadmap from "./pages/Roadmap";
 import RiskDashboard from "./pages/RiskDashboard";
+import GateDiagnostics from "./pages/GateDiagnostics";
 import ApprovalPack from "./pages/ApprovalPack";
 import Jobs from "./pages/Jobs";
 import Runbook from "./pages/Runbook";
