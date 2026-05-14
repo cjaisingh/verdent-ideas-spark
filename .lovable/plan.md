@@ -1,89 +1,46 @@
-## /whats-new — operator-facing change journal
+Document the two shipped Hermes slices as durable project memory so future agents respect the patterns without re-deriving them.
 
-A new route that turns every shipped change (schema, edge functions, UI, cron, policy) into a short, structured entry. AI drafts; you approve before it's visible. No more verbose chat walkthroughs after the fact — they live in one queryable surface.
+## Files to create
 
----
+### 1. `mem/features/worker-reliability.md` (Slice 1 — heartbeat/reclaim/retry caps)
 
-### 1. Data model (1 migration)
+Frontmatter: `type: feature`, `name: worker-reliability`, description: "Heartbeat + reclaim + retry caps for overnight jobs and night shifts".
 
-Two tables, operator-only RLS, both added to `supabase_realtime`.
+Body covers:
+- Tables that carry `heartbeat_at`, `attempts`, `max_retries`, `last_error`: `roadmap_phase_overnight_runs`, `night_shifts`. New jobs of the same shape MUST follow.
+- `overnight-phase-runner` contract: bump `attempts` on pickup, heartbeat every 30s while `status='running'`, on failure requeue until `attempts >= max_retries` then set `status='auto_blocked'` with `last_error`.
+- `night-agent/open` heartbeats per audited candidate.
+- Reclaim path: `public.reclaim_stale_night_jobs(_stale_minutes int)` reverts `running` rows with stale heartbeat to `queued` (or `auto_blocked` if cap hit). Called by `sentinel-tick` every tick — do not call from the runner.
+- Sentinel finding `night_jobs_stalled` (medium) fires on reclaimed rows.
+- Anti-patterns: silent catch in the runner, skipping `attempts` bump, hand-resetting `auto_blocked` rows without recording why.
 
-`whats_new_entries`
-- `id uuid pk`, `slug text unique` (e.g. `worker-heartbeat-reclaim`)
-- `title text`, `area text` — enum-like: `schema | edge | ui | cron | policy | docs`
-- `what text`, `why text`, `how_to_use text`, `impact text` — the four sections
-- `source_refs jsonb` — `{ migrations:[], functions:[], pages:[], commits:[] }`
-- `status text` — `draft | published | dismissed` (default `draft`)
-- `shipped_at timestamptz`, `published_at timestamptz`, `created_by uuid`
-- `model text`, `draft_meta jsonb` — for traceability when AI-drafted
+### 2. `mem/features/platform-allowlist.md` (Slice 4 — default-deny allowlists)
 
-`whats_new_sources` (idempotency ledger)
-- `id uuid pk`, `kind text` (`migration|function|page|cron|policy|changelog`)
-- `ref text unique-per-kind` — file path / function name / CHANGELOG hash
-- `entry_id uuid null fk → whats_new_entries`
-- `seen_at timestamptz`, `dismissed boolean default false`
+Frontmatter: `type: feature`, `name: platform-allowlist`, description: "Default-deny allowlist gating Telegram, Companion, Rork TTS".
 
-Index on `(status, shipped_at desc)` for the feed.
+Body covers:
+- Tables: `platform_allowlist (platform, principal, note, …)` unique on `(platform, principal)`, plus `platform_allowlist_audit` written by trigger.
+- Helper: `public.is_principal_allowed(_platform text, _principal text) → boolean`. Default-deny — empty allowlist means nobody gets in.
+- Gated edge functions: `telegram-webhook` (chat_id), `companion-cloud-chat` (operator email after JWT), `gemini-tts` (operator email after JWT). Any new external-facing function MUST gate on this helper before doing work.
+- Rejection path: log via `withLogger` with `__classified_error: 'allowlist_reject'` so logger meta override classifies the row.
+- Sentinel: `allowlist_rejects` finding fires at >50/24h per platform.
+- Seeded principals: `chris.jaisingh@me.com` for `companion_web` + `rork`. Telegram chat_id must be inserted manually before the bot will reply.
+- Admin UI: `/admin` allowlist panel (operator-only RLS) — use it instead of raw SQL where possible.
+- Anti-patterns: bypassing the helper "just for diagnostics", storing principals on `profiles`, removing audit trigger.
 
-### 2. Auto-draft pipeline
+## Index update
 
-New edge function `whats-new-draft` (`withLogger`, service-token + operator JWT):
+Append to `mem/index.md` under `## Memories`:
 
-1. Scans recent rows in: `awip_migrations_seen` (existing), `capability_events` (last 24h), CHANGELOG.md HEAD diff via existing `GITHUB_REVIEWS_TOKEN`, `roadmap_phases` flipped to `done`, new files under `supabase/functions/*` and `src/pages/*`.
-2. For each unseen `(kind, ref)` not already in `whats_new_sources` → calls Gemini (`pickModel('google/gemini-2.5-flash')`, so night-cheap automatically) with a strict JSON schema prompt → produces `{title, area, what, why, how_to_use, impact}`.
-3. Inserts `whats_new_entries` row with `status='draft'`, links sources.
-
-Cron: new `scheduled-whats-new-draft` every 30 min, plus a manual "Scan now" button on `/whats-new`.
-
-### 3. UI: `/whats-new`
-
-Single page, three tabs:
-- **Drafts** — pending operator review. Inline edit fields, **Publish** / **Dismiss** / **Regenerate** buttons.
-- **Published** — newest first, filter by `area`, search across all four sections.
-- **Sources** — raw ledger, lets you mark a source `dismissed` so it won't redraft.
-
-Entry card shows the four sections as labelled blocks (What / Why / How to use / Impact), with collapsible source refs at the bottom (links to migrations, function paths, pages).
-
-Sidebar nav entry under "Operator", with a small `N` badge of pending drafts (realtime subscribed).
-
-### 4. Integration with existing surfaces
-
-- **Morning Review**: add a one-line strip "📣 N new entries published since yesterday" linking to `/whats-new?since=24h`. No duplication of content.
-- **Sentinel**: new check `whats_new_drafts_stale` — fires `medium` if > 20 unreviewed drafts or oldest > 7 days. Keeps the queue honest.
-- **Discussion actions**: "Promote to discussion" button on each draft if it needs follow-up.
-
-### 5. Out of scope (intentional)
-
-- No public-facing changelog page (operator-only for now).
-- No email/push notifications (you'll see it in Morning Review).
-- No retroactive backfill of pre-existing changes — only new shipments from migration date forward.
-- No editing UI for the four-section template; it's fixed.
-
-### 6. Files
-
-```text
-supabase/migrations/<ts>_whats_new.sql                   (new)
-supabase/functions/whats-new-draft/index.ts              (new)
-supabase/functions/sentinel-tick/checks.ts               (edit: add stale-draft check)
-src/pages/WhatsNew.tsx                                   (new)
-src/components/whats-new/EntryCard.tsx                   (new)
-src/components/whats-new/DraftEditor.tsx                 (new)
-src/components/AppSidebar.tsx                            (edit: nav + badge)
-src/App.tsx                                              (edit: route)
-src/pages/MorningReview.tsx                              (edit: 1-line strip)
-docs/whats-new.md                                        (new — operator runbook)
-README.md, CHANGELOG.md, AGENTS.md                       (edit)
-mem/features/whats-new.md + index.md                     (new + edit)
+```
+- [Worker reliability](mem://features/worker-reliability) — heartbeat/attempts/max_retries on roadmap_phase_overnight_runs + night_shifts; reclaim_stale_night_jobs called from sentinel-tick
+- [Platform allowlist](mem://features/platform-allowlist) — default-deny is_principal_allowed() gating telegram-webhook, companion-cloud-chat, gemini-tts; allowlist_rejects sentinel >50/24h
 ```
 
-Cron registered via `supabase--insert` (per house rule).
+Preserve every existing line in `mem/index.md` (write-tool replaces full file).
 
-### 7. Sequencing
+## Out of scope
 
-1. Migration + RLS + realtime.
-2. Edge function + cron.
-3. Page + sidebar.
-4. Morning Review strip + sentinel check.
-5. Docs + memory.
-
-Ship as one slice — small enough that splitting adds churn.
+- Slices 2 (delta-lint) and 3 (companion session auto-resume) — not yet shipped, no memory yet.
+- Skills framework — `AGENTS.md` already documents it; no separate memory entry needed.
+- Code changes — memory only.
