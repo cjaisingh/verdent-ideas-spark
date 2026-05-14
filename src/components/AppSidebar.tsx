@@ -17,6 +17,24 @@ import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
   useCopilotOpen, useFavorites, useGroupOpen, useStatusDots,
 } from "@/lib/sidebar-state";
+import { useGovernanceCoverage } from "@/hooks/useGovernanceCoverage";
+
+function CoverageChip() {
+  const cov = useGovernanceCoverage(30);
+  if (!cov || cov.pct === null) return null;
+  const tone =
+    cov.pct >= 60 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+    : cov.pct >= 30 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+    : "bg-red-500/15 text-red-600 dark:text-red-400";
+  return (
+    <span
+      className={`ml-1 rounded px-1 py-0.5 text-[10px] font-medium tabular-nums ${tone}`}
+      title={`Governance coverage (30d): ${cov.withEntity}/${cov.total} tasks linked to an entity`}
+    >
+      {cov.pct}%
+    </span>
+  );
+}
 
 type NavItem = {
   url: string;
