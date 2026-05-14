@@ -376,6 +376,8 @@ export default function Governance() {
         </CardContent>
       </Card>
 
+      <W7SignoffChecklist />
+
       <ClaimsPanel />
     </div>
   );
