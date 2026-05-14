@@ -495,3 +495,39 @@ export function checkWhatsNewDraftsStale(
     payload: { drafts: drafts.length, oldest_age_days: Math.floor(ageDays) },
   }];
 }
+
+/**
+ * Delta lint failures (Hermes slice 2).
+ * Fires medium when >5 failed lint_delta_runs in last 60 minutes.
+ */
+export type LintDeltaRow = {
+  id: string;
+  created_at: string;
+  caller: string | null;
+  file_path: string | null;
+  error_class: string | null;
+};
+
+export function checkLintDeltaFailures(
+  now: Date,
+  rows: LintDeltaRow[],
+  threshold = 5,
+): FindingCandidate[] {
+  if (rows.length <= threshold) return [];
+  const byCaller: Record<string, number> = {};
+  for (const r of rows) {
+    const k = r.caller || "unknown";
+    byCaller[k] = (byCaller[k] ?? 0) + 1;
+  }
+  const top = Object.entries(byCaller).sort((a, b) => b[1] - a[1])[0];
+  const hourBucket = Math.floor(now.getTime() / (3600_000));
+  return [{
+    kind: "lint_delta_failures",
+    severity: rows.length > threshold * 4 ? "high" : "medium",
+    summary:
+      `Delta lint: ${rows.length} failures in last 60min (top: ${top[0]} ×${top[1]}).`,
+    dedupe_key: `lint_delta_failures:${hourBucket}`,
+    subject_ref: { top_caller: top[0] },
+    payload: { failures: rows.length, threshold, by_caller: byCaller, window_min: 60 },
+  }];
+}
