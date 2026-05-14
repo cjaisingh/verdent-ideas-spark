@@ -14,6 +14,7 @@ import PanelDiscussionDrawer from "@/components/morning-review/PanelDiscussionDr
 import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningReviewTriage";
 import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
+import { SentinelTriageActivityPanel } from "@/components/SentinelTriageActivityPanel";
 
 type Review = {
   id: string;
@@ -313,6 +314,7 @@ export default function MorningReview() {
         <h1 className="text-2xl font-semibold">Morning Review</h1>
         <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
       </div>
+      <SentinelTriageActivityPanel />
       <Tabs defaultValue="yesterday" className="w-full">
         <TabsList>
           <TabsTrigger value="yesterday">Yesterday</TabsTrigger>

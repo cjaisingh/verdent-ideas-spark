@@ -1977,6 +1977,58 @@ export type Database = {
           },
         ]
       }
+      discussion_action_findings: {
+        Row: {
+          action_id: string
+          created_at: string
+          finding_id: string
+          id: string
+          linked_by: string | null
+          linked_by_label: string | null
+          note: string | null
+        }
+        Insert: {
+          action_id: string
+          created_at?: string
+          finding_id: string
+          id?: string
+          linked_by?: string | null
+          linked_by_label?: string | null
+          note?: string | null
+        }
+        Update: {
+          action_id?: string
+          created_at?: string
+          finding_id?: string
+          id?: string
+          linked_by?: string | null
+          linked_by_label?: string | null
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_action_findings_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_action_findings_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_action_findings_finding_id_fkey"
+            columns: ["finding_id"]
+            isOneToOne: false
+            referencedRelation: "sentinel_findings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discussion_actions: {
         Row: {
           ci_branch: string | null
@@ -4645,6 +4697,63 @@ export type Database = {
         }
         Relationships: []
       }
+      sentinel_triage_activity: {
+        Row: {
+          acknowledged_by: string[]
+          action_id: string
+          action_short_num: number | null
+          action_title: string | null
+          created_at: string
+          event_kind: string
+          finding_count: number
+          finding_ids: string[]
+          id: string
+          triggered_by: string | null
+          triggered_by_label: string | null
+        }
+        Insert: {
+          acknowledged_by?: string[]
+          action_id: string
+          action_short_num?: number | null
+          action_title?: string | null
+          created_at?: string
+          event_kind: string
+          finding_count: number
+          finding_ids?: string[]
+          id?: string
+          triggered_by?: string | null
+          triggered_by_label?: string | null
+        }
+        Update: {
+          acknowledged_by?: string[]
+          action_id?: string
+          action_short_num?: number | null
+          action_title?: string | null
+          created_at?: string
+          event_kind?: string
+          finding_count?: number
+          finding_ids?: string[]
+          id?: string
+          triggered_by?: string | null
+          triggered_by_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sentinel_triage_activity_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sentinel_triage_activity_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telegram_gateway_logs: {
         Row: {
           attempt: number
@@ -5360,6 +5469,8 @@ export type Database = {
       }
     }
     Functions: {
+      acknowledge_all_triage_activity: { Args: never; Returns: number }
+      acknowledge_triage_activity: { Args: { _id: string }; Returns: undefined }
       auto_purge_if_enabled: { Args: never; Returns: number }
       awip_rag_search: {
         Args: { _limit?: number; _q: string }
@@ -5519,6 +5630,7 @@ export type Database = {
           row_count: number
         }[]
       }
+      sentinel_triage_unacked_count: { Args: never; Returns: number }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
         Returns: undefined
