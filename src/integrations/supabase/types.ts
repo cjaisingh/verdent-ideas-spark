@@ -4807,6 +4807,104 @@ export type Database = {
         }
         Relationships: []
       }
+      whats_new_entries: {
+        Row: {
+          area: string
+          created_at: string
+          created_by: string | null
+          draft_meta: Json
+          how_to_use: string
+          id: string
+          impact: string
+          model: string | null
+          published_at: string | null
+          shipped_at: string
+          slug: string | null
+          source_refs: Json
+          status: string
+          title: string
+          updated_at: string
+          what: string
+          why: string
+        }
+        Insert: {
+          area: string
+          created_at?: string
+          created_by?: string | null
+          draft_meta?: Json
+          how_to_use?: string
+          id?: string
+          impact?: string
+          model?: string | null
+          published_at?: string | null
+          shipped_at?: string
+          slug?: string | null
+          source_refs?: Json
+          status?: string
+          title: string
+          updated_at?: string
+          what?: string
+          why?: string
+        }
+        Update: {
+          area?: string
+          created_at?: string
+          created_by?: string | null
+          draft_meta?: Json
+          how_to_use?: string
+          id?: string
+          impact?: string
+          model?: string | null
+          published_at?: string | null
+          shipped_at?: string
+          slug?: string | null
+          source_refs?: Json
+          status?: string
+          title?: string
+          updated_at?: string
+          what?: string
+          why?: string
+        }
+        Relationships: []
+      }
+      whats_new_sources: {
+        Row: {
+          dismissed: boolean
+          entry_id: string | null
+          id: string
+          kind: string
+          meta: Json
+          ref: string
+          seen_at: string
+        }
+        Insert: {
+          dismissed?: boolean
+          entry_id?: string | null
+          id?: string
+          kind: string
+          meta?: Json
+          ref: string
+          seen_at?: string
+        }
+        Update: {
+          dismissed?: boolean
+          entry_id?: string | null
+          id?: string
+          kind?: string
+          meta?: Json
+          ref?: string
+          seen_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whats_new_sources_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "whats_new_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       cost_actuals_30d: {
