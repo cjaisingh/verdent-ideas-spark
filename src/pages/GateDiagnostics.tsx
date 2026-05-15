@@ -62,6 +62,38 @@ function gateState(ok: boolean, mild: boolean): GateState {
   return mild ? "untested" : "fail";
 }
 
+function pendingReason(q: QaCheck): { why: string; evidence: string } {
+  if (q.kind === "judgement") {
+    return {
+      why: "Human judgement check — no automated probe exists by design.",
+      evidence:
+        "Operator decision: paste the artefact link, screenshot, or a 1-line rationale into the note, then click Pass or Fail.",
+    };
+  }
+  if (q.kind === "automated" && !q.probe) {
+    return {
+      why: "Marked automated but no probe SQL/endpoint is registered.",
+      evidence:
+        "Either add a probe in qa_checks.probe, or treat as judgement: attach evidence and override.",
+    };
+  }
+  if (q.probe && !q.last_checked_at) {
+    return {
+      why: "Probe defined but never run by the qa-validate cron.",
+      evidence:
+        "Wait for the next 30-min cron tick, or run qa-validate manually. Override only if the cron is known broken.",
+    };
+  }
+  return {
+    why: "No status recorded yet.",
+    evidence: "Provide a one-line rationale in the note before overriding.",
+  };
+}
+
+function failingEvidence(): string {
+  return "Confirm the probe failure is real before flipping back to pass — paste your reasoning into the note.";
+}
+
 function StateBadge({ state }: { state: GateState }) {
   if (state === "pass")
     return (
