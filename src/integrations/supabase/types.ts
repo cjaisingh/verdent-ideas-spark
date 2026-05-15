@@ -3618,6 +3618,59 @@ export type Database = {
         }
         Relationships: []
       }
+      qa_check_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          created_at: string
+          criterion: string
+          event_type: string
+          id: string
+          kind: string
+          new_status: string | null
+          note: string | null
+          old_status: string | null
+          phase_key: string
+          qa_check_id: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          criterion: string
+          event_type: string
+          id?: string
+          kind: string
+          new_status?: string | null
+          note?: string | null
+          old_status?: string | null
+          phase_key: string
+          qa_check_id: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          created_at?: string
+          criterion?: string
+          event_type?: string
+          id?: string
+          kind?: string
+          new_status?: string | null
+          note?: string | null
+          old_status?: string | null
+          phase_key?: string
+          qa_check_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "qa_check_events_qa_check_id_fkey"
+            columns: ["qa_check_id"]
+            isOneToOne: false
+            referencedRelation: "qa_checks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       qa_checks: {
         Row: {
           created_at: string
