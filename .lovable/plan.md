@@ -1,89 +1,49 @@
-## Goal
+# Clear stale sentinel findings and reset the night shift
 
-Adopt the parts of the external AWIP setup pack that genuinely add to AWIP Core, without re-platforming what we already have. Three small, additive artefacts. No DB changes, no runtime behaviour change, no overlay/bundle framework — just naming + one typed contract on the highest-stakes agent surface (Night Agent) to prove the pattern.
+## What the data actually shows
 
-## Why these three (and not the rest)
+The three "stalled cron" findings are **false positives**:
 
-The pack's ontology, truth-policy, run-memory, governance, and source-mapping ideas are already implemented under different names (`docs/ontology.md`, `decision_authorities`, `*_events`, `governance_links`, `capability_manifest`). Re-importing them would be churn.
+- `cron.job_run_details`: `sentinel-tick`, `overnight-phase-runner-15m`, `morning-review` all running on schedule (sentinel-tick last fired 21:00 UTC today, morning-review 06:00 UTC today).
+- `automation_runs`: 96 runs in last 24h for both 15-min crons; morning-review last ran today.
+- The two open `cron_silence` findings are dated 2026-05-09 17:17 and have never been auto-resolved despite the cron being healthy ever since.
 
-The genuinely missing concept is **"the agent's input packet is implicit today — nobody can point to a typed definition of what the Night Agent is guaranteed to receive."** Fixing that for one agent is cheap and proves whether the pattern is worth generalising.
+So nothing is actually broken in the cron schedule. What **is** broken is the sentinel auto-resolve loop — findings from May 9 should have been cleared on the next tick. Discussion action `45032d7d` ("Reactivate stalled crons") is chasing a phantom.
 
-## Changes
+## Plan
 
-### 1. Memory: contract-first principle
+### Step 1 — Trigger sentinel-tick once and observe
+Invoke `sentinel-tick` directly via `curl_edge_functions`. Check the response for `resolved: N` and re-query `sentinel_findings` to see if the three stale rows flipped to `resolved`.
 
-New file `mem/preferences/contract-first.md`:
+### Step 2a — If auto-resolve worked
+The issue is "auto-resolve only runs on the cron's own cadence and we're impatient" → just close discussion_action `45032d7d` as `done` with a note pointing at the corrected state. No code change.
 
-> Before adding a new agent surface (cron, edge fn, autonomous loop), define its **contract**: canonical question, mandatory evidence, output shape, escalation rule. Code the input packet as a typed object in `supabase/functions/_shared/contracts/`, not as ad-hoc SELECTs in the handler. Rationale: prevents "agent improvises retrieval" failure mode; makes audit lineage trivial.
+### Step 2b — If auto-resolve did NOT work
+There's a real bug in the resolve loop (likely RLS on `sentinel_findings.update` or a status enum mismatch). Then:
+- Migration: `UPDATE public.sentinel_findings SET status='resolved', resolved_at=now() WHERE id IN (...3 ids...)` to unblock the dashboard.
+- Read `sentinel-tick/index.ts` lines 167–180, add error logging to the update, and inspect RLS on `sentinel_findings`. Fix whichever is silently swallowing the update.
+- Add a test in `sentinel-tick/checks_test.ts` covering "open finding whose dedupe_key no longer fires gets resolved".
 
-Add one-liner to `mem://index.md` under `## Memories`.
+### Step 3 — Close the discussion action
+Mark `discussion_actions.id = 45032d7d-...` as `done` with a note: "Crons were never actually stalled — automation_runs shows 96 ticks/24h. Stale sentinel findings cleared. Root cause: [auto-resolve worked late | bug fixed in step 2b]."
 
-### 2. Docs: agent contract checklist
+### Step 4 — Confirm tonight's path
+Re-check (read-only) that for tonight there is still:
+- 0 night-eligible discussion_actions
+- 0 phases with `run_overnight=true`
 
-New file `docs/agents/contract-checklist.md` — short markdown, ~40 lines:
-
-- Canonical question (one sentence)
-- Mandatory evidence (object classes the handler MUST receive)
-- Optional evidence
-- Output shape (typed return)
-- Escalation rule (when to bail to operator)
-- Truth profile (which `decision_authorities` rules apply)
-- Audit hook (which `*_events` table records the run)
-
-Reference from `AGENTS.md` under "Working agreements".
-
-### 3. Code: Night-Agent input contract (typed, no behaviour change)
-
-New file `supabase/functions/_shared/contracts/night-agent.ts`:
-
-```ts
-// Typed contract for the Night Agent's per-action input packet.
-// Source of truth for what the agent is guaranteed to receive.
-// See docs/agents/contract-checklist.md.
-
-export type NightAgentInput = {
-  action: DiscussionAction;          // the row being audited
-  risk: 'low' | 'medium' | 'high';   // critical never reaches here
-  nightOverrideReason: string | null; // required if risk=high
-  recentEvents: DiscussionActionEvent[]; // last 20, for context
-  linkedFindings: SentinelFinding[];     // via discussion_action_findings
-  truthProfile: {
-    entity: 'Action';
-    authorities: DecisionAuthority[];    // from resolve_truth
-  };
-};
-
-export type NightAgentOutput =
-  | { verdict: 'advance'; toStatus: string; rationale: string }
-  | { verdict: 'hold'; reason: string }
-  | { verdict: 'escalate'; reason: string; suggestedOwner?: string };
-
-export const NIGHT_AGENT_CONTRACT = {
-  canonicalQuestion:
-    "Should this night-eligible discussion_action advance, hold, or escalate?",
-  escalationRule:
-    "Escalate if risk=high AND no nightOverrideReason, OR if linkedFindings contains any severity>=high open finding.",
-  auditTable: "discussion_action_events",
-} as const;
-```
-
-Then **refactor `night-agent-open` and `night-agent-close` to build a `NightAgentInput` once** at the top of each iteration and pass it to the existing logic. No semantic change — just makes the implicit packet explicit and typed. Existing tests stay green.
+If yes, tell the operator explicitly that the crons will tick but no phase work will happen overnight unless they queue something before 21:55 UTC, and offer to flag a specific phase.
 
 ## Out of scope
 
-- No bundle library, overlay library, runtime packet assembler, contract catalog, or YAML specs.
-- No changes to Sentinel, Morning Review, Lessons synthesiser (we'll generalise only if the Night Agent contract proves useful).
-- No DB schema changes.
-- No new pages or UI.
-- No changes to truth-policy, ontology, or governance models — they already cover what the pack calls "truth-policy registry" and "run-memory ledger".
+- No new features. No schema changes beyond the targeted update in step 2b if needed.
+- Not touching the broader cron infrastructure or model-policy.
+- Not queuing phases for overnight without operator approval — that's a separate decision.
 
-## Verification
+## Technical notes
 
-- `bun run typecheck` passes — `NightAgentInput` types resolve against existing `DiscussionAction` / `SentinelFinding` types.
-- Night Agent existing behaviour unchanged: pick a `night_eligible=true` action in `/jobs`, confirm it still flows through `night-agent-open`/`close` cron at the same cadence with the same outputs in `discussion_action_events`.
-- `docs/agents/contract-checklist.md` rendered fine on GitHub.
-- New memory entry visible in `mem://index.md`.
-
-## What this unlocks (if we like it)
-
-If after a week the Night-Agent contract feels useful, the same pattern extends naturally to: Sentinel tick input, Morning Review writer input, Lessons synthesiser input, Overnight Recommender input. Each becomes one typed file in `_shared/contracts/`. That's the "bundle library" idea — but earned, not imported.
+- `sentinel-tick` runs with service role; if the auto-resolve `update` is failing it'll be silent because the result isn't checked. Step 2b would add `.select('id')` + log on the update.
+- The three finding IDs:
+  - `1e94d481-9d14-4787-8bad-a5fd67433537` (sentinel-tick)
+  - `c0c0329b-c248-4e30-8e15-917dff2b1e4f` (overnight-phase-runner-15m)
+  - one more for morning-review (need to re-query; the earlier list showed only the two high-sev)
