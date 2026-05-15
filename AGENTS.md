@@ -17,6 +17,7 @@ Operating instructions for AI agents (Lovable, Claude Code, Cursor, Codex) worki
 - Roles live in `public.user_roles`, gated by `has_role()`. Never trust client storage for authz.
 - Idempotency-Key is mandatory on `/okr/ingest` and `/events/ingest`. Same key + different body → `409`.
 - Speak about the backend as "Lovable Cloud", not Supabase, when addressing the user.
+- Before adding a new autonomous surface (cron, edge function, LLM loop), declare a typed input contract in `supabase/functions/_shared/contracts/<name>.ts` — see [`docs/agents/contract-checklist.md`](./docs/agents/contract-checklist.md) and the `night-agent.ts` reference.
 
 ## Agent skills
 
