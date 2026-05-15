@@ -5,6 +5,7 @@ import {
 } from "./config.ts";
 import { localParts, inWindow } from "./time.ts";
 import { classifyJob, inferPhaseAndSuite, worse } from "./classify.ts";
+import { buildNightAgentInput, type NightAgentInput } from "../_shared/contracts/night-agent.ts";
 
 export async function openShift(sb: SbClient, settings: NightSettings) {
   const tz = (settings?.night_timezone as string) || "UTC";
@@ -112,6 +113,13 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     // doesn't think we're a zombie during long batches.
     await sb.from("night_shifts").update({ heartbeat_at: new Date().toISOString() }).eq("id", shiftId);
     const { risk, reason } = classifyJob(job as any);
+    // Typed input contract — see supabase/functions/_shared/contracts/night-agent.ts.
+    // Pure construction; no extra DB I/O. Locks the packet shape so future
+    // hydration of recentEvents/linkedFindings/truthProfile lands without
+    // touching call sites. Currently shadow-only — existing logic below is
+    // unchanged.
+    const _input: NightAgentInput = buildNightAgentInput(job as any, { risk, reason });
+    void _input;
     if (risk === "high") {
       const reasonStr = `risk=high (${reason})`;
       skipped.push({ id: job.id, reason: reasonStr });
