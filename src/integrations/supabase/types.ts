@@ -3624,6 +3624,9 @@ export type Database = {
           criterion: string
           id: string
           kind: string
+          last_action: string | null
+          last_actor: string | null
+          last_actor_label: string | null
           last_checked_at: string | null
           note: string | null
           phase_key: string
@@ -3636,6 +3639,9 @@ export type Database = {
           criterion: string
           id?: string
           kind?: string
+          last_action?: string | null
+          last_actor?: string | null
+          last_actor_label?: string | null
           last_checked_at?: string | null
           note?: string | null
           phase_key: string
@@ -3648,6 +3654,9 @@ export type Database = {
           criterion?: string
           id?: string
           kind?: string
+          last_action?: string | null
+          last_actor?: string | null
+          last_actor_label?: string | null
           last_checked_at?: string | null
           note?: string | null
           phase_key?: string
