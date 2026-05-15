@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useRoadmapGates, type PhaseGate } from "@/hooks/useRoadmapGates";
+import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -267,6 +268,45 @@ export default function GateDiagnostics() {
   );
 }
 
+async function flipQaCheck(id: string, status: "pass" | "fail", criterion: string) {
+  const note = window.prompt(
+    `Operator note for "${criterion}" → ${status.toUpperCase()} (required, will be saved):`,
+    `Operator override ${new Date().toISOString().slice(0, 10)}: `,
+  );
+  if (!note || note.trim().length < 5) {
+    toast({ title: "Cancelled", description: "Note required (5+ chars)." });
+    return;
+  }
+  const { error } = await supabase
+    .from("qa_checks")
+    .update({ status, note: note.trim(), last_checked_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) {
+    toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    return;
+  }
+  toast({ title: `Marked ${status}`, description: criterion });
+}
+
+function JudgementButtons({ q }: { q: QaCheck }) {
+  return (
+    <span className="ml-2 inline-flex gap-1">
+      <button
+        onClick={() => flipQaCheck(q.id, "pass", q.criterion)}
+        className="px-1.5 py-0.5 text-[10px] rounded border border-emerald-500/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+      >
+        pass
+      </button>
+      <button
+        onClick={() => flipQaCheck(q.id, "fail", q.criterion)}
+        className="px-1.5 py-0.5 text-[10px] rounded border border-amber-500/60 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+      >
+        fail
+      </button>
+    </span>
+  );
+}
+
 function PhaseDiagnostic({
   gate,
   qa,
@@ -341,6 +381,7 @@ function PhaseDiagnostic({
                   <li key={q.id}>
                     {q.criterion}
                     {q.note && <span className="text-muted-foreground"> — {q.note}</span>}
+                    <JudgementButtons q={q} />
                   </li>
                 ))}
               </ul>
@@ -353,6 +394,7 @@ function PhaseDiagnostic({
                 {qaUnknown.slice(0, 10).map((q) => (
                   <li key={q.id} className="text-muted-foreground">
                     [{q.kind}] {q.criterion}
+                    <JudgementButtons q={q} />
                   </li>
                 ))}
                 {qaUnknown.length > 10 && (
