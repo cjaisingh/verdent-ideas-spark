@@ -274,6 +274,7 @@ export default function GateDiagnostics() {
             {showPassing ? "Hide passing" : "Show passing too"}
           </Button>
         </div>
+      </div>
 
       {phases.length === 0 && (
         <Card>
