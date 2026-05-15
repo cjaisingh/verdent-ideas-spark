@@ -381,6 +381,7 @@ function PhaseDiagnostic({
                   <li key={q.id}>
                     {q.criterion}
                     {q.note && <span className="text-muted-foreground"> — {q.note}</span>}
+                    <JudgementButtons q={q} />
                   </li>
                 ))}
               </ul>
@@ -393,6 +394,7 @@ function PhaseDiagnostic({
                 {qaUnknown.slice(0, 10).map((q) => (
                   <li key={q.id} className="text-muted-foreground">
                     [{q.kind}] {q.criterion}
+                    <JudgementButtons q={q} />
                   </li>
                 ))}
                 {qaUnknown.length > 10 && (
