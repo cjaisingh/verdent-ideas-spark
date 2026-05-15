@@ -438,6 +438,43 @@ function PhaseDiagnostic({
               </ul>
             </div>
           )}
+          {qa.length > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <button className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mt-1">
+                  <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
+                  Ownership ({qa.length})
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ul className="mt-1 space-y-1 text-[11px]">
+                  {qa
+                    .slice()
+                    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+                    .map((q) => (
+                      <li key={q.id} className="rounded border border-border/40 px-2 py-1">
+                        <div className="flex items-center gap-2">
+                          <span className="uppercase text-[9px] tracking-wide text-muted-foreground">
+                            {q.kind}
+                          </span>
+                          <span className="font-medium">{q.status}</span>
+                          <span className="truncate flex-1">{q.criterion}</span>
+                        </div>
+                        <div className="text-muted-foreground">
+                          {q.last_actor_label ?? "—"}
+                          {q.last_action && <> · {q.last_action}</>}
+                          {" · "}
+                          {q.updated_at
+                            ? new Date(q.updated_at).toLocaleString()
+                            : "never updated"}
+                          {q.note && <> · "{q.note}"</>}
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
         </Section>
 
         <Section
