@@ -28,6 +28,9 @@ type QaCheck = {
   last_checked_at: string | null;
   note: string | null;
   probe: string | null;
+  updated_at: string | null;
+  last_actor_label: string | null;
+  last_action: string | null;
 };
 
 type OpenTask = {
