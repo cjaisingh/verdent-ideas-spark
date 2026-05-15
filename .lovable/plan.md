@@ -1,68 +1,89 @@
 ## Goal
 
-Make the "Untested" list on `/roadmap/gate-diagnostics` self-explanatory: for every pending judgement row, show **why** it has no automated answer and **what evidence** the operator should attach before flipping Pass/Fail.
+Adopt the parts of the external AWIP setup pack that genuinely add to AWIP Core, without re-platforming what we already have. Three small, additive artefacts. No DB changes, no runtime behaviour change, no overlay/bundle framework — just naming + one typed contract on the highest-stakes agent surface (Night Agent) to prove the pattern.
 
-Frontend-only — no schema changes. Uses fields already on `qa_checks` (`kind`, `probe`, `criterion`, `note`).
+## Why these three (and not the rest)
 
-## Changes (single file: `src/pages/GateDiagnostics.tsx`)
+The pack's ontology, truth-policy, run-memory, governance, and source-mapping ideas are already implemented under different names (`docs/ontology.md`, `decision_authorities`, `*_events`, `governance_links`, `capability_manifest`). Re-importing them would be churn.
 
-### 1. Helper: classify why a row is pending
+The genuinely missing concept is **"the agent's input packet is implicit today — nobody can point to a typed definition of what the Night Agent is guaranteed to receive."** Fixing that for one agent is cheap and proves whether the pattern is worth generalising.
+
+## Changes
+
+### 1. Memory: contract-first principle
+
+New file `mem/preferences/contract-first.md`:
+
+> Before adding a new agent surface (cron, edge fn, autonomous loop), define its **contract**: canonical question, mandatory evidence, output shape, escalation rule. Code the input packet as a typed object in `supabase/functions/_shared/contracts/`, not as ad-hoc SELECTs in the handler. Rationale: prevents "agent improvises retrieval" failure mode; makes audit lineage trivial.
+
+Add one-liner to `mem://index.md` under `## Memories`.
+
+### 2. Docs: agent contract checklist
+
+New file `docs/agents/contract-checklist.md` — short markdown, ~40 lines:
+
+- Canonical question (one sentence)
+- Mandatory evidence (object classes the handler MUST receive)
+- Optional evidence
+- Output shape (typed return)
+- Escalation rule (when to bail to operator)
+- Truth profile (which `decision_authorities` rules apply)
+- Audit hook (which `*_events` table records the run)
+
+Reference from `AGENTS.md` under "Working agreements".
+
+### 3. Code: Night-Agent input contract (typed, no behaviour change)
+
+New file `supabase/functions/_shared/contracts/night-agent.ts`:
 
 ```ts
-function pendingReason(q: QaCheck): { why: string; evidence: string } {
-  if (q.kind === "judgement") return {
-    why: "Human judgement check — no automated probe exists by design.",
-    evidence: "Operator decision: paste the artefact link, screenshot, or 1-line rationale into the note, then click Pass or Fail.",
+// Typed contract for the Night Agent's per-action input packet.
+// Source of truth for what the agent is guaranteed to receive.
+// See docs/agents/contract-checklist.md.
+
+export type NightAgentInput = {
+  action: DiscussionAction;          // the row being audited
+  risk: 'low' | 'medium' | 'high';   // critical never reaches here
+  nightOverrideReason: string | null; // required if risk=high
+  recentEvents: DiscussionActionEvent[]; // last 20, for context
+  linkedFindings: SentinelFinding[];     // via discussion_action_findings
+  truthProfile: {
+    entity: 'Action';
+    authorities: DecisionAuthority[];    // from resolve_truth
   };
-  if (q.kind === "automated" && !q.probe) return {
-    why: "Marked automated but no probe SQL/endpoint is registered.",
-    evidence: "Either add a probe in qa_checks.probe, or treat as judgement: attach evidence and override.",
-  };
-  if (q.probe && !q.last_checked_at) return {
-    why: "Probe defined but never run by qa-validate cron.",
-    evidence: "Wait for next 30-min cron tick, or run qa-validate manually. Override only if the cron is known broken.",
-  };
-  return {
-    why: "No status recorded yet.",
-    evidence: "Provide a one-line rationale in the note before overriding.",
-  };
-}
+};
+
+export type NightAgentOutput =
+  | { verdict: 'advance'; toStatus: string; rationale: string }
+  | { verdict: 'hold'; reason: string }
+  | { verdict: 'escalate'; reason: string; suggestedOwner?: string };
+
+export const NIGHT_AGENT_CONTRACT = {
+  canonicalQuestion:
+    "Should this night-eligible discussion_action advance, hold, or escalate?",
+  escalationRule:
+    "Escalate if risk=high AND no nightOverrideReason, OR if linkedFindings contains any severity>=high open finding.",
+  auditTable: "discussion_action_events",
+} as const;
 ```
 
-### 2. QA section header explainer
-
-Above the Failing/Untested lists, add a muted helper line that links to `/roadmap/qa-audit`:
-
-> Pending rows have no automated verdict. Each row below shows why it's pending and what evidence to attach before you flip it.
-
-### 3. Per-row "why pending" block
-
-Replace the current one-line `qaUnknown` rendering with a 2-line block per row:
-
-```
-[judgement] criterion text
-  why:      Human judgement check — no automated probe exists by design.
-  evidence: Paste artefact link or 1-line rationale into the note, then Pass/Fail.
-  [probe: <q.probe>]   ← only if probe exists
-  [last note: <q.note>] ← only if note exists
-  <JudgementButtons q={q} />
-```
-
-Styling: keep the existing `<li>` muted style; render `why` / `evidence` as small `text-[11px]` lines under the criterion. Cap the visible list at 10 (existing behaviour) with the "… N more" tail.
-
-### 4. Same treatment for `qaFailed`
-
-Failing rows get a smaller hint: `evidence: confirm the probe failure is real before flipping back to pass — paste your reasoning into the note`.
+Then **refactor `night-agent-open` and `night-agent-close` to build a `NightAgentInput` once** at the top of each iteration and pass it to the existing logic. No semantic change — just makes the implicit packet explicit and typed. Existing tests stay green.
 
 ## Out of scope
 
-- No DB columns added; `kind`/`probe` already drive the classification.
-- No changes to `JudgementButtons`, the bulk-close action, the audit log, or the Ownership collapsible.
-- No edits to cron / edge functions.
+- No bundle library, overlay library, runtime packet assembler, contract catalog, or YAML specs.
+- No changes to Sentinel, Morning Review, Lessons synthesiser (we'll generalise only if the Night Agent contract proves useful).
+- No DB schema changes.
+- No new pages or UI.
+- No changes to truth-policy, ontology, or governance models — they already cover what the pack calls "truth-policy registry" and "run-memory ledger".
 
 ## Verification
 
-- Open `/roadmap/gate-diagnostics`, expand phases 1, 3, 4 — every Untested row shows "why" + "evidence".
-- Rows where `kind=judgement` show the human-judgement copy.
-- Rows where `kind=automated` and `probe IS NULL` show the missing-probe copy.
-- Existing Pass/Fail buttons still flip status and the audit log still records the change.
+- `bun run typecheck` passes — `NightAgentInput` types resolve against existing `DiscussionAction` / `SentinelFinding` types.
+- Night Agent existing behaviour unchanged: pick a `night_eligible=true` action in `/jobs`, confirm it still flows through `night-agent-open`/`close` cron at the same cadence with the same outputs in `discussion_action_events`.
+- `docs/agents/contract-checklist.md` rendered fine on GitHub.
+- New memory entry visible in `mem://index.md`.
+
+## What this unlocks (if we like it)
+
+If after a week the Night-Agent contract feels useful, the same pattern extends naturally to: Sentinel tick input, Morning Review writer input, Lessons synthesiser input, Overnight Recommender input. Each becomes one typed file in `_shared/contracts/`. That's the "bundle library" idea — but earned, not imported.
