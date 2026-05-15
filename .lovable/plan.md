@@ -1,59 +1,68 @@
-## Honest read
+## Goal
 
-You're right about the drift. Three concrete facts:
+Make the "Untested" list on `/roadmap/gate-diagnostics` self-explanatory: for every pending judgement row, show **why** it has no automated answer and **what evidence** the operator should attach before flipping Pass/Fail.
 
-- `docs/workstream-success-metrics.md` defines **WS1–WS6 only**. **W7 was bolted on** mid-flight with no acceptance criteria, no KPIs, no SLOs, no "done" line.
-- Backlog is actually small: **4 open sentinel findings, 1 open discussion_action, 13 cancelled**. Not a crisis — the noise is from us not closing the W7 loop, not from rot.
-- We've shipped W7.1, W7.1.5, W7.2 as substrate but **nothing reads from it**. `governance_coverage()` returns 0% by design and no flow forces it upward. That's why it feels endless — there's no exit condition.
+Frontend-only — no schema changes. Uses fields already on `qa_checks` (`kind`, `probe`, `criterion`, `note`).
 
-So: don't kill W7, but **define what "done" means**, finish that, then formally close it. No W7.3, W7.4, W7.5 — those go on a backlog until a domain module asks for them.
+## Changes (single file: `src/pages/GateDiagnostics.tsx`)
 
-## Plan: "W7 Governance — Closeout"
+### 1. Helper: classify why a row is pending
 
-### Step 1 — Re-scope (doc-only, no code)
-1. Add **WS7 — Governance Substrate** to `docs/workstream-success-metrics.md` with:
-   - **Acceptance criteria (4 binary checks):** ontology page live; `decision_authorities` + `resolve_truth()` callable; `governance_links` + `/governance` page live; claims pipeline live with at least one real claim source.
-   - **One KPI:** `governance_coverage(30).with_authority_rule / tasks_shipped` ≥ a target we agree (proposed: **40%** for closeout, ratcheting later).
-   - **One SLO:** `truth_conflicts_unresolved` open > 7 days → already wired.
-2. Update `docs/master-plan.md` to mark **W7.3/W7.4 deferred** with a one-line reason ("revisit when a domain module needs decay or operator-reliability signal"). Removes the gravitational pull.
-3. CHANGELOG entry.
+```ts
+function pendingReason(q: QaCheck): { why: string; evidence: string } {
+  if (q.kind === "judgement") return {
+    why: "Human judgement check — no automated probe exists by design.",
+    evidence: "Operator decision: paste the artefact link, screenshot, or 1-line rationale into the note, then click Pass or Fail.",
+  };
+  if (q.kind === "automated" && !q.probe) return {
+    why: "Marked automated but no probe SQL/endpoint is registered.",
+    evidence: "Either add a probe in qa_checks.probe, or treat as judgement: attach evidence and override.",
+  };
+  if (q.probe && !q.last_checked_at) return {
+    why: "Probe defined but never run by qa-validate cron.",
+    evidence: "Wait for next 30-min cron tick, or run qa-validate manually. Override only if the cron is known broken.",
+  };
+  return {
+    why: "No status recorded yet.",
+    evidence: "Provide a one-line rationale in the note before overriding.",
+  };
+}
+```
 
-### Step 2 — Make the substrate produce signal (small, finite)
-Three things, all using existing tables — no new substrate:
+### 2. QA section header explainer
 
-1. **Auto-link on promotion.** When `discussion_actions.promoted_task_id` is set, auto-insert a `governance_links` row `task ↔ entity` if the action's title/payload mentions a known entity (regex match against `docs/ontology.md` entity names). Trigger on `discussion_actions` UPDATE. This alone moves coverage off 0% without backfill.
-2. **One real claim source.** Wire `automation_runs` → `claims-ingest` for the `TestRun` entity (CI is already declared the hard owner in W7.1 defaults). Every successful test run files a claim with `source='ci'`, `confidence=1.0`. Proves the pipeline carries production traffic, not just operator-typed JSON.
-3. **`/governance` coverage badge** on the sidebar — small chip showing current 30-day coverage %. Makes the gap visible without anyone opening the page.
+Above the Failing/Untested lists, add a muted helper line that links to `/roadmap/qa-audit`:
 
-### Step 3 — Triage backlog in the same pass (≤ 1 hour)
-- 4 open sentinel findings → I read them, propose ack/resolve/escalate per finding, you click through.
-- 1 open discussion_action → same.
-- Reconcile 13 cancelled actions: confirm none are actually still wanted.
+> Pending rows have no automated verdict. Each row below shows why it's pending and what evidence to attach before you flip it.
 
-### Step 4 — Sign off W7 and stop
-- Verify the 4 acceptance checks pass.
-- Verify coverage KPI is non-zero (Step 2.1+2.2 should put it in the 20–50% range without manual work).
-- Mark `roadmap_phases` row for W7 done via the proper sign-off flow (not manual update).
-- Write a short `docs/w7-closeout.md` listing what's deferred and why.
+### 3. Per-row "why pending" block
 
-## What this plan deliberately does NOT do
+Replace the current one-line `qaUnknown` rendering with a 2-line block per row:
 
-- ❌ No FM domain module. Per your direction.
-- ❌ No W7.3 (confidence decay), W7.4 (operator reliability), W7.5+. Deferred to backlog.
-- ❌ No backfilling historical `governance_links` for already-shipped tasks. Coverage starts climbing from new work only.
-- ❌ No new tables. We use what exists.
-- ❌ No edits to `claims-ingest` schema or `resolve_truth()` logic.
+```
+[judgement] criterion text
+  why:      Human judgement check — no automated probe exists by design.
+  evidence: Paste artefact link or 1-line rationale into the note, then Pass/Fail.
+  [probe: <q.probe>]   ← only if probe exists
+  [last note: <q.note>] ← only if note exists
+  <JudgementButtons q={q} />
+```
 
-## Estimated scope
+Styling: keep the existing `<li>` muted style; render `why` / `evidence` as small `text-[11px]` lines under the criterion. Cap the visible list at 10 (existing behaviour) with the "… N more" tail.
 
-Step 1: 1 turn (docs).
-Step 2: 2–3 turns (1 trigger migration, 1 small edge function change, 1 sidebar chip).
-Step 3: 1 turn (interactive triage with you).
-Step 4: 1 turn.
+### 4. Same treatment for `qaFailed`
 
-Total: **~5 turns** to formally close W7 with a defensible "done".
+Failing rows get a smaller hint: `evidence: confirm the probe failure is real before flipping back to pass — paste your reasoning into the note`.
 
-## Decision needed before I start
+## Out of scope
 
-- **Coverage target for closeout** — I proposed 40% over 30d. Lower (e.g. 20%) closes faster but signals weaker; higher (60%+) likely needs backfill. Your call.
-- **CI → claims wiring** — confirm `automation_runs.job` rows for `record-test-run` should fire claims for the `TestRun` entity. If you'd rather start with a different entity (e.g. `RoadmapTask` from `roadmap_task_activity`), say which.
+- No DB columns added; `kind`/`probe` already drive the classification.
+- No changes to `JudgementButtons`, the bulk-close action, the audit log, or the Ownership collapsible.
+- No edits to cron / edge functions.
+
+## Verification
+
+- Open `/roadmap/gate-diagnostics`, expand phases 1, 3, 4 — every Untested row shows "why" + "evidence".
+- Rows where `kind=judgement` show the human-judgement copy.
+- Rows where `kind=automated` and `probe IS NULL` show the missing-probe copy.
+- Existing Pass/Fail buttons still flip status and the audit log still records the change.
