@@ -273,6 +273,9 @@ export default function GateDiagnostics() {
           >
             Close all pending judgements
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/roadmap/qa-audit">Audit log</Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowPassing((v) => !v)}>
             {showPassing ? "Hide passing" : "Show passing too"}
           </Button>
