@@ -443,14 +443,25 @@ function PhaseDiagnostic({
           {gate.qa_total === 0 && (
             <div className="text-muted-foreground italic">No qa_checks rows for this phase.</div>
           )}
+          {(qaFailed.length > 0 || qaUnknown.length > 0) && (
+            <p className="text-[11px] text-muted-foreground italic">
+              Pending rows have no automated verdict. Each one shows why it's pending and what evidence to attach before you flip it.{" "}
+              <Link to="/roadmap/qa-audit" className="underline hover:text-foreground">audit log →</Link>
+            </p>
+          )}
           {qaFailed.length > 0 && (
             <div>
               <div className="font-medium text-amber-600 dark:text-amber-400">Failing</div>
-              <ul className="list-disc pl-4 space-y-0.5">
+              <ul className="list-disc pl-4 space-y-1.5">
                 {qaFailed.map((q) => (
                   <li key={q.id}>
-                    {q.criterion}
-                    {q.note && <span className="text-muted-foreground"> — {q.note}</span>}
+                    <div>{q.criterion}</div>
+                    {q.note && (
+                      <div className="text-[11px] text-muted-foreground">last note: {q.note}</div>
+                    )}
+                    <div className="text-[11px] text-muted-foreground">
+                      <span className="font-medium">evidence:</span> {failingEvidence()}
+                    </div>
                     <JudgementButtons q={q} />
                   </li>
                 ))}
@@ -460,13 +471,33 @@ function PhaseDiagnostic({
           {qaUnknown.length > 0 && (
             <div>
               <div className="font-medium text-muted-foreground">Untested</div>
-              <ul className="list-disc pl-4 space-y-0.5">
-                {qaUnknown.slice(0, 10).map((q) => (
-                  <li key={q.id} className="text-muted-foreground">
-                    [{q.kind}] {q.criterion}
-                    <JudgementButtons q={q} />
-                  </li>
-                ))}
+              <ul className="list-disc pl-4 space-y-1.5">
+                {qaUnknown.slice(0, 10).map((q) => {
+                  const { why, evidence } = pendingReason(q);
+                  return (
+                    <li key={q.id}>
+                      <div className="text-muted-foreground">
+                        <span className="uppercase text-[9px] tracking-wide mr-1">[{q.kind}]</span>
+                        {q.criterion}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        <span className="font-medium">why:</span> {why}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        <span className="font-medium">evidence:</span> {evidence}
+                      </div>
+                      {q.probe && (
+                        <div className="text-[11px] text-muted-foreground font-mono truncate">
+                          probe: {q.probe}
+                        </div>
+                      )}
+                      {q.note && (
+                        <div className="text-[11px] text-muted-foreground">last note: {q.note}</div>
+                      )}
+                      <JudgementButtons q={q} />
+                    </li>
+                  );
+                })}
                 {qaUnknown.length > 10 && (
                   <li className="text-muted-foreground">… {qaUnknown.length - 10} more</li>
                 )}
