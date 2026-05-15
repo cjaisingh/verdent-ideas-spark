@@ -239,9 +239,41 @@ export default function GateDiagnostics() {
             the underlying evidence.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowPassing((v) => !v)}>
-          {showPassing ? "Hide passing" : "Show passing too"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const pending = qa.filter((q) => q.kind === "judgement" && (q.status === "unknown" || !q.status));
+              if (pending.length === 0) {
+                toast({ title: "Nothing to close", description: "No pending judgement rows." });
+                return;
+              }
+              const note = window.prompt(
+                `Override ${pending.length} pending judgement row(s) → PASS. Enter note (5+ chars, saved on every row):`,
+                `Operator override ${new Date().toISOString().slice(0, 10)}: bulk-closed pending judgements.`,
+              );
+              if (!note || note.trim().length < 5) {
+                toast({ title: "Cancelled", description: "Note required (5+ chars)." });
+                return;
+              }
+              const { error } = await supabase
+                .from("qa_checks")
+                .update({ status: "pass", note: note.trim(), last_checked_at: new Date().toISOString() })
+                .in("id", pending.map((p) => p.id));
+              if (error) {
+                toast({ title: "Update failed", description: error.message, variant: "destructive" });
+                return;
+              }
+              toast({ title: `Closed ${pending.length} judgement(s)`, description: "Refresh to see updated gates." });
+            }}
+          >
+            Close all pending judgements
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowPassing((v) => !v)}>
+            {showPassing ? "Hide passing" : "Show passing too"}
+          </Button>
+        </div>
       </div>
 
       {phases.length === 0 && (
