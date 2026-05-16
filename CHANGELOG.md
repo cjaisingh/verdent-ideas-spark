@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed
+- **Cleared 3 false-positive `cron_silence` sentinel findings** (`sentinel-tick`, `overnight-phase-runner-15m`, `morning-review`) — crons were healthy per `cron.job_run_details` + `automation_runs`; auto-resolve loop gap noted on closed discussion action `45032d7d`.
+
 ### Security
 - **Phase 2 closeout — Supabase linter cleanup.** Locked `infer_task_entity` `search_path` (was the lone mutable-search_path warn); tightened the `frontend_error_logs` anonymous INSERT policy with size guards (`message` 1–8000, `stack` ≤16000, `url` ≤2000) so it stops tripping the always-true RLS rule; and revoked `EXECUTE` on every public SECURITY DEFINER function from `anon`/`public`, regranting only to `authenticated` and `service_role` (eliminates all 24 anon-callable warnings). `COMMENT ON SCHEMA public` documents the deliberate posture: the remaining 52 warnings are 0029 (authenticated → SECURITY DEFINER) and intentional — every such function gates internally via `has_role()`. Linter went 63 → 52 WARNs, 0 ERRORs. Acceptance for roadmap task "Fix outstanding Supabase security linter warnings" met.
 
