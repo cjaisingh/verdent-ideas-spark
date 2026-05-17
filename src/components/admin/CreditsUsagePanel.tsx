@@ -299,6 +299,8 @@ export function CreditsUsagePanel() {
           )}
         </CardContent>
       </Card>
+        );
+      })()}
 
       <AddCreditEntryDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={load} />
     </div>
