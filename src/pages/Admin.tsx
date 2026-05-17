@@ -13,6 +13,7 @@ import CronSecretsCheckPanel from "@/components/admin/CronSecretsCheckPanel";
 import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 import ManualOvernightTriggers from "@/components/admin/ManualOvernightTriggers";
 import OvernightBackfillPanel from "@/components/admin/OvernightBackfillPanel";
+import { WorkerRestartChecklist } from "@/components/admin/WorkerRestartChecklist";
 
 type AppRole = "admin" | "operator";
 const ROLES: AppRole[] = ["admin", "operator"];
