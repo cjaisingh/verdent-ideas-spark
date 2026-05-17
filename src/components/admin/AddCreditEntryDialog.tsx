@@ -65,6 +65,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
       step_label: stepLabel.trim(),
       credits: c,
       mode,
+      category,
       note: note.trim() || null,
     });
     setSaving(false);
@@ -78,8 +79,18 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
     setNote("");
     setTaskId(UNASSIGNED);
     setMode("build");
+    setCategory("build");
     onOpenChange(false);
     onSaved();
+  }
+
+  // When operator picks a task, pre-select its default_category if set.
+  function handleTaskChange(id: string) {
+    setTaskId(id);
+    if (id !== UNASSIGNED) {
+      const t = tasks.find((x) => x.id === id);
+      if (t?.default_category) setCategory(t.default_category);
+    }
   }
 
   return (
