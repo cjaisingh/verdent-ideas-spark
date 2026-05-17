@@ -18,13 +18,16 @@ type ResizableHandleProps = React.ComponentProps<typeof ResizablePrimitive.Panel
 };
 
 const ResizableHandle = React.forwardRef<HTMLDivElement, ResizableHandleProps>(
-  ({ withHandle, className, ...props }, ref) => (
+  ({ withHandle, className, ...props }, _ref) => (
+    // PanelResizeHandle is a function component and does not accept refs; the
+    // forwardRef wrapper exists purely to silence "Function components cannot
+    // be given refs" warnings from parents (e.g. shadcn Resizable usage in
+    // OperatorLayout). The ref is intentionally ignored.
     <ResizablePrimitive.PanelResizeHandle
       className={cn(
         "relative flex w-px items-center justify-center bg-border after:absolute after:inset-y-0 after:left-1/2 after:w-1 after:-translate-x-1/2 data-[panel-group-direction=vertical]:h-px data-[panel-group-direction=vertical]:w-full data-[panel-group-direction=vertical]:after:left-0 data-[panel-group-direction=vertical]:after:h-1 data-[panel-group-direction=vertical]:after:w-full data-[panel-group-direction=vertical]:after:-translate-y-1/2 data-[panel-group-direction=vertical]:after:translate-x-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 [&[data-panel-group-direction=vertical]>div]:rotate-90",
         className,
       )}
-      {...(ref ? { hitAreaMargins: undefined, ...{ ref: ref as unknown as React.Ref<HTMLDivElement> } } : {})}
       {...props}
     >
       {withHandle && (
