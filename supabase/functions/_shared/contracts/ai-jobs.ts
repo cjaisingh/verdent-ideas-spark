@@ -171,6 +171,14 @@ export function projectDraft(kind: AiJobKind, input: unknown, output_text: strin
         body_md: output_text.trim(),
       };
     }
+    case "codemod_replace_any": {
+      const i = CodemodReplaceAnyInput.parse(input);
+      return {
+        kind,
+        target_ref: { file_path: i.file_path, any_sites_count: i.any_sites.length },
+        body_md: output_text.trim(),
+      };
+    }
   }
 }
 
