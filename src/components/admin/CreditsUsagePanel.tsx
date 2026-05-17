@@ -16,6 +16,8 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, Ca
 import { toast } from "sonner";
 import { AddCreditEntryDialog } from "./AddCreditEntryDialog";
 import { ProjectedSpendPanel } from "./ProjectedSpendPanel";
+import { SpendByCategoryPanel } from "./SpendByCategoryPanel";
+import { categoryChip } from "@/lib/workCategory";
 
 type StepRow = {
   id: string;
@@ -30,6 +32,7 @@ type StepRow = {
   duration_ms: number | null;
   mode: string | null;
   note: string | null;
+  category: string | null;
 };
 
 type PhaseRollup = {
@@ -64,6 +67,7 @@ export function CreditsUsagePanel() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,6 +142,7 @@ export function CreditsUsagePanel() {
   return (
     <div className="space-y-6">
       <ProjectedSpendPanel />
+      <SpendByCategoryPanel selectedCategory={categoryFilter} onSelectCategory={setCategoryFilter} />
 
       {/* Honest banner */}
       <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
@@ -234,9 +239,16 @@ export function CreditsUsagePanel() {
       </Card>
 
       {/* Per-step table */}
+      {(() => {
+        const filtered = (steps ?? []).filter((r) => !categoryFilter || r.category === categoryFilter);
+        return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Per build step ({(steps ?? []).length})</CardTitle>
+          <CardTitle className="text-base">
+            Per build step ({filtered.length}
+            {categoryFilter ? <> · filter <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs ml-1 ${categoryChip(categoryFilter)}`}>{categoryFilter}</span></> : null}
+            )
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -245,16 +257,17 @@ export function CreditsUsagePanel() {
                 <TableHead className="w-[140px]">When</TableHead>
                 <TableHead>Step</TableHead>
                 <TableHead>Source</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead className="text-right">Credits</TableHead>
                 <TableHead className="text-right">Tokens</TableHead>
                 <TableHead>Model</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(steps ?? []).length === 0 && (
-                <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">Nothing in the last 30 days.</TableCell></TableRow>
+              {filtered.length === 0 && (
+                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-6">{categoryFilter ? `No entries tagged ${categoryFilter}.` : "Nothing in the last 30 days."}</TableCell></TableRow>
               )}
-              {(steps ?? []).slice(0, 200).map((r) => (
+              {filtered.slice(0, 200).map((r) => (
                 <TableRow key={`${r.source}-${r.id}`}>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                     {new Date(r.occurred_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
@@ -265,6 +278,13 @@ export function CreditsUsagePanel() {
                       {r.source}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    {r.category ? (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] ${categoryChip(r.category)}`}>{r.category}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{fmtCredits(Number(r.credits))}</TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">{r.tokens_total?.toLocaleString() ?? "—"}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{r.model ?? "—"}</TableCell>
@@ -272,13 +292,15 @@ export function CreditsUsagePanel() {
               ))}
             </TableBody>
           </Table>
-          {(steps ?? []).length > 200 && (
+          {filtered.length > 200 && (
             <div className="px-4 py-2 text-xs text-muted-foreground border-t">
-              Showing first 200 of {(steps ?? []).length}.
+              Showing first 200 of {filtered.length}.
             </div>
           )}
         </CardContent>
       </Card>
+        );
+      })()}
 
       <AddCreditEntryDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={load} />
     </div>

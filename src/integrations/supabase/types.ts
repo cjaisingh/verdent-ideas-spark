@@ -1679,6 +1679,7 @@ export type Database = {
       }
       credit_entries: {
         Row: {
+          category: Database["public"]["Enums"]["work_category"]
           created_at: string
           created_by: string | null
           credits: number
@@ -1691,6 +1692,7 @@ export type Database = {
           task_id: string | null
         }
         Insert: {
+          category?: Database["public"]["Enums"]["work_category"]
           created_at?: string
           created_by?: string | null
           credits: number
@@ -1703,6 +1705,7 @@ export type Database = {
           task_id?: string | null
         }
         Update: {
+          category?: Database["public"]["Enums"]["work_category"]
           created_at?: string
           created_by?: string | null
           credits?: number
@@ -4651,6 +4654,7 @@ export type Database = {
           blocked_by: string[]
           capability_id: string | null
           created_at: string
+          default_category: Database["public"]["Enums"]["work_category"] | null
           description: string | null
           id: string
           key: string
@@ -4673,6 +4677,7 @@ export type Database = {
           blocked_by?: string[]
           capability_id?: string | null
           created_at?: string
+          default_category?: Database["public"]["Enums"]["work_category"] | null
           description?: string | null
           id?: string
           key: string
@@ -4695,6 +4700,7 @@ export type Database = {
           blocked_by?: string[]
           capability_id?: string | null
           created_at?: string
+          default_category?: Database["public"]["Enums"]["work_category"] | null
           description?: string | null
           id?: string
           key?: string
@@ -5840,6 +5846,7 @@ export type Database = {
       }
       v_credit_burn_per_step: {
         Row: {
+          category: string | null
           credits: number | null
           duration_ms: number | null
           id: string | null
@@ -5874,6 +5881,17 @@ export type Database = {
           projected_pct_21d: number | null
           projected_pct_30d: number | null
           year_month: string | null
+        }
+        Relationships: []
+      }
+      v_credit_spend_by_category: {
+        Row: {
+          category: string | null
+          entry_count_30d: number | null
+          last_30d_credits: number | null
+          last_30d_pct: number | null
+          mtd_credits: number | null
+          mtd_pct: number | null
         }
         Relationships: []
       }
@@ -6120,6 +6138,15 @@ export type Database = {
         | "review"
         | "done"
         | "wont_do"
+      work_category:
+        | "plan"
+        | "build"
+        | "pivot"
+        | "refactor"
+        | "bugfix"
+        | "research"
+        | "ops"
+        | "other"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6264,6 +6291,16 @@ export const Constants = {
         "review",
         "done",
         "wont_do",
+      ],
+      work_category: [
+        "plan",
+        "build",
+        "pivot",
+        "refactor",
+        "bugfix",
+        "research",
+        "ops",
+        "other",
       ],
     },
   },

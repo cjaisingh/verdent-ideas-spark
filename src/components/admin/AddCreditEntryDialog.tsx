@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { WORK_CATEGORIES, type WorkCategory } from "@/lib/workCategory";
 
-type Task = { id: string; key: string; title: string; sprint_id: string };
+type Task = { id: string; key: string; title: string; sprint_id: string; default_category: WorkCategory | null };
 type Sprint = { id: string; phase_id: string };
 
 const UNASSIGNED = "__unassigned__";
@@ -28,6 +29,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
   const [stepLabel, setStepLabel] = useState("");
   const [credits, setCredits] = useState("");
   const [mode, setMode] = useState("build");
+  const [category, setCategory] = useState<WorkCategory>("build");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -35,7 +37,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
     if (!open) return;
     (async () => {
       const [tRes, sRes] = await Promise.all([
-        supabase.from("roadmap_tasks").select("id,key,title,sprint_id").order("updated_at", { ascending: false }).limit(200),
+        supabase.from("roadmap_tasks").select("id,key,title,sprint_id,default_category").order("updated_at", { ascending: false }).limit(200),
         supabase.from("roadmap_sprints").select("id,phase_id"),
       ]);
       setTasks((tRes.data ?? []) as Task[]);
@@ -63,6 +65,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
       step_label: stepLabel.trim(),
       credits: c,
       mode,
+      category,
       note: note.trim() || null,
     });
     setSaving(false);
@@ -76,8 +79,18 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
     setNote("");
     setTaskId(UNASSIGNED);
     setMode("build");
+    setCategory("build");
     onOpenChange(false);
     onSaved();
+  }
+
+  // When operator picks a task, pre-select its default_category if set.
+  function handleTaskChange(id: string) {
+    setTaskId(id);
+    if (id !== UNASSIGNED) {
+      const t = tasks.find((x) => x.id === id);
+      if (t?.default_category) setCategory(t.default_category);
+    }
   }
 
   return (
@@ -109,17 +122,30 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
               </Select>
             </div>
           </div>
-          <div>
-            <Label>Roadmap task (optional)</Label>
-            <Select value={taskId} onValueChange={setTaskId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNASSIGNED}>— unassigned —</SelectItem>
-                {tasks.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.key} · {t.title.slice(0, 60)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as WorkCategory)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WORK_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Roadmap task (optional)</Label>
+              <Select value={taskId} onValueChange={handleTaskChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED}>— unassigned —</SelectItem>
+                  {tasks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.key} · {t.title.slice(0, 60)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Note (optional)</Label>
