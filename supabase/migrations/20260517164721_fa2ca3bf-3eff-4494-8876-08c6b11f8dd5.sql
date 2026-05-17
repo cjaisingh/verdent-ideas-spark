@@ -1,0 +1,1 @@
+alter table public.ai_workers add column if not exists default_model text;
