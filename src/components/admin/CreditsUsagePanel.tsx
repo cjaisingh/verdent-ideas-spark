@@ -303,6 +303,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings | null; onSave
   const [rate, setRate] = useState(settings?.proxy_rate_per_1k_tokens.toString() ?? "0.05");
   const [budget, setBudget] = useState(settings?.monthly_budget_credits?.toString() ?? "");
   const [threshold, setThreshold] = useState(settings?.alert_threshold_pct.toString() ?? "80");
+  const [tgChat, setTgChat] = useState(settings?.operator_telegram_chat_id ?? "");
+  const [alertsOn, setAlertsOn] = useState(settings?.alerts_enabled ?? true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -310,6 +312,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings | null; onSave
     setRate(settings.proxy_rate_per_1k_tokens.toString());
     setBudget(settings.monthly_budget_credits?.toString() ?? "");
     setThreshold(settings.alert_threshold_pct.toString());
+    setTgChat(settings.operator_telegram_chat_id ?? "");
+    setAlertsOn(settings.alerts_enabled);
   }, [settings]);
 
   async function save() {
@@ -326,6 +330,8 @@ function SettingsForm({ settings, onSaved }: { settings: Settings | null; onSave
         proxy_rate_per_1k_tokens: r,
         monthly_budget_credits: b,
         alert_threshold_pct: t,
+        operator_telegram_chat_id: tgChat.trim() === "" ? null : tgChat.trim(),
+        alerts_enabled: alertsOn,
         updated_at: new Date().toISOString(),
       })
       .eq("id", true);
@@ -347,8 +353,27 @@ function SettingsForm({ settings, onSaved }: { settings: Settings | null; onSave
         <Input type="number" step="1" min="0" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Leave blank for no budget" />
       </div>
       <div>
-        <Label>Alert threshold (%)</Label>
+        <Label>KPI alert threshold (%)</Label>
         <Input type="number" step="1" min="1" max="100" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+        <p className="text-xs text-muted-foreground mt-1">Tints the KPI card when MTD crosses this %. Hard-coded budget alerts fire at 80% and 100% of projected month-end regardless.</p>
+      </div>
+      <div className="border-t pt-4 space-y-3">
+        <div className="text-sm font-medium">Budget alerts (80% / 100% projected)</div>
+        <div className="flex items-center gap-3">
+          <input
+            id="alerts_enabled"
+            type="checkbox"
+            checked={alertsOn}
+            onChange={(e) => setAlertsOn(e.target.checked)}
+            className="h-4 w-4"
+          />
+          <Label htmlFor="alerts_enabled" className="cursor-pointer">Alerts enabled</Label>
+        </div>
+        <div>
+          <Label>Telegram chat ID for alerts</Label>
+          <Input value={tgChat} onChange={(e) => setTgChat(e.target.value)} placeholder="e.g. 123456789 (leave blank to skip Telegram)" />
+          <p className="text-xs text-muted-foreground mt-1">In-app banner + Sentinel finding always fire; Telegram only if set.</p>
+        </div>
       </div>
       <Button onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save"}</Button>
     </div>
