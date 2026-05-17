@@ -21,7 +21,9 @@ export type FindingCandidate = {
     | "heygen_videos_failed"
     | "truth_conflicts_unresolved"
     | "budget_projection_80"
-    | "budget_projection_100";
+    | "budget_projection_100"
+    | "credit_runway_warn"
+    | "credit_runway_critical";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
