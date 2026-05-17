@@ -147,11 +147,17 @@ export function SpendByCategoryPanel({ selectedCategory, onSelectCategory }: Pro
                   <TableHead className="text-right">30d</TableHead>
                   <TableHead className="text-right">% of 30d</TableHead>
                   <TableHead className="text-right">Entries 30d</TableHead>
+                  <TableHead className="text-right" title="Actual ÷ logged across last closed phases. >1 means we underlog.">Drift</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sorted.map((r) => {
                   const active = selectedCategory === r.category;
+                  const d = drift[r.category];
+                  const dr = d?.drift_ratio == null ? null : Number(d.drift_ratio);
+                  const drTone = dr == null ? "text-muted-foreground" :
+                    dr > 1.2 ? "text-amber-600 dark:text-amber-400" :
+                    dr < 0.8 ? "text-cyan-600 dark:text-cyan-400" : "text-muted-foreground";
                   return (
                     <TableRow
                       key={r.category}
@@ -167,6 +173,10 @@ export function SpendByCategoryPanel({ selectedCategory, onSelectCategory }: Pro
                       <TableCell className="text-right tabular-nums font-medium">{fmt(r.last_30d_credits)}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{r.last_30d_pct != null ? `${r.last_30d_pct.toFixed(0)}%` : "—"}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{r.entry_count_30d}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${drTone}`} title={d ? `${d.phase_sample_count} phases · ${d.confidence}` : "no samples"}>
+                        {dr != null ? `×${dr.toFixed(2)}` : "—"}
+                        {d && <span className="text-[10px] text-muted-foreground ml-1">({d.phase_sample_count})</span>}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
