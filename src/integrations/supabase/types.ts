@@ -1638,41 +1638,44 @@ export type Database = {
       credit_alerts: {
         Row: {
           acknowledged_at: string | null
-          budget: number
-          burn_per_day: number
+          budget: number | null
+          burn_per_day: number | null
           created_at: string
           fired_at: string
           id: string
-          projected_pct: number
+          kind: string
+          projected_pct: number | null
           sentinel_finding_id: string | null
           telegram_message_id: string | null
-          threshold_pct: number
+          threshold_pct: number | null
           year_month: string
         }
         Insert: {
           acknowledged_at?: string | null
-          budget: number
-          burn_per_day: number
+          budget?: number | null
+          burn_per_day?: number | null
           created_at?: string
           fired_at?: string
           id?: string
-          projected_pct: number
+          kind?: string
+          projected_pct?: number | null
           sentinel_finding_id?: string | null
           telegram_message_id?: string | null
-          threshold_pct: number
+          threshold_pct?: number | null
           year_month: string
         }
         Update: {
           acknowledged_at?: string | null
-          budget?: number
-          burn_per_day?: number
+          budget?: number | null
+          burn_per_day?: number | null
           created_at?: string
           fired_at?: string
           id?: string
-          projected_pct?: number
+          kind?: string
+          projected_pct?: number | null
           sentinel_finding_id?: string | null
           telegram_message_id?: string | null
-          threshold_pct?: number
+          threshold_pct?: number | null
           year_month?: string
         }
         Relationships: []
@@ -6059,6 +6062,27 @@ export type Database = {
           step_label: string | null
           task_id: string | null
           tokens_total: number | null
+        }
+        Relationships: []
+      }
+      v_credit_drift_ratio_by_category: {
+        Row: {
+          actual_total: number | null
+          category: string | null
+          confidence: string | null
+          drift_ratio: number | null
+          logged_total: number | null
+          phase_sample_count: number | null
+        }
+        Relationships: []
+      }
+      v_credit_drift_ratio_overall: {
+        Row: {
+          actual_total: number | null
+          confidence: string | null
+          drift_ratio: number | null
+          logged_total: number | null
+          phase_sample_count: number | null
         }
         Relationships: []
       }
