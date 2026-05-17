@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { RefreshCw, Copy, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { AiJobsSentinelAlerts } from "@/components/admin/AiJobsSentinelAlerts";
+import { OllamaConfigSummary } from "@/components/admin/OllamaConfigSummary";
 
 type Job = {
   id: string;
@@ -54,6 +55,7 @@ type Worker = {
   name: string;
   enabled: boolean;
   model_tags: string[];
+  default_model: string | null;
   last_seen_at: string | null;
   created_at: string;
 };
@@ -351,6 +353,7 @@ export default function AdminAiJobs() {
         </TabsContent>
 
         <TabsContent value="workers" className="space-y-3">
+          <OllamaConfigSummary workers={workers} loading={loading} />
           <Card>
             <CardContent className="p-0">
               {loading ? (
@@ -367,7 +370,8 @@ export default function AdminAiJobs() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Enabled</TableHead>
-                      <TableHead>Models</TableHead>
+                      <TableHead>Default model</TableHead>
+                      <TableHead>Available tags</TableHead>
                       <TableHead>Last seen</TableHead>
                       <TableHead>Created</TableHead>
                     </TableRow>
@@ -377,7 +381,16 @@ export default function AdminAiJobs() {
                       <TableRow key={w.id}>
                         <TableCell className="font-medium">{w.name}</TableCell>
                         <TableCell>{w.enabled ? <Badge>on</Badge> : <Badge variant="outline">off</Badge>}</TableCell>
-                        <TableCell className="text-xs">{w.model_tags.join(", ") || "—"}</TableCell>
+                        <TableCell className="text-xs font-mono">{w.default_model ?? "—"}</TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex flex-wrap gap-1">
+                            {w.model_tags.length === 0
+                              ? <span className="text-muted-foreground">—</span>
+                              : w.model_tags.map((t) => (
+                                  <Badge key={t} variant="outline" className="font-mono text-[10px]">{t}</Badge>
+                                ))}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs">{fmtTime(w.last_seen_at)}</TableCell>
                         <TableCell className="text-xs">{fmtTime(w.created_at)}</TableCell>
                       </TableRow>
