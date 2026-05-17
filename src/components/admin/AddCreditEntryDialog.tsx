@@ -122,17 +122,30 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
               </Select>
             </div>
           </div>
-          <div>
-            <Label>Roadmap task (optional)</Label>
-            <Select value={taskId} onValueChange={setTaskId}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={UNASSIGNED}>— unassigned —</SelectItem>
-                {tasks.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>{t.key} · {t.title.slice(0, 60)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v as WorkCategory)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WORK_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Roadmap task (optional)</Label>
+              <Select value={taskId} onValueChange={handleTaskChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={UNASSIGNED}>— unassigned —</SelectItem>
+                  {tasks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.key} · {t.title.slice(0, 60)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label>Note (optional)</Label>
