@@ -185,3 +185,50 @@ function MiniProj({ label, eom, pct, active }: { label: string; eom: number; pct
     </div>
   );
 }
+
+function RunwayBlock({ runway }: { runway: Runway | null }) {
+  if (!runway || runway.balance == null) {
+    return (
+      <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+        No current balance recorded. Use <strong>Record balance</strong> below to enable runway estimates.
+      </div>
+    );
+  }
+  const days = runway.days_runway_21d;
+  const stale = runway.as_of ? (Date.now() - +new Date(runway.as_of)) > 7 * 24 * 60 * 60 * 1000 : false;
+  const tone =
+    days == null ? "text-muted-foreground" :
+    days < 7  ? "text-destructive" :
+    days < 14 ? "text-amber-600 dark:text-amber-400" :
+    "text-emerald-600 dark:text-emerald-400";
+  return (
+    <div className="rounded-md border p-3 space-y-1">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs text-muted-foreground">Estimated balance now</div>
+          <div className="text-2xl font-semibold tabular-nums">{fmt(runway.estimated_balance_now)}</div>
+          <div className="text-xs text-muted-foreground">
+            Last reading {fmt(runway.balance)} on {runway.as_of ? new Date(runway.as_of).toLocaleString() : "—"} ·
+            spent {fmt(runway.spent_since_as_of)} since
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs text-muted-foreground">Runway (21d burn)</div>
+          <div className={`text-2xl font-semibold tabular-nums ${tone}`}>
+            {days != null ? `≈ ${days} days` : "—"}
+          </div>
+          {runway.runway_exhaustion_date_21d && (
+            <div className="text-xs text-muted-foreground">
+              exhaust ~ {new Date(runway.runway_exhaustion_date_21d).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      </div>
+      {stale && (
+        <div className="text-xs text-amber-600 dark:text-amber-400">
+          Balance reading is over 7 days old — record a fresh one to keep runway honest.
+        </div>
+      )}
+    </div>
+  );
+}
