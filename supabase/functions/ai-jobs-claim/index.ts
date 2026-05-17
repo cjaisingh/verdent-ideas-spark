@@ -31,14 +31,22 @@ Deno.serve(withLogger("ai-jobs-claim", async (req) => {
   const body = await req.json().catch(() => ({}));
   const workerName = String(body?.worker_name ?? "").trim();
   const modelTags: string[] = Array.isArray(body?.model_tags) ? body.model_tags : [];
+  const defaultModel: string | null =
+    typeof body?.default_model === "string" && body.default_model.trim()
+      ? body.default_model.trim() : null;
   if (!workerName) return json({ error: "worker_name_required" }, 400);
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
 
   // Upsert worker, mark seen.
+  const upsertPayload: Record<string, unknown> = {
+    name: workerName,
+    model_tags: modelTags,
+    last_seen_at: new Date().toISOString(),
+  };
+  if (defaultModel) upsertPayload.default_model = defaultModel;
   const { data: workerRow, error: wErr } = await sb.from("ai_workers")
-    .upsert({ name: workerName, model_tags: modelTags, last_seen_at: new Date().toISOString() },
-      { onConflict: "name" })
+    .upsert(upsertPayload, { onConflict: "name" })
     .select("id, enabled").single();
   if (wErr) return json({ error: "worker_upsert_failed", detail: wErr.message }, 500);
   if (!workerRow.enabled) return json({ error: "worker_disabled" }, 403);
