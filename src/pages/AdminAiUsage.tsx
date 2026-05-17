@@ -83,6 +83,25 @@ export default function AdminAiUsage() {
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
 
+  // Deeplink from phase-close auto-prompt: /admin/ai-usage?phase=<id>&prompt=balance
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [promptPhase, setPromptPhase] = useState<{ id: string; label: string } | null>(null);
+  useEffect(() => {
+    const phaseId = searchParams.get("phase");
+    const prompt = searchParams.get("prompt");
+    if (prompt !== "balance" || !phaseId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("roadmap_phases").select("key,title").eq("id", phaseId).maybeSingle();
+      setPromptPhase({ id: phaseId, label: data ? `${data.key} — ${data.title}` : "phase" });
+    })();
+  }, [searchParams]);
+  const closePrompt = () => {
+    setPromptPhase(null);
+    searchParams.delete("phase"); searchParams.delete("prompt");
+    setSearchParams(searchParams, { replace: true });
+  };
+
   const days = WINDOWS.find((w) => w.id === win)!.days;
 
   async function load() {
