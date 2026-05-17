@@ -182,7 +182,7 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
     try {
       const idempotencyKey = `${kind}:${crypto.randomUUID()}`;
       const { data, error } = await supabase.functions.invoke("ai-jobs-enqueue", {
-        body: { kind, input, idempotency_key: idempotencyKey },
+        body: { kind, input, idempotency_key: idempotencyKey, requested_model: requestedModel },
       });
       if (error) throw error;
       toast.success(
