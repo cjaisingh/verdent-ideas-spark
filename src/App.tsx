@@ -65,6 +65,7 @@ import AdminVideos from "./pages/AdminVideos";
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
+import ReleaseNotes from "./pages/ReleaseNotes";
 import NotFound from "./pages/NotFound";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -140,6 +141,7 @@ const App = () => (
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/whats-new" element={<WhatsNew />} />
+            <Route path="/release-notes" element={<ReleaseNotes />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
           </Route>
           <Route path="*" element={<NotFound />} />
