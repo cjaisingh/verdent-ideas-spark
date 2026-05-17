@@ -1635,6 +1635,48 @@ export type Database = {
           },
         ]
       }
+      credit_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          budget: number
+          burn_per_day: number
+          created_at: string
+          fired_at: string
+          id: string
+          projected_pct: number
+          sentinel_finding_id: string | null
+          telegram_message_id: string | null
+          threshold_pct: number
+          year_month: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          budget: number
+          burn_per_day: number
+          created_at?: string
+          fired_at?: string
+          id?: string
+          projected_pct: number
+          sentinel_finding_id?: string | null
+          telegram_message_id?: string | null
+          threshold_pct: number
+          year_month: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          budget?: number
+          burn_per_day?: number
+          created_at?: string
+          fired_at?: string
+          id?: string
+          projected_pct?: number
+          sentinel_finding_id?: string | null
+          telegram_message_id?: string | null
+          threshold_pct?: number
+          year_month?: string
+        }
+        Relationships: []
+      }
       credit_entries: {
         Row: {
           created_at: string
@@ -1713,24 +1755,30 @@ export type Database = {
       credit_settings: {
         Row: {
           alert_threshold_pct: number
+          alerts_enabled: boolean
           id: boolean
           monthly_budget_credits: number | null
+          operator_telegram_chat_id: string | null
           proxy_rate_per_1k_tokens: number
           updated_at: string
           updated_by: string | null
         }
         Insert: {
           alert_threshold_pct?: number
+          alerts_enabled?: boolean
           id?: boolean
           monthly_budget_credits?: number | null
+          operator_telegram_chat_id?: string | null
           proxy_rate_per_1k_tokens?: number
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
           alert_threshold_pct?: number
+          alerts_enabled?: boolean
           id?: boolean
           monthly_budget_credits?: number | null
+          operator_telegram_chat_id?: string | null
           proxy_rate_per_1k_tokens?: number
           updated_at?: string
           updated_by?: string | null
