@@ -42,6 +42,15 @@ type Runway = {
 
 type Win = "14" | "21" | "30";
 const STORAGE_KEY = "awip.projectedSpend.window";
+const DRIFT_KEY = "awip.projectedSpend.driftAdjust";
+
+type Drift = {
+  phase_sample_count: number;
+  logged_total: number | null;
+  actual_total: number | null;
+  drift_ratio: number | null;
+  confidence: "low" | "medium" | "high" | null;
+};
 
 const fmt = (n: number | null | undefined) =>
   n == null ? "—" : Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -49,23 +58,30 @@ const fmt = (n: number | null | undefined) =>
 export function ProjectedSpendPanel() {
   const [row, setRow] = useState<Row | null>(null);
   const [runway, setRunway] = useState<Runway | null>(null);
+  const [drift, setDrift] = useState<Drift | null>(null);
   const [loading, setLoading] = useState(true);
   const [win, setWin] = useState<Win>(() => {
     if (typeof window === "undefined") return "21";
     return (localStorage.getItem(STORAGE_KEY) as Win) || "21";
+  });
+  const [driftAdjust, setDriftAdjust] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem(DRIFT_KEY) !== "0";
   });
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const [proj, rw] = await Promise.all([
+      const [proj, rw, dr] = await Promise.all([
         supabase.from("v_credit_projection").select("*").maybeSingle(),
         supabase.from("v_credit_runway").select("*").maybeSingle(),
+        supabase.from("v_credit_drift_ratio_overall").select("*").maybeSingle(),
       ]);
       if (!cancelled) {
         setRow((proj.data as Row | null) ?? null);
         setRunway((rw.data as Runway | null) ?? null);
+        setDrift((dr.data as Drift | null) ?? null);
         setLoading(false);
       }
     })();
@@ -75,6 +91,9 @@ export function ProjectedSpendPanel() {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, win); } catch { /* noop */ }
   }, [win]);
+  useEffect(() => {
+    try { localStorage.setItem(DRIFT_KEY, driftAdjust ? "1" : "0"); } catch { /* noop */ }
+  }, [driftAdjust]);
 
   if (loading) {
     return (
