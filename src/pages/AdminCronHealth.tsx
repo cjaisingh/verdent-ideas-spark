@@ -139,6 +139,9 @@ const AdminCronHealth = () => {
         </button>
       </header>
 
+      {/* Runtime health: cron tick cross-check + phase runs */}
+      <RuntimeHealthWidget />
+
       {/* W2/W3/W4 edge function health & error-rate dashboard */}
       <Card>
         <EdgeHealthDashboard />
