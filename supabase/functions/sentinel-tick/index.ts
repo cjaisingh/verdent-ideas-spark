@@ -7,7 +7,7 @@ import {
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
-  checkTruthConflictsUnresolved,
+  checkTruthConflictsUnresolved, checkBudgetProjection,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -62,6 +62,16 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
 
     const truthConflictsRes = await sb.from("truth_conflicts")
       .select("entity,entity_id,field,top_source,next_source").limit(200);
+
+    // Budget projection signals + state
+    const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes] = await Promise.all([
+      sb.from("v_tool_policy_signals").select("budget,burn_7d_per_day,projected_month_end").maybeSingle(),
+      sb.from("credit_settings")
+        .select("operator_telegram_chat_id,alerts_enabled")
+        .eq("id", true).maybeSingle(),
+      sb.from("credit_alerts").select("year_month,threshold_pct").eq("year_month", ym),
+    ]);
 
     const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
@@ -127,6 +137,11 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[]),
       ...checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[]),
       ...checkTruthConflictsUnresolved(now, (truthConflictsRes.data ?? []) as { entity: string; entity_id: string; field: string; top_source: string | null; next_source: string | null }[]),
+      ...checkBudgetProjection(
+        now,
+        (budgetSignalsRes.data ?? null) as { budget: number | null; burn_7d_per_day: number | null; projected_month_end: number | null } | null,
+        (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number }[],
+      ),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
@@ -160,6 +175,52 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         if (c.severity === "high" || c.severity === "critical") {
           await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
           alerts++;
+        }
+
+        // Budget projection side-effects: insert credit_alerts row + optional Telegram push.
+        if (c.kind === "budget_projection_80" || c.kind === "budget_projection_100") {
+          const p = c.payload as { year_month: string; threshold_pct: number; projected_pct: number; burn_per_day: number; budget: number };
+          const settings = (budgetSettingsRes.data ?? null) as { operator_telegram_chat_id: string | null; alerts_enabled: boolean } | null;
+
+          let telegramMessageId: string | null = null;
+          if (settings?.alerts_enabled && settings?.operator_telegram_chat_id && SERVICE_TOKEN) {
+            try {
+              const emoji = p.threshold_pct === 100 ? "🚨" : "⚠️";
+              const text = `${emoji} <b>Lovable budget ${p.threshold_pct}% (projected)</b>\n` +
+                `Projected month-end: <b>${p.projected_pct.toFixed(0)}%</b> of ${p.budget} credits\n` +
+                `Burn rate (7d): ${p.burn_per_day.toFixed(1)}/day\n` +
+                `Month: ${p.year_month}`;
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-service-token": SERVICE_TOKEN,
+                  "Authorization": `Bearer ${SERVICE_ROLE}`,
+                },
+                body: JSON.stringify({
+                  chat_id: settings.operator_telegram_chat_id,
+                  text,
+                  parse_mode: "HTML",
+                }),
+              });
+              if (res.ok) {
+                const body = await res.json().catch(() => null) as { result?: { message_id?: number } } | null;
+                telegramMessageId = body?.result?.message_id ? String(body.result.message_id) : null;
+              } else {
+                console.error("telegram-send for budget alert failed", res.status, await res.text().catch(() => ""));
+              }
+            } catch (e) { console.error("telegram-send budget alert error", e); }
+          }
+
+          await sb.from("credit_alerts").insert({
+            year_month: p.year_month,
+            threshold_pct: p.threshold_pct,
+            projected_pct: p.projected_pct,
+            burn_per_day: p.burn_per_day,
+            budget: p.budget,
+            sentinel_finding_id: ins?.id ?? null,
+            telegram_message_id: telegramMessageId,
+          });
         }
       }
     }

@@ -5,6 +5,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ## [Unreleased]
 
 ### Added
+- **Budget alerts** (`docs/budget-alerts.md`) — sentinel-tick check fires at 80% (high) and 100% (critical) of **projected month-end** credit spend (`burn_7d_per_day × 30 / monthly_budget_credits`). Once per (year_month, threshold) enforced by unique index on new `credit_alerts` table. Surfaces: in-app `BudgetAlertBanner` on `/admin/ai-usage` (realtime, dismissable), sentinel finding (Morning Review), Telegram via existing `telegram-send` (opt-in via `credit_settings.operator_telegram_chat_id` + `alerts_enabled`). 8 new check tests, all green.
+
+### Added
 - **Tool Selection Policy** — new "Tool Policy" tab on `/admin/ai-usage` recommends Lovable/Claude/Cursor/Codex/manual per task. Editable `tool_policy_rules` (precedence-ordered, gated by task type, phase, credit % remaining, 7d burn rate). Deterministic recommender in `src/lib/toolPolicy.ts`. Logs every chosen recommendation to `tool_policy_recommendations`. 8 seed rules. See `docs/tool-policy.md`.
 
 ### Fixed
