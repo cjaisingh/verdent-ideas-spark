@@ -1,97 +1,94 @@
 
-# Tool Selection Policy
+# Budget Alerts at 80% and 100% projected month-end
 
-A "Tool Policy" tab on `/admin/ai-usage` that recommends Lovable / Claude / Cursor / Codex per task, driven by editable rules + live credit signals.
+Sentinel check that fires once per (threshold, calendar month) when **`burn_7d_per_day × 30 / monthly_budget_credits`** crosses 80% or 100%. Surfaces in three places: in-app banner on `/admin/ai-usage`, sentinel finding (Morning Review), Telegram message.
 
-## Surface
+## Trigger
 
-New tab `Tool Policy` next to `Credits & Usage` on `/admin/ai-usage`. Three sections:
+```
+projected_pct = round( burn_7d_per_day * 30 / monthly_budget_credits * 100, 2 )
+```
 
-1. **Recommend a tool** (top) — operator picks task type, optional phase. Card shows the winning tool, score, reasoning bullets, and the rule that fired.
-2. **Signals strip** — MTD credits used, remaining vs budget, 7d burn/day, projected month-end. Pulled from `credit_settings` + `v_credit_burn_per_step`.
-3. **Rules table** — editable list of `tool_policy_rules`. Add / edit / disable / reorder by precedence.
+Fire when `projected_pct >= 80` (level=warn) or `>= 100` (level=critical). Skipped silently if budget is null/0 or burn signal is null.
+
+## Cadence
+
+One alert per threshold per calendar month. State persisted in new `credit_alerts` table. Sentinel-tick (15 min) re-evaluates each run; same (year, month, threshold) row is unique → idempotent.
 
 ## Database (one migration)
 
-### `tool_policy_rules`
+### `credit_alerts`
 | col | type | notes |
 |---|---|---|
 | id | uuid pk | |
-| name | text | "Bulk refactor → Claude" |
-| precedence | int | lower wins ties |
-| task_types | text[] | matches operator pick: `new_feature`, `refactor`, `bug_fix`, `ui_tweak`, `pure_logic`, `tests`, `docs`, `migration`, `edge_fn` |
-| phase_ids | uuid[] nullable | optional scope |
-| min_credits_remaining_pct | int nullable | rule fires only if remaining ≥ X% |
-| max_credits_remaining_pct | int nullable | rule fires only if remaining ≤ X% |
-| min_burn_rate_per_day | numeric nullable | fires only if 7d burn ≥ X |
-| recommended_tool | text | `lovable` / `claude` / `cursor` / `codex` / `manual` |
-| reasoning | text | shown verbatim in recommendation card |
-| enabled | bool default true |
-| created_at / updated_at | timestamptz | |
+| year_month | text | `YYYY-MM` |
+| threshold_pct | int | 80 or 100 |
+| projected_pct | numeric(6,2) | snapshot at fire time |
+| burn_per_day | numeric(10,2) | |
+| budget | int | snapshot |
+| fired_at | timestamptz | |
+| acknowledged_at | timestamptz nullable | operator dismiss |
+| sentinel_finding_id | uuid nullable | link |
+| telegram_message_id | text nullable | for debug |
+| **unique** | (year_month, threshold_pct) | enforces once-per-month |
 
-RLS: operator-only (`has_role(auth.uid(),'operator')`) for all ops. Realtime on.
+RLS: operator-only. Realtime on (for banner auto-dismiss).
 
-### `tool_policy_recommendations` (log)
-| col | type |
-|---|---|
-| id, created_at | uuid, timestamptz |
-| operator_id | uuid |
-| task_type | text |
-| phase_id | uuid nullable |
-| credits_remaining_pct | numeric |
-| burn_rate_per_day | numeric |
-| chosen_tool | text |
-| chosen_rule_id | uuid nullable |
-| score_breakdown | jsonb |
+### `credit_settings` — add columns
+- `operator_telegram_chat_id text` (nullable) — destination for budget alerts. Optional; if null, Telegram step is skipped.
+- `alerts_enabled boolean default true` — master switch.
 
-Operator-only RLS. Insert on every recommendation. Used later to back a "policy accuracy" view (out of scope now).
+(Existing `alert_threshold_pct` is unused by this feature; we standardise on 80/100 hard-coded.)
 
-### `v_tool_policy_signals` (security_invoker view)
-Returns single row: `mtd_credits`, `budget`, `remaining_pct`, `burn_7d_per_day`, `projected_month_end`. Sources: `credit_entries`, `credit_settings`, `v_credit_burn_per_step`.
+## Sentinel check
 
-### Seed rules (inserted in same migration)
-| precedence | name | when | → tool |
-|---|---|---|---|
-| 10 | Critical credit conservation | remaining_pct ≤ 15 | `claude` |
-| 20 | UI tweaks stay on Lovable | task=`ui_tweak` | `lovable` |
-| 30 | Migrations stay on Lovable | task=`migration` or `edge_fn` | `lovable` |
-| 40 | Bulk refactor → Claude | task=`refactor`, burn ≥ 5/day | `claude` |
-| 50 | Tests + docs → Claude | task in (`tests`,`docs`) | `claude` |
-| 60 | Pure logic → Claude when squeezed | task=`pure_logic`, remaining ≤ 40% | `claude` |
-| 70 | New feature default | task=`new_feature` | `lovable` |
-| 999 | Fallback | always | `lovable` |
+`supabase/functions/sentinel-tick/checks.ts` → new `checkBudgetProjection(now, signals, settings, existingAlerts): FindingCandidate[]`.
 
-## Recommender logic (client-side)
+Pure function. Returns one candidate per crossed threshold that has no row for the current `year_month`. Tested in `checks_test.ts`.
 
-Pure TS in `src/lib/toolPolicy.ts`:
+`index.ts` wiring:
+1. Read `v_tool_policy_signals` + `credit_settings` + `credit_alerts` rows for current month.
+2. Run `checkBudgetProjection`.
+3. For each candidate:
+   - Insert `sentinel_findings` (existing pattern, kind `budget_projection_80` / `budget_projection_100`).
+   - Insert `credit_alerts` row with the returned `sentinel_finding_id`.
+   - If `alerts_enabled` and `operator_telegram_chat_id` is set, POST to `telegram-send` with service token. Store returned `message_id` on the alert row. Failure is non-fatal.
 
-1. Load `tool_policy_signals` row + enabled rules ordered by precedence.
-2. For each rule, evaluate all conditions (task type match, phase match, credit %, burn). All conditions must pass.
-3. First matching rule wins. Returns `{ tool, rule, reasoning, score_breakdown }`.
-4. On submit, insert into `tool_policy_recommendations`.
+## In-app banner
 
-Deterministic, no AI call — keeps it cheap and auditable.
+`src/components/admin/BudgetAlertBanner.tsx` (mounted at the top of `AdminAiUsage`):
+- Subscribes to `credit_alerts` realtime channel + initial fetch for current month.
+- Shows the most severe unacknowledged alert (100 > 80) with `projected_pct`, `burn_per_day`, budget, and a "Dismiss" button → sets `acknowledged_at = now()`.
+- Critical = destructive variant; warn = amber. Toast on new insert via realtime.
+
+## Operator settings
+
+Two new fields in the existing `CreditsUsagePanel` Settings sheet:
+- "Telegram chat ID for alerts" (text)
+- "Alerts enabled" (switch)
+
+Both write to `credit_settings`.
 
 ## Files
 
 **New**
-- `supabase/migrations/<ts>_tool_policy.sql`
-- `src/lib/toolPolicy.ts` (recommender)
-- `src/lib/toolPolicy.test.ts` (rule evaluation unit tests)
-- `src/components/admin/ToolPolicyPanel.tsx` (signals + recommender form + result card)
-- `src/components/admin/ToolPolicyRulesTable.tsx` (CRUD)
-- `src/components/admin/EditToolPolicyRuleDialog.tsx`
-- `docs/tool-policy.md`
-- `mem/features/tool-policy.md`
+- `supabase/migrations/<ts>_budget_alerts.sql`
+- `src/components/admin/BudgetAlertBanner.tsx`
+- `docs/budget-alerts.md`
+- `mem/features/budget-alerts.md`
 
 **Edited**
-- `src/pages/AdminAiUsage.tsx` — add third tab
-- `CHANGELOG.md`
-- `mem://index.md` — link new memory
+- `supabase/functions/sentinel-tick/checks.ts` — add `checkBudgetProjection`
+- `supabase/functions/sentinel-tick/checks_test.ts` — cases: below, crosses 80, crosses 100, already-fired-this-month, no budget, no burn
+- `supabase/functions/sentinel-tick/index.ts` — wire check + insert + telegram dispatch
+- `src/pages/AdminAiUsage.tsx` — mount `BudgetAlertBanner` above tabs
+- `src/components/admin/CreditsUsagePanel.tsx` — extend Settings sheet (telegram chat id, alerts toggle)
+- `CHANGELOG.md`, `mem://index.md`
 
 ## Out of scope
 
-- Auto-switching tools (this is advisory only).
-- Pulling real Claude/Cursor/Codex usage (no APIs wired).
-- AI-generated rules — rules are operator-authored.
-- Sentinel finding when policy is consistently ignored — can add later from `tool_policy_recommendations` log.
+- Email channel (would need email-domain setup; you didn't pick it).
+- Configurable thresholds (locked at 80/100; change in code if needed).
+- Auto-pausing Lovable usage at 100% (advisory only).
+- Slack (project uses Telegram).
+- Alerts based on MTD actual — projection only, per your answer.
