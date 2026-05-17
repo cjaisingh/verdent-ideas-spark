@@ -220,10 +220,58 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
 
           await sb.from("credit_alerts").insert({
             year_month: p.year_month,
+            kind: `budget_projection_${p.threshold_pct}`,
             threshold_pct: p.threshold_pct,
             projected_pct: p.projected_pct,
             burn_per_day: p.burn_per_day,
             budget: p.budget,
+            sentinel_finding_id: ins?.id ?? null,
+            telegram_message_id: telegramMessageId,
+          });
+        }
+
+        // Credit runway side-effects: same shape — credit_alerts row + Telegram push.
+        if (c.kind === "credit_runway_warn" || c.kind === "credit_runway_critical") {
+          const p = c.payload as {
+            year_month: string; kind: string; days_runway: number; burn_per_day: number;
+            balance: number; estimated_balance_now: number; as_of: string; exhaust_at: string | null;
+          };
+          const settings = (budgetSettingsRes.data ?? null) as { operator_telegram_chat_id: string | null; alerts_enabled: boolean } | null;
+          let telegramMessageId: string | null = null;
+          if (settings?.alerts_enabled && settings?.operator_telegram_chat_id && SERVICE_TOKEN) {
+            try {
+              const emoji = c.kind === "credit_runway_critical" ? "🚨" : "⚠️";
+              const exhaust = p.exhaust_at ? new Date(p.exhaust_at).toISOString().slice(0, 10) : "—";
+              const text = `${emoji} <b>Credit runway ${p.days_runway.toFixed(1)} days</b>\n` +
+                `Estimated balance: <b>${p.estimated_balance_now.toFixed(0)}</b> credits\n` +
+                `Burn (21d): ${p.burn_per_day.toFixed(1)}/day · exhaust ~${exhaust}\n` +
+                `Last reading: ${p.balance.toFixed(0)} on ${new Date(p.as_of).toISOString().slice(0,10)}`;
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-service-token": SERVICE_TOKEN,
+                  "Authorization": `Bearer ${SERVICE_ROLE}`,
+                },
+                body: JSON.stringify({
+                  chat_id: settings.operator_telegram_chat_id,
+                  text,
+                  parse_mode: "HTML",
+                }),
+              });
+              if (res.ok) {
+                const body = await res.json().catch(() => null) as { result?: { message_id?: number } } | null;
+                telegramMessageId = body?.result?.message_id ? String(body.result.message_id) : null;
+              } else {
+                console.error("telegram-send for runway alert failed", res.status, await res.text().catch(() => ""));
+              }
+            } catch (e) { console.error("telegram-send runway alert error", e); }
+          }
+
+          await sb.from("credit_alerts").insert({
+            year_month: p.year_month,
+            kind: p.kind === "runway_critical" ? "runway_critical" : "runway_warn",
+            burn_per_day: p.burn_per_day,
             sentinel_finding_id: ins?.id ?? null,
             telegram_message_id: telegramMessageId,
           });
