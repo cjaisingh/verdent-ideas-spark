@@ -1,16 +1,21 @@
 // Reusable dialog to enqueue an ai_jobs draft for the local Ollama worker.
 // Supports all 3 contract kinds. Calls ai-jobs-enqueue with idempotency key.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "react-router-dom";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+
+const CUSTOM = "__custom__";
+const WORKER_DEFAULT = "__worker_default__";
+const FRESH_MS = 2 * 60 * 1000;
 
 export type DraftKind = "draft_changelog_entry" | "draft_lesson_synthesis" | "draft_doc_section";
 
