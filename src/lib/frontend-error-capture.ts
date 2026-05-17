@@ -31,9 +31,13 @@ type Payload = {
   source?: string | null;
   lineno?: number | null;
   colno?: number | null;
-  kind: "error" | "unhandledrejection" | "boundary";
+  kind: "error" | "unhandledrejection" | "boundary" | "console.error" | "console.warn";
   meta?: Record<string, unknown>;
 };
+
+// Guard to avoid recursion when we patch console.error and our own sender / fetch
+// logs through console under the hood.
+let SENDING = false;
 
 async function send(p: Payload): Promise<void> {
   // De-dupe identical errors fired in a 5s window (e.g. React re-render storms).
