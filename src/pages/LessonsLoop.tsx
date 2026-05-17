@@ -289,6 +289,15 @@ export default function LessonsLoop() {
           ))}
         </div>
       )}
+
+      {draftDialog && (
+        <EnqueueDraftDialog
+          open={!!draftDialog}
+          onOpenChange={(o) => { if (!o) setDraftDialog(null); }}
+          kind={draftDialog.kind}
+          initial={draftDialog.initial}
+        />
+      )}
     </div>
   );
 }
