@@ -618,3 +618,54 @@ export function checkTruthConflictsUnresolved(
     },
   }];
 }
+
+// Budget projection check.
+// Fires once per (year_month, threshold_pct) when projected month-end spend
+// (burn_7d_per_day × 30) crosses 80% or 100% of monthly_budget_credits.
+export type BudgetSignals = {
+  budget: number | null;
+  burn_7d_per_day: number | null;
+  projected_month_end: number | null;
+};
+export type CreditAlertRow = { year_month: string; threshold_pct: number };
+
+export function checkBudgetProjection(
+  now: Date,
+  signals: BudgetSignals | null,
+  existing: CreditAlertRow[],
+): FindingCandidate[] {
+  if (!signals) return [];
+  const budget = Number(signals.budget ?? 0);
+  const burn = Number(signals.burn_7d_per_day ?? 0);
+  if (budget <= 0 || !Number.isFinite(burn) || burn <= 0) return [];
+  const projected = Number(signals.projected_month_end ?? burn * 30);
+  const projectedPct = Math.round((projected / budget) * 100 * 100) / 100;
+  const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const fired = new Set(
+    existing.filter((r) => r.year_month === ym).map((r) => r.threshold_pct),
+  );
+  const out: FindingCandidate[] = [];
+  for (const threshold of [80, 100] as const) {
+    if (projectedPct < threshold) continue;
+    if (fired.has(threshold)) continue;
+    const severity: FindingCandidate["severity"] = threshold === 100 ? "critical" : "high";
+    const kind: FindingCandidate["kind"] =
+      threshold === 100 ? "budget_projection_100" : "budget_projection_80";
+    out.push({
+      kind,
+      severity,
+      summary: `Projected month-end spend ${projectedPct.toFixed(0)}% of budget (${projected.toFixed(0)}/${budget} credits; ${burn.toFixed(1)}/day).`,
+      dedupe_key: `${kind}:${ym}`,
+      subject_ref: { year_month: ym, threshold_pct: threshold },
+      payload: {
+        year_month: ym,
+        threshold_pct: threshold,
+        projected_pct: projectedPct,
+        projected_month_end: projected,
+        burn_per_day: burn,
+        budget,
+      },
+    });
+  }
+  return out;
+}
