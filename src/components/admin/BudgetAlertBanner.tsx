@@ -25,7 +25,7 @@ function currentYearMonth(): string {
 }
 
 export function BudgetAlertBanner() {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [alerts, setAlerts] = useState<CreditAlert[]>([]);
 
   async function load() {
     const { data } = await supabase
@@ -34,7 +34,7 @@ export function BudgetAlertBanner() {
       .eq("year_month", currentYearMonth())
       .is("acknowledged_at", null)
       .order("threshold_pct", { ascending: false });
-    setAlerts((data ?? []) as Alert[]);
+    setAlerts((data ?? []) as CreditAlert[]);
   }
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export function BudgetAlertBanner() {
         (payload) => {
           load();
           if (payload.eventType === "INSERT") {
-            const row = payload.new as Alert;
+            const row = payload.new as CreditAlert;
             if (row.threshold_pct === 100) {
               toast.error(`Projected spend hit 100% of budget (${row.projected_pct.toFixed(0)}%).`);
             } else {
