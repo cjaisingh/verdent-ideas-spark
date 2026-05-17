@@ -13,6 +13,7 @@ type: feature
 **Views (SECURITY INVOKER):**
 - `v_credit_burn_per_step` — unions manual entries + proxy rows derived from `roadmap_work_log` where `tokens_total > 0`. Proxy credits = `tokens_total / 1000 × proxy_rate_per_1k_tokens`.
 - `v_credit_burn_per_phase_30d` — rollup by phase over last 30d with `manual_credits`, `proxy_credits`, `total_credits`.
+- `v_credit_projection` — single row: MTD actual + 14/21/30d burn/day + projected EOM + % of budget. Powers `ProjectedSpendPanel` at top of the tab. Linear extrapolation only; 21d window is the default. Budget alerts still use 7d (more reactive).
 
 **UI:** banner explaining manual vs proxy, 4 KPIs (MTD manual / proxy / total / budget %), Recharts line trend (manual + proxy series), per-phase table, per-step table (manual=primary chip, proxy=secondary chip). "Log credits" dialog + Settings sheet.
 
