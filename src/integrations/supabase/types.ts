@@ -5711,6 +5711,17 @@ export type Database = {
           row_count: number
         }[]
       }
+      runtime_cron_status: {
+        Args: { _jobnames: string[] }
+        Returns: {
+          active: boolean
+          jobname: string
+          last_end: string
+          last_start: string
+          last_status: string
+          schedule: string
+        }[]
+      }
       sentinel_triage_unacked_count: { Args: never; Returns: number }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Activity, CheckCircle2, XCircle, Clock, Moon, AlertTriangle, RefreshCw } from "lucide-react";
 import ErrorGroupsPanel from "@/components/admin/ErrorGroupsPanel";
 import EdgeHealthDashboard from "@/components/admin/EdgeHealthDashboard";
+import RuntimeHealthWidget from "@/components/admin/RuntimeHealthWidget";
 
 // Cron jobs that run as part of the overnight pipeline.
 // Keep aligned with mem://features/automation.
@@ -137,6 +138,9 @@ const AdminCronHealth = () => {
           <RefreshCw className="h-3 w-3" /> {rel(lastRefresh.toISOString())}
         </button>
       </header>
+
+      {/* Runtime health: cron tick cross-check + phase runs */}
+      <RuntimeHealthWidget />
 
       {/* W2/W3/W4 edge function health & error-rate dashboard */}
       <Card>
