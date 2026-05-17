@@ -226,6 +226,96 @@ export function WorkerRestartChecklist() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Cpu className="h-4 w-4" />
+            Verify worker activity
+            <Button asChild size="sm" variant="ghost" className="ml-auto h-7 gap-1">
+              <Link to="/admin/logs">
+                <ExternalLink className="h-3 w-3" />
+                All logs
+              </Link>
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-xs">
+          <div className="rounded-md border p-2 flex items-center justify-between gap-2">
+            <div>
+              <div className="text-muted-foreground">Last <code className="font-mono">ai-jobs-claim</code> poll</div>
+              <div className="font-mono">
+                {s.lastClaim
+                  ? `${ago(s.lastClaim.created_at)} · ${s.lastClaim.status ?? "?"} · ${s.lastClaim.latency_ms ?? "?"}ms`
+                  : "no poll recorded"}
+              </div>
+            </div>
+            <Button asChild size="sm" variant="outline" className="h-7 gap-1">
+              <Link to="/admin/logs">
+                <ExternalLink className="h-3 w-3" />
+                Open
+              </Link>
+            </Button>
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-muted-foreground">Workers (registered)</div>
+            {s.workers.length === 0 && (
+              <div className="text-muted-foreground italic">none registered yet</div>
+            )}
+            {s.workers.map((w) => {
+              const isOnline =
+                w.enabled &&
+                w.last_seen_at &&
+                Date.now() - new Date(w.last_seen_at).getTime() < FRESH_MS;
+              return (
+                <div
+                  key={w.name}
+                  className="rounded-md border p-2 flex items-center justify-between gap-2"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-medium">{w.name}</span>
+                      <Badge variant={isOnline ? "default" : "outline"} className="text-[10px]">
+                        {isOnline ? "online" : "offline"}
+                      </Badge>
+                      {!w.enabled && <Badge variant="outline" className="text-[10px]">disabled</Badge>}
+                    </div>
+                    <div className="text-muted-foreground">
+                      default: <code className="font-mono">{w.default_model ?? "—"}</code>
+                      {" · "}tags: <code className="font-mono">{(w.model_tags ?? []).join(",") || "—"}</code>
+                    </div>
+                    <div className="text-muted-foreground">
+                      last poll: {ago(w.last_seen_at)} · registered: {ago(w.created_at)}
+                    </div>
+                  </div>
+                  <Button asChild size="sm" variant="outline" className="h-7 gap-1">
+                    <Link to="/admin/ai-jobs">
+                      <ExternalLink className="h-3 w-3" />
+                      Workers tab
+                    </Link>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1 border-t">
+            <Button asChild size="sm" variant="outline" className="h-7 gap-1">
+              <Link to="/admin/edge-health">
+                <ExternalLink className="h-3 w-3" />
+                Edge health
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="h-7 gap-1">
+              <Link to="/admin/ai-jobs">
+                <ExternalLink className="h-3 w-3" />
+                /admin/ai-jobs
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </section>
   );
 }
