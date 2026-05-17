@@ -187,13 +187,25 @@ export default function AdminAiUsage() {
 
   return (
     <div className="container max-w-7xl mx-auto py-8 space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-3xl font-bold">AI Usage</h1>
-          <p className="text-sm text-muted-foreground">
-            Per-day counts and details from <code className="text-xs">public.ai_usage_log</code>. Filter and export to CSV.
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">AI Usage</h1>
+        <p className="text-sm text-muted-foreground">
+          Per-day AI call counts and operator-logged credit spend.
+        </p>
+      </div>
+
+      <Tabs defaultValue="ai-calls">
+        <TabsList>
+          <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
+          <TabsTrigger value="credits">Credits &amp; Usage</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="credits" className="mt-6">
+          <CreditsUsagePanel />
+        </TabsContent>
+
+        <TabsContent value="ai-calls" className="mt-6 space-y-6">
+      <div className="flex items-center justify-end gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Tabs value={win} onValueChange={(v) => setWin(v as WindowId)}>
             <TabsList>
