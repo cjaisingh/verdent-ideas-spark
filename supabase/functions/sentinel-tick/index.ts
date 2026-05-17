@@ -137,6 +137,11 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[]),
       ...checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[]),
       ...checkTruthConflictsUnresolved(now, (truthConflictsRes.data ?? []) as { entity: string; entity_id: string; field: string; top_source: string | null; next_source: string | null }[]),
+      ...checkBudgetProjection(
+        now,
+        (budgetSignalsRes.data ?? null) as { budget: number | null; burn_7d_per_day: number | null; projected_month_end: number | null } | null,
+        (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number }[],
+      ),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
