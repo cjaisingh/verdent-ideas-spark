@@ -219,7 +219,15 @@ export default function AdminAiUsage() {
 
       <BudgetAlertBanner />
 
-      <Tabs defaultValue="ai-calls">
+      <BalanceSnapshotDialog
+        open={!!promptPhase}
+        onOpenChange={(o) => { if (!o) closePrompt(); }}
+        phaseId={promptPhase?.id ?? null}
+        phaseLabel={promptPhase?.label ?? null}
+        onSaved={closePrompt}
+      />
+
+      <Tabs defaultValue={promptPhase ? "credits" : "ai-calls"}>
         <TabsList>
           <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
           <TabsTrigger value="credits">Credits &amp; Usage</TabsTrigger>
