@@ -8,6 +8,7 @@ import {
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
   checkTruthConflictsUnresolved, checkBudgetProjection, checkCreditRunway,
+  checkAiJobsStuck, checkAiWorkersOffline,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
