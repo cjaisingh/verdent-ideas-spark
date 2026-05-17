@@ -55,6 +55,22 @@ Live in [`docs/agents/`](./docs/agents/). Reference them by path or filename.
 
 When a task touches the contract API, the database schema, or module registration, load the relevant AWIP skill before planning.
 
+### Agent team (personas)
+
+Nine persona files in [`docs/agents/team/`](./docs/agents/team/). Each owns a slice of Core and challenges changes inside that slice before approval. All share `CONTEXT.md` as common ground. Invoke by name (`Use the okr-strategist skill to ...`).
+
+| Persona | Owns |
+|---|---|
+| [`okr-strategist`](./docs/agents/team/okr-strategist.md) | OKR tree shape and lineage; enforces `okr_node_events` emission on every mutation |
+| [`capability-architect`](./docs/agents/team/capability-architect.md) | Capability manifest + module registration; challenges any bypass of `POST /capabilities/register` |
+| [`tenant-manager`](./docs/agents/team/tenant-manager.md) | Tenant onboarding, RLS, isolation; blocks anything that could cross tenant boundaries |
+| [`demand-analyst`](./docs/agents/team/demand-analyst.md) | Reads the demand board; surfaces used vs dead-weight; challenges features with no demand signal |
+| [`compliance-auditor`](./docs/agents/team/compliance-auditor.md) | Phase gates, W7 sign-off, security gating; approves any gate-status or sign-off flow change |
+| [`event-engineer`](./docs/agents/team/event-engineer.md) | Ensures every mutation emits the right event row; reviews all new endpoints and migrations |
+| [`control-plane-operator`](./docs/agents/team/control-plane-operator.md) | Routing/dispatch logic; enforces "no routing in Core" (Control Plane or modules only) |
+| [`sentinel`](./docs/agents/team/sentinel.md) | Triage, anomaly detection, ambient awareness; watches for OKR/capability drift |
+| [`product-historian`](./docs/agents/team/product-historian.md) | Maintains `CONTEXT.md`, `docs/why-awip.md`, ADRs; reviews any change to foundational docs |
+
 ## Definition of done
 
 - All migrations applied; `bun run rls:verify` passes.
