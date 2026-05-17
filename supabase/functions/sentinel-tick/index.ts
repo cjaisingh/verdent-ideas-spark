@@ -120,6 +120,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       console.error("reclaim_stale_night_jobs failed", e);
     }
 
+    // Slice 1b: reclaim stalled local-LLM (Ollama) workers, same cadence.
+    try {
+      await sb.rpc("reclaim_stale_ai_jobs", { _stale_minutes: 10 });
+    } catch (e) {
+      console.error("reclaim_stale_ai_jobs failed", e);
+    }
+
+    const [aiJobsRes, aiWorkersRes, aiQueueRes] = await Promise.all([
+      sb.from("ai_jobs").select("id,kind,attempts,heartbeat_at,claimed_at").eq("status","claimed").limit(200),
+      sb.from("ai_workers").select("name,enabled,last_seen_at").limit(50),
+      sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
+    ]);
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
     const candidates: FindingCandidate[] = [
