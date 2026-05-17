@@ -30,6 +30,7 @@ type StepRow = {
   duration_ms: number | null;
   mode: string | null;
   note: string | null;
+  category: string | null;
 };
 
 type PhaseRollup = {
