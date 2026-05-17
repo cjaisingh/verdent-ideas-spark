@@ -1,49 +1,64 @@
-## Projected spend panel
+## Spend categories (plan/pivot/refactor/…)
 
-A new card at the top of the **Credits & Usage** tab on `/admin/ai-usage` that estimates end-of-month credit spend from rolling 14/21/30-day windows, so you can decide weeks in advance whether to throttle Lovable.
+Tag each `credit_entries` row with a **work category** so the Credits & Usage tab can show which categories burn the most. Categorising at the **credit entry** level (not the task) because one task often spans plan→build→refactor and you want each logged credit attributed to what it actually was.
 
-### What it shows
+### Schema
 
-One card with:
+New enum + column on `credit_entries`:
 
-- **MTD actual** — sum of `credit_entries.credits` for current `year_month` (manual + proxy, split).
-- **Daily burn** — three rolling averages: last 14d, 21d, 30d (manual + proxy combined).
-- **Projected EOM** — for each window: `mtd + burn_per_day × days_left_in_month`. Default highlighted window: 21d.
-- **% of monthly budget** — projected EOM ÷ `credit_settings.monthly_budget_credits`, with a progress bar coloured green (<80%), amber (80–100%), red (>100%).
-- **Headroom** — `budget − projected_eom`, signed.
-- **Window picker** — segmented control (14d / 21d / 30d) that changes which projection drives the headline + progress bar. Persists in `localStorage`.
-- **Footnote** — "Projection assumes current burn continues. Real number is unknowable — Lovable has no billing API." Plus a link to `docs/budget-alerts.md` and a note saying the 80%/100% alerts use the 7d window (intentionally more reactive).
-
-### Where
-
-`src/components/admin/ProjectedSpendPanel.tsx`, mounted at the top of the existing `CreditsUsagePanel` (above the existing "By phase / 30d" and "Recent entries" tables). No new route, no new tab.
-
-### Data
-
-New read-only SQL view `public.v_credit_projection` with one row containing:
-
-```text
-year_month, mtd_credits, mtd_manual, mtd_proxy,
-burn_14d_per_day, burn_21d_per_day, burn_30d_per_day,
-days_in_month, days_elapsed, days_left,
-projected_eom_14d, projected_eom_21d, projected_eom_30d,
-budget, projected_pct_14d, projected_pct_21d, projected_pct_30d
+```sql
+CREATE TYPE work_category AS ENUM ('plan','build','pivot','refactor','bugfix','research','ops','other');
+ALTER TABLE credit_entries ADD COLUMN category work_category NOT NULL DEFAULT 'build';
+CREATE INDEX idx_credit_entries_category ON credit_entries(category);
 ```
 
-Computed from `credit_entries` (sum credits per window / N) and `credit_settings.monthly_budget_credits`. Operator-only RLS via `has_role(auth.uid(),'admin')`.
+Defaults to `build` so existing rows stay valid. `mode` (build/plan/try-to-fix/other) stays — it's the Lovable run mode, orthogonal to category.
 
-No new table, no cron, no edge function — the view is recomputed on each `SELECT`. Budget-alert logic and the existing `v_credit_burn_per_step` / `v_credit_burn_per_phase_30d` views are untouched.
+Also add an optional **default category** on `roadmap_tasks` so the "Log credits" dialog can pre-select sensibly:
+
+```sql
+ALTER TABLE roadmap_tasks ADD COLUMN default_category work_category;
+```
+
+### View
+
+`v_credit_spend_by_category` — single read-only view, MTD + 30d windows:
+
+```text
+category,
+mtd_credits, mtd_pct,
+last_30d_credits, last_30d_pct,
+entry_count_30d
+```
+
+`mtd_pct` and `last_30d_pct` are the category's share of total spend in that window. Security invoker, operator-only via underlying RLS.
+
+### UI
+
+**1. `AddCreditEntryDialog`** — add a category dropdown (8 options, default = task's `default_category` or `build`).
+
+**2. New `SpendByCategoryPanel`** on `/admin/ai-usage` → Credits & Usage tab, between `ProjectedSpendPanel` and the existing phase rollup. Shows:
+- Horizontal bar chart (Recharts) — categories sorted by 30d credits descending, with MTD overlay.
+- Table beneath: category · MTD · 30d · % of 30d · count. Click a row to filter the recent-entries table below (in-page filter, no URL change).
+- Window toggle (MTD / 30d) — default 30d.
+
+**3. `CreditsUsagePanel` recent-entries table** — add a "Category" column with a coloured chip.
 
 ### Files
 
-- **New migration**: `v_credit_projection` view + RLS.
-- **New**: `src/components/admin/ProjectedSpendPanel.tsx`.
-- **Edit**: `src/components/admin/CreditsUsagePanel.tsx` — mount the panel at the top of its content.
-- **Edit**: `CHANGELOG.md`, `docs/credits-usage.md` (append section), `mem://features/credits-usage` (note the new view).
+- New migration (enum, column, default, index, view).
+- New `src/components/admin/SpendByCategoryPanel.tsx`.
+- Edit `src/components/admin/AddCreditEntryDialog.tsx` — category select.
+- Edit `src/components/admin/CreditsUsagePanel.tsx` — mount panel, add column, add filter state.
+- Edit `CHANGELOG.md`, `docs/credits-usage.md` (new section), `mem/features/credits-usage.md`.
 
 ### Out of scope
 
-- New alert thresholds (existing 80/100% alerts cover this).
-- Forecasting models beyond linear extrapolation (no day-of-week weighting, no exponential smoothing).
-- Per-phase or per-tool projection — overall only.
-- Editing the projection window default from a UI (hardcoded to 21d; user-selectable per-session via the segmented control).
+- Backfilling existing rows beyond the `build` default (you can re-categorise via direct DB edit if needed; no UI for bulk re-tag).
+- Per-category budgets or alerts.
+- Tagging the **tool** used (Lovable/Claude/Cursor) — that lives in the Tool Policy table already.
+- Forecasting per category — projection panel stays overall-only.
+
+### Questions before I build
+
+None — the spec is concrete enough. Approve to ship.
