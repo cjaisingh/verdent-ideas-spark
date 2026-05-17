@@ -67,6 +67,7 @@ export const AiJobInputByKind = {
   draft_changelog_entry: DraftChangelogEntryInput,
   draft_lesson_synthesis: DraftLessonSynthesisInput,
   draft_doc_section: DraftDocSectionInput,
+  codemod_replace_any: CodemodReplaceAnyInput,
 } as const;
 
 export function validateInput(kind: AiJobKind, input: unknown) {
