@@ -5855,6 +5855,28 @@ export type Database = {
         }
         Relationships: []
       }
+      v_credit_projection: {
+        Row: {
+          budget: number | null
+          burn_14d_per_day: number | null
+          burn_21d_per_day: number | null
+          burn_30d_per_day: number | null
+          days_elapsed: number | null
+          days_in_month: number | null
+          days_left: number | null
+          mtd_credits: number | null
+          mtd_manual: number | null
+          mtd_proxy: number | null
+          projected_eom_14d: number | null
+          projected_eom_21d: number | null
+          projected_eom_30d: number | null
+          projected_pct_14d: number | null
+          projected_pct_21d: number | null
+          projected_pct_30d: number | null
+          year_month: string | null
+        }
+        Relationships: []
+      }
       v_tool_policy_signals: {
         Row: {
           budget: number | null
