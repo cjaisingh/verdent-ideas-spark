@@ -29,6 +29,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
   const [stepLabel, setStepLabel] = useState("");
   const [credits, setCredits] = useState("");
   const [mode, setMode] = useState("build");
+  const [category, setCategory] = useState<WorkCategory>("build");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
