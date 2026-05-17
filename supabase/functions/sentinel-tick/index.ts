@@ -162,6 +162,8 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         (runwayRes.data ?? null) as { balance: number | null; as_of: string | null; estimated_balance_now: number | null; burn_per_day_21d: number | null; days_runway_21d: number | null; runway_exhaustion_date_21d: string | null } | null,
         (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
       ),
+      ...checkAiJobsStuck(now, (aiJobsRes.data ?? []) as { id: string; kind: string; attempts: number | null; heartbeat_at: string | null; claimed_at: string | null }[]),
+      ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
