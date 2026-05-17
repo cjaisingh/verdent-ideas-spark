@@ -283,6 +283,39 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
               </div>
             </>
           )}
+
+          <div className="border-t pt-3">
+            <Label className="text-xs">Model</Label>
+            <div className="flex gap-2 items-center mt-1">
+              <Select value={modelChoice} onValueChange={setModelChoice}>
+                <SelectTrigger className="w-[260px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={WORKER_DEFAULT}>
+                    Worker default{workerDefault ? ` (${workerDefault})` : ""}
+                  </SelectItem>
+                  {tags.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM}>Custom tag…</SelectItem>
+                </SelectContent>
+              </Select>
+              {modelChoice === CUSTOM && (
+                <Input
+                  className="font-mono"
+                  placeholder="e.g. gemma4"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                />
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {tags.length === 0
+                ? "No online workers — falls back to worker DEFAULT_MODEL when one connects."
+                : `${tags.length} tag${tags.length === 1 ? "" : "s"} available across online workers.`}
+            </p>
+          </div>
         </div>
 
         <DialogFooter>
