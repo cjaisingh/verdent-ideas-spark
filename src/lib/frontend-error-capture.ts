@@ -40,6 +40,7 @@ type Payload = {
 let SENDING = false;
 
 async function send(p: Payload): Promise<void> {
+  if (SENDING) return;
   // De-dupe identical errors fired in a 5s window (e.g. React re-render storms).
   const key = `${p.kind}:${p.message}:${p.source ?? ""}:${p.lineno ?? ""}`;
   const now = Date.now();
@@ -47,32 +48,37 @@ async function send(p: Payload): Promise<void> {
   lastSentKey = key;
   lastSentAt = now;
 
-  let userId: string | null = null;
+  SENDING = true;
   try {
-    const { data } = await supabase.auth.getUser();
-    userId = data.user?.id ?? null;
-  } catch {/* ignore */}
+    let userId: string | null = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      userId = data.user?.id ?? null;
+    } catch {/* ignore */}
 
-  const body = JSON.stringify({
-    ...p,
-    url: window.location.href,
-    user_id: userId,
-    request_id: SESSION_REQUEST_ID,
-  });
-
-  try {
-    // Prefer sendBeacon so the report survives navigation / unload.
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: "application/json" });
-      if (navigator.sendBeacon(ENDPOINT, blob)) return;
-    }
-    await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-request-id": SESSION_REQUEST_ID },
-      body,
-      keepalive: true,
+    const body = JSON.stringify({
+      ...p,
+      url: window.location.href,
+      user_id: userId,
+      request_id: SESSION_REQUEST_ID,
     });
-  } catch {/* never throw from the reporter */}
+
+    try {
+      // Prefer sendBeacon so the report survives navigation / unload.
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        if (navigator.sendBeacon(ENDPOINT, blob)) return;
+      }
+      await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-request-id": SESSION_REQUEST_ID },
+        body,
+        keepalive: true,
+      });
+    } catch {/* never throw from the reporter */}
+  } finally {
+    SENDING = false;
+  }
 }
 
 export function reportBoundaryError(err: unknown, info: { componentStack?: string }): void {
