@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, OctagonAlert, X } from "lucide-react";
 import { toast } from "sonner";
 
-type Alert = {
+type CreditAlert = {
   id: string;
   year_month: string;
   threshold_pct: number;
