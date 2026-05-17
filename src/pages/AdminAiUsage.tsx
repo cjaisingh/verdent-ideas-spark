@@ -376,6 +376,8 @@ export default function AdminAiUsage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
