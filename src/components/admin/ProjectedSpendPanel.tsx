@@ -106,9 +106,15 @@ export function ProjectedSpendPanel() {
   if (!row) return null;
 
   const burn = win === "14" ? row.burn_14d_per_day : win === "21" ? row.burn_21d_per_day : row.burn_30d_per_day;
-  const eom = win === "14" ? row.projected_eom_14d : win === "21" ? row.projected_eom_21d : row.projected_eom_30d;
-  const pct = win === "14" ? row.projected_pct_14d : win === "21" ? row.projected_pct_21d : row.projected_pct_30d;
+  const rawEom = win === "14" ? row.projected_eom_14d : win === "21" ? row.projected_eom_21d : row.projected_eom_30d;
+  const rawPct = win === "14" ? row.projected_pct_14d : win === "21" ? row.projected_pct_21d : row.projected_pct_30d;
   const budget = row.budget;
+
+  const driftRatio = drift?.drift_ratio == null ? null : Number(drift.drift_ratio);
+  const driftConf = drift?.confidence ?? "low";
+  const driftApplicable = driftAdjust && driftRatio != null && driftRatio > 0 && driftConf !== "low";
+  const eom = driftApplicable ? Number(rawEom) * driftRatio! : Number(rawEom);
+  const pct = budget != null && budget > 0 ? Math.round((eom / Number(budget)) * 100 * 100) / 100 : rawPct;
   const headroom = budget != null ? Number(budget) - Number(eom) : null;
 
   const tone =
@@ -129,17 +135,29 @@ export function ProjectedSpendPanel() {
           <TrendingUp className="h-4 w-4" /> Projected spend
           <span className="text-xs font-normal text-muted-foreground">· {row.year_month}</span>
         </CardTitle>
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={win}
-          onValueChange={(v) => v && setWin(v as Win)}
-          className="border rounded-md"
-        >
-          <ToggleGroupItem value="14" className="text-xs px-2 h-7">14d</ToggleGroupItem>
-          <ToggleGroupItem value="21" className="text-xs px-2 h-7">21d</ToggleGroupItem>
-          <ToggleGroupItem value="30" className="text-xs px-2 h-7">30d</ToggleGroupItem>
-        </ToggleGroup>
+        <div className="flex items-center gap-2">
+          {driftRatio != null && driftConf !== "low" && (
+            <button
+              type="button"
+              onClick={() => setDriftAdjust(!driftAdjust)}
+              className={`text-xs px-2 h-7 rounded border ${driftAdjust ? "bg-primary/10 border-primary/40 text-primary" : "bg-muted text-muted-foreground"}`}
+              title={`Drift ratio ${driftRatio.toFixed(2)}× from last ${drift?.phase_sample_count} phases (${driftConf} confidence). Click to ${driftAdjust ? "show raw" : "apply"}.`}
+            >
+              {driftAdjust ? `Adjusted ×${driftRatio.toFixed(2)}` : "Unadjusted"}
+            </button>
+          )}
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={win}
+            onValueChange={(v) => v && setWin(v as Win)}
+            className="border rounded-md"
+          >
+            <ToggleGroupItem value="14" className="text-xs px-2 h-7">14d</ToggleGroupItem>
+            <ToggleGroupItem value="21" className="text-xs px-2 h-7">21d</ToggleGroupItem>
+            <ToggleGroupItem value="30" className="text-xs px-2 h-7">30d</ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <RunwayBlock runway={runway} />
@@ -147,7 +165,14 @@ export function ProjectedSpendPanel() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="MTD actual" value={fmt(row.mtd_credits)} sub={`${fmt(row.mtd_manual)} manual · ${fmt(row.mtd_proxy)} proxy`} />
           <Stat label={`Burn (${win}d)`} value={`${fmt(burn)}/day`} sub={`${row.days_elapsed}/${row.days_in_month} days elapsed`} />
-          <Stat label="Projected EOM" value={fmt(eom)} sub={`${row.days_left} days left`} valueClass={toneClass} />
+          <Stat
+            label="Projected EOM"
+            value={fmt(eom)}
+            sub={driftApplicable
+              ? `raw ${fmt(rawEom)} × ${driftRatio!.toFixed(2)} drift · ${row.days_left}d left`
+              : `${row.days_left} days left`}
+            valueClass={toneClass}
+          />
           <Stat
             label={budget ? `vs budget ${fmt(budget)}` : "Budget"}
             value={pct != null ? `${pct.toFixed(0)}%` : "set budget"}
