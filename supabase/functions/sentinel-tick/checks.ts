@@ -24,6 +24,8 @@ export type FindingCandidate = {
     | "budget_projection_100"
     | "credit_runway_warn"
     | "credit_runway_critical"
+    | "credit_snapshot_stale_warn"
+    | "credit_snapshot_stale_critical"
     | "ai_jobs_stuck"
     | "ai_workers_offline";
   severity: "info" | "low" | "medium" | "high" | "critical";
