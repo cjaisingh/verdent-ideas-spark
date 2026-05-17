@@ -121,4 +121,40 @@ export function installFrontendErrorCapture(): void {
       kind: "unhandledrejection",
     });
   });
+
+  // Patch console.error / console.warn so recurring issues that never throw
+  // (React warnings, deprecations, third-party complaints) still land in
+  // frontend_error_logs. Rows here are purged after 7 days; real errors keep
+  // the default retention.
+  const patchConsole = (level: "error" | "warn") => {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...args);
+      if (SENDING) return;
+      try {
+        const firstErr = args.find((a) => a instanceof Error) as Error | undefined;
+        const message = args
+          .map((a) => {
+            if (a instanceof Error) return a.message;
+            if (typeof a === "string") return a;
+            try { return JSON.stringify(a); } catch { return String(a); }
+          })
+          .join(" ")
+          .slice(0, 2000);
+        if (!message.trim()) return;
+        // Skip our own beacon failures to avoid loops.
+        if (message.includes("frontend-errors")) return;
+        void send({
+          message,
+          stack: firstErr?.stack ?? null,
+          source: null,
+          lineno: null,
+          colno: null,
+          kind: level === "error" ? "console.error" : "console.warn",
+        });
+      } catch {/* never throw from the reporter */}
+    };
+  };
+  patchConsole("error");
+  patchConsole("warn");
 }
