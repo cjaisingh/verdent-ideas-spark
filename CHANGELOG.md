@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+- **Tool Selection Policy** — new "Tool Policy" tab on `/admin/ai-usage` recommends Lovable/Claude/Cursor/Codex/manual per task. Editable `tool_policy_rules` (precedence-ordered, gated by task type, phase, credit % remaining, 7d burn rate). Deterministic recommender in `src/lib/toolPolicy.ts`. Logs every chosen recommendation to `tool_policy_recommendations`. 8 seed rules. See `docs/tool-policy.md`.
+
 ### Fixed
 - **Cleared 3 false-positive `cron_silence` sentinel findings** (`sentinel-tick`, `overnight-phase-runner-15m`, `morning-review`) — crons were healthy per `cron.job_run_details` + `automation_runs`; auto-resolve loop gap noted on closed discussion action `45032d7d`.
 
