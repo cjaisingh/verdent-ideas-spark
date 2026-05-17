@@ -104,6 +104,181 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_draft_outputs: {
+        Row: {
+          body_md: string
+          created_at: string
+          id: string
+          job_id: string
+          kind: string
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          target_ref: Json
+        }
+        Insert: {
+          body_md: string
+          created_at?: string
+          id?: string
+          job_id: string
+          kind: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_ref?: Json
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          kind?: string
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_ref?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_draft_outputs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "ai_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_job_results: {
+        Row: {
+          attempt: number
+          created_at: string
+          error: string | null
+          id: string
+          job_id: string
+          latency_ms: number | null
+          model: string | null
+          output_json: Json | null
+          output_text: string | null
+          tokens_in: number | null
+          tokens_out: number | null
+          worker_id: string | null
+        }
+        Insert: {
+          attempt: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          job_id: string
+          latency_ms?: number | null
+          model?: string | null
+          output_json?: Json | null
+          output_text?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          worker_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          job_id?: string
+          latency_ms?: number | null
+          model?: string | null
+          output_json?: Json | null
+          output_text?: string | null
+          tokens_in?: number | null
+          tokens_out?: number | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_job_results_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "ai_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_job_results_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_jobs: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          claimed_by: string | null
+          created_at: string
+          created_by: string | null
+          heartbeat_at: string | null
+          id: string
+          idempotency_key: string | null
+          input_json: Json
+          kind: string
+          last_error: string | null
+          max_retries: number
+          priority: number
+          requested_model: string | null
+          required_model_tags: string[]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          heartbeat_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          input_json?: Json
+          kind: string
+          last_error?: string | null
+          max_retries?: number
+          priority?: number
+          requested_model?: string | null
+          required_model_tags?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          claimed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          heartbeat_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          input_json?: Json
+          kind?: string
+          last_error?: string | null
+          max_retries?: number
+          priority?: number
+          requested_model?: string | null
+          required_model_tags?: string[]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_jobs_claimed_by_fkey"
+            columns: ["claimed_by"]
+            isOneToOne: false
+            referencedRelation: "ai_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_log: {
         Row: {
           completion_tokens: number | null
@@ -158,6 +333,36 @@ export type Database = {
           status_code?: number | null
           total_tokens?: number | null
           trigger?: string
+        }
+        Relationships: []
+      }
+      ai_workers: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          last_seen_at: string | null
+          model_tags: string[]
+          name: string
+          owner_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string | null
+          model_tags?: string[]
+          name: string
+          owner_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string | null
+          model_tags?: string[]
+          name?: string
+          owner_user_id?: string | null
         }
         Relationships: []
       }
@@ -6332,6 +6537,10 @@ export type Database = {
           deleted: number
           table_name: string
         }[]
+      }
+      reclaim_stale_ai_jobs: {
+        Args: { _stale_minutes?: number }
+        Returns: Json
       }
       reclaim_stale_night_jobs: {
         Args: { _stale_minutes?: number }

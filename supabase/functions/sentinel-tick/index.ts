@@ -8,6 +8,7 @@ import {
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
   checkTruthConflictsUnresolved, checkBudgetProjection, checkCreditRunway,
+  checkAiJobsStuck, checkAiWorkersOffline,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -119,6 +120,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       console.error("reclaim_stale_night_jobs failed", e);
     }
 
+    // Slice 1b: reclaim stalled local-LLM (Ollama) workers, same cadence.
+    try {
+      await sb.rpc("reclaim_stale_ai_jobs", { _stale_minutes: 10 });
+    } catch (e) {
+      console.error("reclaim_stale_ai_jobs failed", e);
+    }
+
+    const [aiJobsRes, aiWorkersRes, aiQueueRes] = await Promise.all([
+      sb.from("ai_jobs").select("id,kind,attempts,heartbeat_at,claimed_at").eq("status","claimed").limit(200),
+      sb.from("ai_workers").select("name,enabled,last_seen_at").limit(50),
+      sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
+    ]);
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
     const candidates: FindingCandidate[] = [
@@ -148,6 +162,8 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         (runwayRes.data ?? null) as { balance: number | null; as_of: string | null; estimated_balance_now: number | null; burn_per_day_21d: number | null; days_runway_21d: number | null; runway_exhaustion_date_21d: string | null } | null,
         (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
       ),
+      ...checkAiJobsStuck(now, (aiJobsRes.data ?? []) as { id: string; kind: string; attempts: number | null; heartbeat_at: string | null; claimed_at: string | null }[]),
+      ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
