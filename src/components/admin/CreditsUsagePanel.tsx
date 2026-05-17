@@ -15,6 +15,7 @@ import { AlertTriangle, Plus, Settings as SettingsIcon } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { AddCreditEntryDialog } from "./AddCreditEntryDialog";
+import { ProjectedSpendPanel } from "./ProjectedSpendPanel";
 
 type StepRow = {
   id: string;
