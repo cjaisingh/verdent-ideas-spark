@@ -142,6 +142,7 @@ export function CreditsUsagePanel() {
   return (
     <div className="space-y-6">
       <ProjectedSpendPanel />
+      <SpendByCategoryPanel selectedCategory={categoryFilter} onSelectCategory={setCategoryFilter} />
 
       {/* Honest banner */}
       <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
