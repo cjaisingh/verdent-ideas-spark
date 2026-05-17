@@ -19,7 +19,7 @@ const FRESH_MS = 5 * 60 * 1000;
 const RECENT_JOB_MS = 60 * 60 * 1000;
 
 type WorkerRow = {
-  worker_name: string;
+  name: string;
   default_model: string | null;
   model_tags: string[] | null;
   last_seen_at: string | null;
