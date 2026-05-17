@@ -53,7 +53,7 @@ Job kinds (all defined in
 
 - Node.js 18+ on the worker box (uses global `fetch`).
 - [Ollama](https://ollama.com/) running locally: `ollama serve`.
-- At least one model pulled, e.g. `ollama pull llama3.1:8b`.
+- At least one model pulled, e.g. `ollama pull gemma4`.
 - The cross-project `AWIP_SERVICE_TOKEN` value (already in Cloud secrets).
 
 ### 2. Download the worker artefact
@@ -85,14 +85,14 @@ Required:
 | `SUPABASE_URL`       | `https://agzkyzyzopcgeobofjaz.supabase.co`    | Cloud project URL                      |
 | `AWIP_SERVICE_TOKEN` | `awip_…`                                      | Same token Cloud stores; never share   |
 | `WORKER_NAME`        | `macbook-ollama-01`                           | Stable; used as upsert key             |
-| `MODEL_TAGS`         | `llama3.1:8b,qwen2.5-coder:7b`                | Comma-separated; matched against job's `required_model_tags` |
+| `MODEL_TAGS`         | `gemma4,gemma4`                | Comma-separated; matched against job's `required_model_tags` |
 
 Optional (defaults shown):
 
 | Var             | Default                  | Purpose                                  |
 |-----------------|--------------------------|------------------------------------------|
 | `OLLAMA_URL`    | `http://localhost:11434` | Where to reach the Ollama daemon         |
-| `DEFAULT_MODEL` | `llama3.1:8b`            | Used when job has no `requested_model`   |
+| `DEFAULT_MODEL` | `gemma4`            | Used when job has no `requested_model`   |
 | `POLL_MS`       | `5000`                   | Idle poll cadence                        |
 | `HEARTBEAT_MS`  | `20000`                  | Heartbeat cadence while a job runs       |
 | `MAX_JOB_MS`    | `300000`                 | Per-job timeout (5 min)                  |
@@ -106,8 +106,8 @@ node --env-file=.env worker.mjs
 Expected first lines:
 
 ```
-… [worker] worker "macbook-ollama-01" tags=llama3.1:8b → https://…supabase.co
-… [worker] ollama=http://localhost:11434 default_model=llama3.1:8b
+… [worker] worker "macbook-ollama-01" tags=gemma4 → https://…supabase.co
+… [worker] ollama=http://localhost:11434 default_model=gemma4
 … [worker] ollama ok, 3 models available
 … [worker] idle (no jobs, 60s)
 ```

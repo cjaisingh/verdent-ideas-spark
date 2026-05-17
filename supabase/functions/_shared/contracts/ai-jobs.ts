@@ -139,7 +139,7 @@ export function projectDraft(kind: AiJobKind, input: unknown, output_text: strin
 
 export const AI_JOBS_CONTRACT = {
   kinds: AI_JOB_KINDS,
-  defaultModel: "llama3.1:8b",
+  defaultModel: "gemma4",
   workerAuth: "x-service-token",
   retryPolicy: { maxAttempts: 3, staleAfterMinutes: 10 },
   reviewSurface: "ai_draft_outputs",
