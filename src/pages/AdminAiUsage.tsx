@@ -196,6 +196,8 @@ export default function AdminAiUsage() {
         </p>
       </div>
 
+      <BudgetAlertBanner />
+
       <Tabs defaultValue="ai-calls">
         <TabsList>
           <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
