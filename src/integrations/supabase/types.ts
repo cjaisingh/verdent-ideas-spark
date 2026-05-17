@@ -1677,6 +1677,75 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_balance_snapshots: {
+        Row: {
+          as_of: string
+          balance_credits: number
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          phase_id: string | null
+          source: string | null
+        }
+        Insert: {
+          as_of?: string
+          balance_credits: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          phase_id?: string | null
+          source?: string | null
+        }
+        Update: {
+          as_of?: string
+          balance_credits?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          phase_id?: string | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
+        ]
+      }
       credit_entries: {
         Row: {
           category: Database["public"]["Enums"]["work_category"]
@@ -1737,6 +1806,20 @@ export type Database = {
             columns: ["phase_id"]
             isOneToOne: false
             referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_entries_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_entries_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
             referencedColumns: ["phase_id"]
           },
           {
@@ -3611,6 +3694,20 @@ export type Database = {
             referencedRelation: "v_credit_burn_per_phase_30d"
             referencedColumns: ["phase_id"]
           },
+          {
+            foreignKeyName: "overnight_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "overnight_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
         ]
       }
       plan_tasks: {
@@ -4230,6 +4327,20 @@ export type Database = {
             referencedRelation: "v_credit_burn_per_phase_30d"
             referencedColumns: ["phase_id"]
           },
+          {
+            foreignKeyName: "roadmap_phase_overnight_runs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_overnight_runs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
         ]
       }
       roadmap_phase_signoffs: {
@@ -4292,6 +4403,20 @@ export type Database = {
             columns: ["phase_id"]
             isOneToOne: false
             referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_signoffs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_signoffs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
             referencedColumns: ["phase_id"]
           },
         ]
@@ -4467,6 +4592,20 @@ export type Database = {
             columns: ["phase_id"]
             isOneToOne: false
             referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_sprints_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "roadmap_sprints_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
             referencedColumns: ["phase_id"]
           },
         ]
@@ -5304,6 +5443,20 @@ export type Database = {
             referencedRelation: "v_credit_burn_per_phase_30d"
             referencedColumns: ["phase_id"]
           },
+          {
+            foreignKeyName: "tool_policy_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "tool_policy_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
         ]
       }
       tool_policy_rules: {
@@ -5831,6 +5984,53 @@ export type Database = {
         }
         Relationships: []
       }
+      v_credit_balance_latest: {
+        Row: {
+          as_of: string | null
+          balance_credits: number | null
+          id: string | null
+          note: string | null
+          phase_id: string | null
+          source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
+        ]
+      }
       v_credit_burn_per_phase_30d: {
         Row: {
           manual_count: number | null
@@ -5862,6 +6062,22 @@ export type Database = {
         }
         Relationships: []
       }
+      v_credit_phase_deltas: {
+        Row: {
+          closing_at: string | null
+          closing_balance: number | null
+          delta_credits: number | null
+          logged_spend: number | null
+          opening_at: string | null
+          opening_balance: number | null
+          phase_id: string | null
+          phase_key: string | null
+          phase_status: Database["public"]["Enums"]["roadmap_status"] | null
+          phase_title: string | null
+          unaccounted_credits: number | null
+        }
+        Relationships: []
+      }
       v_credit_projection: {
         Row: {
           budget: number | null
@@ -5884,6 +6100,20 @@ export type Database = {
         }
         Relationships: []
       }
+      v_credit_runway: {
+        Row: {
+          as_of: string | null
+          balance: number | null
+          burn_per_day_21d: number | null
+          burn_per_day_7d: number | null
+          days_runway_21d: number | null
+          days_runway_7d: number | null
+          estimated_balance_now: number | null
+          runway_exhaustion_date_21d: string | null
+          spent_since_as_of: number | null
+        }
+        Relationships: []
+      }
       v_credit_spend_by_category: {
         Row: {
           category: string | null
@@ -5892,6 +6122,30 @@ export type Database = {
           last_30d_pct: number | null
           mtd_credits: number | null
           mtd_pct: number | null
+        }
+        Relationships: []
+      }
+      v_phases_awaiting_balance: {
+        Row: {
+          closed_at: string | null
+          hours_since_close: number | null
+          phase_id: string | null
+          phase_key: string | null
+          phase_title: string | null
+        }
+        Insert: {
+          closed_at?: string | null
+          hours_since_close?: never
+          phase_id?: string | null
+          phase_key?: string | null
+          phase_title?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          hours_since_close?: never
+          phase_id?: string | null
+          phase_key?: string | null
+          phase_title?: string | null
         }
         Relationships: []
       }

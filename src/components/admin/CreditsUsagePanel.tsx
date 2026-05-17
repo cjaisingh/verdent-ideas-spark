@@ -17,6 +17,9 @@ import { toast } from "sonner";
 import { AddCreditEntryDialog } from "./AddCreditEntryDialog";
 import { ProjectedSpendPanel } from "./ProjectedSpendPanel";
 import { SpendByCategoryPanel } from "./SpendByCategoryPanel";
+import { PhasesAwaitingBalancePanel } from "./PhasesAwaitingBalancePanel";
+import { BalanceHistoryPanel } from "./BalanceHistoryPanel";
+import { PhaseDeltasPanel } from "./PhaseDeltasPanel";
 import { categoryChip } from "@/lib/workCategory";
 
 type StepRow = {
@@ -141,7 +144,10 @@ export function CreditsUsagePanel() {
 
   return (
     <div className="space-y-6">
+      <PhasesAwaitingBalancePanel />
       <ProjectedSpendPanel />
+      <BalanceHistoryPanel />
+      <PhaseDeltasPanel />
       <SpendByCategoryPanel selectedCategory={categoryFilter} onSelectCategory={setCategoryFilter} />
 
       {/* Honest banner */}

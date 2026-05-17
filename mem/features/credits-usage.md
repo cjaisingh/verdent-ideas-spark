@@ -9,12 +9,14 @@ type: feature
 **Tables:**
 - `credit_entries` — operator-logged real credit spend (task_id, phase_id, step_label, credits, mode, note, occurred_at). Operator-only RLS. Realtime on.
 - `credit_settings` — singleton (id=true) with `proxy_rate_per_1k_tokens` (default 0.05), `monthly_budget_credits` (nullable), `alert_threshold_pct` (default 80).
+- `credit_balance_snapshots` — operator-entered remaining-credit readings (`balance_credits`, `as_of`, `phase_id?`, `source?`, `note?`). Optional `phase_id` tags it as the closing reading for that phase. Operator-only RLS + realtime.
 
 **Views (SECURITY INVOKER):**
 - `v_credit_burn_per_step` — unions manual entries + proxy rows derived from `roadmap_work_log` where `tokens_total > 0`. Proxy credits = `tokens_total / 1000 × proxy_rate_per_1k_tokens`. Carries `category` column (manual rows only; proxy rows NULL).
 - `v_credit_burn_per_phase_30d` — rollup by phase over last 30d with `manual_credits`, `proxy_credits`, `total_credits`.
 - `v_credit_projection` — single row: MTD actual + 14/21/30d burn/day + projected EOM + % of budget. Powers `ProjectedSpendPanel` at top of the tab. Linear extrapolation only; 21d window is the default. Budget alerts still use 7d (more reactive).
 - `v_credit_spend_by_category` — per-`work_category` MTD + 30d totals and share %. Powers `SpendByCategoryPanel` (bar + table, click to filter per-step table). Proxy rows excluded (no category).
+- `v_credit_balance_latest` / `v_credit_runway` / `v_credit_phase_deltas` / `v_phases_awaiting_balance` — drive the runway block in `ProjectedSpendPanel`, `BalanceHistoryPanel`, `PhaseDeltasPanel`, and `PhasesAwaitingBalancePanel` (end-of-phase prompt: any `roadmap_phases.status='done'` in last 14d without a snapshot nags until logged).
 
 **Categories:** `work_category` enum (`plan`/`build`/`pivot`/`refactor`/`bugfix`/`research`/`ops`/`other`) on `credit_entries` (default `build`). Orthogonal to `mode`. Optional `roadmap_tasks.default_category` pre-fills the dialog.
 
