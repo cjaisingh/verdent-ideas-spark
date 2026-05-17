@@ -176,6 +176,52 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
           await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
           alerts++;
         }
+
+        // Budget projection side-effects: insert credit_alerts row + optional Telegram push.
+        if (c.kind === "budget_projection_80" || c.kind === "budget_projection_100") {
+          const p = c.payload as { year_month: string; threshold_pct: number; projected_pct: number; burn_per_day: number; budget: number };
+          const settings = (budgetSettingsRes.data ?? null) as { operator_telegram_chat_id: string | null; alerts_enabled: boolean } | null;
+
+          let telegramMessageId: string | null = null;
+          if (settings?.alerts_enabled && settings?.operator_telegram_chat_id && SERVICE_TOKEN) {
+            try {
+              const emoji = p.threshold_pct === 100 ? "🚨" : "⚠️";
+              const text = `${emoji} <b>Lovable budget ${p.threshold_pct}% (projected)</b>\n` +
+                `Projected month-end: <b>${p.projected_pct.toFixed(0)}%</b> of ${p.budget} credits\n` +
+                `Burn rate (7d): ${p.burn_per_day.toFixed(1)}/day\n` +
+                `Month: ${p.year_month}`;
+              const res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-send`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-service-token": SERVICE_TOKEN,
+                  "Authorization": `Bearer ${SERVICE_ROLE}`,
+                },
+                body: JSON.stringify({
+                  chat_id: settings.operator_telegram_chat_id,
+                  text,
+                  parse_mode: "HTML",
+                }),
+              });
+              if (res.ok) {
+                const body = await res.json().catch(() => null) as { result?: { message_id?: number } } | null;
+                telegramMessageId = body?.result?.message_id ? String(body.result.message_id) : null;
+              } else {
+                console.error("telegram-send for budget alert failed", res.status, await res.text().catch(() => ""));
+              }
+            } catch (e) { console.error("telegram-send budget alert error", e); }
+          }
+
+          await sb.from("credit_alerts").insert({
+            year_month: p.year_month,
+            threshold_pct: p.threshold_pct,
+            projected_pct: p.projected_pct,
+            burn_per_day: p.burn_per_day,
+            budget: p.budget,
+            sentinel_finding_id: ins?.id ?? null,
+            telegram_message_id: telegramMessageId,
+          });
+        }
       }
     }
 
