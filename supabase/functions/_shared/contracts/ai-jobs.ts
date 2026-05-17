@@ -14,8 +14,26 @@ export const AI_JOB_KINDS = [
   "draft_changelog_entry",
   "draft_lesson_synthesis",
   "draft_doc_section",
+  "codemod_replace_any",
 ] as const;
 export type AiJobKind = typeof AI_JOB_KINDS[number];
+
+// ---- codemod_replace_any --------------------------------------------------
+// File-scoped job: ask Ollama to draft sound types for `any` sites in one TS
+// file. Output is a unified diff against ts_source. Lands in ai_draft_outputs
+// for operator review; gated by lint-delta + CI before merge.
+export const CodemodReplaceAnyInput = z.object({
+  file_path: z.string().min(1).max(300),
+  ts_source: z.string().min(1).max(60000),
+  any_sites: z.array(z.object({
+    line: z.number().int().min(1),
+    col: z.number().int().min(1),
+    snippet: z.string().min(1).max(400),
+    hint: z.string().max(200).optional(),
+  })).min(1).max(40),
+  surrounding_types: z.string().max(8000).optional(),
+});
+export type CodemodReplaceAnyInput = z.infer<typeof CodemodReplaceAnyInput>;
 
 // ---- Schemas -------------------------------------------------------------
 export const DraftChangelogEntryInput = z.object({
