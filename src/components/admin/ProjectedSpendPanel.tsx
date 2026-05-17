@@ -123,6 +123,8 @@ export function ProjectedSpendPanel() {
         </ToggleGroup>
       </CardHeader>
       <CardContent className="space-y-4">
+        <RunwayBlock runway={runway} />
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label="MTD actual" value={fmt(row.mtd_credits)} sub={`${fmt(row.mtd_manual)} manual · ${fmt(row.mtd_proxy)} proxy`} />
           <Stat label={`Burn (${win}d)`} value={`${fmt(burn)}/day`} sub={`${row.days_elapsed}/${row.days_in_month} days elapsed`} />
