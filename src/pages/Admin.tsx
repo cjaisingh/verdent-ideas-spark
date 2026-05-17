@@ -127,6 +127,8 @@ const Admin = () => {
         </p>
       </div>
 
+      <WorkerRestartChecklist />
+
       <section className="space-y-3">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-medium">Users</h2>
