@@ -143,6 +143,9 @@ const AdminCronHealth = () => {
       {/* Runtime health: cron tick cross-check + phase runs */}
       <RuntimeHealthWidget />
 
+      {/* Incident-style timeline of cleared sentinel findings + linked evidence */}
+      <ClearedFindingsTimeline />
+
       {/* W2/W3/W4 edge function health & error-rate dashboard */}
       <Card>
         <EdgeHealthDashboard />
