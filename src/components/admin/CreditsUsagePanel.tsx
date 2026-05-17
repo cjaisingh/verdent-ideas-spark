@@ -46,6 +46,8 @@ type Settings = {
   proxy_rate_per_1k_tokens: number;
   monthly_budget_credits: number | null;
   alert_threshold_pct: number;
+  operator_telegram_chat_id: string | null;
+  alerts_enabled: boolean;
 };
 
 function fmtCredits(n: number): string {
