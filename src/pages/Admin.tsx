@@ -13,6 +13,7 @@ import CronSecretsCheckPanel from "@/components/admin/CronSecretsCheckPanel";
 import TelegramBotPanel from "@/components/admin/TelegramBotPanel";
 import ManualOvernightTriggers from "@/components/admin/ManualOvernightTriggers";
 import OvernightBackfillPanel from "@/components/admin/OvernightBackfillPanel";
+import { WorkerRestartChecklist } from "@/components/admin/WorkerRestartChecklist";
 
 type AppRole = "admin" | "operator";
 const ROLES: AppRole[] = ["admin", "operator"];
@@ -125,6 +126,8 @@ const Admin = () => {
           Manage operator and admin roles. Every change is recorded in the audit log.
         </p>
       </div>
+
+      <WorkerRestartChecklist />
 
       <section className="space-y-3">
         <div className="flex items-center gap-3">
