@@ -2,6 +2,7 @@
 // Per-day counts, filters by job/model/status, CSV export, and detail rows.
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditsUsagePanel } from "@/components/admin/CreditsUsagePanel";
 import { ToolPolicyPanel } from "@/components/admin/ToolPolicyPanel";
 import { BudgetAlertBanner } from "@/components/admin/BudgetAlertBanner";
+import { BalanceSnapshotDialog } from "@/components/admin/BalanceSnapshotDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
