@@ -31,11 +31,16 @@ type Payload = {
   source?: string | null;
   lineno?: number | null;
   colno?: number | null;
-  kind: "error" | "unhandledrejection" | "boundary";
+  kind: "error" | "unhandledrejection" | "boundary" | "console.error" | "console.warn";
   meta?: Record<string, unknown>;
 };
 
+// Guard to avoid recursion when we patch console.error and our own sender / fetch
+// logs through console under the hood.
+let SENDING = false;
+
 async function send(p: Payload): Promise<void> {
+  if (SENDING) return;
   // De-dupe identical errors fired in a 5s window (e.g. React re-render storms).
   const key = `${p.kind}:${p.message}:${p.source ?? ""}:${p.lineno ?? ""}`;
   const now = Date.now();
@@ -43,32 +48,37 @@ async function send(p: Payload): Promise<void> {
   lastSentKey = key;
   lastSentAt = now;
 
-  let userId: string | null = null;
+  SENDING = true;
   try {
-    const { data } = await supabase.auth.getUser();
-    userId = data.user?.id ?? null;
-  } catch {/* ignore */}
+    let userId: string | null = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      userId = data.user?.id ?? null;
+    } catch {/* ignore */}
 
-  const body = JSON.stringify({
-    ...p,
-    url: window.location.href,
-    user_id: userId,
-    request_id: SESSION_REQUEST_ID,
-  });
-
-  try {
-    // Prefer sendBeacon so the report survives navigation / unload.
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], { type: "application/json" });
-      if (navigator.sendBeacon(ENDPOINT, blob)) return;
-    }
-    await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-request-id": SESSION_REQUEST_ID },
-      body,
-      keepalive: true,
+    const body = JSON.stringify({
+      ...p,
+      url: window.location.href,
+      user_id: userId,
+      request_id: SESSION_REQUEST_ID,
     });
-  } catch {/* never throw from the reporter */}
+
+    try {
+      // Prefer sendBeacon so the report survives navigation / unload.
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        if (navigator.sendBeacon(ENDPOINT, blob)) return;
+      }
+      await fetch(ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-request-id": SESSION_REQUEST_ID },
+        body,
+        keepalive: true,
+      });
+    } catch {/* never throw from the reporter */}
+  } finally {
+    SENDING = false;
+  }
 }
 
 export function reportBoundaryError(err: unknown, info: { componentStack?: string }): void {
@@ -111,4 +121,40 @@ export function installFrontendErrorCapture(): void {
       kind: "unhandledrejection",
     });
   });
+
+  // Patch console.error / console.warn so recurring issues that never throw
+  // (React warnings, deprecations, third-party complaints) still land in
+  // frontend_error_logs. Rows here are purged after 7 days; real errors keep
+  // the default retention.
+  const patchConsole = (level: "error" | "warn") => {
+    const original = console[level].bind(console);
+    console[level] = (...args: unknown[]) => {
+      original(...args);
+      if (SENDING) return;
+      try {
+        const firstErr = args.find((a) => a instanceof Error) as Error | undefined;
+        const message = args
+          .map((a) => {
+            if (a instanceof Error) return a.message;
+            if (typeof a === "string") return a;
+            try { return JSON.stringify(a); } catch { return String(a); }
+          })
+          .join(" ")
+          .slice(0, 2000);
+        if (!message.trim()) return;
+        // Skip our own beacon failures to avoid loops.
+        if (message.includes("frontend-errors")) return;
+        void send({
+          message,
+          stack: firstErr?.stack ?? null,
+          source: null,
+          lineno: null,
+          colno: null,
+          kind: level === "error" ? "console.error" : "console.warn",
+        });
+      } catch {/* never throw from the reporter */}
+    };
+  };
+  patchConsole("error");
+  patchConsole("warn");
 }
