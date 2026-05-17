@@ -629,7 +629,7 @@ export type BudgetSignals = {
   burn_7d_per_day: number | null;
   projected_month_end: number | null;
 };
-export type CreditAlertRow = { year_month: string; threshold_pct: number };
+export type CreditAlertRow = { year_month: string; threshold_pct: number | null; kind?: string };
 
 export function checkBudgetProjection(
   now: Date,
