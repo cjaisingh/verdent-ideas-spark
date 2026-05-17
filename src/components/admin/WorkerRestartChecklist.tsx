@@ -13,10 +13,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Cpu, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Cpu, ExternalLink, RefreshCw } from "lucide-react";
 
 const FRESH_MS = 5 * 60 * 1000;
 const RECENT_JOB_MS = 60 * 60 * 1000;
+
+type WorkerRow = {
+  worker_name: string;
+  default_model: string | null;
+  model_tags: string[] | null;
+  last_seen_at: string | null;
+  created_at: string | null;
+  enabled: boolean;
+};
+
+type ClaimLog = {
+  created_at: string;
+  status: number | null;
+  latency_ms: number | null;
+};
 
 type State = {
   loading: boolean;
@@ -24,6 +39,8 @@ type State = {
   defaultModels: string[];
   availableTags: string[];
   unservedModels: string[];
+  workers: WorkerRow[];
+  lastClaim: ClaimLog | null;
 };
 
 const EMPTY: State = {
@@ -32,7 +49,18 @@ const EMPTY: State = {
   defaultModels: [],
   availableTags: [],
   unservedModels: [],
+  workers: [],
+  lastClaim: null,
 };
+
+function ago(iso: string | null): string {
+  if (!iso) return "—";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s ago`;
+  if (ms < 3600_000) return `${Math.round(ms / 60_000)}m ago`;
+  if (ms < 86400_000) return `${Math.round(ms / 3600_000)}h ago`;
+  return new Date(iso).toLocaleString();
+}
 
 export function WorkerRestartChecklist() {
   const [s, setS] = useState<State>(EMPTY);
