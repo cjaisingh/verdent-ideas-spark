@@ -1,16 +1,21 @@
 // Reusable dialog to enqueue an ai_jobs draft for the local Ollama worker.
 // Supports all 3 contract kinds. Calls ai-jobs-enqueue with idempotency key.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "react-router-dom";
 import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+
+const CUSTOM = "__custom__";
+const WORKER_DEFAULT = "__worker_default__";
+const FRESH_MS = 2 * 60 * 1000;
 
 export type DraftKind = "draft_changelog_entry" | "draft_lesson_synthesis" | "draft_doc_section";
 
@@ -49,6 +54,43 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
   const [sectionAnchor, setSectionAnchor] = useState("");
   const [prompt, setPrompt] = useState("");
   const [existingMd, setExistingMd] = useState("");
+
+  // Model picker — sourced from ai_workers (online = last_seen within 2 min).
+  const [tags, setTags] = useState<string[]>([]);
+  const [workerDefault, setWorkerDefault] = useState<string | null>(null);
+  const [modelChoice, setModelChoice] = useState<string>(WORKER_DEFAULT);
+  const [customModel, setCustomModel] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("ai_workers")
+        .select("model_tags, default_model, last_seen_at, enabled");
+      if (cancelled) return;
+      const now = Date.now();
+      const online = (data ?? []).filter(
+        (w) => w.enabled && w.last_seen_at && now - new Date(w.last_seen_at).getTime() < FRESH_MS,
+      );
+      const union = Array.from(new Set(online.flatMap((w) => w.model_tags ?? []))).sort();
+      setTags(union);
+      setWorkerDefault(online.find((w) => w.default_model)?.default_model ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setModelChoice(WORKER_DEFAULT);
+    setCustomModel("");
+  }, [open, kind]);
+
+  const requestedModel = useMemo(() => {
+    if (modelChoice === WORKER_DEFAULT) return null;
+    if (modelChoice === CUSTOM) return customModel.trim() || null;
+    return modelChoice;
+  }, [modelChoice, customModel]);
 
   useEffect(() => {
     if (!open) return;
@@ -140,7 +182,7 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
     try {
       const idempotencyKey = `${kind}:${crypto.randomUUID()}`;
       const { data, error } = await supabase.functions.invoke("ai-jobs-enqueue", {
-        body: { kind, input, idempotency_key: idempotencyKey },
+        body: { kind, input, idempotency_key: idempotencyKey, requested_model: requestedModel },
       });
       if (error) throw error;
       toast.success(
@@ -241,6 +283,39 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
               </div>
             </>
           )}
+
+          <div className="border-t pt-3">
+            <Label className="text-xs">Model</Label>
+            <div className="flex gap-2 items-center mt-1">
+              <Select value={modelChoice} onValueChange={setModelChoice}>
+                <SelectTrigger className="w-[260px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={WORKER_DEFAULT}>
+                    Worker default{workerDefault ? ` (${workerDefault})` : ""}
+                  </SelectItem>
+                  {tags.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM}>Custom tag…</SelectItem>
+                </SelectContent>
+              </Select>
+              {modelChoice === CUSTOM && (
+                <Input
+                  className="font-mono"
+                  placeholder="e.g. gemma4"
+                  value={customModel}
+                  onChange={(e) => setCustomModel(e.target.value)}
+                />
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {tags.length === 0
+                ? "No online workers — falls back to worker DEFAULT_MODEL when one connects."
+                : `${tags.length} tag${tags.length === 1 ? "" : "s"} available across online workers.`}
+            </p>
+          </div>
         </div>
 
         <DialogFooter>
