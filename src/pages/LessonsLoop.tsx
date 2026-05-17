@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, RefreshCcw, BookOpen, ArrowLeft, Sparkles, MessageSquare } from "lucide-react";
+import { Loader2, RefreshCcw, BookOpen, ArrowLeft, Sparkles, MessageSquare, Bot } from "lucide-react";
+import { EnqueueDraftDialog, type DraftKind } from "@/components/admin/EnqueueDraftDialog";
 
 type Lesson = {
   id: string;
@@ -55,6 +56,7 @@ export default function LessonsLoop() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "client" | typeof SOURCES[number]>("all");
   const [cadenceFilter, setCadenceFilter] = useState<"all" | "daily" | "weekly">("all");
+  const [draftDialog, setDraftDialog] = useState<{ kind: DraftKind; initial?: Record<string, unknown> } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -147,6 +149,13 @@ export default function LessonsLoop() {
           <Button onClick={() => runSynthesis("weekly")} disabled={running !== null} size="sm">
             {running === "weekly" ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCcw className="h-4 w-4 mr-1" />}
             Run weekly roll-up
+          </Button>
+          <Button
+            onClick={() => setDraftDialog({ kind: "draft_lesson_synthesis" })}
+            size="sm"
+            variant="outline"
+          >
+            <Bot className="h-4 w-4 mr-1" /> Draft with local LLM
           </Button>
         </div>
       </div>
@@ -242,6 +251,28 @@ export default function LessonsLoop() {
                     <Button size="sm" onClick={() => updateStatus(l, "applied")}>Apply</Button>
                     <Button size="sm" variant="outline" onClick={() => updateStatus(l, "deferred")}>Defer</Button>
                     <Button size="sm" variant="ghost" onClick={() => updateStatus(l, "rejected")}>Reject</Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setDraftDialog({
+                          kind: "draft_lesson_synthesis",
+                          initial: {
+                            candidate_id: l.id,
+                            title_hint: l.title,
+                            category: l.category,
+                            evidence: Array.isArray(l.evidence) && l.evidence.length > 0
+                              ? l.evidence.map((e) => ({
+                                  source: typeof e === "object" && e && "source" in e ? String((e as { source: unknown }).source) : "lesson",
+                                  snippet: typeof e === "object" && e ? JSON.stringify(e) : String(e),
+                                }))
+                              : [{ source: "lesson", snippet: l.recommendation }],
+                          },
+                        })
+                      }
+                    >
+                      <Bot className="h-4 w-4 mr-1" /> Draft
+                    </Button>
                   </div>
                 )}
                 {tab !== "proposed" && (
