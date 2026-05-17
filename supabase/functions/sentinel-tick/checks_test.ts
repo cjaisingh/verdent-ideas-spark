@@ -157,3 +157,62 @@ Deno.test("job_error_rate: includes triggering run ids in subject_ref + payload"
   assertEquals(f.payload.error_run_ids_24h, ["r-newest", "r-mid", "r-old"]);
   assertEquals(f.payload.error_run_ids_1h, ["r-newest", "r-mid"]);
 });
+
+import { checkBudgetProjection } from "./checks.ts";
+
+const BNOW = new Date("2026-05-17T14:00:00Z");
+
+Deno.test("budget: no signals → no findings", () => {
+  assertEquals(checkBudgetProjection(BNOW, null, []).length, 0);
+});
+
+Deno.test("budget: no budget → no findings", () => {
+  const r = checkBudgetProjection(BNOW, { budget: 0, burn_7d_per_day: 50, projected_month_end: 1500 }, []);
+  assertEquals(r.length, 0);
+});
+
+Deno.test("budget: no burn → no findings", () => {
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 0, projected_month_end: 0 }, []);
+  assertEquals(r.length, 0);
+});
+
+Deno.test("budget: below 80% → no findings", () => {
+  // 20/day * 30 = 600 = 60% of 1000
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 20, projected_month_end: 600 }, []);
+  assertEquals(r.length, 0);
+});
+
+Deno.test("budget: crosses 80% → one warn finding", () => {
+  // 30/day * 30 = 900 = 90% of 1000
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 30, projected_month_end: 900 }, []);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].kind, "budget_projection_80");
+  assertEquals(r[0].severity, "high");
+  assertEquals(r[0].dedupe_key, "budget_projection_80:2026-05");
+});
+
+Deno.test("budget: crosses 100% → both findings if neither fired", () => {
+  // 40/day * 30 = 1200 = 120% of 1000
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 40, projected_month_end: 1200 }, []);
+  assertEquals(r.length, 2);
+  const kinds = r.map((c) => c.kind).sort();
+  assertEquals(kinds, ["budget_projection_100", "budget_projection_80"]);
+  const crit = r.find((c) => c.kind === "budget_projection_100")!;
+  assertEquals(crit.severity, "critical");
+});
+
+Deno.test("budget: 80 already fired this month → only 100 fires", () => {
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 40, projected_month_end: 1200 }, [
+    { year_month: "2026-05", threshold_pct: 80 },
+  ]);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].kind, "budget_projection_100");
+});
+
+Deno.test("budget: previous month's row does not block current month", () => {
+  const r = checkBudgetProjection(BNOW, { budget: 1000, burn_7d_per_day: 30, projected_month_end: 900 }, [
+    { year_month: "2026-04", threshold_pct: 80 },
+  ]);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].kind, "budget_projection_80");
+});
