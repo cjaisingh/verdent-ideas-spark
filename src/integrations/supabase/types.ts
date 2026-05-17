@@ -1895,9 +1895,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          label: string | null
           note: string | null
           phase_id: string | null
           source: string | null
+          subject_id: string | null
+          subject_type: string | null
         }
         Insert: {
           as_of?: string
@@ -1905,9 +1908,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          label?: string | null
           note?: string | null
           phase_id?: string | null
           source?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
         }
         Update: {
           as_of?: string
@@ -1915,9 +1921,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          label?: string | null
           note?: string | null
           phase_id?: string | null
           source?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
         }
         Relationships: [
           {
@@ -6343,6 +6352,72 @@ export type Database = {
           estimated_balance_now: number | null
           runway_exhaustion_date_21d: string | null
           spent_since_as_of: number | null
+        }
+        Relationships: []
+      }
+      v_credit_snapshot_deltas: {
+        Row: {
+          as_of: string | null
+          balance_credits: number | null
+          delta_credits: number | null
+          drift_band: string | null
+          drift_credits: number | null
+          drift_ratio: number | null
+          id: string | null
+          label: string | null
+          logged_credits_in_window: number | null
+          note: string | null
+          phase_id: string | null
+          prev_as_of: string | null
+          prev_balance: number | null
+          source: string | null
+          subject_id: string | null
+          subject_type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_phase_deltas"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_balance_snapshots_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_phases_awaiting_balance"
+            referencedColumns: ["phase_id"]
+          },
+        ]
+      }
+      v_credit_snapshot_latest_age: {
+        Row: {
+          entries_since_latest: number | null
+          latest_as_of: string | null
+          minutes_since_latest: number | null
+          snapshots_24h: number | null
         }
         Relationships: []
       }

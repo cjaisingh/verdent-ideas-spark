@@ -17,19 +17,36 @@ type Snapshot = {
   note: string | null;
 };
 
+type DriftRow = {
+  id: string;
+  drift_band: "match" | "over-logged" | "under-logged" | "no-logged";
+  drift_ratio: number | null;
+};
+
 export function BalanceHistoryPanel() {
   const [rows, setRows] = useState<Snapshot[]>([]);
+  const [drift, setDrift] = useState<Record<string, DriftRow>>({});
   const [loading, setLoading] = useState(true);
   const [dlgOpen, setDlgOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("credit_balance_snapshots")
-      .select("id,balance_credits,as_of,phase_id,source,note")
-      .order("as_of", { ascending: false })
-      .limit(50);
-    setRows((data ?? []) as Snapshot[]);
+    const [snapsRes, driftRes] = await Promise.all([
+      supabase
+        .from("credit_balance_snapshots")
+        .select("id,balance_credits,as_of,phase_id,source,note")
+        .order("as_of", { ascending: false })
+        .limit(50),
+      supabase
+        .from("v_credit_snapshot_deltas")
+        .select("id,drift_band,drift_ratio")
+        .order("as_of", { ascending: false })
+        .limit(50),
+    ]);
+    setRows((snapsRes.data ?? []) as Snapshot[]);
+    const map: Record<string, DriftRow> = {};
+    for (const d of (driftRes.data ?? []) as DriftRow[]) map[d.id] = d;
+    setDrift(map);
     setLoading(false);
   }, []);
 
@@ -76,26 +93,42 @@ export function BalanceHistoryPanel() {
               <TableHead>When</TableHead>
               <TableHead className="text-right">Balance</TableHead>
               <TableHead>Phase</TableHead>
+              <TableHead>Drift</TableHead>
               <TableHead>Source / note</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {!loading && rows.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6">No snapshots yet. Record one to enable runway estimates.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-6">No snapshots yet. Record one to enable runway estimates.</TableCell></TableRow>
             )}
-            {rows.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {new Date(r.as_of).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right tabular-nums font-semibold">{Number(r.balance_credits).toLocaleString()}</TableCell>
-                <TableCell className="text-xs font-mono">{r.phase_id ? r.phase_id.slice(0, 8) : "—"}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">
-                  {r.source ?? ""}
-                  {r.note ? <div className="italic">{r.note}</div> : null}
-                </TableCell>
-              </TableRow>
-            ))}
+            {rows.map((r) => {
+              const d = drift[r.id];
+              return (
+                <TableRow key={r.id}>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(r.as_of).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold">{Number(r.balance_credits).toLocaleString()}</TableCell>
+                  <TableCell className="text-xs font-mono">{r.phase_id ? r.phase_id.slice(0, 8) : "—"}</TableCell>
+                  <TableCell className="text-xs">
+                    {d ? (
+                      <span className={
+                        d.drift_band === "match" ? "text-emerald-600 dark:text-emerald-400" :
+                        d.drift_band === "under-logged" ? "text-destructive" :
+                        d.drift_band === "over-logged" ? "text-amber-600 dark:text-amber-400" :
+                        "text-muted-foreground"
+                      }>
+                        {d.drift_band}{d.drift_ratio != null ? ` ×${Number(d.drift_ratio).toFixed(2)}` : ""}
+                      </span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {r.source ?? ""}
+                    {r.note ? <div className="italic">{r.note}</div> : null}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

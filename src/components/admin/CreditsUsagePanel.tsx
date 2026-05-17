@@ -19,6 +19,7 @@ import { ProjectedSpendPanel } from "./ProjectedSpendPanel";
 import { SpendByCategoryPanel } from "./SpendByCategoryPanel";
 import { PhasesAwaitingBalancePanel } from "./PhasesAwaitingBalancePanel";
 import { BalanceHistoryPanel } from "./BalanceHistoryPanel";
+import { BalanceTrackingPanel } from "./BalanceTrackingPanel";
 import { PhaseDeltasPanel } from "./PhaseDeltasPanel";
 import { categoryChip } from "@/lib/workCategory";
 
@@ -146,6 +147,7 @@ export function CreditsUsagePanel() {
     <div className="space-y-6">
       <PhasesAwaitingBalancePanel />
       <ProjectedSpendPanel />
+      <BalanceTrackingPanel />
       <BalanceHistoryPanel />
       <PhaseDeltasPanel />
       <SpendByCategoryPanel selectedCategory={categoryFilter} onSelectCategory={setCategoryFilter} />
