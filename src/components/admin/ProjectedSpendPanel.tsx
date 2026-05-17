@@ -28,6 +28,18 @@ type Row = {
   projected_pct_30d: number | null;
 };
 
+type Runway = {
+  balance: number | null;
+  as_of: string | null;
+  spent_since_as_of: number | null;
+  estimated_balance_now: number | null;
+  burn_per_day_7d: number | null;
+  burn_per_day_21d: number | null;
+  days_runway_21d: number | null;
+  days_runway_7d: number | null;
+  runway_exhaustion_date_21d: string | null;
+};
+
 type Win = "14" | "21" | "30";
 const STORAGE_KEY = "awip.projectedSpend.window";
 
@@ -36,6 +48,7 @@ const fmt = (n: number | null | undefined) =>
 
 export function ProjectedSpendPanel() {
   const [row, setRow] = useState<Row | null>(null);
+  const [runway, setRunway] = useState<Runway | null>(null);
   const [loading, setLoading] = useState(true);
   const [win, setWin] = useState<Win>(() => {
     if (typeof window === "undefined") return "21";
@@ -46,9 +59,13 @@ export function ProjectedSpendPanel() {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase.from("v_credit_projection").select("*").maybeSingle();
+      const [proj, rw] = await Promise.all([
+        supabase.from("v_credit_projection").select("*").maybeSingle(),
+        supabase.from("v_credit_runway").select("*").maybeSingle(),
+      ]);
       if (!cancelled) {
-        setRow((data as Row | null) ?? null);
+        setRow((proj.data as Row | null) ?? null);
+        setRunway((rw.data as Runway | null) ?? null);
         setLoading(false);
       }
     })();
