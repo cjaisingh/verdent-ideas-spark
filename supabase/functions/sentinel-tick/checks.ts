@@ -21,7 +21,9 @@ export type FindingCandidate = {
     | "heygen_videos_failed"
     | "truth_conflicts_unresolved"
     | "budget_projection_80"
-    | "budget_projection_100";
+    | "budget_projection_100"
+    | "credit_runway_warn"
+    | "credit_runway_critical";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -627,7 +629,7 @@ export type BudgetSignals = {
   burn_7d_per_day: number | null;
   projected_month_end: number | null;
 };
-export type CreditAlertRow = { year_month: string; threshold_pct: number };
+export type CreditAlertRow = { year_month: string; threshold_pct: number | null; kind?: string };
 
 export function checkBudgetProjection(
   now: Date,
@@ -664,6 +666,82 @@ export function checkBudgetProjection(
         projected_month_end: projected,
         burn_per_day: burn,
         budget,
+      },
+    });
+  }
+  return out;
+}
+
+// Credit runway check. Reads v_credit_runway and fires:
+//   - credit_runway_warn      when days_runway_21d < 14 (high)
+//   - credit_runway_critical  when days_runway_21d < 7  (critical)
+// Skips when:
+//   - snapshot is missing or older than 7 days (stale → not actionable)
+//   - burn_per_day_21d <= 0 (no recent spend → infinite runway)
+//   - an alert of the same (year_month, kind) already fired this month
+export type RunwayRow = {
+  balance: number | null;
+  as_of: string | null;
+  estimated_balance_now: number | null;
+  burn_per_day_21d: number | null;
+  days_runway_21d: number | null;
+  runway_exhaustion_date_21d: string | null;
+};
+
+export function checkCreditRunway(
+  now: Date,
+  runway: RunwayRow | null,
+  existing: CreditAlertRow[],
+): FindingCandidate[] {
+  if (!runway || runway.balance == null || !runway.as_of) return [];
+  const ageMs = now.getTime() - +new Date(runway.as_of);
+  if (ageMs > 7 * 24 * 60 * 60 * 1000) return [];
+  const burn = Number(runway.burn_per_day_21d ?? 0);
+  if (!Number.isFinite(burn) || burn <= 0) return [];
+  const days = runway.days_runway_21d == null ? null : Number(runway.days_runway_21d);
+  if (days == null || !Number.isFinite(days)) return [];
+
+  const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const firedKinds = new Set(
+    existing.filter((r) => r.year_month === ym).map((r) => (r as { kind?: string }).kind),
+  );
+
+  const out: FindingCandidate[] = [];
+  // Critical first (so the higher band wins if both thresholds are crossed).
+  if (days < 7 && !firedKinds.has("runway_critical")) {
+    out.push({
+      kind: "credit_runway_critical",
+      severity: "critical",
+      summary: `Credit runway ${days.toFixed(1)}d at ${burn.toFixed(1)}/day. Balance ${Number(runway.estimated_balance_now ?? runway.balance).toFixed(0)}.`,
+      dedupe_key: `credit_runway_critical:${ym}`,
+      subject_ref: { year_month: ym, kind: "runway_critical" },
+      payload: {
+        year_month: ym,
+        kind: "runway_critical",
+        days_runway: days,
+        burn_per_day: burn,
+        balance: Number(runway.balance),
+        estimated_balance_now: Number(runway.estimated_balance_now ?? runway.balance),
+        as_of: runway.as_of,
+        exhaust_at: runway.runway_exhaustion_date_21d,
+      },
+    });
+  } else if (days < 14 && !firedKinds.has("runway_warn") && !firedKinds.has("runway_critical")) {
+    out.push({
+      kind: "credit_runway_warn",
+      severity: "high",
+      summary: `Credit runway ${days.toFixed(1)}d at ${burn.toFixed(1)}/day. Balance ${Number(runway.estimated_balance_now ?? runway.balance).toFixed(0)}.`,
+      dedupe_key: `credit_runway_warn:${ym}`,
+      subject_ref: { year_month: ym, kind: "runway_warn" },
+      payload: {
+        year_month: ym,
+        kind: "runway_warn",
+        days_runway: days,
+        burn_per_day: burn,
+        balance: Number(runway.balance),
+        estimated_balance_now: Number(runway.estimated_balance_now ?? runway.balance),
+        as_of: runway.as_of,
+        exhaust_at: runway.runway_exhaustion_date_21d,
       },
     });
   }

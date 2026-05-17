@@ -16,12 +16,17 @@ type: feature
 - `v_credit_burn_per_phase_30d` — rollup by phase over last 30d with `manual_credits`, `proxy_credits`, `total_credits`.
 - `v_credit_projection` — single row: MTD actual + 14/21/30d burn/day + projected EOM + % of budget. Powers `ProjectedSpendPanel` at top of the tab. Linear extrapolation only; 21d window is the default. Budget alerts still use 7d (more reactive).
 - `v_credit_spend_by_category` — per-`work_category` MTD + 30d totals and share %. Powers `SpendByCategoryPanel` (bar + table, click to filter per-step table). Proxy rows excluded (no category).
-- `v_credit_balance_latest` / `v_credit_runway` / `v_credit_phase_deltas` / `v_phases_awaiting_balance` — drive the runway block in `ProjectedSpendPanel`, `BalanceHistoryPanel`, `PhaseDeltasPanel`, and `PhasesAwaitingBalancePanel` (end-of-phase prompt: any `roadmap_phases.status='done'` in last 14d without a snapshot nags until logged).
+- `v_credit_balance_latest` / `v_credit_runway` / `v_credit_phase_deltas` / `v_phases_awaiting_balance` — drive runway block in `ProjectedSpendPanel`, `BalanceHistoryPanel`, `PhaseDeltasPanel`, `PhasesAwaitingBalancePanel`.
+- `v_credit_drift_ratio_overall` / `v_credit_drift_ratio_by_category` — last 8 closed phases with opening+closing snapshots; `drift_ratio = actual_total/logged_total`; confidence `high`(≥6)/`medium`(3-5)/`low`. Per-category attribution is share-of-logged-spend weighted.
 
 **Categories:** `work_category` enum (`plan`/`build`/`pivot`/`refactor`/`bugfix`/`research`/`ops`/`other`) on `credit_entries` (default `build`). Orthogonal to `mode`. Optional `roadmap_tasks.default_category` pre-fills the dialog.
 
-**UI:** banner explaining manual vs proxy, 4 KPIs (MTD manual / proxy / total / budget %), Recharts line trend (manual + proxy series), per-phase table, per-step table (manual=primary chip, proxy=secondary chip). "Log credits" dialog + Settings sheet.
+**UI:** banner explaining manual vs proxy, 4 KPIs, Recharts trend, per-phase + per-step tables. `ProjectedSpendPanel` shows Adjusted ×N.NN pill when drift ratio is medium/high confidence (toggleable, persists in localStorage as `awip.projectedSpend.driftAdjust`). `SpendByCategoryPanel` has a Drift column. `/admin/ai-usage?phase=<id>&prompt=balance` auto-opens `BalanceSnapshotDialog`.
 
-**Honest constraint:** Lovable has no billing API exposed to the project. Proxy is a *signal*, not a real credit number. Set `proxy_rate_per_1k_tokens = 0` to collapse the proxy series.
+**End-of-phase auto-prompt:** trigger `trg_phase_close_balance_prompt` on `roadmap_phases AFTER UPDATE OF status` inserts an idempotent `discussion_actions` row (`source=auto-credit-prompt`, `subject_type=roadmap_phase`, `night_eligible=true`, `morning_review_panel_ref=credits`) when status flips to `done`. `trg_resolve_balance_prompt` auto-closes it on snapshot insert. `PhasesAwaitingBalancePanel` is the fallback view.
 
-**Out of scope:** CSV import from Lovable billing export, Slack/Telegram budget breach webhook, historical backfill.
+**Runway alert:** sentinel-tick `checkCreditRunway` reads `v_credit_runway`. Fires `credit_runway_warn` (high, <14d) and `credit_runway_critical` (critical, <7d) once per (year_month, kind). Skips stale (>7d) snapshots and zero burn. `credit_alerts.kind` is the dedupe key (replaces old `threshold_pct` unique key).
+
+**Honest constraint:** Lovable has no billing API. Proxy is a signal. Set `proxy_rate_per_1k_tokens=0` to collapse.
+
+**Out of scope:** CSV import from Lovable billing export, historical backfill, per-tool drift.

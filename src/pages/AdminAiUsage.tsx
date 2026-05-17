@@ -2,6 +2,7 @@
 // Per-day counts, filters by job/model/status, CSV export, and detail rows.
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditsUsagePanel } from "@/components/admin/CreditsUsagePanel";
 import { ToolPolicyPanel } from "@/components/admin/ToolPolicyPanel";
 import { BudgetAlertBanner } from "@/components/admin/BudgetAlertBanner";
+import { BalanceSnapshotDialog } from "@/components/admin/BalanceSnapshotDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -80,6 +82,25 @@ export default function AdminAiUsage() {
   const [modelFilter, setModelFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
+
+  // Deeplink from phase-close auto-prompt: /admin/ai-usage?phase=<id>&prompt=balance
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [promptPhase, setPromptPhase] = useState<{ id: string; label: string } | null>(null);
+  useEffect(() => {
+    const phaseId = searchParams.get("phase");
+    const prompt = searchParams.get("prompt");
+    if (prompt !== "balance" || !phaseId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("roadmap_phases").select("key,title").eq("id", phaseId).maybeSingle();
+      setPromptPhase({ id: phaseId, label: data ? `${data.key} — ${data.title}` : "phase" });
+    })();
+  }, [searchParams]);
+  const closePrompt = () => {
+    setPromptPhase(null);
+    searchParams.delete("phase"); searchParams.delete("prompt");
+    setSearchParams(searchParams, { replace: true });
+  };
 
   const days = WINDOWS.find((w) => w.id === win)!.days;
 
@@ -198,7 +219,15 @@ export default function AdminAiUsage() {
 
       <BudgetAlertBanner />
 
-      <Tabs defaultValue="ai-calls">
+      <BalanceSnapshotDialog
+        open={!!promptPhase}
+        onOpenChange={(o) => { if (!o) closePrompt(); }}
+        phaseId={promptPhase?.id ?? null}
+        phaseLabel={promptPhase?.label ?? null}
+        onSaved={closePrompt}
+      />
+
+      <Tabs defaultValue={promptPhase ? "credits" : "ai-calls"}>
         <TabsList>
           <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
           <TabsTrigger value="credits">Credits &amp; Usage</TabsTrigger>

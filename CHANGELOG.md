@@ -200,3 +200,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 2. Every manifest change emits a `capability_events` row.
 3. All write endpoints are idempotent — same `Idempotency-Key` returns the original response.
 4. No "who acts when" logic in Core — routing belongs in the Control Plane.
+
+## Credit runway + drift (W-credits.2)
+
+- **Runway alert**: sentinel-tick checks `v_credit_runway` every 15min; fires `credit_runway_warn` (<14d) and `credit_runway_critical` (<7d) once per (year_month, kind). Telegram push + `credit_alerts` row. Skips stale (>7d) snapshots and zero burn.
+- **Auto-prompt at phase close**: trigger `trg_phase_close_balance_prompt` inserts an idempotent `discussion_action` (`source=auto-credit-prompt`) when a `roadmap_phases.status` flips to `done`. Deeplink `/admin/ai-usage?phase=<id>&prompt=balance` auto-opens the snapshot dialog. Recording the snapshot auto-resolves the action via `trg_resolve_balance_prompt`.
+- **Drift-adjusted projections**: new views `v_credit_drift_ratio_overall` and `v_credit_drift_ratio_by_category` (last 8 closed phases with opening+closing snapshots). `ProjectedSpendPanel` multiplies EOM by the overall ratio when confidence ≥ medium (toggle to disable). `SpendByCategoryPanel` gains a Drift column with sample count.
+- `credit_alerts` schema: added `kind` column (replaces `(year_month, threshold_pct)` unique key with `(year_month, kind)`); existing rows backfilled.
