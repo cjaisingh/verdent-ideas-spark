@@ -7,7 +7,7 @@ import {
   checkFrontendRealtimeErrors, checkEdgeFunctionErrorRate, checkClientTransportErrors,
   checkVoicePipelineRed, checkNightJobsStalled, checkAllowlistRejects, checkWhatsNewDraftsStale,
   checkLintDeltaFailures, checkCompanionStreamsStalled, checkHeygenVideosFailed,
-  checkTruthConflictsUnresolved, checkBudgetProjection,
+  checkTruthConflictsUnresolved, checkBudgetProjection, checkCreditRunway,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -65,12 +65,13 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
 
     // Budget projection signals + state
     const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes] = await Promise.all([
+    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes, runwayRes] = await Promise.all([
       sb.from("v_tool_policy_signals").select("budget,burn_7d_per_day,projected_month_end").maybeSingle(),
       sb.from("credit_settings")
         .select("operator_telegram_chat_id,alerts_enabled")
         .eq("id", true).maybeSingle(),
-      sb.from("credit_alerts").select("year_month,threshold_pct").eq("year_month", ym),
+      sb.from("credit_alerts").select("year_month,threshold_pct,kind").eq("year_month", ym),
+      sb.from("v_credit_runway").select("balance,as_of,estimated_balance_now,burn_per_day_21d,days_runway_21d,runway_exhaustion_date_21d").maybeSingle(),
     ]);
 
     const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
@@ -140,7 +141,12 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkBudgetProjection(
         now,
         (budgetSignalsRes.data ?? null) as { budget: number | null; burn_7d_per_day: number | null; projected_month_end: number | null } | null,
-        (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number }[],
+        (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
+      ),
+      ...checkCreditRunway(
+        now,
+        (runwayRes.data ?? null) as { balance: number | null; as_of: string | null; estimated_balance_now: number | null; burn_per_day_21d: number | null; days_runway_21d: number | null; runway_exhaustion_date_21d: string | null } | null,
+        (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
       ),
     ];
 
