@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditsUsagePanel } from "@/components/admin/CreditsUsagePanel";
 import { ToolPolicyPanel } from "@/components/admin/ToolPolicyPanel";
+import { BudgetAlertBanner } from "@/components/admin/BudgetAlertBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
