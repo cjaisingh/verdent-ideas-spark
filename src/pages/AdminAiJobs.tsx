@@ -232,6 +232,8 @@ export default function AdminAiJobs() {
         </Button>
       </div>
 
+      <AiJobsSentinelAlerts />
+
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         {Object.entries(counts).map(([k, v]) => (
           <Card key={k}>
