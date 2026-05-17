@@ -68,16 +68,26 @@ export function WorkerRestartChecklist() {
   async function load() {
     setS((p) => ({ ...p, loading: true }));
     const since = new Date(Date.now() - RECENT_JOB_MS).toISOString();
-    const [workersRes, jobsRes] = await Promise.all([
-      supabase.from("ai_workers").select("model_tags, default_model, last_seen_at, enabled"),
+    const [workersRes, jobsRes, claimRes] = await Promise.all([
+      supabase
+        .from("ai_workers")
+        .select("worker_name, model_tags, default_model, last_seen_at, created_at, enabled")
+        .order("last_seen_at", { ascending: false, nullsFirst: false }),
       supabase
         .from("ai_jobs")
         .select("requested_model, created_at")
         .gte("created_at", since)
         .not("requested_model", "is", null),
+      supabase
+        .from("edge_request_logs")
+        .select("created_at, status, latency_ms")
+        .eq("function_name", "ai-jobs-claim")
+        .order("created_at", { ascending: false })
+        .limit(1),
     ]);
     const now = Date.now();
-    const online = (workersRes.data ?? []).filter(
+    const allWorkers = (workersRes.data ?? []) as WorkerRow[];
+    const online = allWorkers.filter(
       (w) => w.enabled && w.last_seen_at && now - new Date(w.last_seen_at).getTime() < FRESH_MS,
     );
     const availableTags = Array.from(new Set(online.flatMap((w) => w.model_tags ?? []))).sort();
@@ -96,6 +106,8 @@ export function WorkerRestartChecklist() {
       defaultModels,
       availableTags,
       unservedModels,
+      workers: allWorkers,
+      lastClaim: ((claimRes.data ?? [])[0] as ClaimLog | undefined) ?? null,
     });
   }
 
