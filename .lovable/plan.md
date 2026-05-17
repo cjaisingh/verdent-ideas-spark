@@ -1,79 +1,103 @@
-# Credits: close the loop
 
-Three additions on top of the balance/runway work already shipped.
+# Outsource drafting work to local Ollama
 
-## 1. Runway-low alert (sentinel-tick)
+## Roles
 
-New check `credit_runway_low` in `supabase/functions/sentinel-tick/checks.ts`.
+- **Lovable (me)** — architect, planner, schema/contract author, reviewer of outputs. No change to how I work today.
+- **Ollama box (your laptop)** — stateless worker. Pulls jobs, runs the local model, posts results back. Never holds secrets beyond a service token.
+- **Lovable Cloud** — queue, auth, audit. No direct outbound to your box.
 
-- Reads `v_credit_runway` once per tick.
-- Bands:
-  - `warn` when `days_runway_21d < 14`
-  - `critical` when `days_runway_21d < 7`
-- Skip if `as_of` older than 7 days (stale snapshot → not actionable, falls under the "missing balance" path instead).
-- Skip if `burn_per_day_21d <= 0` (no recent spend → infinite runway, no alert).
-- Fires Telegram via `telegram-send` with format:
-  `[CREDITS] Runway {days}d at burn {x}/day. Balance {b} as of {as_of}. → /admin/ai-usage`
-- Idempotency: reuse the existing `credit_alerts` table from the budget-alerts work. New `kind` values `runway_warn` / `runway_critical`, keyed by `(year_month, kind)` so each band fires at most once per calendar month. Re-arms when month rolls over OR when a new snapshot pushes runway back above the threshold for ≥48h (clear → re-fire allowed).
-- Writes a `sentinel_findings` row at matching severity so it lands on Morning Review.
+Out of scope for slice 1: full code generation, anything that mutates the repo, OpenRouter, tunnels.
 
-## 2. Auto-prompt at phase close
+## Slice 1 — Doc/changelog/lesson drafting
 
-Replace passive `PhasesAwaitingBalancePanel` reliance with an active nudge.
+Three job kinds only, all "produce text, attach to a record":
+1. `draft_changelog_entry` — input: list of recent merged commits/migration filenames in a window. Output: markdown block for `CHANGELOG.md`.
+2. `draft_lesson_synthesis` — input: a `lesson_candidate` row. Output: lesson body in the existing `lessons` shape.
+3. `draft_doc_section` — input: `{doc_path, section_anchor, prompt}`. Output: markdown for that section.
 
-- Trigger `tg_roadmap_phase_close_balance_prompt` on `roadmap_phases AFTER UPDATE`:
-  - Fires only on `status` transition to `done`.
-  - Inserts a `discussion_action` `{ kind: 'credit_balance_snapshot', title: 'Record closing balance for phase: <name>', risk: 'low', night_eligible: true, deeplink: '/admin/ai-usage?phase=<id>&prompt=balance' }`.
-  - Idempotent: skip if a `discussion_action` with the same `kind` and `phase_id` already exists in `open` state.
-- `/admin/ai-usage` reads `?phase=<id>&prompt=balance` and auto-opens `BalanceSnapshotDialog` pre-filled with that phase.
-- Recording a snapshot for that phase auto-resolves the matching `discussion_action`.
-- Keep `PhasesAwaitingBalancePanel` as a fallback view for anything that slips through (e.g. trigger disabled, old phases).
-- 24h follow-up: existing sentinel `v_phases_awaiting_balance` continues to surface anything still missing after a day.
+All outputs land in a new `ai_draft_outputs` table as `status='ready_for_review'`. Operator approves → drafts get applied by existing flows (lesson promotion / a small "copy to clipboard" button for changelog and docs). **No auto-merge.**
 
-## 3. Drift-adjusted projections
+## Data model
 
-Use observed `unaccounted` from `v_credit_phase_deltas` to scale projections.
+| Table | Purpose |
+|---|---|
+| `ai_jobs` | The queue. `id, kind, input_json, status (queued/claimed/done/failed/cancelled), claimed_by, claimed_at, heartbeat_at, attempts, max_retries=3, priority, created_by, requested_model, idempotency_key UNIQUE` |
+| `ai_job_results` | One row per attempt. `job_id, output_text, output_json, model, tokens_in, tokens_out, latency_ms, error, created_at` |
+| `ai_draft_outputs` | Reviewable surface. `job_id, kind, target_ref jsonb, body_md, status (ready/approved/rejected/applied), reviewed_by, reviewed_at` |
+| `ai_workers` | Registered Ollama boxes. `name, model_tags[], last_seen_at, enabled, owner_user_id` |
 
-- New view `v_credit_drift_ratio_by_category`:
-  - Joins `roadmap_phases` → `v_credit_phase_deltas` → `work_category` (via `src/lib/workCategory.ts` mapping logic mirrored in SQL or a stored function).
-  - Per category, last 8 closed phases with both opening+closing snapshots:
-    - `logged_total`, `actual_total = sum(opening - closing)`, `drift_ratio = actual_total / NULLIF(logged_total, 0)`.
-  - Returns `category`, `phase_sample_count`, `drift_ratio`, `confidence` (`high` ≥6 samples, `medium` 3–5, `low` <3).
-- New view `v_credit_drift_ratio_overall`: single row, same maths across all categories combined, fallback when category-specific ratio is `low` confidence.
-- `ProjectedSpendPanel`:
-  - Multiply each projected line by the matching category drift ratio when confidence ≥ `medium`, else use overall ratio, else use `1.0` (no adjustment).
-  - Show a small "Adjusted ×1.23 (from drift)" annotation under each projection so the operator sees the correction and can sanity-check it.
-  - Add an "Unadjusted" toggle to flip back to raw projections.
-- `SpendByCategoryPanel`: append a "Drift" column showing the per-category ratio + sample count, so the operator can spot categories where logging is systematically off.
+RLS: operator-only for read/review. Workers authenticate with `x-awip-service-token` (existing pattern) — never user JWT.
 
-## Out of scope
+Realtime on `ai_jobs` and `ai_draft_outputs` so the review UI updates live.
 
-- Auto-pull from Lovable (still no API).
-- Backfilling historical snapshots (option 3 from prior turn, parked).
-- Per-tool drift (only per-category for now — drift signal is too noisy at tool granularity until we have more phases).
+`reclaim_stale_ai_jobs()` mirrors the existing `reclaim_stale_night_jobs` — call it from `sentinel-tick`. Heartbeat > 5 min stale → reset to `queued`, increment `attempts`, terminal `auto_blocked` at `max_retries`.
 
-## Files
+## Edge functions (all wrapped with `withLogger`, contracts in `_shared/contracts/`)
 
-**Migration (1):**
-- `supabase/migrations/<ts>_credit_runway_drift.sql` — trigger + 2 views + `credit_alerts.kind` accepts new values.
+| Function | Auth | Purpose |
+|---|---|---|
+| `ai-jobs-enqueue` | operator JWT | Create a job. Validates input per `kind` via zod contract. Idempotent on `idempotency_key`. |
+| `ai-jobs-claim` | service token | Worker pulls next `queued` job for its `model_tags`. Sets `claimed_by`, `claimed_at`, `heartbeat_at`. Returns one job or 204. |
+| `ai-jobs-heartbeat` | service token | Worker pings every 60s while running. Updates `heartbeat_at`. |
+| `ai-jobs-complete` | service token | Worker posts result. Writes `ai_job_results`, marks job `done`, creates `ai_draft_outputs` row `ready_for_review`. |
+| `ai-jobs-fail` | service token | Worker reports error. Increments `attempts`, requeues or marks `failed`. |
 
-**Edge functions:**
-- `supabase/functions/sentinel-tick/checks.ts` — add `credit_runway_low` check.
+No edge function ever calls Ollama. Cloud → Box traffic = zero.
 
-**Frontend:**
-- `src/components/admin/ProjectedSpendPanel.tsx` — drift adjustment + toggle + annotation.
-- `src/components/admin/SpendByCategoryPanel.tsx` — Drift column.
-- `src/pages/AdminAiUsage.tsx` (or wherever the route lives) — read `?phase=&prompt=balance` and auto-open dialog.
-- `src/components/admin/BalanceSnapshotDialog.tsx` — on success, resolve matching `discussion_action`.
+## Worker (runs on your laptop)
 
-**Docs/memory:**
-- `docs/credits-usage.md` — three new sections.
-- `CHANGELOG.md`.
-- `mem/features/credits-usage.md` — update with runway alert, auto-prompt trigger, drift ratio.
-- `mem/index.md` — Core line tweak if needed; keep memory entry pointer intact.
+Tiny TS or Python script — about 100 lines. Loop:
 
-## Verification
+```text
+every 5s:
+  job = POST /ai-jobs-claim {model_tags: ["llama3.1:8b","qwen2.5-coder:7b"]}
+  if !job: continue
+  spawn heartbeat() every 60s
+  build prompt from job.kind + job.input_json
+  call http://localhost:11434/api/chat with job.requested_model
+  POST /ai-jobs-complete {job_id, output_text, model, tokens_*, latency_ms}
+```
 
-- Insert a low-balance snapshot in a scratch test, tick sentinel, confirm Telegram fires once and `credit_alerts` row written; second tick same month silent.
-- Flip a `roadmap_phase` to `done`, confirm `discussion_action` created and deeplink auto-opens dialog with phase pre-selected; re-flipping (idempotency) does not duplicate.
-- Spot-check drift view against `v_credit_phase_deltas` totals for one category by hand.
+Config: `AWIP_SERVICE_TOKEN`, `AWIP_BASE_URL`, `OLLAMA_URL=http://localhost:11434`, `WORKER_NAME`. Lives outside the repo (your `~/awip-worker/`). I'll provide the script as a copy-paste artefact, not part of this build.
+
+Survives laptop sleep: on wake, claim picks up wherever the queue is. Stale jobs get reclaimed by sentinel.
+
+## Producer hooks (where jobs come from)
+
+- **Manual button** on `/admin/lessons` ("Draft with local LLM") → `draft_lesson_synthesis`.
+- **Manual button** on `/admin/ai-usage` or a small `/admin/ai-jobs` console → `draft_changelog_entry` for a date range.
+- **Manual button** on doc pages later — not in slice 1.
+
+No cron producer in slice 1. Want explicit operator triggering until trust is established.
+
+## Review UI — `/admin/ai-jobs`
+
+Two tabs: **Jobs** (queue health, last 50, retry/cancel) and **Drafts** (ready_for_review with diff-style preview, Approve/Reject). Approve on a lesson draft populates the existing lesson form; approve on a changelog draft copies to clipboard and links the entry.
+
+## Observability
+
+- `ai_jobs_stuck` sentinel check: any job `claimed > 10 min ago` with stale heartbeat.
+- `ai_workers_offline` sentinel: enabled worker with `last_seen_at > 15 min ago` AND queue depth > 0.
+- All worker calls land in `ai_usage_log` with `job='ollama-worker'`, `model=<llama3.1:8b>`, so existing credits/usage panels show local spend as $0 — useful "what we saved" view later.
+
+## Why this won't make me dumber
+
+- I still write every job's input contract and review every output kind before it can be enabled.
+- Slice 1 produces *text for you to approve*, not code or schema. Worst case: you reject a draft.
+- Adding a new job kind requires a new contract file + new producer button — both are my work, not the worker's.
+
+## Files I'll touch when you say go
+
+- Migration: `ai_jobs`, `ai_job_results`, `ai_draft_outputs`, `ai_workers`, `reclaim_stale_ai_jobs()`, RLS.
+- `supabase/functions/_shared/contracts/ai-jobs.ts` (zod schemas per kind).
+- 5 edge functions above.
+- `supabase/functions/sentinel-tick/checks.ts` — 2 new checks.
+- `src/pages/AdminAiJobs.tsx` + route.
+- Buttons on `/admin/lessons` and `/admin/ai-usage`.
+- `docs/ai-jobs-ollama.md`, `CHANGELOG.md`, `mem://features/ai-jobs-ollama.md`, `mem://index.md`.
+- A standalone worker script delivered as `/mnt/documents/awip-ollama-worker.ts` (lives outside the repo on your box).
+
+## Open questions before I build
+
+None blocking. If you want me to skip the `/admin/ai-jobs` page in slice 1 and just expose Approve/Reject inline on lessons + a tiny strip on `/admin/ai-usage`, say so — saves about a third of the UI work.
