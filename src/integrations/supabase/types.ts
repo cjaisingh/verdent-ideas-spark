@@ -5184,6 +5184,122 @@ export type Database = {
         }
         Relationships: []
       }
+      tool_policy_recommendations: {
+        Row: {
+          burn_rate_per_day: number | null
+          chosen_rule_id: string | null
+          chosen_tool: string
+          created_at: string
+          credits_remaining_pct: number | null
+          id: string
+          operator_id: string | null
+          phase_id: string | null
+          score_breakdown: Json
+          task_type: string
+        }
+        Insert: {
+          burn_rate_per_day?: number | null
+          chosen_rule_id?: string | null
+          chosen_tool: string
+          created_at?: string
+          credits_remaining_pct?: number | null
+          id?: string
+          operator_id?: string | null
+          phase_id?: string | null
+          score_breakdown?: Json
+          task_type: string
+        }
+        Update: {
+          burn_rate_per_day?: number | null
+          chosen_rule_id?: string | null
+          chosen_tool?: string
+          created_at?: string
+          credits_remaining_pct?: number | null
+          id?: string
+          operator_id?: string | null
+          phase_id?: string | null
+          score_breakdown?: Json
+          task_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_policy_recommendations_chosen_rule_id_fkey"
+            columns: ["chosen_rule_id"]
+            isOneToOne: false
+            referencedRelation: "tool_policy_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tool_policy_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "tool_policy_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tool_policy_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+        ]
+      }
+      tool_policy_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          max_credits_remaining_pct: number | null
+          min_burn_rate_per_day: number | null
+          min_credits_remaining_pct: number | null
+          name: string
+          phase_ids: string[] | null
+          precedence: number
+          reasoning: string
+          recommended_tool: string
+          task_types: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          max_credits_remaining_pct?: number | null
+          min_burn_rate_per_day?: number | null
+          min_credits_remaining_pct?: number | null
+          name: string
+          phase_ids?: string[] | null
+          precedence?: number
+          reasoning?: string
+          recommended_tool: string
+          task_types?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          max_credits_remaining_pct?: number | null
+          min_burn_rate_per_day?: number | null
+          min_credits_remaining_pct?: number | null
+          name?: string
+          phase_ids?: string[] | null
+          precedence?: number
+          reasoning?: string
+          recommended_tool?: string
+          task_types?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -5688,6 +5804,16 @@ export type Database = {
           step_label: string | null
           task_id: string | null
           tokens_total: number | null
+        }
+        Relationships: []
+      }
+      v_tool_policy_signals: {
+        Row: {
+          budget: number | null
+          burn_7d_per_day: number | null
+          mtd_credits: number | null
+          projected_month_end: number | null
+          remaining_pct: number | null
         }
         Relationships: []
       }

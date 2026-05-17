@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditsUsagePanel } from "@/components/admin/CreditsUsagePanel";
+import { ToolPolicyPanel } from "@/components/admin/ToolPolicyPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -198,10 +199,15 @@ export default function AdminAiUsage() {
         <TabsList>
           <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
           <TabsTrigger value="credits">Credits &amp; Usage</TabsTrigger>
+          <TabsTrigger value="tool-policy">Tool Policy</TabsTrigger>
         </TabsList>
 
         <TabsContent value="credits" className="mt-6">
           <CreditsUsagePanel />
+        </TabsContent>
+
+        <TabsContent value="tool-policy" className="mt-6">
+          <ToolPolicyPanel />
         </TabsContent>
 
         <TabsContent value="ai-calls" className="mt-6 space-y-6">
