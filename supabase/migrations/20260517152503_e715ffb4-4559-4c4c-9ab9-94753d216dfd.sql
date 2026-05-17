@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.tg_phase_close_balance_prompt() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_resolve_balance_prompt_on_snapshot() FROM PUBLIC, anon, authenticated;
