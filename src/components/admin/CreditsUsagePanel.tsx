@@ -16,6 +16,8 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, Ca
 import { toast } from "sonner";
 import { AddCreditEntryDialog } from "./AddCreditEntryDialog";
 import { ProjectedSpendPanel } from "./ProjectedSpendPanel";
+import { SpendByCategoryPanel } from "./SpendByCategoryPanel";
+import { categoryChip } from "@/lib/workCategory";
 
 type StepRow = {
   id: string;
