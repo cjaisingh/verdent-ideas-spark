@@ -136,6 +136,8 @@ export function CreditsUsagePanel() {
 
   return (
     <div className="space-y-6">
+      <ProjectedSpendPanel />
+
       {/* Honest banner */}
       <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
         <strong className="text-amber-600 dark:text-amber-400">Note:</strong>{" "}
