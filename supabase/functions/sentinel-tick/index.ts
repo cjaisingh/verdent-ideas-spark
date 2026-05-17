@@ -63,6 +63,16 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const truthConflictsRes = await sb.from("truth_conflicts")
       .select("entity,entity_id,field,top_source,next_source").limit(200);
 
+    // Budget projection signals + state
+    const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes] = await Promise.all([
+      sb.from("v_tool_policy_signals").select("budget,burn_7d_per_day,projected_month_end").maybeSingle(),
+      sb.from("credit_settings")
+        .select("operator_telegram_chat_id,alerts_enabled")
+        .eq("id", true).maybeSingle(),
+      sb.from("credit_alerts").select("year_month,threshold_pct").eq("year_month", ym),
+    ]);
+
     const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
       sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
       sb.from("edge_request_logs")
