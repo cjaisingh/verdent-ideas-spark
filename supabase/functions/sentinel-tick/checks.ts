@@ -749,3 +749,72 @@ export function checkCreditRunway(
   }
   return out;
 }
+
+// ============================================================================
+// AI Jobs (local Ollama worker) — slice 1
+// ============================================================================
+
+export type AiJobStaleRow = {
+  id: string;
+  kind: string;
+  attempts: number | null;
+  heartbeat_at: string | null;
+  claimed_at: string | null;
+};
+
+export function checkAiJobsStuck(
+  now: Date,
+  rows: AiJobStaleRow[],
+  staleMinutes = 10,
+): FindingCandidate[] {
+  const cutoff = now.getTime() - staleMinutes * 60_000;
+  const stuck = rows.filter((r) => {
+    const last = new Date(r.heartbeat_at ?? r.claimed_at ?? 0).getTime();
+    return last > 0 && last < cutoff;
+  });
+  if (stuck.length === 0) return [];
+  const hour = Math.floor(now.getTime() / (60 * 60_000));
+  return [{
+    kind: "ai_jobs_stuck",
+    severity: stuck.length >= 3 ? "high" : "medium",
+    summary:
+      `${stuck.length} ai_job(s) claimed > ${staleMinutes}m with stale heartbeat. ` +
+      `Worker probably crashed or laptop slept.`,
+    dedupe_key: `ai_jobs_stuck:${hour}`,
+    subject_ref: { count: stuck.length },
+    payload: { stale_minutes: staleMinutes, ids: stuck.slice(0, 10).map((s) => s.id) },
+  }];
+}
+
+export type AiWorkerRow = {
+  name: string;
+  enabled: boolean;
+  last_seen_at: string | null;
+};
+
+export function checkAiWorkersOffline(
+  now: Date,
+  workers: AiWorkerRow[],
+  queueDepth: number,
+  offlineMinutes = 15,
+): FindingCandidate[] {
+  if (queueDepth === 0) return []; // no queue → no urgency
+  const cutoff = now.getTime() - offlineMinutes * 60_000;
+  const offline = workers.filter((w) => {
+    if (!w.enabled) return false;
+    const last = new Date(w.last_seen_at ?? 0).getTime();
+    return last === 0 || last < cutoff;
+  });
+  if (offline.length === 0) return [];
+  const hour = Math.floor(now.getTime() / (60 * 60_000));
+  return [{
+    kind: "ai_workers_offline",
+    severity: "medium",
+    summary:
+      `${offline.length} enabled ai_worker(s) offline > ${offlineMinutes}m ` +
+      `with ${queueDepth} job(s) waiting.`,
+    dedupe_key: `ai_workers_offline:${hour}`,
+    subject_ref: { queue_depth: queueDepth },
+    payload: { offline_minutes: offlineMinutes, names: offline.map((w) => w.name) },
+  }];
+}
