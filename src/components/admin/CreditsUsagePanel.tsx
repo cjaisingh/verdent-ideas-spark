@@ -85,6 +85,8 @@ export function CreditsUsagePanel() {
         proxy_rate_per_1k_tokens: Number(cfg.data.proxy_rate_per_1k_tokens),
         monthly_budget_credits: cfg.data.monthly_budget_credits,
         alert_threshold_pct: cfg.data.alert_threshold_pct,
+        operator_telegram_chat_id: (cfg.data as { operator_telegram_chat_id?: string | null }).operator_telegram_chat_id ?? null,
+        alerts_enabled: (cfg.data as { alerts_enabled?: boolean }).alerts_enabled ?? true,
       });
     }
     setLoading(false);
