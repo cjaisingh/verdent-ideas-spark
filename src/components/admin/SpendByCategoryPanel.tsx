@@ -20,6 +20,13 @@ type Row = {
   entry_count_30d: number;
 };
 
+type DriftRow = {
+  category: string;
+  phase_sample_count: number;
+  drift_ratio: number | null;
+  confidence: "low" | "medium" | "high" | null;
+};
+
 type Win = "mtd" | "30d";
 
 const fmt = (n: number | null | undefined) =>
@@ -43,6 +50,7 @@ interface Props {
 
 export function SpendByCategoryPanel({ selectedCategory, onSelectCategory }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [drift, setDrift] = useState<Record<string, DriftRow>>({});
   const [loading, setLoading] = useState(true);
   const [win, setWin] = useState<Win>("30d");
 
@@ -50,9 +58,15 @@ export function SpendByCategoryPanel({ selectedCategory, onSelectCategory }: Pro
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data } = await supabase.from("v_credit_spend_by_category").select("*");
+      const [spendRes, driftRes] = await Promise.all([
+        supabase.from("v_credit_spend_by_category").select("*"),
+        supabase.from("v_credit_drift_ratio_by_category").select("*"),
+      ]);
       if (!cancelled) {
-        setRows((data as Row[]) ?? []);
+        setRows((spendRes.data as Row[]) ?? []);
+        const map: Record<string, DriftRow> = {};
+        for (const d of (driftRes.data as DriftRow[]) ?? []) map[d.category] = d;
+        setDrift(map);
         setLoading(false);
       }
     })();
