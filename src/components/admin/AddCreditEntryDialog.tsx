@@ -37,7 +37,7 @@ export function AddCreditEntryDialog({ open, onOpenChange, onSaved }: Props) {
     if (!open) return;
     (async () => {
       const [tRes, sRes] = await Promise.all([
-        supabase.from("roadmap_tasks").select("id,key,title,sprint_id").order("updated_at", { ascending: false }).limit(200),
+        supabase.from("roadmap_tasks").select("id,key,title,sprint_id,default_category").order("updated_at", { ascending: false }).limit(200),
         supabase.from("roadmap_sprints").select("id,phase_id"),
       ]);
       setTasks((tRes.data ?? []) as Task[]);
