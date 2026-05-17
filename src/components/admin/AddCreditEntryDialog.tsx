@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { WORK_CATEGORIES, type WorkCategory } from "@/lib/workCategory";
 
-type Task = { id: string; key: string; title: string; sprint_id: string };
+type Task = { id: string; key: string; title: string; sprint_id: string; default_category: WorkCategory | null };
 type Sprint = { id: string; phase_id: string };
 
 const UNASSIGNED = "__unassigned__";
