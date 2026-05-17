@@ -16,8 +16,9 @@ import { BalanceSnapshotDialog } from "@/components/admin/BalanceSnapshotDialog"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Bot } from "lucide-react";
 import { toast } from "sonner";
+import { EnqueueDraftDialog, type DraftKind } from "@/components/admin/EnqueueDraftDialog";
 
 type Row = {
   id: string;
@@ -82,6 +83,7 @@ export default function AdminAiUsage() {
   const [modelFilter, setModelFilter] = useState<string>(ALL);
   const [statusFilter, setStatusFilter] = useState<string>(ALL);
   const [search, setSearch] = useState("");
+  const [draftKind, setDraftKind] = useState<DraftKind | null>(null);
 
   // Deeplink from phase-close auto-prompt: /admin/ai-usage?phase=<id>&prompt=balance
   const [searchParams, setSearchParams] = useSearchParams();
@@ -210,12 +212,30 @@ export default function AdminAiUsage() {
 
   return (
     <div className="container max-w-7xl mx-auto py-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">AI Usage</h1>
-        <p className="text-sm text-muted-foreground">
-          Per-day AI call counts and operator-logged credit spend.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold">AI Usage</h1>
+          <p className="text-sm text-muted-foreground">
+            Per-day AI call counts and operator-logged credit spend.
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={() => setDraftKind("draft_changelog_entry")}>
+            <Bot className="h-4 w-4 mr-1" /> Draft changelog
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setDraftKind("draft_doc_section")}>
+            <Bot className="h-4 w-4 mr-1" /> Draft doc section
+          </Button>
+        </div>
       </div>
+
+      {draftKind && (
+        <EnqueueDraftDialog
+          open={!!draftKind}
+          onOpenChange={(o) => { if (!o) setDraftKind(null); }}
+          kind={draftKind}
+        />
+      )}
 
       <BudgetAlertBanner />
 
