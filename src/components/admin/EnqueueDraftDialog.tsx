@@ -93,6 +93,8 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
   }, [modelChoice, customModel]);
 
   useEffect(() => {
+    if (!open) return;
+    // hydrate from initial when (re)opened
     if (kind === "draft_changelog_entry") {
       setDateFrom((initial?.date_from as string) ?? weekAgo);
       setDateTo((initial?.date_to as string) ?? today);
