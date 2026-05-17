@@ -753,6 +753,77 @@ export function checkCreditRunway(
 }
 
 // ============================================================================
+// Credit snapshot staleness — fires once per UTC day when operator hasn't
+// recorded a fresh balance reading despite ongoing logged spend.
+// ============================================================================
+
+export type CreditSnapshotAgeRow = {
+  latest_as_of: string | null;
+  minutes_since_latest: number | null;
+  snapshots_24h: number | null;
+  entries_since_latest: number | null;
+};
+
+export function checkCreditSnapshotStale(
+  now: Date,
+  age: CreditSnapshotAgeRow | null,
+  existing: CreditAlertRow[],
+): FindingCandidate[] {
+  if (!age || age.minutes_since_latest == null) return [];
+  const mins = Number(age.minutes_since_latest);
+  const entries = Number(age.entries_since_latest ?? 0);
+  if (!Number.isFinite(mins)) return [];
+
+  const day = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const firedKinds = new Set(
+    existing.filter((r) => r.year_month === ym).map((r) => (r as { kind?: string }).kind),
+  );
+
+  const out: FindingCandidate[] = [];
+  if (mins > 1440 && entries >= 1 && !firedKinds.has(`snapshot_stale_critical:${day}`)) {
+    out.push({
+      kind: "credit_snapshot_stale_critical",
+      severity: "critical",
+      summary:
+        `No credit-balance snapshot for ${(mins / 60).toFixed(1)}h while ${entries} entr${entries === 1 ? "y" : "ies"} logged. ` +
+        `Record one on /admin/ai-usage.`,
+      dedupe_key: `credit_snapshot_stale_critical:${day}`,
+      subject_ref: { day, kind: `snapshot_stale_critical:${day}` },
+      payload: {
+        year_month: ym,
+        kind: `snapshot_stale_critical:${day}`,
+        minutes_since_latest: mins,
+        entries_since_latest: entries,
+        latest_as_of: age.latest_as_of,
+      },
+    });
+  } else if (
+    mins > 240 && entries >= 3 &&
+    !firedKinds.has(`snapshot_stale_warn:${day}`) &&
+    !firedKinds.has(`snapshot_stale_critical:${day}`)
+  ) {
+    out.push({
+      kind: "credit_snapshot_stale_warn",
+      severity: "high",
+      summary:
+        `No credit-balance snapshot for ${(mins / 60).toFixed(1)}h while ${entries} entries logged. ` +
+        `Record one on /admin/ai-usage so per-step drift can be calculated.`,
+      dedupe_key: `credit_snapshot_stale_warn:${day}`,
+      subject_ref: { day, kind: `snapshot_stale_warn:${day}` },
+      payload: {
+        year_month: ym,
+        kind: `snapshot_stale_warn:${day}`,
+        minutes_since_latest: mins,
+        entries_since_latest: entries,
+        latest_as_of: age.latest_as_of,
+      },
+    });
+  }
+  return out;
+}
+
+// ============================================================================
 // AI Jobs (local Ollama worker) — slice 1
 // ============================================================================
 
