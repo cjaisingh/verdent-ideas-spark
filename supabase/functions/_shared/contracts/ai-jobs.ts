@@ -14,8 +14,26 @@ export const AI_JOB_KINDS = [
   "draft_changelog_entry",
   "draft_lesson_synthesis",
   "draft_doc_section",
+  "codemod_replace_any",
 ] as const;
 export type AiJobKind = typeof AI_JOB_KINDS[number];
+
+// ---- codemod_replace_any --------------------------------------------------
+// File-scoped job: ask Ollama to draft sound types for `any` sites in one TS
+// file. Output is a unified diff against ts_source. Lands in ai_draft_outputs
+// for operator review; gated by lint-delta + CI before merge.
+export const CodemodReplaceAnyInput = z.object({
+  file_path: z.string().min(1).max(300),
+  ts_source: z.string().min(1).max(60000),
+  any_sites: z.array(z.object({
+    line: z.number().int().min(1),
+    col: z.number().int().min(1),
+    snippet: z.string().min(1).max(400),
+    hint: z.string().max(200).optional(),
+  })).min(1).max(40),
+  surrounding_types: z.string().max(8000).optional(),
+});
+export type CodemodReplaceAnyInput = z.infer<typeof CodemodReplaceAnyInput>;
 
 // ---- Schemas -------------------------------------------------------------
 export const DraftChangelogEntryInput = z.object({
@@ -49,6 +67,7 @@ export const AiJobInputByKind = {
   draft_changelog_entry: DraftChangelogEntryInput,
   draft_lesson_synthesis: DraftLessonSynthesisInput,
   draft_doc_section: DraftDocSectionInput,
+  codemod_replace_any: CodemodReplaceAnyInput,
 } as const;
 
 export function validateInput(kind: AiJobKind, input: unknown) {
@@ -104,6 +123,24 @@ export function buildPrompt(kind: AiJobKind, input: unknown): Prompt {
           `Instruction:\n${i.prompt}\n\nProduce the markdown section now.`,
       };
     }
+    case "codemod_replace_any": {
+      const i = CodemodReplaceAnyInput.parse(input);
+      const sites = i.any_sites
+        .map((s) => `- L${s.line}:${s.col}${s.hint ? ` (${s.hint})` : ""}\n  \`\`\`ts\n${s.snippet}\n  \`\`\``)
+        .join("\n");
+      return {
+        system:
+          "You are a TypeScript codemod assistant. Replace every `any` in the file with the narrowest sound type. " +
+          "Rules: (1) never change runtime behaviour — types only; (2) if a precise type is uncertain, use `unknown` + a `// TODO(codemod): tighten` comment; " +
+          "(3) prefer existing imported types over inventing new ones; (4) keep formatting identical; " +
+          "(5) output ONLY a unified diff against the supplied source, fenced as ```diff. No prose, no preamble.",
+        user:
+          `File: ${i.file_path}\n\n` +
+          (i.surrounding_types ? `Nearby type context:\n---\n${i.surrounding_types}\n---\n\n` : "") +
+          `Sites to fix (${i.any_sites.length}):\n${sites}\n\n` +
+          `Full source:\n\`\`\`ts\n${i.ts_source}\n\`\`\`\n\nProduce the unified diff now.`,
+      };
+    }
   }
 }
 
@@ -131,6 +168,14 @@ export function projectDraft(kind: AiJobKind, input: unknown, output_text: strin
       return {
         kind,
         target_ref: { doc_path: i.doc_path, section_anchor: i.section_anchor },
+        body_md: output_text.trim(),
+      };
+    }
+    case "codemod_replace_any": {
+      const i = CodemodReplaceAnyInput.parse(input);
+      return {
+        kind,
+        target_ref: { file_path: i.file_path, any_sites_count: i.any_sites.length },
         body_md: output_text.trim(),
       };
     }

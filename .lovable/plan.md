@@ -1,79 +1,91 @@
-## Goal
+## 1. Flip `run_overnight = true` on three phases
 
-Make every manual credit-balance reading countable. Each time you record a balance, the app:
+Single migration sets `roadmap_phases.run_overnight = true` for:
 
-1. Captures **what triggered it** (free-form label + optional task/discussion link, in addition to today's optional phase tag).
-2. Computes **delta since previous snapshot** (auto, no input).
-3. Compares delta to **logged spend** in the same window → drift %.
-4. Raises a **sentinel finding** if no snapshot has been recorded for too long, so it never goes unchecked.
+- `phase-6` (Ingest & Canonicalisation)
+- `phase-6b` (Ingest Observability)
+- `phase-7` (Connector Marketplace)
 
-No new tables — extend `credit_balance_snapshots`. Reuses the existing `BalanceSnapshotDialog` and `BalanceHistoryPanel` on `/admin/ai-usage`.
+`overnight-prequeue` (21:55 UTC) will auto-pick them up tonight. Each is independently reversible from `/master-plan` via the existing "Run overnight" toggle. `phase-5`, `phase-okr`, `phase-9`, `phase-11` stay operator-only because their contract surfaces need human design.
 
-## Schema changes (migration)
+## 2. New Ollama job kind: `codemod_replace_any`
 
-`credit_balance_snapshots` gains:
+A file-scoped job that drafts a typed replacement for each `@typescript-eslint/no-explicit-any` site. Output never lands on `main` directly — it goes through the existing `ai_draft_outputs` review surface and is gated by lint-delta + CI before an operator merges.
 
-- `label text` — free-form, e.g. `"model picker"`, `"worker checklist"`.
-- `subject_type text` — nullable, one of `roadmap_phase` (existing) | `discussion_action` | `roadmap_task` | `dev_turn` | `manual`. Derived in trigger so `phase_id` keeps working.
-- `subject_id uuid` — generic FK-by-id (no DB FK; validated in trigger against the matching table when set).
+### Contract (`supabase/functions/_shared/contracts/ai-jobs.ts`)
 
-Index: `(occurred_at desc)` for the deltas view (already covered by existing index — check, add if missing).
+Add to `AI_JOB_KINDS`:
 
-## Views (SECURITY INVOKER)
+```text
+"codemod_replace_any"
+```
 
-- `v_credit_snapshot_deltas` — for each snapshot, prev snapshot's `balance_credits`, `delta = prev - curr`, window start/end, `logged_credits_in_window` (sum of `credit_entries.credits` for `occurred_at` in window), `drift_credits = delta - logged`, `drift_ratio = delta / nullif(logged,0)`, `drift_band`:
-  - `match` — `|drift_ratio - 1| ≤ 0.1`
-  - `over-logged` — actual delta < logged (logged too much)
-  - `under-logged` — actual delta > logged by >10% (logged too little)
-  - `no-logged` — `logged = 0`
-- `v_credit_snapshot_latest_age` — single row: minutes since most recent snapshot, count of snapshots in last 24h, count of `credit_entries` since latest snapshot.
+Input schema:
 
-## UI on `/admin/ai-usage` Credits & Usage tab
+```text
+CodemodReplaceAnyInput {
+  file_path: string (≤300)
+  ts_source: string (≤60000)        // current file contents
+  any_sites: Array<{                 // pre-extracted by enqueuer
+    line: number
+    col: number
+    snippet: string (≤400)           // ±3 lines around the `any`
+    hint?: string (≤200)             // e.g. "param of useFoo callback"
+  }> (1..40)
+  surrounding_types?: string (≤8000) // optional: nearby type defs / imports
+}
+```
 
-- **`BalanceSnapshotDialog`** — add:
-  - `Label` input (autofocus when no phase set).
-  - "Link to…" combobox: type-ahead over open `discussion_actions` + recent `roadmap_tasks`; selecting sets `subject_type` + `subject_id`. Phase prompt path keeps `subject_type='roadmap_phase'`.
-- **New `BalanceTrackingPanel`** above existing `BalanceHistoryPanel`:
-  - Header row: latest balance · `Xh Ym since last snapshot` · `N developments un-snapshotted` (count of `credit_entries` since last snapshot).
-  - One-click "Record now" button → opens dialog with no preset.
-  - Compact table of last 20 snapshots from `v_credit_snapshot_deltas`: `when`, `label / subject`, `balance`, `Δ` (red if negative=spent), `logged in window`, `drift` chip (`match` green, `over-logged` amber, `under-logged` red, `no-logged` grey). Click row → drawer with the matching `credit_entries` rows in that window so you can attribute or add missing entries.
-- `BalanceHistoryPanel` gets a `Drift` column wired to the same view.
+Prompt: system instructs Ollama to "replace every `any` with the narrowest sound type; if uncertain, emit `unknown` + a TODO comment; never change runtime behaviour; output a unified diff against `ts_source`". User payload is the file + sites.
 
-## Cadence enforcement — sentinel finding
+Projector → `ai_draft_outputs` row with `target_ref = { file_path, any_sites_count }` and `body_md` = the diff fenced as `diff`.
 
-New check in `supabase/functions/sentinel-tick/checks.ts`:
+### Enqueuer
 
-- **`credit_snapshot_stale`** — reads `v_credit_snapshot_latest_age`.
-  - `warn` (high): `minutes_since_latest > 240` (4h) **and** ≥3 entries logged since.
-  - `critical`: `minutes_since_latest > 1440` (24h) **and** ≥1 entry since.
-  - Dedup key: `credit_snapshot_stale` once per UTC day (matches existing `credit_runway` pattern).
-  - Surfaces on Morning Review via existing sentinel rollup.
+New cron-triggered edge fn `codemod-any-enqueue` (nightly 22:10 UTC, gated by night window so it auto-picks the cheap model via `pickModel()`):
 
-## Contract
+1. Run `eslint --rule '@typescript-eslint/no-explicit-any: error' -f json` against `src/` only (worker invokes via existing ESLint config).
+2. Bucket findings by file, cap 40 sites per job, skip files already touched by an unmerged draft.
+3. Enqueue one `ai_jobs` row per file with `Idempotency-Key = sha256(file_path + git_head)`.
+4. Hard cap: 30 new jobs per night to keep review load human-sized.
 
-Add `supabase/functions/_shared/contracts/credit-snapshot.ts` describing the snapshot input shape (per project contract-first rule). No new edge function needed — inserts stay client-side under operator-only RLS.
+### Review path
 
-## Docs + memory
+- `/admin/ai-usage` already lists `ai_draft_outputs`. We add a small "Codemod queue" filter chip.
+- Merge action posts the diff to a new branch via existing GitHub PR helper (out of scope for this turn — drafts only).
+- Discussion action #20 stays open until the queue drains.
 
-- `docs/credits-usage.md` — new "Per-snapshot tracking & drift" section + sentinel entry.
-- `CHANGELOG.md` — Added entry.
-- `mem/features/credits-usage.md` — append: label/subject_type/subject_id, `v_credit_snapshot_deltas`, `credit_snapshot_stale` sentinel.
+## 3. CodeQL email noise — disable the GitHub default setup
+
+The failing 45-minute job in the screenshot is **not** our workflow (`.github/workflows/codeql.yml`, timeout 20 min, currently green in ~2 min on every push). It's GitHub's **default CodeQL setup** running in parallel — the exact dual-setup conflict already documented at `docs/ci-cd.md § "CodeQL: default vs advanced setup"`.
+
+Fix is one click in repo settings (no code change possible from here):
+
+```text
+Repo → Settings → Code security → Code scanning →
+  "CodeQL analysis" row → Set up ▾ → Switch to advanced
+  (or Disable, then rely on our workflow)
+```
+
+Once disabled, the red emails stop and only our advanced workflow reports findings under Security → Code scanning.
+
+### Tracking
+
+Open a `discussion_actions` row "Disable GitHub default CodeQL setup" tagged `ci-cd`, `risk=low`, `night_eligible=false` (operator-only repo settings change) so it shows up on the Morning Review until done.
+
+## Files
+
+- `supabase/migrations/<ts>_phase_run_overnight_6_6b_7.sql` — 3-row update + emits 3 `roadmap_phase_events`.
+- `supabase/functions/_shared/contracts/ai-jobs.ts` — add `codemod_replace_any` kind, schema, prompt, projector.
+- `supabase/functions/codemod-any-enqueue/index.ts` — new cron-triggered enqueuer (wrapped with `withLogger`).
+- `supabase/config.toml` — schedule entry for `codemod-any-enqueue` at `10 22 * * *`.
+- `src/components/admin/AiDraftsPanel.tsx` (or equivalent) — add "Codemod queue" filter chip.
+- `supabase/migrations/<ts>_codeql_default_setup_action.sql` — insert `discussion_action` row for the manual repo-settings change.
+- `CHANGELOG.md`, `docs/credits-usage.md` unchanged; `docs/ci-cd.md` already covers the CodeQL guidance.
+- `mem://features/automation` — append the new job kind + cron.
 
 ## Out of scope
 
-- Auto-creating a snapshot from chat activity (no signal from Lovable build loop into Cloud).
-- Editing past snapshots — record-only, like today.
-- Reconciling against any Lovable billing API (none exists; project memory).
-
-## File list
-
-```text
-supabase/migrations/<ts>_credit_snapshot_tracking.sql   (new)
-supabase/functions/_shared/contracts/credit-snapshot.ts (new)
-supabase/functions/sentinel-tick/checks.ts              (edit: add credit_snapshot_stale)
-src/components/admin/BalanceSnapshotDialog.tsx          (edit: label + subject combobox)
-src/components/admin/BalanceTrackingPanel.tsx           (new)
-src/components/admin/BalanceHistoryPanel.tsx            (edit: drift column)
-src/pages/AdminAiUsage.tsx                              (edit: mount BalanceTrackingPanel)
-docs/credits-usage.md, CHANGELOG.md, mem/features/credits-usage.md (edit)
-```
+- Auto-merging codemod diffs to `main`.
+- Wiring `codemod_replace_any` into the Night Agent audit loop (it runs through the existing draft-review surface instead).
+- Anything in `phase-5`, `phase-okr`, `phase-9`, `phase-11`.
