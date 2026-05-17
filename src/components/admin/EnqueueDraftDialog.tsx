@@ -147,7 +147,7 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
         <span>
           Job queued ({(data as { status?: string })?.status ?? "queued"}).{" "}
           <Link to="/admin/ai-jobs" className="underline">View queue</Link>
-        </span> as unknown as string,
+        </span>,
       );
       onOpenChange(false);
     } catch (e: unknown) {
