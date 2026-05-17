@@ -126,6 +126,7 @@ const App = () => (
             <Route path="/admin/cron-health/:job" element={<CronJobDetail />} />
             <Route path="/admin/cron-config" element={<AdminCronConfig />} />
             <Route path="/admin/logs" element={<AdminLogs />} />
+            <Route path="/admin/errors" element={<AdminErrors />} />
             <Route path="/admin/ai-usage" element={<AdminAiUsage />} />
             <Route path="/morning-review" element={<MorningReview />} />
             <Route path="/admin/lessons" element={<LessonsLoop />} />
