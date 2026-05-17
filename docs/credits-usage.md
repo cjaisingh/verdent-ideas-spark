@@ -47,3 +47,35 @@ The runway block inside the Projected Spend panel uses your most recent snapshot
 - No auto-import from Lovable billing — manual or proxy only.
 - No webhook on budget breach. Wire one later via the existing `automation_jobs` pattern if needed.
 - Historical backfill not done. Past `roadmap_work_log` rows with tokens automatically contribute via the proxy; manual entries only count from creation forward.
+
+## Per-snapshot tracking & drift
+
+Each balance reading is countable. `credit_balance_snapshots` carries:
+
+- `label` — free-form ("model picker", "worker checklist").
+- `subject_type` — one of `roadmap_phase` | `discussion_action` | `roadmap_task` | `dev_turn` | `manual`.
+- `subject_id` — id of the row matching `subject_type`. A `before insert` trigger auto-fills these from `phase_id` so the existing phase flow keeps working.
+
+Two views back the UI:
+
+- `v_credit_snapshot_deltas` — for each snapshot, joins the previous snapshot and sums `credit_entries.credits` in the `(prev_as_of, as_of]` window. Emits `delta_credits = prev - curr`, `drift_credits = delta - logged`, `drift_ratio`, and a `drift_band`:
+  - `match` — `|drift_ratio − 1| ≤ 0.10`
+  - `over-logged` — actual delta < logged (you logged credits the wallet didn't actually burn)
+  - `under-logged` — actual delta > logged by >10% (you spent more than you tracked)
+  - `no-logged` — no entries in the window
+- `v_credit_snapshot_latest_age` — single row: `minutes_since_latest`, `snapshots_24h`, `entries_since_latest`.
+
+`BalanceTrackingPanel` on `/admin/ai-usage` lists the last 20 snapshots with Δ spent, logged in window, and drift chip. Click a row → drawer shows the `credit_entries` in that window so you can attribute or add missing entries. `BalanceHistoryPanel` gains a Drift column wired to the same view.
+
+### Cadence enforcement
+
+`sentinel-tick` runs `checkCreditSnapshotStale` against `v_credit_snapshot_latest_age`:
+
+- `credit_snapshot_stale_warn` (high) — no snapshot for >4h **and** ≥3 entries logged since.
+- `credit_snapshot_stale_critical` (critical) — no snapshot for >24h **and** ≥1 entry since.
+
+Dedup key is `credit_snapshot_stale_{warn,critical}:YYYY-MM-DD`, so each band fires at most once per UTC day. Findings roll into Morning Review like every other sentinel.
+
+### Contract
+
+`supabase/functions/_shared/contracts/credit-snapshot.ts` declares `CreditSnapshotInput`/`validateCreditSnapshot` — clients write through supabase-js under operator-only RLS today, but any future agent (Telegram bot, edge fn, automation) reuses the same shape.
