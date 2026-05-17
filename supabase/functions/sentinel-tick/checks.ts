@@ -19,7 +19,9 @@ export type FindingCandidate = {
     | "lint_delta_failures"
     | "companion_streams_stalled"
     | "heygen_videos_failed"
-    | "truth_conflicts_unresolved";
+    | "truth_conflicts_unresolved"
+    | "budget_projection_80"
+    | "budget_projection_100";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
