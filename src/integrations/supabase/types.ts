@@ -5673,6 +5673,7 @@ export type Database = {
         }[]
       }
       purge_all_rows: { Args: { _table: string }; Returns: number }
+      purge_console_captures: { Args: never; Returns: number }
       purge_expired_rows: {
         Args: { _table?: string }
         Returns: {
