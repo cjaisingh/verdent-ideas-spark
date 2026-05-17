@@ -144,7 +144,10 @@ export function CreditsUsagePanel() {
 
   return (
     <div className="space-y-6">
+      <PhasesAwaitingBalancePanel />
       <ProjectedSpendPanel />
+      <BalanceHistoryPanel />
+      <PhaseDeltasPanel />
       <SpendByCategoryPanel selectedCategory={categoryFilter} onSelectCategory={setCategoryFilter} />
 
       {/* Honest banner */}
