@@ -5,6 +5,7 @@ import { Activity, CheckCircle2, XCircle, Clock, Moon, AlertTriangle, RefreshCw 
 import ErrorGroupsPanel from "@/components/admin/ErrorGroupsPanel";
 import EdgeHealthDashboard from "@/components/admin/EdgeHealthDashboard";
 import RuntimeHealthWidget from "@/components/admin/RuntimeHealthWidget";
+import ClearedFindingsTimeline from "@/components/admin/ClearedFindingsTimeline";
 
 // Cron jobs that run as part of the overnight pipeline.
 // Keep aligned with mem://features/automation.
