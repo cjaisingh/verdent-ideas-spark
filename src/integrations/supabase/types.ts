@@ -1635,6 +1635,108 @@ export type Database = {
           },
         ]
       }
+      credit_entries: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          credits: number
+          id: string
+          mode: string
+          note: string | null
+          occurred_at: string
+          phase_id: string | null
+          step_label: string
+          task_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          credits: number
+          id?: string
+          mode?: string
+          note?: string | null
+          occurred_at?: string
+          phase_id?: string | null
+          step_label: string
+          task_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          credits?: number
+          id?: string
+          mode?: string
+          note?: string | null
+          occurred_at?: string
+          phase_id?: string | null
+          step_label?: string
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_entries_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phase_gate_status"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_entries_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_entries_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
+          {
+            foreignKeyName: "credit_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "credit_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_settings: {
+        Row: {
+          alert_threshold_pct: number
+          id: boolean
+          monthly_budget_credits: number | null
+          proxy_rate_per_1k_tokens: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          alert_threshold_pct?: number
+          id?: boolean
+          monthly_budget_credits?: number | null
+          proxy_rate_per_1k_tokens?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          alert_threshold_pct?: number
+          id?: boolean
+          monthly_budget_credits?: number | null
+          proxy_rate_per_1k_tokens?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       daily_plans: {
         Row: {
           created_at: string
@@ -3451,6 +3553,13 @@ export type Database = {
             referencedRelation: "roadmap_phases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "overnight_recommendations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
         ]
       }
       plan_tasks: {
@@ -4063,6 +4172,13 @@ export type Database = {
             referencedRelation: "roadmap_phases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "roadmap_phase_overnight_runs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
+          },
         ]
       }
       roadmap_phase_signoffs: {
@@ -4119,6 +4235,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roadmap_phases"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_phase_signoffs_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
           },
         ]
       }
@@ -4287,6 +4410,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roadmap_phases"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_sprints_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "v_credit_burn_per_phase_30d"
+            referencedColumns: ["phase_id"]
           },
         ]
       }
@@ -5528,6 +5658,36 @@ export type Database = {
           next_source: string | null
           top_score: number | null
           top_source: string | null
+        }
+        Relationships: []
+      }
+      v_credit_burn_per_phase_30d: {
+        Row: {
+          manual_count: number | null
+          manual_credits: number | null
+          phase_id: string | null
+          phase_key: string | null
+          phase_title: string | null
+          proxy_count: number | null
+          proxy_credits: number | null
+          total_credits: number | null
+        }
+        Relationships: []
+      }
+      v_credit_burn_per_step: {
+        Row: {
+          credits: number | null
+          duration_ms: number | null
+          id: string | null
+          mode: string | null
+          model: string | null
+          note: string | null
+          occurred_at: string | null
+          phase_id: string | null
+          source: string | null
+          step_label: string | null
+          task_id: string | null
+          tokens_total: number | null
         }
         Relationships: []
       }
