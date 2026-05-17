@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { RefreshCw, Copy, CheckCircle2, XCircle, Clock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { AiJobsSentinelAlerts } from "@/components/admin/AiJobsSentinelAlerts";
+import { OllamaConfigSummary } from "@/components/admin/OllamaConfigSummary";
 
 type Job = {
   id: string;
