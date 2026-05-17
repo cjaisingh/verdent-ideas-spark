@@ -55,9 +55,44 @@ export function EnqueueDraftDialog({ open, onOpenChange, kind, initial }: Props)
   const [prompt, setPrompt] = useState("");
   const [existingMd, setExistingMd] = useState("");
 
+  // Model picker — sourced from ai_workers (online = last_seen within 2 min).
+  const [tags, setTags] = useState<string[]>([]);
+  const [workerDefault, setWorkerDefault] = useState<string | null>(null);
+  const [modelChoice, setModelChoice] = useState<string>(WORKER_DEFAULT);
+  const [customModel, setCustomModel] = useState("");
+
   useEffect(() => {
     if (!open) return;
-    // hydrate from initial when (re)opened
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("ai_workers")
+        .select("model_tags, default_model, last_seen_at, enabled");
+      if (cancelled) return;
+      const now = Date.now();
+      const online = (data ?? []).filter(
+        (w) => w.enabled && w.last_seen_at && now - new Date(w.last_seen_at).getTime() < FRESH_MS,
+      );
+      const union = Array.from(new Set(online.flatMap((w) => w.model_tags ?? []))).sort();
+      setTags(union);
+      setWorkerDefault(online.find((w) => w.default_model)?.default_model ?? null);
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setModelChoice(WORKER_DEFAULT);
+    setCustomModel("");
+  }, [open, kind]);
+
+  const requestedModel = useMemo(() => {
+    if (modelChoice === WORKER_DEFAULT) return null;
+    if (modelChoice === CUSTOM) return customModel.trim() || null;
+    return modelChoice;
+  }, [modelChoice, customModel]);
+
+  useEffect(() => {
     if (kind === "draft_changelog_entry") {
       setDateFrom((initial?.date_from as string) ?? weekAgo);
       setDateTo((initial?.date_to as string) ?? today);
