@@ -71,7 +71,7 @@ export function WorkerRestartChecklist() {
     const [workersRes, jobsRes, claimRes] = await Promise.all([
       supabase
         .from("ai_workers")
-        .select("worker_name, model_tags, default_model, last_seen_at, created_at, enabled")
+        .select("name, model_tags, default_model, last_seen_at, created_at, enabled")
         .order("last_seen_at", { ascending: false, nullsFirst: false }),
       supabase
         .from("ai_jobs")
