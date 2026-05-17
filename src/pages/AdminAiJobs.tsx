@@ -54,6 +54,7 @@ type Worker = {
   name: string;
   enabled: boolean;
   model_tags: string[];
+  default_model: string | null;
   last_seen_at: string | null;
   created_at: string;
 };
