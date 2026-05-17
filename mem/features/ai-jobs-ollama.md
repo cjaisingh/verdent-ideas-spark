@@ -3,7 +3,9 @@ name: ai-jobs-ollama
 description: Pull-based queue (ai_jobs/ai_job_results/ai_draft_outputs/ai_workers) for outsourcing drafts to a local Ollama worker; Lovable stays architect/reviewer
 type: feature
 ---
-Slice 1 scope: three draft kinds only — `draft_changelog_entry`, `draft_lesson_synthesis`, `draft_doc_section`. All outputs land in `ai_draft_outputs` as `status='ready'` for operator approve/reject. No auto-merge, no code generation.
+Slice 1 scope: three draft kinds — `draft_changelog_entry`, `draft_lesson_synthesis`, `draft_doc_section`. Slice 2 adds `codemod_replace_any` (file-scoped TypeScript any → narrow type, output is a unified diff). All outputs land in `ai_draft_outputs` as `status='ready'` for operator approve/reject. No auto-merge, no code generation outside the diff.
+
+**codemod_replace_any enqueuer**: `supabase/functions/codemod-any-enqueue` (x-awip-service-token). Caller (GH Actions or local script) runs eslint with `no-explicit-any: error`, buckets findings by file, posts `{git_sha, files:[{file_path, ts_source, any_sites:[{line,col,snippet,hint?}], surrounding_types?}]}`. Caps: 40 sites/file, 30 jobs/call. Idempotency key `codemod-any:sha256(file_path:git_sha)`. Priority 200 (lower than draft_*). Tracked by discussion_action #20 ("no-explicit-any cleanup").
 
 **Tables**: `ai_workers` (registered boxes), `ai_jobs` (queue, idempotency_key UNIQUE, heartbeat/attempts/max_retries=3), `ai_job_results` (per attempt), `ai_draft_outputs` (reviewable). Operator-only RLS; realtime on `ai_jobs` + `ai_draft_outputs`.
 
