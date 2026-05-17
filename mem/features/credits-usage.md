@@ -9,6 +9,7 @@ type: feature
 **Tables:**
 - `credit_entries` — operator-logged real credit spend (task_id, phase_id, step_label, credits, mode, note, occurred_at). Operator-only RLS. Realtime on.
 - `credit_settings` — singleton (id=true) with `proxy_rate_per_1k_tokens` (default 0.05), `monthly_budget_credits` (nullable), `alert_threshold_pct` (default 80).
+- `credit_balance_snapshots` — operator-entered remaining-credit readings (`balance_credits`, `as_of`, `phase_id?`, `source?`, `note?`). Optional `phase_id` tags it as the closing reading for that phase. Operator-only RLS + realtime.
 
 **Views (SECURITY INVOKER):**
 - `v_credit_burn_per_step` — unions manual entries + proxy rows derived from `roadmap_work_log` where `tokens_total > 0`. Proxy credits = `tokens_total / 1000 × proxy_rate_per_1k_tokens`. Carries `category` column (manual rows only; proxy rows NULL).
