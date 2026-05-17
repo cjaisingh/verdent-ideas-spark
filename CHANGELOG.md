@@ -5,6 +5,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ## [Unreleased]
 
 ### Added
+- **Projected spend panel** (`docs/projected-spend.md`) — top card on `/admin/ai-usage` → Credits & Usage. Estimates EOM credit spend from rolling 14/21/30-day burn averages (`mtd + burn_Nd_per_day × days_left`). New `v_credit_projection` view, single row, security invoker (RLS inherited). Window picker persists per-operator in `localStorage`; default 21d. Complements the 7d-based budget alerts (longer windows are less noisy; useful for trend sanity-check).
 - **Budget alerts** (`docs/budget-alerts.md`) — sentinel-tick check fires at 80% (high) and 100% (critical) of **projected month-end** credit spend (`burn_7d_per_day × 30 / monthly_budget_credits`). Once per (year_month, threshold) enforced by unique index on new `credit_alerts` table. Surfaces: in-app `BudgetAlertBanner` on `/admin/ai-usage` (realtime, dismissable), sentinel finding (Morning Review), Telegram via existing `telegram-send` (opt-in via `credit_settings.operator_telegram_chat_id` + `alerts_enabled`). 8 new check tests, all green.
 
 ### Added
