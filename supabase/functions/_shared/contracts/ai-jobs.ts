@@ -123,6 +123,24 @@ export function buildPrompt(kind: AiJobKind, input: unknown): Prompt {
           `Instruction:\n${i.prompt}\n\nProduce the markdown section now.`,
       };
     }
+    case "codemod_replace_any": {
+      const i = CodemodReplaceAnyInput.parse(input);
+      const sites = i.any_sites
+        .map((s) => `- L${s.line}:${s.col}${s.hint ? ` (${s.hint})` : ""}\n  \`\`\`ts\n${s.snippet}\n  \`\`\``)
+        .join("\n");
+      return {
+        system:
+          "You are a TypeScript codemod assistant. Replace every `any` in the file with the narrowest sound type. " +
+          "Rules: (1) never change runtime behaviour — types only; (2) if a precise type is uncertain, use `unknown` + a `// TODO(codemod): tighten` comment; " +
+          "(3) prefer existing imported types over inventing new ones; (4) keep formatting identical; " +
+          "(5) output ONLY a unified diff against the supplied source, fenced as ```diff. No prose, no preamble.",
+        user:
+          `File: ${i.file_path}\n\n` +
+          (i.surrounding_types ? `Nearby type context:\n---\n${i.surrounding_types}\n---\n\n` : "") +
+          `Sites to fix (${i.any_sites.length}):\n${sites}\n\n` +
+          `Full source:\n\`\`\`ts\n${i.ts_source}\n\`\`\`\n\nProduce the unified diff now.`,
+      };
+    }
   }
 }
 
