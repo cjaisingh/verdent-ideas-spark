@@ -5846,6 +5846,7 @@ export type Database = {
       }
       v_credit_burn_per_step: {
         Row: {
+          category: string | null
           credits: number | null
           duration_ms: number | null
           id: string | null
