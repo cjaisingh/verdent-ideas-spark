@@ -27,7 +27,9 @@ export type FindingCandidate = {
     | "credit_snapshot_stale_warn"
     | "credit_snapshot_stale_critical"
     | "ai_jobs_stuck"
-    | "ai_workers_offline";
+    | "ai_workers_offline"
+    | "telegram_webhook_silent"
+    | "approvals_stale";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
