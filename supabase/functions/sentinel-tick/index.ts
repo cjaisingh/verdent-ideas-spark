@@ -10,6 +10,7 @@ import {
   checkTruthConflictsUnresolved, checkBudgetProjection, checkCreditRunway,
   checkCreditSnapshotStale,
   checkAiJobsStuck, checkAiWorkersOffline,
+  checkTelegramWebhookSilent, checkApprovalsStale,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
