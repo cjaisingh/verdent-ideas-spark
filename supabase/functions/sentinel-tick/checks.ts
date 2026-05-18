@@ -27,7 +27,9 @@ export type FindingCandidate = {
     | "credit_snapshot_stale_warn"
     | "credit_snapshot_stale_critical"
     | "ai_jobs_stuck"
-    | "ai_workers_offline";
+    | "ai_workers_offline"
+    | "telegram_webhook_silent"
+    | "approvals_stale";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -201,15 +203,38 @@ export function checkJobErrorRate(
 
 // Cadences (minutes) MUST match the real pg_cron schedule, not the
 // edge-function name. Job names here are the strings written to
-// `automation_runs.job` by each function.
-//   weekly-qa-validate     → Fri 16:00 UTC, function logs as "qa-validate"
-//   scheduled-lessons-weekly → Sun 05:00 UTC, function logs as "lessons-synthesize"
+// `automation_runs.job` by each function. Sentinel filters automation_runs
+// by this key set, so anything not listed here is NOT watched for silence.
 export const SENTINEL_CADENCES: Record<string, number> = {
-  "qa-validate": 7 * 24 * 60,         // weekly (Fri 16:00 UTC)
-  "overnight-phase-runner-15m": 15,
-  "morning-review": 24 * 60,
+  // 15-minute heartbeats
   "sentinel-tick": 15,
-  "lessons-synthesize": 7 * 24 * 60,  // weekly (Sun 05:00 UTC)
+  "tomorrow-plan-refresh": 15,
+  "overnight-phase-runner-15m": 15,
+  "automation-auth-monitor": 15,
+  // 30-minute
+  "ci-status-sync-30m": 30,
+  // ~12-hourly
+  "secrets-health-check": 12 * 60,
+  // daily
+  "morning-review": 24 * 60,
+  "night-agent-open": 24 * 60,
+  "night-agent-close": 24 * 60,
+  "scheduled-code-review": 24 * 60,
+  "daily-plan": 24 * 60,
+  "lessons-daily-synth": 24 * 60,
+  "snapshot-daily-report": 24 * 60,
+  "nightly-rollup-analytics": 24 * 60,
+  "ingest-external-data": 24 * 60,
+  "cache-warm": 24 * 60,
+  "app-walkthrough": 24 * 60,
+  "overnight-prequeue": 24 * 60,
+  "overnight-recommender": 24 * 60,
+  "record-test-run": 24 * 60,
+  // weekly
+  "qa-validate": 7 * 24 * 60,
+  "lessons-synthesize": 7 * 24 * 60,
+  "awip-reviews-pull": 7 * 24 * 60,
+  "deep-audit": 7 * 24 * 60,
 };
 
 // Pattern matchers for realtime / channel-lifecycle bugs we've actually hit.
@@ -891,3 +916,62 @@ export function checkAiWorkersOffline(
     payload: { offline_minutes: offlineMinutes, names: offline.map((w) => w.name) },
   }];
 }
+
+/**
+ * Telegram webhook silence. If the operator channel goes quiet for hours
+ * we lose every Telegram message + every approval decision silently.
+ * Reads from edge_request_logs (which records every webhook hit, including
+ * 200s with `ignored: not_allowlisted`).
+ *
+ * Threshold: >6h with zero hits → high. Bot is essentially always in use,
+ * so >6h is a strong signal of a broken webhook, expired token, or wrong
+ * URL registration.
+ */
+export function checkTelegramWebhookSilent(
+  now: Date,
+  lastSeenAt: string | null,
+  silenceHours = 6,
+): FindingCandidate[] {
+  const silenceMs = lastSeenAt ? now.getTime() - +new Date(lastSeenAt) : Infinity;
+  const thresholdMs = silenceHours * 3600_000;
+  if (silenceMs <= thresholdMs) return [];
+  return [{
+    kind: "telegram_webhook_silent",
+    severity: "high",
+    summary: `Telegram webhook silent for ${
+      isFinite(silenceMs) ? Math.round(silenceMs / 3600_000) + "h" : "ever"
+    } (threshold ${silenceHours}h). Check bot token, webhook URL, allowlist.`,
+    dedupe_key: `telegram_webhook_silent`,
+    subject_ref: { function_name: "telegram-webhook" },
+    payload: { last_seen_at: lastSeenAt, silence_hours_threshold: silenceHours },
+  }];
+}
+
+/**
+ * Approvals staleness. Operator approval channel quiet for too long
+ * usually means upstream (Telegram, awip-api) is silently dropping
+ * requests. Fires when no new approval_queue row in N hours.
+ *
+ * Threshold: 72h → medium. Pure-quiet window in practice rarely exceeds
+ * 48h; 72h means the channel is broken, not just unused.
+ */
+export function checkApprovalsStale(
+  now: Date,
+  lastCreatedAt: string | null,
+  staleHours = 72,
+): FindingCandidate[] {
+  const ageMs = lastCreatedAt ? now.getTime() - +new Date(lastCreatedAt) : Infinity;
+  const thresholdMs = staleHours * 3600_000;
+  if (ageMs <= thresholdMs) return [];
+  return [{
+    kind: "approvals_stale",
+    severity: "medium",
+    summary: `No new approvals in ${
+      isFinite(ageMs) ? Math.round(ageMs / 3600_000) + "h" : "ever"
+    } (threshold ${staleHours}h). Operator approval channel may be broken.`,
+    dedupe_key: `approvals_stale`,
+    subject_ref: { table: "approval_queue" },
+    payload: { last_created_at: lastCreatedAt, stale_hours_threshold: staleHours },
+  }];
+}
+
