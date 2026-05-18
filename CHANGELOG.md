@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed
+- **Alerts never reached Telegram.** `alert_settings.webhook_url` was NULL so every `dispatchAlert(...)` call wrote `alert_log` and stopped. Added `alert_settings.operator_telegram_chat_id`, gave `dispatchAlert` a Telegram leg via `telegram-send` (independent of the webhook leg, shares dedupe), seeded operator chat_id (7139482467) into `alert_settings` + `credit_settings` + `platform_allowlist`. Added daily heartbeat in `sentinel-tick`: if chat_id is set but no successful `telegram-send` in 25h, fire a one-line ping so silent outbound rot surfaces within a day.
+
+
 ### Added
 - **Overnight phase queue** — `phase-6` (Ingest & Canonicalisation), `phase-6b` (Ingest Observability), `phase-7` (Connector Marketplace) flipped to `run_overnight=true`; `overnight-prequeue` will draft them tonight at 21:55 UTC. Toggle reversible per-phase on `/master-plan`.
 - **`codemod_replace_any` AI-jobs kind** — file-scoped Ollama codemod that drafts narrow types for `@typescript-eslint/no-explicit-any` sites and emits a unified diff into `ai_draft_outputs` for operator review (never lands on `main` directly). New `codemod-any-enqueue` edge function (x-awip-service-token); caller supplies pre-extracted lint findings. Caps: 40 sites/file, 30 jobs/call, per-file idempotency keyed on `git_sha`. Feeds discussion action #20 (no-explicit-any cleanup).
