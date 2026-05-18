@@ -203,15 +203,38 @@ export function checkJobErrorRate(
 
 // Cadences (minutes) MUST match the real pg_cron schedule, not the
 // edge-function name. Job names here are the strings written to
-// `automation_runs.job` by each function.
-//   weekly-qa-validate     → Fri 16:00 UTC, function logs as "qa-validate"
-//   scheduled-lessons-weekly → Sun 05:00 UTC, function logs as "lessons-synthesize"
+// `automation_runs.job` by each function. Sentinel filters automation_runs
+// by this key set, so anything not listed here is NOT watched for silence.
 export const SENTINEL_CADENCES: Record<string, number> = {
-  "qa-validate": 7 * 24 * 60,         // weekly (Fri 16:00 UTC)
-  "overnight-phase-runner-15m": 15,
-  "morning-review": 24 * 60,
+  // 15-minute heartbeats
   "sentinel-tick": 15,
-  "lessons-synthesize": 7 * 24 * 60,  // weekly (Sun 05:00 UTC)
+  "tomorrow-plan-refresh": 15,
+  "overnight-phase-runner-15m": 15,
+  "automation-auth-monitor": 15,
+  // 30-minute
+  "ci-status-sync-30m": 30,
+  // ~12-hourly
+  "secrets-health-check": 12 * 60,
+  // daily
+  "morning-review": 24 * 60,
+  "night-agent-open": 24 * 60,
+  "night-agent-close": 24 * 60,
+  "scheduled-code-review": 24 * 60,
+  "daily-plan": 24 * 60,
+  "lessons-daily-synth": 24 * 60,
+  "snapshot-daily-report": 24 * 60,
+  "nightly-rollup-analytics": 24 * 60,
+  "ingest-external-data": 24 * 60,
+  "cache-warm": 24 * 60,
+  "app-walkthrough": 24 * 60,
+  "overnight-prequeue": 24 * 60,
+  "overnight-recommender": 24 * 60,
+  "record-test-run": 24 * 60,
+  // weekly
+  "qa-validate": 7 * 24 * 60,
+  "lessons-synthesize": 7 * 24 * 60,
+  "awip-reviews-pull": 7 * 24 * 60,
+  "deep-audit": 7 * 24 * 60,
 };
 
 // Pattern matchers for realtime / channel-lifecycle bugs we've actually hit.
