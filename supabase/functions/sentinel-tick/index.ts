@@ -343,6 +343,36 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       resolved++;
     }
 
+    // Daily Telegram heartbeat — if a chat_id is configured but no successful
+    // telegram-send in the last 25h, fire a one-line ping so silent outbound
+    // breakage surfaces within a day rather than going stale for a week.
+    try {
+      const { data: alertCfg } = await sb.from("alert_settings")
+        .select("operator_telegram_chat_id,enabled").eq("id", true).maybeSingle();
+      const chatId = (alertCfg as any)?.operator_telegram_chat_id;
+      if (alertCfg?.enabled && chatId && SERVICE_TOKEN) {
+        const since25h = new Date(now.getTime() - 25 * 3600_000).toISOString();
+        const { data: lastSend } = await sb.from("edge_request_logs")
+          .select("created_at").eq("function_name", "telegram-send").eq("status", 200)
+          .gte("created_at", since25h).order("created_at", { ascending: false }).limit(1);
+        if (!lastSend || lastSend.length === 0) {
+          await fetch(`${SUPABASE_URL}/functions/v1/telegram-send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SERVICE_ROLE}`,
+              "x-service-token": SERVICE_TOKEN,
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: `🟢 AWIP heartbeat · ${now.toISOString().slice(0, 16).replace("T", " ")}Z\nsentinel-tick alive · ${inserted} new · ${updated} updated · ${resolved} resolved`,
+              parse_mode: "HTML",
+            }),
+          }).catch((e) => console.error("heartbeat send failed", e));
+        }
+      }
+    } catch (e) { console.error("heartbeat check failed", e); }
+
     await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓ ${autoLinked}🔗`, {
       inserted, updated, resolved, alerts, autoLinked, candidates: candidates.length,
     });
