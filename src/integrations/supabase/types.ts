@@ -4484,7 +4484,7 @@ export type Database = {
           phase_id: string
           phase_key: string
           requested_at: string
-          requested_by: string
+          requested_by: string | null
           result: Json | null
           scheduled_for: string
           started_at: string | null
@@ -4503,7 +4503,7 @@ export type Database = {
           phase_id: string
           phase_key: string
           requested_at?: string
-          requested_by: string
+          requested_by?: string | null
           result?: Json | null
           scheduled_for?: string
           started_at?: string | null
@@ -4522,7 +4522,7 @@ export type Database = {
           phase_id?: string
           phase_key?: string
           requested_at?: string
-          requested_by?: string
+          requested_by?: string | null
           result?: Json | null
           scheduled_for?: string
           started_at?: string | null
