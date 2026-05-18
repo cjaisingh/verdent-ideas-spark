@@ -447,6 +447,7 @@ export type Database = {
           dedupe_minutes: number
           enabled: boolean
           id: boolean
+          operator_telegram_chat_id: number | null
           updated_at: string
           webhook_url: string | null
         }
@@ -464,6 +465,7 @@ export type Database = {
           dedupe_minutes?: number
           enabled?: boolean
           id?: boolean
+          operator_telegram_chat_id?: number | null
           updated_at?: string
           webhook_url?: string | null
         }
@@ -481,6 +483,7 @@ export type Database = {
           dedupe_minutes?: number
           enabled?: boolean
           id?: boolean
+          operator_telegram_chat_id?: number | null
           updated_at?: string
           webhook_url?: string | null
         }

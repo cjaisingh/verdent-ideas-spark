@@ -1,0 +1,1 @@
+ALTER TABLE public.alert_settings ADD COLUMN IF NOT EXISTS operator_telegram_chat_id bigint;
