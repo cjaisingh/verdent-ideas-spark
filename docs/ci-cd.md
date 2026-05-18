@@ -88,7 +88,7 @@ BASE_REF=main bun run scripts/generate-changelog-entry.ts
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `lint-and-typecheck.yml` | every push + PR | Fast feedback gate (lint + `tsc --noEmit`). Mark required in branch protection. |
-| `codeql.yml` | push, PR, weekly Mon 04:23 UTC | GitHub CodeQL static analysis (`security-and-quality` queries). Findings appear under **Security → Code scanning**. |
+| ~~`codeql.yml`~~ | — | **Removed 2026-05-18.** See § "CodeQL: disabled" below. |
 | `gitleaks.yml` | push, PR, daily 05:13 UTC | Repo-wide secret scan via `gitleaks-action`. Uploads SARIF to **Security → Secret scanning**. |
 | `lighthouse.yml` | PR, weekly Mon 06:37 UTC | Lighthouse CI against built `dist/` using `.lighthouserc.json` (perf 0.7, a11y/best-practices/SEO 0.85, all `warn`). |
 | `axe.yml` | PR, weekly Mon 06:47 UTC | `@axe-core/cli` against served `dist/`, WCAG 2.0 A + AA tags. Report uploaded as artifact. |
@@ -106,7 +106,7 @@ Operator action — not enforceable from code. In **Settings → Branches → ma
    - `Lint · Typecheck · Test · Build` (`ci.yml`)
    - `Linter + RLS matrix` (`security-audit.yml`)
    - `Check docs and changelog parity` (`doc-drift.yml`)
-   - `Analyze (javascript-typescript)` (`codeql.yml`)
+   
    - `Secret scan` (`gitleaks.yml`)
 3. **Require branches to be up to date** before merging.
 4. **Require linear history** (squash-merge only).
@@ -116,19 +116,16 @@ Operator action — not enforceable from code. In **Settings → Branches → ma
 
 Mirror a relaxed version on `develop`: same checks but allow direct pushes from maintainers for fast-iteration spikes.
 
-## CodeQL: default vs advanced setup (must pick one)
+## CodeQL: disabled (2026-05-18)
 
-GitHub will reject SARIF uploads from `codeql.yml` with
-`CodeQL analyses from advanced configurations cannot be processed when the default setup is enabled`
-if the repository has **both** the in-repo workflow **and** GitHub's built-in default setup turned on.
+CodeQL was removed from this repo. Rationale: 28 unactioned alerts had accumulated with no triage owner; Gitleaks (secrets), Security Audit (Supabase linter + RLS matrix), and Dependabot (dependency CVEs) cover the threat surface we actually act on.
 
-This repo uses the in-repo `.github/workflows/codeql.yml` as the source of truth, so default setup must be **disabled**:
+Operator one-off cleanup (cannot be done from code):
 
-1. Go to the repo on GitHub → **Settings → Code security**.
-2. Under **Code scanning → CodeQL analysis**, click **Set up** dropdown → **Switch to advanced** (or **Disable**, then rely on the workflow).
-3. Confirm. The next push or scheduled run of `codeql.yml` should now upload successfully.
+1. **Settings → Code security → Code scanning → CodeQL analysis → Set up ▾ → Disable.** Stops the default-setup runs.
+2. **Security → Code scanning → filter Tool: CodeQL → select all → Dismiss → "Won't fix".** Clears the 28 alerts.
 
-If you ever want to go back to default setup, delete `.github/workflows/codeql.yml` first — never run both.
+To re-enable later: appoint a triage owner first, then restore `.github/workflows/codeql.yml` from git history. Never run both default and advanced setup simultaneously.
 
 ## GitHub Actions secrets — at a glance
 
