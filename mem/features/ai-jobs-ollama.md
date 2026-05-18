@@ -1,26 +1,26 @@
 ---
 name: ai-jobs-ollama
-description: Pull-based queue (ai_jobs/ai_job_results/ai_draft_outputs/ai_workers) for outsourcing drafts to a local Ollama worker; Lovable stays architect/reviewer
+description: Pull-based queue (ai_jobs/ai_job_results/ai_draft_outputs/ai_workers) for outsourcing drafts to a local Ollama worker; Lovable stays architect/reviewer. Default model gemma4.
 type: feature
 ---
-Slice 1 scope: three draft kinds — `draft_changelog_entry`, `draft_lesson_synthesis`, `draft_doc_section`. Slice 2 adds `codemod_replace_any` (file-scoped TypeScript any → narrow type, output is a unified diff). All outputs land in `ai_draft_outputs` as `status='ready'` for operator approve/reject. No auto-merge, no code generation outside the diff.
+Slice 1 scope: three draft kinds — `draft_changelog_entry`, `draft_lesson_synthesis`, `draft_doc_section`. Slice 2 adds `codemod_replace_any`. All outputs land in `ai_draft_outputs` as `status='ready'` for operator approve/reject. No auto-merge.
 
-**codemod_replace_any enqueuer**: `supabase/functions/codemod-any-enqueue` (x-awip-service-token). Caller (GH Actions or local script) runs eslint with `no-explicit-any: error`, buckets findings by file, posts `{git_sha, files:[{file_path, ts_source, any_sites:[{line,col,snippet,hint?}], surrounding_types?}]}`. Caps: 40 sites/file, 30 jobs/call. Idempotency key `codemod-any:sha256(file_path:git_sha)`. Priority 200 (lower than draft_*). Tracked by discussion_action #20 ("no-explicit-any cleanup").
+**Worker script**: `scripts/ollama-worker.mjs` (also mirrored to `/mnt/documents/ollama-worker/worker.mjs` with README + .env.example). Zero npm deps, Node 18+. Default model `gemma4`, configurable via `DEFAULT_MODEL` env. Polls every 5s, heartbeats every 20s, 5-min per-job timeout.
 
-**Tables**: `ai_workers` (registered boxes), `ai_jobs` (queue, idempotency_key UNIQUE, heartbeat/attempts/max_retries=3), `ai_job_results` (per attempt), `ai_draft_outputs` (reviewable). Operator-only RLS; realtime on `ai_jobs` + `ai_draft_outputs`.
+**Run**: `node --env-file=.env scripts/ollama-worker.mjs`. Required env: `SUPABASE_URL`, `AWIP_SERVICE_TOKEN`, `WORKER_NAME`. Survives sleep — `sentinel-tick` reclaims stale claims after ~10min via `reclaim_stale_ai_jobs()`.
 
-**Edge functions** (all `withLogger`): `ai-jobs-enqueue` (operator JWT, idempotent), `ai-jobs-claim`/`-heartbeat`/`-complete`/`-fail` (x-service-token = AWIP_SERVICE_TOKEN). Claim uses select+update with `WHERE status='queued'` race-safe fallback (no atomic RPC yet — fine for single-worker).
+**codemod_replace_any enqueuer**: `supabase/functions/codemod-any-enqueue` (x-awip-service-token). Caps: 40 sites/file, 30 jobs/call. Priority 200.
 
-**Contracts**: `supabase/functions/_shared/contracts/ai-jobs.ts` — zod schemas + `buildPrompt()` + `projectDraft()` per kind. Add new kinds here first.
+**Tables**: `ai_workers`, `ai_jobs` (idempotency_key UNIQUE, max_retries=3), `ai_job_results`, `ai_draft_outputs`. Operator-only RLS; realtime on `ai_jobs` + `ai_draft_outputs`.
 
-**Sentinel** (`sentinel-tick`): calls `reclaim_stale_ai_jobs(10)` then runs `checkAiJobsStuck` (>10min stale heartbeat → medium/high) and `checkAiWorkersOffline` (enabled worker >15min silent AND queue>0 → medium).
+**Edge functions** (all `withLogger`): `ai-jobs-enqueue` (operator JWT), `ai-jobs-claim`/`-heartbeat`/`-complete`/`-fail` (x-service-token).
 
-**Usage logging**: complete handler inserts into `ai_usage_log` with `job='ollama-worker'`, model=ollama tag, so credits panel shows local spend as $0.
+**Contracts**: `supabase/functions/_shared/contracts/ai-jobs.ts` — zod schemas + `buildPrompt()` + `projectDraft()` per kind.
 
-**Still to build**: `/admin/ai-jobs` review page, producer buttons on `/admin/lessons` + `/admin/ai-usage`, the worker script artefact, `docs/ai-jobs-ollama.md`.
+**Producer buttons live**: `/admin/lessons` (synth), `/admin/ai-usage` (changelog + doc section) via `EnqueueDraftDialog`.
 
-**Worker contract** (for the script that will live outside repo):
-1. POST `/ai-jobs-claim` `{worker_name, model_tags}` → 204 or `{job:{id,kind,requested_model,prompt:{system,user}}}`.
-2. While running, POST `/ai-jobs-heartbeat` `{job_id, worker_name}` every 60s.
-3. POST `/ai-jobs-complete` `{job_id, output_text, model, tokens_in, tokens_out, latency_ms}` OR `/ai-jobs-fail` `{job_id, error}`.
-4. Headers: `x-service-token: $AWIP_SERVICE_TOKEN`.
+**Review surface live**: `/admin/ai-jobs` (Jobs/Drafts/Workers tabs, 516 lines, realtime).
+
+**Sentinel** (`sentinel-tick`): `reclaim_stale_ai_jobs(10)` + `checkAiJobsStuck` (>10min stale heartbeat) + `checkAiWorkersOffline` (>15min silent AND queue>0).
+
+**Usage logging**: complete handler inserts `ai_usage_log` with `job='ollama-worker'`, cost=$0.
