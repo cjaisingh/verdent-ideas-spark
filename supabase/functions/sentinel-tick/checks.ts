@@ -916,3 +916,62 @@ export function checkAiWorkersOffline(
     payload: { offline_minutes: offlineMinutes, names: offline.map((w) => w.name) },
   }];
 }
+
+/**
+ * Telegram webhook silence. If the operator channel goes quiet for hours
+ * we lose every Telegram message + every approval decision silently.
+ * Reads from edge_request_logs (which records every webhook hit, including
+ * 200s with `ignored: not_allowlisted`).
+ *
+ * Threshold: >6h with zero hits → high. Bot is essentially always in use,
+ * so >6h is a strong signal of a broken webhook, expired token, or wrong
+ * URL registration.
+ */
+export function checkTelegramWebhookSilent(
+  now: Date,
+  lastSeenAt: string | null,
+  silenceHours = 6,
+): FindingCandidate[] {
+  const silenceMs = lastSeenAt ? now.getTime() - +new Date(lastSeenAt) : Infinity;
+  const thresholdMs = silenceHours * 3600_000;
+  if (silenceMs <= thresholdMs) return [];
+  return [{
+    kind: "telegram_webhook_silent",
+    severity: "high",
+    summary: `Telegram webhook silent for ${
+      isFinite(silenceMs) ? Math.round(silenceMs / 3600_000) + "h" : "ever"
+    } (threshold ${silenceHours}h). Check bot token, webhook URL, allowlist.`,
+    dedupe_key: `telegram_webhook_silent`,
+    subject_ref: { function_name: "telegram-webhook" },
+    payload: { last_seen_at: lastSeenAt, silence_hours_threshold: silenceHours },
+  }];
+}
+
+/**
+ * Approvals staleness. Operator approval channel quiet for too long
+ * usually means upstream (Telegram, awip-api) is silently dropping
+ * requests. Fires when no new approval_queue row in N hours.
+ *
+ * Threshold: 72h → medium. Pure-quiet window in practice rarely exceeds
+ * 48h; 72h means the channel is broken, not just unused.
+ */
+export function checkApprovalsStale(
+  now: Date,
+  lastCreatedAt: string | null,
+  staleHours = 72,
+): FindingCandidate[] {
+  const ageMs = lastCreatedAt ? now.getTime() - +new Date(lastCreatedAt) : Infinity;
+  const thresholdMs = staleHours * 3600_000;
+  if (ageMs <= thresholdMs) return [];
+  return [{
+    kind: "approvals_stale",
+    severity: "medium",
+    summary: `No new approvals in ${
+      isFinite(ageMs) ? Math.round(ageMs / 3600_000) + "h" : "ever"
+    } (threshold ${staleHours}h). Operator approval channel may be broken.`,
+    dedupe_key: `approvals_stale`,
+    subject_ref: { table: "approval_queue" },
+    payload: { last_created_at: lastCreatedAt, stale_hours_threshold: staleHours },
+  }];
+}
+
