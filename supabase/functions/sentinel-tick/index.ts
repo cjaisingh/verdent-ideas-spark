@@ -78,8 +78,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("v_credit_snapshot_latest_age").select("latest_as_of,minutes_since_latest,snapshots_24h,entries_since_latest").maybeSingle(),
     ]);
 
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes] = await Promise.all([
-      sb.from("automation_runs").select("id,job,status,created_at").gte("created_at", since15d),
+    const monitoredJobs = Object.keys(SENTINEL_CADENCES);
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes] = await Promise.all([
+      // Filter to monitored jobs only. Without this filter, high-frequency jobs
+      // like automation-auth-monitor (every 15min × 15d = 1440 rows) blow past
+      // PostgREST's default 1000-row cap and push lower-volume jobs out of the
+      // sample — causing false-positive cron_silence findings for jobs that
+      // are actually running on schedule.
+      sb.from("automation_runs")
+        .select("id,job,status,created_at")
+        .in("job", monitoredJobs)
+        .gte("created_at", since15d)
+        .order("created_at", { ascending: false })
+        .limit(5000),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
         .gte("created_at", since30m).limit(2000),
@@ -112,6 +123,18 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .eq("status", "failed")
         .gte("created_at", since24h)
         .limit(50),
+      // Telegram webhook: last invocation (any status, including 200/ignored).
+      sb.from("edge_request_logs")
+        .select("created_at")
+        .eq("function_name", "telegram-webhook")
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle(),
+      // Approvals: latest row regardless of status. Silence here means the
+      // operator approval channel is broken upstream.
+      sb.from("approval_queue")
+        .select("created_at")
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle(),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
