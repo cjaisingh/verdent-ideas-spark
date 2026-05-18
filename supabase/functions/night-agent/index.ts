@@ -31,7 +31,10 @@ Deno.serve(withLogger("night-agent", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
-  const path = url.pathname.replace(/^.*\/night-agent/, "") || "/";
+  // Accept both subpath (/night-agent/close) and dash variant (/night-agent-close)
+  // because pg_cron URLs historically used the dash form.
+  let path = url.pathname.replace(/^.*\/night-agent/, "") || "/";
+  if (path.startsWith("-")) path = "/" + path.slice(1);
 
   const provided = req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";

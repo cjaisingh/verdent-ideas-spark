@@ -78,8 +78,11 @@ Deno.serve(withLogger("record-test-run", async (req) => {
 
 function int(v: unknown): number | null {
   if (v === null || v === undefined) return null;
-  const n = typeof v === "number" ? v : parseInt(String(v), 10);
-  return Number.isFinite(n) ? n : null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  if (!Number.isFinite(n)) return null;
+  // Postgres integer columns reject floats — round here so CI callers
+  // that send fractional ms (e.g. 356.16) don't blow up the insert.
+  return Math.round(n);
 }
 function json(p: unknown, s = 200) {
   return new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, "Content-Type": "application/json" } });
