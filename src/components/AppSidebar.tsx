@@ -11,7 +11,7 @@ import {
   Notebook as NotebookIcon, Code2, Shield, Heart, Database, Library, ShieldAlert,
   Mic, UserCircle2, GraduationCap, MessageSquareText, FileCheck2, ListChecks, Moon,
   FileSearch, Users, ChevronRight, Star, LayoutDashboard, Sparkles, Target, Bot,
-  ShieldCheck, FileSpreadsheet, Footprints, Newspaper, Plug, Video,
+  ShieldCheck, FileSpreadsheet, Footprints, Newspaper, Plug, Video, Inbox,
 } from "lucide-react";
 import {
   DOT_CLASSES, DOT_LABELS, getCopilotLastChild, rememberCopilotChild,
@@ -75,6 +75,7 @@ const operateLogsItems: NavItem[] = [
 
 const planTopItems: NavItem[] = [
   { url: "/morning-review", title: "Morning Review", icon: Sparkles },
+  { url: "/operator-inbox", title: "Operator inbox", icon: Inbox },
   { url: "/whats-new", title: "What's New", icon: Newspaper },
   { url: "/roadmap", title: "Roadmap", icon: MapIcon },
   { url: "/roadmap/risks", title: "Risk dashboard", icon: ShieldAlert },

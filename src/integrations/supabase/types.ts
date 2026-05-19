@@ -3819,6 +3819,33 @@ export type Database = {
         }
         Relationships: []
       }
+      operator_inbox_sources: {
+        Row: {
+          chat_id: number
+          created_at: string
+          enabled: boolean
+          kind: string
+          label: string
+          notes: string | null
+        }
+        Insert: {
+          chat_id: number
+          created_at?: string
+          enabled?: boolean
+          kind: string
+          label: string
+          notes?: string | null
+        }
+        Update: {
+          chat_id?: number
+          created_at?: string
+          enabled?: boolean
+          kind?: string
+          label?: string
+          notes?: string | null
+        }
+        Relationships: []
+      }
       operator_messages: {
         Row: {
           chat_id: number
@@ -3826,7 +3853,12 @@ export type Database = {
           direction: string
           id: string
           intent: string | null
+          kind: string | null
+          kind_confidence: number | null
+          kind_source: string | null
+          promoted_action_id: string | null
           raw: Json
+          source: string
           text: string | null
           update_id: number | null
         }
@@ -3836,7 +3868,12 @@ export type Database = {
           direction: string
           id?: string
           intent?: string | null
+          kind?: string | null
+          kind_confidence?: number | null
+          kind_source?: string | null
+          promoted_action_id?: string | null
           raw?: Json
+          source?: string
           text?: string | null
           update_id?: number | null
         }
@@ -3846,11 +3883,31 @@ export type Database = {
           direction?: string
           id?: string
           intent?: string | null
+          kind?: string | null
+          kind_confidence?: number | null
+          kind_source?: string | null
+          promoted_action_id?: string | null
           raw?: Json
+          source?: string
           text?: string | null
           update_id?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "operator_messages_promoted_action_id_fkey"
+            columns: ["promoted_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_messages_promoted_action_id_fkey"
+            columns: ["promoted_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       overnight_recommendations: {
         Row: {
@@ -6432,6 +6489,51 @@ export type Database = {
           last_30d_pct: number | null
           mtd_credits: number | null
           mtd_pct: number | null
+        }
+        Relationships: []
+      }
+      v_operator_inbox_24h: {
+        Row: {
+          action_short_num: number | null
+          action_status: string | null
+          chat_id: number | null
+          created_at: string | null
+          id: string | null
+          intent: string | null
+          kind: string | null
+          kind_confidence: number | null
+          kind_source: string | null
+          promoted_action_id: string | null
+          source: string | null
+          source_label: string | null
+          text: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operator_messages_promoted_action_id_fkey"
+            columns: ["promoted_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operator_messages_promoted_action_id_fkey"
+            columns: ["promoted_action_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_actions_stuck_in_night"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_operator_inbox_unpromoted: {
+        Row: {
+          chat_id: number | null
+          created_at: string | null
+          id: string | null
+          kind: string | null
+          source: string | null
+          source_label: string | null
+          text: string | null
         }
         Relationships: []
       }
