@@ -120,6 +120,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/capability-promotion", title: "Capability promotion", icon: Boxes },
   { url: "/admin/promotion-audits", title: "Promotion audits", icon: FileSearch },
   { url: "/admin/cron-health", title: "Cron health", icon: Activity },
+  { url: "/admin/secrets-health", title: "Secrets health", icon: Shield },
   { url: "/admin/edge-health", title: "Edge function health", icon: Activity },
   { url: "/admin/voice-health", title: "Voice pipeline health", icon: Mic },
   { url: "/playbooks/voice-chat-first", title: "Playbook: voice + chat-first", icon: BookOpen },
