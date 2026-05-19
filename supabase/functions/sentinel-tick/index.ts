@@ -11,6 +11,7 @@ import {
   checkCreditSnapshotStale,
   checkAiJobsStuck, checkAiWorkersOffline,
   checkTelegramWebhookSilent, checkApprovalsStale,
+  checkSecretsHealthStale, checkCronAuthFailuresBurst,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -79,7 +80,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     ]);
 
     const monitoredJobs = Object.keys(SENTINEL_CADENCES);
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes, lastSecretsOkRes, authFailLogRes] = await Promise.all([
       // Filter to monitored jobs only. Without this filter, high-frequency jobs
       // like automation-auth-monitor (every 15min × 15d = 1440 rows) blow past
       // PostgREST's default 1000-row cap and push lower-volume jobs out of the
@@ -135,6 +136,17 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .select("created_at")
         .order("created_at", { ascending: false })
         .limit(1).maybeSingle(),
+      // Detector-of-the-detector: most recent ok run of secrets-health-check.
+      sb.from("automation_runs")
+        .select("created_at")
+        .eq("job", "secrets-health-check").eq("status", "ok")
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle(),
+      // Aggregate auth_failed bursts across all cron jobs (last 1h).
+      sb.from("alert_log")
+        .select("job,reason,created_at")
+        .eq("reason", "auth_failed")
+        .gte("created_at", since60m).limit(500),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
@@ -197,6 +209,8 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
       ...checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null),
+      ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
+      ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;

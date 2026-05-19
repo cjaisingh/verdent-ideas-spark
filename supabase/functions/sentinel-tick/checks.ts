@@ -29,7 +29,9 @@ export type FindingCandidate = {
     | "ai_jobs_stuck"
     | "ai_workers_offline"
     | "telegram_webhook_silent"
-    | "approvals_stale";
+    | "approvals_stale"
+    | "secrets_health_stale"
+    | "cron_auth_failures_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -975,3 +977,67 @@ export function checkApprovalsStale(
   }];
 }
 
+
+/**
+ * Detector-of-the-detector: secrets-health-check must produce a fresh `ok`
+ * row in automation_runs at least once per 26h (cron runs daily at 21:30 UTC).
+ * If the detector itself is silent or erroring, we fire critical — this is
+ * exactly the case that hid the AWIP_SERVICE_TOKEN rotation drift for a day.
+ */
+export function checkSecretsHealthStale(
+  now: Date,
+  lastOkAt: string | null,
+  staleHours = 26,
+): FindingCandidate[] {
+  const ageMs = lastOkAt ? now.getTime() - +new Date(lastOkAt) : Infinity;
+  const thresholdMs = staleHours * 3600_000;
+  if (ageMs <= thresholdMs) return [];
+  return [{
+    kind: "secrets_health_stale",
+    severity: "critical",
+    summary: `secrets-health-check has not produced an ok run in ${
+      isFinite(ageMs) ? Math.round(ageMs / 3600_000) + "h" : "ever"
+    } (threshold ${staleHours}h). Secret-drift detection is offline.`,
+    dedupe_key: `secrets_health_stale`,
+    subject_ref: { job: "secrets-health-check" },
+    payload: { last_ok_at: lastOkAt, stale_hours_threshold: staleHours },
+  }];
+}
+
+export type AlertLogRow = { job: string; reason: string; created_at: string };
+
+/**
+ * Aggregate cron auth-failure burst. When the service token diverges between
+ * the DB-side value (read by cron) and the edge-function env var (checked by
+ * the function), every cron job fires `auth_failed` alerts. A single 401 is
+ * noise; >5 across any jobs in an hour is the platform-wide auth chain
+ * collapsing and must page critical immediately.
+ */
+export function checkCronAuthFailuresBurst(
+  now: Date,
+  rows: AlertLogRow[],
+  threshold = 5,
+): FindingCandidate[] {
+  const since = now.getTime() - 60 * 60_000;
+  const recent = rows.filter(
+    (r) => r.reason === "auth_failed" && +new Date(r.created_at) >= since,
+  );
+  if (recent.length <= threshold) return [];
+  const byJob: Record<string, number> = {};
+  for (const r of recent) byJob[r.job] = (byJob[r.job] ?? 0) + 1;
+  const top = Object.entries(byJob).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // Hour-bucket dedupe so a sustained outage re-flags hourly, not every 15m.
+  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+  return [{
+    kind: "cron_auth_failures_burst",
+    severity: "critical",
+    summary:
+      `${recent.length} cron auth_failed alerts in last 1h across ${
+        Object.keys(byJob).length
+      } job(s) (top: ${top.map(([j, n]) => `${j}×${n}`).join(", ")}). ` +
+      `Likely AWIP_SERVICE_TOKEN mismatch between app_secrets and edge env.`,
+    dedupe_key: `cron_auth_failures_burst:${hourBucket}`,
+    subject_ref: { window_minutes: 60 },
+    payload: { count: recent.length, by_job: byJob, threshold },
+  }];
+}

@@ -82,38 +82,59 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // Mismatch detection: row present in BOTH places but values differ.
   // We never log raw values — only short fingerprints so operators can tell
   // which side rotated without leaking the secret.
-  const mismatches: { key: string; env_fp: string; db_fp: string }[] = [];
+  // Opt-in `?sync=env-to-db` aligns the DB to env (env is the rotation surface
+  // operators use via the Lovable secret form). Only available to operator-
+  // authed callers (Bearer auth), never to the cron path.
+  const url = new URL(req.url);
+  const syncMode = url.searchParams.get("sync");
+  const allowSync = !triggeredByCron && syncMode === "env-to-db";
+
+  const mismatches: { key: string; env_fp: string; db_fp: string; resynced?: boolean }[] = [];
   for (const key of REQUIRED_SECRETS) {
     const envVal = Deno.env.get(key);
     const dbVal = dbValues.get(key);
     if (!envVal || !dbVal) continue;
     if (envVal === dbVal) continue;
+    let resynced = false;
+    if (allowSync) {
+      const { error: upErr } = await sb.from("app_secrets").upsert({
+        key, value: envVal,
+        description: `Synced env→db by secrets-health-check (operator sync)`,
+      }, { onConflict: "key" });
+      if (!upErr) { dbValues.set(key, envVal); resynced = true; }
+    }
     mismatches.push({
       key,
       env_fp: await fingerprint(envVal),
       db_fp: await fingerprint(dbVal),
+      resynced,
     });
   }
+  // After sync, recompute mismatches (drop the ones we just aligned).
+  const effectiveMismatches = mismatches.filter((m) => !m.resynced);
 
-  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && mismatches.length === 0;
+  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && effectiveMismatches.length === 0;
   const messageParts: string[] = [];
   if (missingInDb.length) messageParts.push(`missing in db: [${missingInDb.join(",")}]`);
   if (missingInEnv.length) messageParts.push(`missing in env: [${missingInEnv.join(",")}]`);
-  if (mismatches.length) messageParts.push(`mismatched: [${mismatches.map((m) => m.key).join(",")}]`);
+  if (effectiveMismatches.length) messageParts.push(`mismatched: [${effectiveMismatches.map((m) => m.key).join(",")}]`);
+  const resyncedKeys = mismatches.filter((m) => m.resynced).map((m) => m.key);
+  if (resyncedKeys.length) messageParts.push(`resynced env→db: [${resyncedKeys.join(",")}]`);
   const message = ok
-    ? `All ${REQUIRED_SECRETS.length} required secrets present and matching`
+    ? `All ${REQUIRED_SECRETS.length} required secrets present and matching` +
+      (resyncedKeys.length ? ` (resynced: ${resyncedKeys.join(",")})` : "")
     : `Secret check failed — ${messageParts.join(" · ")}`;
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
-    synced_to_db: synced, mismatches,
+    synced_to_db: synced, mismatches, resynced_env_to_db: resyncedKeys,
   });
 
-  if (mismatches.length > 0) {
+  if (effectiveMismatches.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_mismatch",
-      `Edge env and app_secrets disagree for: ${mismatches.map((m) => m.key).join(", ")}. ` +
+      `Edge env and app_secrets disagree for: ${effectiveMismatches.map((m) => m.key).join(", ")}. ` +
       `Rotate one side or run the sync to align them.`,
-      { mismatches });
+      { mismatches: effectiveMismatches });
   }
   if (missingInDb.length > 0 || missingInEnv.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_missing", message, {
@@ -126,7 +147,8 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     missing_in_db: missingInDb,
     missing_in_env: missingInEnv,
     synced_to_db: synced,
-    mismatches,
+    resynced_env_to_db: resyncedKeys,
+    mismatches: effectiveMismatches,
   });
 }));
 
