@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle, Tag } from "lucide-react";
+import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle, Tag, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
 type Kind = "idea" | "research" | "suggestion" | "question" | "chat";
@@ -141,19 +142,17 @@ export default function OperatorInbox() {
     })();
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const buildQuery = useCallback((opts: { withCount?: boolean; range?: [number, number] | null } = {}) => {
     const w = WINDOWS.find((x) => x.id === windowId)!;
     const sinceISO = w.hours == null ? null : new Date(Date.now() - w.hours * 3600_000).toISOString();
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
     let q = supabase
       .from("operator_messages")
-      .select("id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
+      .select(
+        "id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id",
+        opts.withCount ? { count: "exact" } : undefined,
+      )
+      .order("created_at", { ascending: false });
+    if (opts.range) q = q.range(opts.range[0], opts.range[1]);
     if (sinceISO) q = q.gte("created_at", sinceISO);
     if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
@@ -165,8 +164,14 @@ export default function OperatorInbox() {
       q = q.is("promoted_action_id", null).in("kind", ["idea", "research", "suggestion"]);
     }
     if (searchDebounced) q = q.ilike("text", `%${searchDebounced}%`);
+    return q;
+  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced]);
 
-    const { data, error, count } = await q;
+  const load = useCallback(async () => {
+    setLoading(true);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await buildQuery({ withCount: true, range: [from, to] });
     if (error) toast({ title: "Failed to load inbox", description: error.message, variant: "destructive" });
     const list = (data ?? []) as Row[];
     setRows(list);
@@ -186,7 +191,7 @@ export default function OperatorInbox() {
       setActions({});
     }
     setLoading(false);
-  }, [page, directionFilter, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
+  }, [buildQuery, page, toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -367,6 +372,141 @@ export default function OperatorInbox() {
     load();
   }
 
+  const [exporting, setExporting] = useState(false);
+
+  function triggerDownload(filename: string, mime: string, body: string) {
+    const blob = new Blob([body], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function toCSV(items: Row[]): string {
+    const cols: Array<keyof Row> = [
+      "id", "created_at", "direction", "source", "chat_id",
+      "kind", "kind_source", "kind_confidence", "promoted_action_id", "text",
+    ];
+    const esc = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [...cols, "source_label", "action_short_num", "action_status"].join(",");
+    const lines = items.map((r) => {
+      const a = r.promoted_action_id ? actions[r.promoted_action_id] : null;
+      const label = (r.chat_id != null && sourceLabels[String(r.chat_id)]) || "";
+      return [
+        ...cols.map((c) => esc(r[c])),
+        esc(label),
+        esc(a?.short_num ?? ""),
+        esc(a?.status ?? ""),
+      ].join(",");
+    });
+    return [header, ...lines].join("\n");
+  }
+
+  function filterSlug() {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const parts = [
+      directionFilter !== "all" && directionFilter,
+      kindFilter !== "all" && `kind-${kindFilter}`,
+      sourceFilter !== "all" && `src-${sourceFilter}`,
+      promotedFilter !== "all" && promotedFilter,
+      `win-${windowId}`,
+      searchDebounced && `q-${searchDebounced.slice(0, 16).replace(/\W+/g, "_")}`,
+    ].filter(Boolean).join("_");
+    return `operator-inbox_${parts || "all"}_${stamp}`;
+  }
+
+  async function exportCurrentPage(format: "csv" | "json") {
+    if (rows.length === 0) {
+      toast({ title: "Nothing to export", description: "Current page is empty." });
+      return;
+    }
+    const name = `${filterSlug()}_page${page + 1}`;
+    if (format === "csv") triggerDownload(`${name}.csv`, "text/csv;charset=utf-8", toCSV(rows));
+    else triggerDownload(`${name}.json`, "application/json", JSON.stringify(rows, null, 2));
+  }
+
+  async function exportAllMatching(format: "csv" | "json") {
+    setExporting(true);
+    const HARD_CAP = 5000;
+    const PAGE = 1000;
+    const collected: Row[] = [];
+    let from = 0;
+    while (collected.length < HARD_CAP) {
+      const to = Math.min(from + PAGE - 1, HARD_CAP - 1);
+      const { data, error } = await buildQuery({ range: [from, to] });
+      if (error) {
+        toast({ title: "Export failed", description: error.message, variant: "destructive" });
+        setExporting(false);
+        return;
+      }
+      const batch = (data ?? []) as Row[];
+      collected.push(...batch);
+      if (batch.length < PAGE) break;
+      from += PAGE;
+    }
+
+    // Hydrate any missing action metadata in one go
+    const missing = Array.from(new Set(
+      collected.map((r) => r.promoted_action_id).filter((id): id is string => !!id && !actions[id]),
+    ));
+    const localActions = { ...actions };
+    if (missing.length) {
+      const { data: ad } = await supabase
+        .from("discussion_actions")
+        .select("id,short_num,status")
+        .in("id", missing);
+      for (const a of (ad ?? []) as ActionMeta[]) localActions[a.id] = a;
+    }
+
+    const name = `${filterSlug()}_all-${collected.length}`;
+    if (format === "csv") {
+      // Inline CSV with localActions
+      const cols: Array<keyof Row> = [
+        "id", "created_at", "direction", "source", "chat_id",
+        "kind", "kind_source", "kind_confidence", "promoted_action_id", "text",
+      ];
+      const esc = (v: unknown) => {
+        if (v == null) return "";
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = [...cols, "source_label", "action_short_num", "action_status"].join(",");
+      const lines = collected.map((r) => {
+        const a = r.promoted_action_id ? localActions[r.promoted_action_id] : null;
+        const label = (r.chat_id != null && sourceLabels[String(r.chat_id)]) || "";
+        return [
+          ...cols.map((c) => esc(r[c])),
+          esc(label),
+          esc(a?.short_num ?? ""),
+          esc(a?.status ?? ""),
+        ].join(",");
+      });
+      triggerDownload(`${name}.csv`, "text/csv;charset=utf-8", [header, ...lines].join("\n"));
+    } else {
+      const enriched = collected.map((r) => ({
+        ...r,
+        source_label: (r.chat_id != null && sourceLabels[String(r.chat_id)]) || null,
+        action: r.promoted_action_id ? localActions[r.promoted_action_id] ?? null : null,
+      }));
+      triggerDownload(`${name}.json`, "application/json", JSON.stringify(enriched, null, 2));
+    }
+
+    setExporting(false);
+    toast({
+      title: `Exported ${collected.length} rows`,
+      description: collected.length >= HARD_CAP ? `Capped at ${HARD_CAP} — narrow filters for more.` : "Download started.",
+    });
+  }
+
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showingFrom = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const showingTo = Math.min(total, (page + 1) * PAGE_SIZE);
@@ -378,9 +518,27 @@ export default function OperatorInbox() {
           <Inbox className="h-5 w-5" />
           <h1 className="text-2xl font-semibold">Operator inbox</h1>
         </div>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" disabled={exporting || loading}>
+                <Download className={`h-4 w-4 mr-2 ${exporting ? "animate-pulse" : ""}`} /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">Current page ({rows.length})</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => exportCurrentPage("csv")}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportCurrentPage("json")}>JSON</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs">All matching ({total.toLocaleString("en-GB")}, max 5000)</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => exportAllMatching("csv")}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportAllMatching("json")}>JSON</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </header>
 
       <Card className="p-3 flex flex-wrap gap-2 items-center text-xs">
