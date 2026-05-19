@@ -4,6 +4,11 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+- **Unified Operator Inbox** (`docs/operator-inbox.md`) — `/operator-inbox` page + `OperatorInboxPanel` on Morning Review aggregating Telegram DMs, groups, channels, and manual paste. `operator_messages` gains `source` / `kind` / `kind_source` / `kind_confidence` / `promoted_action_id`. New `operator_inbox_sources` registry gates `telegram-webhook` (must be `enabled=true` AND pass `is_principal_allowed`). Layered classifier `_shared/classifyInboxKind.ts`: prefix rules (`/idea`, `#research`, `/suggest`, `/ask`, `/chat`, trailing `?`) → `gemini-2.5-flash-lite` fallback → manual UI override. `route-operator-message` auto-promotes `idea`/`research`/`suggestion` to `discussion_actions` (idempotent via unique `(subject_type,subject_id)` index, `source='operator_inbox'`). Views `v_operator_inbox_24h` + `v_operator_inbox_unpromoted`. Two new sentinel checks: `inbox_kind_classify_failures` (medium, >10% LLM errors in 24h, min 10) and `inbox_source_silent` (low, enabled source idle 14d).
+
+
+
 ### Fixed
 - **Alerts never reached Telegram.** `alert_settings.webhook_url` was NULL so every `dispatchAlert(...)` call wrote `alert_log` and stopped. Added `alert_settings.operator_telegram_chat_id`, gave `dispatchAlert` a Telegram leg via `telegram-send` (independent of the webhook leg, shares dedupe), seeded operator chat_id (7139482467) into `alert_settings` + `credit_settings` + `platform_allowlist`. Added daily heartbeat in `sentinel-tick`: if chat_id is set but no successful `telegram-send` in 25h, fire a one-line ping so silent outbound rot surfaces within a day.
 

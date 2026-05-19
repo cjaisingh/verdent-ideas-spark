@@ -12,6 +12,7 @@ import {
   checkAiJobsStuck, checkAiWorkersOffline,
   checkTelegramWebhookSilent, checkApprovalsStale,
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
+  checkInboxKindClassifyFailures, checkInboxSourceSilent,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
@@ -171,6 +172,25 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
     ]);
 
+    // Operator Inbox signals.
+    const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
+    const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await Promise.all([
+      sb.from("ai_usage_log")
+        .select("status,created_at")
+        .eq("job", "route-operator-message:inbox-kind")
+        .gte("created_at", since24h)
+        .limit(2000),
+      sb.from("operator_inbox_sources")
+        .select("id,label,chat_id")
+        .eq("enabled", true)
+        .limit(200),
+      sb.from("operator_messages")
+        .select("chat_id")
+        .gte("created_at", since14d)
+        .not("chat_id", "is", null)
+        .limit(5000),
+    ]);
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
     const candidates: FindingCandidate[] = [
@@ -211,6 +231,12 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
+      ...checkInboxKindClassifyFailures(now, (inboxClassifyRes.data ?? []) as { status: string | null; created_at: string }[]),
+      ...checkInboxSourceSilent(
+        now,
+        (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
+        (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
+      ),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
