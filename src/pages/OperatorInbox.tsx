@@ -165,16 +165,50 @@ export default function OperatorInbox() {
     return c;
   }, [rows]);
 
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   async function setKind(id: string, kind: Kind | null) {
+    setBusyId(id);
     const { data, error } = await supabase.functions.invoke("operator-inbox-ingest", {
       body: { message_id: id, kind },
     });
+    setBusyId(null);
     if (error) {
       toast({ title: "Re-tag failed", description: error.message, variant: "destructive" });
       return;
     }
     const promoted = (data as { promoted_action_id?: string | null } | null)?.promoted_action_id;
     toast({ title: "Re-tagged", description: `kind=${kind ?? "null"}${promoted ? " · promoted" : ""}` });
+    load();
+  }
+
+  async function promote(id: string) {
+    setBusyId(id);
+    const { data, error } = await supabase.functions.invoke("operator-inbox-ingest", {
+      body: { message_id: id, action: "promote" },
+    });
+    setBusyId(null);
+    if (error) {
+      toast({ title: "Promote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    const promoted = (data as { promoted_action_id?: string | null } | null)?.promoted_action_id;
+    toast({ title: "Promoted", description: promoted ? `→ action ${promoted.slice(0, 8)}` : "(no-op)" });
+    load();
+  }
+
+  async function unpromote(id: string) {
+    if (!confirm("Cancel the linked action and unlink it from this message?")) return;
+    setBusyId(id);
+    const { error } = await supabase.functions.invoke("operator-inbox-ingest", {
+      body: { message_id: id, action: "unpromote" },
+    });
+    setBusyId(null);
+    if (error) {
+      toast({ title: "Unpromote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Unpromoted", description: "Linked action cancelled." });
     load();
   }
 
