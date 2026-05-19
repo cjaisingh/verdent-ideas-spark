@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle, Tag } from "lucide-react";
+import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle, Tag, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
 type Kind = "idea" | "research" | "suggestion" | "question" | "chat";
