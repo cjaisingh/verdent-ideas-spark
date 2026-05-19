@@ -93,11 +93,12 @@ export default function LessonsLoop() {
   }, [rows]);
 
   const sourceCounts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, client: 0 };
+    const c: Record<string, number> = { all: 0, client: 0, unknown: 0 };
     for (const r of rows.filter((r) => r.status === tab)) {
       c.all++;
       if (r.source && CLIENT_SOURCES.has(r.source)) c.client++;
       if (r.source) c[r.source] = (c[r.source] ?? 0) + 1;
+      else c.unknown++;
     }
     return c;
   }, [rows, tab]);

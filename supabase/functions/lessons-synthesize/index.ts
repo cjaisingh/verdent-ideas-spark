@@ -118,7 +118,7 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
     let inserted = 0, updated = 0, promoted = 0;
     for (const l of norm) {
       const { data: existing } = await sb.from("lessons")
-        .select("id,status,occurrences,cadence").eq("dedupe_key", l.dedupe_key).maybeSingle();
+        .select("id,status,occurrences,cadence,source").eq("dedupe_key", l.dedupe_key).maybeSingle();
       if (existing) {
         const occ = (existing.occurrences ?? 1) + 1;
         // Promote daily lessons that recur ≥3 times across the week to cadence='weekly'.
@@ -128,6 +128,7 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
           source_window_start: since, source_window_end: now.toISOString(),
           occurrences: occ,
           cadence: shouldPromote ? "weekly" : existing.cadence,
+          source: existing.source ?? "automation",
           status: existing.status === "rejected" ? "rejected" : existing.status,
         }).eq("id", existing.id);
         updated++;
