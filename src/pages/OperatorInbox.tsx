@@ -18,6 +18,7 @@ type Row = {
   created_at: string;
   chat_id: number | null;
   source: string | null;
+  direction: string | null;
   kind: Kind | null;
   kind_source: string | null;
   kind_confidence: number | null;
