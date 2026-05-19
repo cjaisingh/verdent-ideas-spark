@@ -167,9 +167,11 @@ Deno.serve(withLogger("telegram-webhook-reregister", async (req) => {
   // --- 3. Re-register (idempotent) ---
   const expectedSecret = await deriveSecret(TELEGRAM_API_KEY);
   const webhookUrl = info.url || `${SUPABASE_URL}/functions/v1/telegram-webhook`;
-  const allowedUpdates = info.allowed_updates && info.allowed_updates.length > 0
-    ? info.allowed_updates
-    : ["message", "edited_message", "callback_query"];
+  // Inbox upgrade: always include channel_post + edited_channel_post so the
+  // operator can register Telegram groups/channels as inbox sources.
+  const desiredUpdates = ["message", "edited_message", "callback_query", "channel_post", "edited_channel_post"];
+  const existing = info.allowed_updates ?? [];
+  const allowedUpdates = Array.from(new Set([...existing, ...desiredUpdates]));
 
   let setResult: unknown = null;
   let setStatus = 0;
