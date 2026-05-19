@@ -372,6 +372,141 @@ export default function OperatorInbox() {
     load();
   }
 
+  const [exporting, setExporting] = useState(false);
+
+  function triggerDownload(filename: string, mime: string, body: string) {
+    const blob = new Blob([body], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function toCSV(items: Row[]): string {
+    const cols: Array<keyof Row> = [
+      "id", "created_at", "direction", "source", "chat_id",
+      "kind", "kind_source", "kind_confidence", "promoted_action_id", "text",
+    ];
+    const esc = (v: unknown) => {
+      if (v == null) return "";
+      const s = String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = [...cols, "source_label", "action_short_num", "action_status"].join(",");
+    const lines = items.map((r) => {
+      const a = r.promoted_action_id ? actions[r.promoted_action_id] : null;
+      const label = (r.chat_id != null && sourceLabels[String(r.chat_id)]) || "";
+      return [
+        ...cols.map((c) => esc(r[c])),
+        esc(label),
+        esc(a?.short_num ?? ""),
+        esc(a?.status ?? ""),
+      ].join(",");
+    });
+    return [header, ...lines].join("\n");
+  }
+
+  function filterSlug() {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const parts = [
+      directionFilter !== "all" && directionFilter,
+      kindFilter !== "all" && `kind-${kindFilter}`,
+      sourceFilter !== "all" && `src-${sourceFilter}`,
+      promotedFilter !== "all" && promotedFilter,
+      `win-${windowId}`,
+      searchDebounced && `q-${searchDebounced.slice(0, 16).replace(/\W+/g, "_")}`,
+    ].filter(Boolean).join("_");
+    return `operator-inbox_${parts || "all"}_${stamp}`;
+  }
+
+  async function exportCurrentPage(format: "csv" | "json") {
+    if (rows.length === 0) {
+      toast({ title: "Nothing to export", description: "Current page is empty." });
+      return;
+    }
+    const name = `${filterSlug()}_page${page + 1}`;
+    if (format === "csv") triggerDownload(`${name}.csv`, "text/csv;charset=utf-8", toCSV(rows));
+    else triggerDownload(`${name}.json`, "application/json", JSON.stringify(rows, null, 2));
+  }
+
+  async function exportAllMatching(format: "csv" | "json") {
+    setExporting(true);
+    const HARD_CAP = 5000;
+    const PAGE = 1000;
+    const collected: Row[] = [];
+    let from = 0;
+    while (collected.length < HARD_CAP) {
+      const to = Math.min(from + PAGE - 1, HARD_CAP - 1);
+      const { data, error } = await buildQuery({ range: [from, to] });
+      if (error) {
+        toast({ title: "Export failed", description: error.message, variant: "destructive" });
+        setExporting(false);
+        return;
+      }
+      const batch = (data ?? []) as Row[];
+      collected.push(...batch);
+      if (batch.length < PAGE) break;
+      from += PAGE;
+    }
+
+    // Hydrate any missing action metadata in one go
+    const missing = Array.from(new Set(
+      collected.map((r) => r.promoted_action_id).filter((id): id is string => !!id && !actions[id]),
+    ));
+    const localActions = { ...actions };
+    if (missing.length) {
+      const { data: ad } = await supabase
+        .from("discussion_actions")
+        .select("id,short_num,status")
+        .in("id", missing);
+      for (const a of (ad ?? []) as ActionMeta[]) localActions[a.id] = a;
+    }
+
+    const name = `${filterSlug()}_all-${collected.length}`;
+    if (format === "csv") {
+      // Inline CSV with localActions
+      const cols: Array<keyof Row> = [
+        "id", "created_at", "direction", "source", "chat_id",
+        "kind", "kind_source", "kind_confidence", "promoted_action_id", "text",
+      ];
+      const esc = (v: unknown) => {
+        if (v == null) return "";
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const header = [...cols, "source_label", "action_short_num", "action_status"].join(",");
+      const lines = collected.map((r) => {
+        const a = r.promoted_action_id ? localActions[r.promoted_action_id] : null;
+        const label = (r.chat_id != null && sourceLabels[String(r.chat_id)]) || "";
+        return [
+          ...cols.map((c) => esc(r[c])),
+          esc(label),
+          esc(a?.short_num ?? ""),
+          esc(a?.status ?? ""),
+        ].join(",");
+      });
+      triggerDownload(`${name}.csv`, "text/csv;charset=utf-8", [header, ...lines].join("\n"));
+    } else {
+      const enriched = collected.map((r) => ({
+        ...r,
+        source_label: (r.chat_id != null && sourceLabels[String(r.chat_id)]) || null,
+        action: r.promoted_action_id ? localActions[r.promoted_action_id] ?? null : null,
+      }));
+      triggerDownload(`${name}.json`, "application/json", JSON.stringify(enriched, null, 2));
+    }
+
+    setExporting(false);
+    toast({
+      title: `Exported ${collected.length} rows`,
+      description: collected.length >= HARD_CAP ? `Capped at ${HARD_CAP} — narrow filters for more.` : "Download started.",
+    });
+  }
+
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const showingFrom = total === 0 ? 0 : page * PAGE_SIZE + 1;
   const showingTo = Math.min(total, (page + 1) * PAGE_SIZE);
