@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle, Tag } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
