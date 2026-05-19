@@ -18,6 +18,7 @@ type Row = {
   created_at: string;
   chat_id: number | null;
   source: string | null;
+  direction: string | null;
   kind: Kind | null;
   kind_source: string | null;
   kind_confidence: number | null;
@@ -58,6 +59,7 @@ export default function OperatorInbox() {
   const [actions, setActions] = useState<Record<string, ActionMeta>>({});
 
   // Filters
+  const [directionFilter, setDirectionFilter] = useState<string>("inbound"); // inbound | outbound | all
   const [kindFilter, setKindFilter] = useState<string>("all"); // all | <Kind> | untriaged
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [promotedFilter, setPromotedFilter] = useState<string>("all"); // all | promoted | unpromoted | actionable_unpromoted
@@ -92,7 +94,7 @@ export default function OperatorInbox() {
   }, [search]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [kindFilter, sourceFilter, promotedFilter, windowId]);
+  useEffect(() => { setPage(0); }, [directionFilter, kindFilter, sourceFilter, promotedFilter, windowId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,11 +105,12 @@ export default function OperatorInbox() {
 
     let q = supabase
       .from("operator_messages")
-      .select("id,created_at,chat_id,source,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
+      .select("id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(from, to);
 
     if (sinceISO) q = q.gte("created_at", sinceISO);
+    if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
     else if (kindFilter !== "all") q = q.eq("kind", kindFilter);
     if (sourceFilter !== "all") q = q.eq("source", sourceFilter);
@@ -138,7 +141,7 @@ export default function OperatorInbox() {
       setActions({});
     }
     setLoading(false);
-  }, [page, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
+  }, [page, directionFilter, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -251,6 +254,14 @@ export default function OperatorInbox() {
       </Card>
 
       <div className="flex flex-wrap gap-2 items-center">
+        <Select value={directionFilter} onValueChange={setDirectionFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="inbound">Inbound</SelectItem>
+            <SelectItem value="outbound">Outbound (bot)</SelectItem>
+            <SelectItem value="all">All directions</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={kindFilter} onValueChange={setKindFilter}>
           <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
