@@ -209,6 +209,8 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
       ...checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null),
+      ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
+      ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
