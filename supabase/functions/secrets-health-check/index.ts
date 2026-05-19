@@ -18,10 +18,16 @@ const REQUIRED_SECRETS = ["AWIP_SERVICE_TOKEN"] as const;
 Deno.serve(withLogger("secrets-health-check", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
-  const provided = req.headers.get("x-service-token");
+  // Auth model: cron MUST authenticate with SUPABASE_SERVICE_ROLE_KEY so this
+  // detector keeps working even when AWIP_SERVICE_TOKEN diverges between env
+  // and app_secrets — that's exactly the failure mode this function is meant
+  // to catch. The legacy AWIP_SERVICE_TOKEN / x-service-token path is no
+  // longer accepted (using it would self-DoS this detector). Manual operator
+  // calls go through the standard Bearer (user JWT or anon) auth path.
+  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  const triggeredByCron = !!SERVICE_ROLE_KEY && bearer === SERVICE_ROLE_KEY;
   const trigger = triggeredByCron ? "cron" : "manual";
 
   const sb = createClient(
@@ -41,12 +47,13 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     } catch (e) { console.error("automation_runs insert failed", e); }
   };
 
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await recordRun("error", 401, !SERVICE_TOKEN
-      ? "AWIP_SERVICE_TOKEN secret is missing in Lovable Cloud — cron cannot authenticate."
-      : "Missing service token and no Authorization header.");
+  if (!triggeredByCron && !bearer) {
+    await recordRun("error", 401, !SERVICE_ROLE_KEY
+      ? "SUPABASE_SERVICE_ROLE_KEY missing from edge env — cron cannot authenticate."
+      : "Missing Authorization header.");
     return json({ error: "unauthorized" }, 401);
   }
+
 
   const { data: rows, error } = await sb
     .from("app_secrets").select("key, value").in("key", REQUIRED_SECRETS as unknown as string[]);
