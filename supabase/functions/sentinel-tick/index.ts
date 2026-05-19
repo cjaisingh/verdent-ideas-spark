@@ -387,6 +387,18 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       }
     } catch (e) { console.error("heartbeat check failed", e); }
 
+    // Telegram webhook auto-recovery — fire-and-forget. The function probes
+    // getWebhookInfo itself and only re-registers if Telegram reports pending
+    // updates or a recent last_error_date. Back-off lives inside the function;
+    // we just kick it once per tick.
+    if (SERVICE_TOKEN) {
+      fetch(`${SUPABASE_URL}/functions/v1/telegram-webhook-reregister`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-service-token": SERVICE_TOKEN },
+        body: "{}",
+      }).catch((e) => console.error("telegram-webhook-reregister kick failed", e));
+    }
+
     await recordRun("ok", 200, `tick: ${inserted}+ ${updated}~ ${resolved}✓ ${autoLinked}🔗`, {
       inserted, updated, resolved, alerts, autoLinked, candidates: candidates.length,
     });
