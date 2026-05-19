@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -51,23 +51,75 @@ function kindTone(k: Kind | null) {
   }
 }
 
+const DEFAULTS = {
+  direction: "inbound",
+  kind: "all",
+  source: "all",
+  promoted: "all",
+  window: "7d",
+  q: "",
+  page: "0",
+} as const;
+type ParamKey = keyof typeof DEFAULTS;
+
 export default function OperatorInbox() {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const getParam = useCallback(
+    (k: ParamKey) => searchParams.get(k) ?? DEFAULTS[k],
+    [searchParams],
+  );
+  const updateParams = useCallback(
+    (patch: Partial<Record<ParamKey, string>>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [k, v] of Object.entries(patch)) {
+            if (v == null || v === DEFAULTS[k as ParamKey]) next.delete(k);
+            else next.set(k, v);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sourceLabels, setSourceLabels] = useState<Record<string, string>>({});
   const [actions, setActions] = useState<Record<string, ActionMeta>>({});
 
-  // Filters
-  const [directionFilter, setDirectionFilter] = useState<string>("inbound"); // inbound | outbound | all
-  const [kindFilter, setKindFilter] = useState<string>("all"); // all | <Kind> | untriaged
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [promotedFilter, setPromotedFilter] = useState<string>("all"); // all | promoted | unpromoted | actionable_unpromoted
-  const [windowId, setWindowId] = useState<string>("7d");
-  const [search, setSearch] = useState("");
-  const [searchDebounced, setSearchDebounced] = useState("");
-  const [page, setPage] = useState(0);
+  // Filters (derived from URL)
+  const directionFilter = getParam("direction");
+  const kindFilter = getParam("kind");
+  const sourceFilter = getParam("source");
+  const promotedFilter = getParam("promoted");
+  const windowId = getParam("window");
+  const searchDebounced = getParam("q");
+  const page = Math.max(0, parseInt(getParam("page"), 10) || 0);
+
+  const setDirectionFilter = (v: string) => updateParams({ direction: v, page: "0" });
+  const setKindFilter = (v: string | ((prev: string) => string)) =>
+    updateParams({ kind: typeof v === "function" ? v(kindFilter) : v, page: "0" });
+  const setSourceFilter = (v: string) => updateParams({ source: v, page: "0" });
+  const setPromotedFilter = (v: string | ((prev: string) => string)) =>
+    updateParams({ promoted: typeof v === "function" ? v(promotedFilter) : v, page: "0" });
+  const setWindowId = (v: string) => updateParams({ window: v, page: "0" });
+  const setPage = (v: number | ((prev: number) => number)) =>
+    updateParams({ page: String(typeof v === "function" ? v(page) : v) });
+
+  // Search input is local + debounced into URL
+  const [search, setSearch] = useState(searchDebounced);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (search.trim() !== searchDebounced) updateParams({ q: search.trim(), page: "0" });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search, searchDebounced, updateParams]);
 
   // Manual paste
   const [pasteText, setPasteText] = useState("");
@@ -87,15 +139,6 @@ export default function OperatorInbox() {
       setSourceLabels(map);
     })();
   }, []);
-
-  // Debounce text search
-  useEffect(() => {
-    const t = setTimeout(() => { setSearchDebounced(search.trim()); setPage(0); }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  // Reset page when filters change
-  useEffect(() => { setPage(0); }, [directionFilter, kindFilter, sourceFilter, promotedFilter, windowId]);
 
   const load = useCallback(async () => {
     setLoading(true);
