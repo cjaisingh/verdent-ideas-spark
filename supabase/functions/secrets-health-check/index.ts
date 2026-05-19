@@ -13,7 +13,13 @@ const corsHeaders = {
 
 // Secrets that MUST exist in BOTH app_secrets (for cron job bodies) and the
 // edge-function env (for the functions that validate the incoming token).
-const REQUIRED_SECRETS = ["AWIP_SERVICE_TOKEN"] as const;
+// SUPABASE_SERVICE_ROLE_KEY is included so cron can read it from app_secrets
+// to authenticate THIS function — that path is independent of AWIP rotation.
+const REQUIRED_SECRETS = [
+  "AWIP_SERVICE_TOKEN",
+  "SUPABASE_SERVICE_ROLE_KEY",
+] as const;
+
 
 Deno.serve(withLogger("secrets-health-check", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
