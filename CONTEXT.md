@@ -44,3 +44,7 @@ Full framing in [`docs/why-awip.md`](./docs/why-awip.md). Read it before the rul
 - Read `docs/ontology.md` before introducing a new entity — there are 11 canonical ones and the list is locked.
 - Read `docs/decision-authority.md` before changing who wins a truth conflict.
 - Ambiguity → ask. Silent assumption → outage.
+
+## Research & References
+
+- [`docs/research/system-prompts-reference.md`](./docs/research/system-prompts-reference.md) — leaked system prompts from Cursor, Claude Code, Lovable, v0, Devin and others. Benchmark for AWIP's agent personas and Capica routing.
