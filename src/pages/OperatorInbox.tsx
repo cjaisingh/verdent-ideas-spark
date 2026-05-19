@@ -211,6 +211,51 @@ export default function OperatorInbox() {
   }, [rows]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // Details drawer
+  type Detail = {
+    row: Row & { raw: unknown; promoted_action_id: string | null };
+    source: { chat_id: number; kind: string | null; label: string | null; notes: string | null; enabled: boolean | null } | null;
+    action: { id: string; short_num: number | null; status: string | null; title: string | null; details: string | null; owner: string | null; priority: string | null; risk: string | null; created_at: string } | null;
+  };
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  useEffect(() => {
+    if (!detailId) { setDetail(null); return; }
+    let cancelled = false;
+    (async () => {
+      setDetailLoading(true);
+      const { data: row } = await supabase
+        .from("operator_messages")
+        .select("id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id,raw")
+        .eq("id", detailId)
+        .maybeSingle();
+      let source: Detail["source"] = null;
+      if (row?.chat_id != null) {
+        const { data } = await supabase
+          .from("operator_inbox_sources")
+          .select("chat_id,kind,label,notes,enabled")
+          .eq("chat_id", row.chat_id)
+          .maybeSingle();
+        source = data as Detail["source"];
+      }
+      let action: Detail["action"] = null;
+      if (row?.promoted_action_id) {
+        const { data } = await supabase
+          .from("discussion_actions")
+          .select("id,short_num,status,title,details,owner,priority,risk,created_at")
+          .eq("id", row.promoted_action_id)
+          .maybeSingle();
+        action = data as Detail["action"];
+      }
+      if (!cancelled && row) setDetail({ row: row as Detail["row"], source, action });
+      setDetailLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [detailId]);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState<{ done: number; total: number } | null>(null);
 
