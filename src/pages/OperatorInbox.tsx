@@ -648,6 +648,94 @@ export default function OperatorInbox() {
           </Button>
         </div>
       </div>
+
+      <Sheet open={!!detailId} onOpenChange={(o) => { if (!o) setDetailId(null); }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Message details</SheetTitle>
+            <SheetDescription>
+              {detail ? new Date(detail.row.created_at).toLocaleString("en-GB") : "Loading…"}
+            </SheetDescription>
+          </SheetHeader>
+
+          {detailLoading && !detail ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+          ) : detail ? (
+            <div className="space-y-4 mt-4 text-sm">
+              <section className="space-y-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Classification</div>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <Badge className={kindTone(detail.row.kind)}>{detail.row.kind ?? "untriaged"}</Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {detail.row.kind_source ?? "—"}
+                    {detail.row.kind_confidence != null && ` · ${(detail.row.kind_confidence * 100).toFixed(0)}% confidence`}
+                  </span>
+                </div>
+              </section>
+
+              <section className="space-y-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Source</div>
+                <div className="flex flex-wrap gap-2 items-center text-xs">
+                  <Badge variant="outline">{detail.source?.label ?? detail.row.source ?? "—"}</Badge>
+                  {detail.source?.kind && <Badge variant="outline">{detail.source.kind}</Badge>}
+                  <span className="text-muted-foreground">chat_id {detail.row.chat_id ?? "—"}</span>
+                  <span className="text-muted-foreground">· {detail.row.direction}</span>
+                  {detail.source?.enabled === false && <Badge variant="destructive">disabled</Badge>}
+                </div>
+                {detail.source?.notes && (
+                  <div className="text-xs text-muted-foreground mt-1">{detail.source.notes}</div>
+                )}
+              </section>
+
+              <section className="space-y-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Text</div>
+                <div className="whitespace-pre-wrap break-words rounded border bg-muted/30 p-3 text-sm">
+                  {detail.row.text ?? <em className="text-muted-foreground">(no text)</em>}
+                </div>
+              </section>
+
+              <section className="space-y-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Promoted action</div>
+                {detail.action ? (
+                  <div className="rounded border p-3 space-y-1">
+                    <div className="flex flex-wrap gap-2 items-center text-xs">
+                      <Link to={`/jobs?action=${detail.action.id}`} className="font-medium text-primary hover:underline inline-flex items-center gap-1">
+                        #{detail.action.short_num ?? "?"} {detail.action.title ?? "(no title)"}
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                      <span>status: {detail.action.status ?? "—"}</span>
+                      <span>· priority: {detail.action.priority ?? "—"}</span>
+                      <span>· risk: {detail.action.risk ?? "—"}</span>
+                      <span>· owner: {detail.action.owner ?? "—"}</span>
+                      <span>· {new Date(detail.action.created_at).toLocaleString("en-GB")}</span>
+                    </div>
+                    {detail.action.details && (
+                      <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground mt-2">{detail.action.details}</pre>
+                    )}
+                  </div>
+                ) : detail.row.promoted_action_id ? (
+                  <div className="text-xs text-muted-foreground">
+                    Linked action id <code>{detail.row.promoted_action_id}</code> not found (cancelled or purged).
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">Not promoted.</div>
+                )}
+              </section>
+
+              <section className="space-y-1">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Raw payload</div>
+                <pre className="rounded border bg-muted/30 p-3 text-[11px] overflow-x-auto whitespace-pre-wrap break-words">
+{JSON.stringify(detail.row.raw, null, 2)}
+                </pre>
+              </section>
+            </div>
+          ) : (
+            <div className="py-10 text-center text-sm text-muted-foreground">Message not found.</div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
