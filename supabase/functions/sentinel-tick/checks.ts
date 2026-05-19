@@ -31,7 +31,9 @@ export type FindingCandidate = {
     | "telegram_webhook_silent"
     | "approvals_stale"
     | "secrets_health_stale"
-    | "cron_auth_failures_burst";
+    | "cron_auth_failures_burst"
+    | "inbox_kind_classify_failures"
+    | "inbox_source_silent";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
