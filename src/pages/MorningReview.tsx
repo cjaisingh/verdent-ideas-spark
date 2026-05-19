@@ -316,6 +316,7 @@ export default function MorningReview() {
         <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
       </div>
       <SentinelTriageActivityPanel />
+      <OperatorInboxPanel />
       <Tabs defaultValue="yesterday" className="w-full">
         <TabsList>
           <TabsTrigger value="yesterday">Yesterday</TabsTrigger>
