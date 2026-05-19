@@ -136,6 +136,17 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .select("created_at")
         .order("created_at", { ascending: false })
         .limit(1).maybeSingle(),
+      // Detector-of-the-detector: most recent ok run of secrets-health-check.
+      sb.from("automation_runs")
+        .select("created_at")
+        .eq("job", "secrets-health-check").eq("status", "ok")
+        .order("created_at", { ascending: false })
+        .limit(1).maybeSingle(),
+      // Aggregate auth_failed bursts across all cron jobs (last 1h).
+      sb.from("alert_log")
+        .select("job,reason,created_at")
+        .eq("reason", "auth_failed")
+        .gte("created_at", since60m).limit(500),
     ]);
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
