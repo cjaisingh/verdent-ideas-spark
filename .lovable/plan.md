@@ -1,54 +1,40 @@
-## Findings
+## Why every walkthrough shows 10/10
 
-- **The voice page is red because of stale success timestamps, not current failures.**
-- `/admin/voice-health` marks a leg **red** when either:
-  - error rate is above 10% in the last hour, or
-  - the **last successful call is older than 60 minutes**.
-- Current backend data for the last 60 minutes shows:
-  - `gemini-tts`: **0 calls, 0 errors**
-  - `companion-cloud-chat`: **0 calls, 0 errors**
-  - `telegram-send-voice`: **0 calls, 0 errors**
-- Latest successful calls are old enough to trip the UI red rule:
-  - `companion-cloud-chat`: **2026-05-13 06:15 UTC**
-  - `gemini-tts`: **2026-05-18 02:15 UTC**
-  - `telegram-send-voice`: **2026-05-18 15:35 UTC**
-- There are **no current `voice_pipeline_red` sentinel findings**, so the backend watchdog is not currently treating voice as failed.
+Each nightly run probes:
 
-## What the Telegram messages mean
+- 2 awip-api endpoints
+- 5 edge function OPTIONS/GET probes
+- 3 capability self-tests
 
-These are **separate from voice health**:
+= **10 checks**. The 7 UI route probes (`/`, `/auth`, `/roadmap`, `/overnight`, `/morning-review`, `/audits`, `/companion`) are only included when the function receives a `preview_origin` in the POST body. The cron job sends `{"source":"cron"}` — no origin — so `uiRouteProbes("")` returns `[]` and UI routes are silently skipped. That's been the case since day 1; the AWIP secret rotation didn't affect this.
 
-- `sentinel-tick unauthorized`
-- `overnight-phase-runner-15m 401 — service token mismatch`
-
-Those alerts indicate **cron/service-token authentication failures** on scheduled jobs, not a voice pipeline outage.
+Separately: cron.job_run_details says today's 02:15 UTC run succeeded, but no row exists in `walkthrough_runs` for 19 May. The edge function almost certainly 401'd before insert (token rotation timing). Need to confirm from logs and re-run once for today.
 
 ## Plan
 
-1. **Separate inactive from broken on `/admin/voice-health`**
-   - Change the page so **no traffic in the last hour** shows as **idle/stale**, not red.
-   - Keep **red** for real recent failures or a clearly broken end-to-end path.
+### 1. Make UI route probes run under cron
 
-2. **Align the page with sentinel semantics**
-   - Make sure the dashboard and sentinel use the same rule set, so UI red and backend high-severity findings mean the same thing.
-   - Optionally add a distinct **stale** state if you want dormant-but-configured pipelines called out without implying an outage.
+- Add a new edge-function env var `WALKTHROUGH_PREVIEW_ORIGIN` (default to the published/preview origin, e.g. `https://id-preview--c58aeaea-93be-4b64-bb57-aeef50ab6dcd.lovable.app`).
+- In `supabase/functions/app-walkthrough/index.ts`, fall back to `Deno.env.get("WALKTHROUGH_PREVIEW_ORIGIN")` when the request body doesn't supply one.
+- Result: every nightly probes 17 targets (10 backend + 7 UI) instead of 10.
 
-3. **Investigate the Telegram auth failures separately**
-   - Trace the scheduler/auth path for `sentinel-tick` and `overnight-phase-runner-15m`.
-   - Verify the expected service-token header name/value and the current scheduled caller configuration.
-   - Fix the mismatch so Telegram stops receiving false auth-failure noise.
+### 2. Backfill today's missed run
 
-## Technical details
+- Manually invoke `app-walkthrough` once now so 19 May has a row.
+- Confirm next 02:15 UTC produces a fresh row.
 
-- UI logic: `src/pages/VoiceHealth.tsx`
-- Sentinel check: `supabase/functions/sentinel-tick/checks.ts`
-- Sentinel auth path: `supabase/functions/sentinel-tick/index.ts`
-- The current mismatch is:
-  - **UI:** stale success can produce **red** even with zero recent requests
-  - **Sentinel:** `voice_pipeline_red` only fires when there are recent requests with no success, or enough recent 5xx volume
+### 3. Verify
 
-## Recommended implementation order
+- After deploy, trigger one manual run from `/walkthrough` → expect `17/17 passed` (or surface real UI failures).
+- Confirm `cron.job_run_details` for `scheduled-app-walkthrough` and `walkthrough_runs` stay in lockstep going forward.
 
-1. Fix the **Telegram cron auth noise** so alerts are trustworthy.
-2. Fix the **voice health status semantics** so red means failure, not dormancy.
-3. Re-test with one manual `/voice-setup` run to confirm the page returns to green on fresh success.
+### Out of scope
+
+- Retention / pagination of the runs list (currently shows last 50, DB has 13).
+- Adding more probes beyond the existing UI route set — can be a follow-up once we see which UI routes actually pass under cron.
+
+## Technical notes
+
+- `supabase/functions/app-walkthrough/probes.ts` `uiRouteProbes(previewOrigin)` already returns `[]` on empty string — no change needed there.
+- Env var route avoids hardcoding the preview URL in source; user can override per environment.
+- No DB migration required.
