@@ -48,3 +48,5 @@ Full framing in [`docs/why-awip.md`](./docs/why-awip.md). Read it before the rul
 ## Research & References
 
 - [`docs/research/system-prompts-reference.md`](./docs/research/system-prompts-reference.md) — leaked system prompts from Cursor, Claude Code, Lovable, v0, Devin and others. Benchmark for AWIP's agent personas and Capica routing.
+- [`docs/research/ebm-kona-reference.md`](./docs/research/ebm-kona-reference.md) — Kona 1.0 Energy-Based Model by Logical Intelligence. Candidate constraint-checker for Sentinel (OKR coherence, capability conflicts, gate satisfaction).
+
