@@ -212,6 +212,7 @@ Deno.serve(withLogger("app-walkthrough", async (req) => {
   }
 
   // Optional preview-origin override for UI route probes (POST body { preview_origin })
+  // Falls back to WALKTHROUGH_PREVIEW_ORIGIN env var so cron-triggered runs probe UI routes too.
   let previewOrigin = "";
   try {
     if (req.method === "POST") {
@@ -219,6 +220,9 @@ Deno.serve(withLogger("app-walkthrough", async (req) => {
       previewOrigin = typeof body?.preview_origin === "string" ? body.preview_origin : "";
     }
   } catch { /* ignore */ }
+  if (!previewOrigin) {
+    previewOrigin = Deno.env.get("WALKTHROUGH_PREVIEW_ORIGIN") ?? "";
+  }
 
   const startedAt = Date.now();
   const { data: runRow, error: runErr } = await sb
