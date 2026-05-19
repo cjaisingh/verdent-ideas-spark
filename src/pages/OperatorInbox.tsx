@@ -167,6 +167,54 @@ export default function OperatorInbox() {
   }, [rows]);
 
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<{ done: number; total: number } | null>(null);
+
+  // Drop selections that vanished from the current page (filter/page/realtime changes)
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(rows.map((r) => r.id));
+      const next = new Set<string>();
+      for (const id of prev) if (visible.has(id)) next.add(id);
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  function toggleRow(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(rows.map((r) => r.id)) : new Set());
+  }
+
+  async function bulkInvoke(body: (id: string) => Record<string, unknown>, label: string) {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkBusy({ done: 0, total: ids.length });
+    let ok = 0, fail = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const { error } = await supabase.functions.invoke("operator-inbox-ingest", { body: body(ids[i]) });
+      if (error) fail++; else ok++;
+      setBulkBusy({ done: i + 1, total: ids.length });
+    }
+    setBulkBusy(null);
+    setSelected(new Set());
+    toast({
+      title: `${label}: ${ok}/${ids.length}`,
+      description: fail ? `${fail} failed` : "All succeeded",
+      variant: fail ? "destructive" : "default",
+    });
+    load();
+  }
+
+  const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const someVisibleSelected = rows.some((r) => selected.has(r.id));
+
 
   async function setKind(id: string, kind: Kind | null) {
     setBusyId(id);
