@@ -15,6 +15,7 @@ import { useMorningReviewTriage, type TriageState } from "@/hooks/useMorningRevi
 import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
 import { SentinelTriageActivityPanel } from "@/components/SentinelTriageActivityPanel";
+import OperatorInboxPanel from "@/components/morning-review/OperatorInboxPanel";
 
 type Review = {
   id: string;
