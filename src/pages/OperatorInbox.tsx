@@ -568,9 +568,14 @@ export default function OperatorInbox() {
                     )}
                   </td>
                   <td className="p-2 max-w-xl">
-                    <div className="whitespace-pre-wrap break-words">
+                    <button
+                      type="button"
+                      onClick={() => setDetailId(r.id)}
+                      className="text-left w-full whitespace-pre-wrap break-words line-clamp-3 hover:text-primary"
+                      title="Open details"
+                    >
                       {r.text ?? <em className="text-muted-foreground">(no text)</em>}
-                    </div>
+                    </button>
                   </td>
                   <td className="p-2">
                     <Select value={r.kind ?? "none"} onValueChange={(v) => setKind(r.id, v === "none" ? null : v as Kind)}>
