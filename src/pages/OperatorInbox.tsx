@@ -142,19 +142,17 @@ export default function OperatorInbox() {
     })();
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const buildQuery = useCallback((opts: { withCount?: boolean; range?: [number, number] | null } = {}) => {
     const w = WINDOWS.find((x) => x.id === windowId)!;
     const sinceISO = w.hours == null ? null : new Date(Date.now() - w.hours * 3600_000).toISOString();
-    const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
     let q = supabase
       .from("operator_messages")
-      .select("id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(from, to);
-
+      .select(
+        "id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id",
+        opts.withCount ? { count: "exact" } : undefined,
+      )
+      .order("created_at", { ascending: false });
+    if (opts.range) q = q.range(opts.range[0], opts.range[1]);
     if (sinceISO) q = q.gte("created_at", sinceISO);
     if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
@@ -166,8 +164,14 @@ export default function OperatorInbox() {
       q = q.is("promoted_action_id", null).in("kind", ["idea", "research", "suggestion"]);
     }
     if (searchDebounced) q = q.ilike("text", `%${searchDebounced}%`);
+    return q;
+  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced]);
 
-    const { data, error, count } = await q;
+  const load = useCallback(async () => {
+    setLoading(true);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, error, count } = await buildQuery({ withCount: true, range: [from, to] });
     if (error) toast({ title: "Failed to load inbox", description: error.message, variant: "destructive" });
     const list = (data ?? []) as Row[];
     setRows(list);
@@ -187,7 +191,7 @@ export default function OperatorInbox() {
       setActions({});
     }
     setLoading(false);
-  }, [page, directionFilter, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
+  }, [buildQuery, page, toast]);
 
   useEffect(() => { load(); }, [load]);
 
