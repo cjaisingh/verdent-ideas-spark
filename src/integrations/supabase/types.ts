@@ -6666,6 +6666,7 @@ export type Database = {
         }[]
       }
       sentinel_triage_unacked_count: { Args: never; Returns: number }
+      set_awip_service_token: { Args: { new_value: string }; Returns: Json }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
         Returns: undefined

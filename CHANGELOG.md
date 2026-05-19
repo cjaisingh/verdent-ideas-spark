@@ -216,3 +216,8 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - **Auto-prompt at phase close**: trigger `trg_phase_close_balance_prompt` inserts an idempotent `discussion_action` (`source=auto-credit-prompt`) when a `roadmap_phases.status` flips to `done`. Deeplink `/admin/ai-usage?phase=<id>&prompt=balance` auto-opens the snapshot dialog. Recording the snapshot auto-resolves the action via `trg_resolve_balance_prompt`.
 - **Drift-adjusted projections**: new views `v_credit_drift_ratio_overall` and `v_credit_drift_ratio_by_category` (last 8 closed phases with opening+closing snapshots). `ProjectedSpendPanel` multiplies EOM by the overall ratio when confidence ≥ medium (toggle to disable). `SpendByCategoryPanel` gains a Drift column with sample count.
 - `credit_alerts` schema: added `kind` column (replaces `(year_month, threshold_pct)` unique key with `(year_month, kind)`); existing rows backfilled.
+
+## rotate-awip-token (one-shot atomic rotation)
+- New edge fn `rotate-awip-token` + `public.set_awip_service_token(text)` SECURITY DEFINER helper (service_role only).
+- Operator flow: update secret in Lovable Cloud → POST `/rotate-awip-token` with `{ new_token }` → fn verifies env matches, writes app_secrets + vault atomically, invokes secrets-health-check, returns 200 only if green.
+- Failure modes: 409 env_mismatch, 500 db_write, 502 health_check_unreachable, 503 health_not_green.
