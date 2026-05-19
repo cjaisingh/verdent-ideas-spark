@@ -80,7 +80,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     ]);
 
     const monitoredJobs = Object.keys(SENTINEL_CADENCES);
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes, lastSecretsOkRes, authFailLogRes] = await Promise.all([
       // Filter to monitored jobs only. Without this filter, high-frequency jobs
       // like automation-auth-monitor (every 15min × 15d = 1440 rows) blow past
       // PostgREST's default 1000-row cap and push lower-volume jobs out of the
