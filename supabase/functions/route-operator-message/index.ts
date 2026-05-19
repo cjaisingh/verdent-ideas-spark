@@ -265,6 +265,86 @@ Deno.serve(withLogger("route-operator-message", async (req) => {
       .from('operator_messages')
       .update({ intent: classification.activity })
       .eq('id', messageId);
+
+    // Layered inbox-kind classification (prefix → LLM). Only writes if not
+    // already manually tagged. Auto-promote ideas/research/suggestions to
+    // discussion_actions, idempotent by (subject_type, subject_id).
+    try {
+      const { data: current } = await supabase
+        .from('operator_messages')
+        .select('kind, kind_source, promoted_action_id, chat_id, raw')
+        .eq('id', messageId)
+        .maybeSingle();
+
+      if (current && current.kind_source !== 'manual') {
+        const kindResult = await classifyInboxKind(text, supabase);
+        if (kindResult.kind) {
+          await supabase
+            .from('operator_messages')
+            .update({
+              kind: kindResult.kind,
+              kind_source: kindResult.kind_source,
+              kind_confidence: kindResult.confidence,
+            })
+            .eq('id', messageId);
+
+          // Auto-promote actionable kinds
+          const actionable = new Set(['idea', 'research', 'suggestion']);
+          if (actionable.has(kindResult.kind) && !current.promoted_action_id) {
+            const summary = kindResult.summary ?? text;
+            const fromUser = (current.raw as any)?.message?.from
+              ?? (current.raw as any)?.edited_message?.from
+              ?? (current.raw as any)?.channel_post?.from
+              ?? null;
+            const fromTag = fromUser?.username ? `@${fromUser.username}` : (fromUser?.id ? String(fromUser.id) : 'telegram');
+
+            // Idempotent: try insert; on conflict (unique index on operator_message subject), look up existing.
+            const insertPayload = {
+              subject_type: 'operator_message',
+              subject_id: messageId,
+              title: (summary || text).slice(0, 80),
+              details: [
+                text,
+                '',
+                `_from ${fromTag} via Telegram (${current.chat_id})_`,
+                `_kind: ${kindResult.kind} (${kindResult.kind_source}, conf=${kindResult.confidence ?? 'n/a'})_`,
+              ].join('\n'),
+              status: 'open',
+              priority: 'med',
+              risk: 'low',
+              source: 'operator_inbox',
+              owner: fromTag,
+            };
+            const { data: inserted, error: insErr } = await supabase
+              .from('discussion_actions')
+              .insert(insertPayload)
+              .select('id')
+              .maybeSingle();
+
+            let actionId: string | null = inserted?.id ?? null;
+            if (insErr && /duplicate|unique/i.test(insErr.message)) {
+              const { data: existing } = await supabase
+                .from('discussion_actions')
+                .select('id')
+                .eq('subject_type', 'operator_message')
+                .eq('subject_id', messageId)
+                .maybeSingle();
+              actionId = existing?.id ?? null;
+            } else if (insErr) {
+              console.error('auto-promote insert failed', insErr);
+            }
+            if (actionId) {
+              await supabase
+                .from('operator_messages')
+                .update({ promoted_action_id: actionId })
+                .eq('id', messageId);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('inbox-kind classification failed', e);
+    }
   }
 
   // Conversational reply for low-risk chitchat / status / unknown — voice note back to operator.
