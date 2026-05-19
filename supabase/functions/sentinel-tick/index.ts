@@ -12,6 +12,7 @@ import {
   checkAiJobsStuck, checkAiWorkersOffline,
   checkTelegramWebhookSilent, checkApprovalsStale,
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
+  checkInboxKindClassifyFailures, checkInboxSourceSilent,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 
