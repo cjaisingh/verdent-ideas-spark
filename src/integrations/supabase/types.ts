@@ -3006,7 +3006,7 @@ export type Database = {
           occurrences: number
           recommendation: string
           severity: string
-          source: string | null
+          source: string
           source_window_end: string | null
           source_window_start: string | null
           status: string
@@ -3026,7 +3026,7 @@ export type Database = {
           occurrences?: number
           recommendation: string
           severity: string
-          source?: string | null
+          source?: string
           source_window_end?: string | null
           source_window_start?: string | null
           status?: string
@@ -3046,7 +3046,7 @@ export type Database = {
           occurrences?: number
           recommendation?: string
           severity?: string
-          source?: string | null
+          source?: string
           source_window_end?: string | null
           source_window_start?: string | null
           status?: string
