@@ -254,6 +254,14 @@ export default function OperatorInbox() {
       </Card>
 
       <div className="flex flex-wrap gap-2 items-center">
+        <Select value={directionFilter} onValueChange={setDirectionFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="inbound">Inbound</SelectItem>
+            <SelectItem value="outbound">Outbound (bot)</SelectItem>
+            <SelectItem value="all">All directions</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={kindFilter} onValueChange={setKindFilter}>
           <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
