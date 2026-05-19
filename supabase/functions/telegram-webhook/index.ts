@@ -191,11 +191,14 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
   // Slice 4: default-deny allowlist. Silently drop messages from any chat_id
   // not present in public.platform_allowlist (platform='telegram'). Telegram
   // expects 200 from webhooks; returning 4xx would cause retries.
-  const incomingChatId =
-    update.callback_query?.message?.chat?.id ??
-    update.message?.chat?.id ??
-    update.edited_message?.chat?.id ??
+  const incomingChat =
+    update.callback_query?.message?.chat ??
+    update.message?.chat ??
+    update.edited_message?.chat ??
+    update.channel_post?.chat ??
+    update.edited_channel_post?.chat ??
     null;
+  const incomingChatId = incomingChat?.id ?? null;
   if (incomingChatId != null) {
     const { data: allowed } = await supabase.rpc('is_principal_allowed', {
       _platform: 'telegram',
@@ -208,6 +211,30 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Operator-inbox curation gate. The allowlist above is security; this is
+    // curation/labelling — sources not in operator_inbox_sources or disabled
+    // are silently dropped and surfaced via sentinel.
+    const { data: source } = await supabase
+      .from('operator_inbox_sources')
+      .select('chat_id, enabled')
+      .eq('chat_id', incomingChatId)
+      .maybeSingle();
+    if (!source || source.enabled === false) {
+      ctx.attach('__classified_error', 'inbox_source_unregistered');
+      ctx.attach('rejected_chat_id', String(incomingChatId));
+      ctx.attach('chat_type', incomingChat?.type ?? null);
+      ctx.attach('chat_title', incomingChat?.title ?? null);
+      return new Response(JSON.stringify({ ok: true, ignored: 'unregistered_source' }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  function chatTypeToSource(type: string | undefined): 'dm' | 'group' | 'channel' {
+    if (type === 'channel') return 'channel';
+    if (type === 'group' || type === 'supergroup') return 'group';
+    return 'dm';
   }
 
   // Handle inline-button callback (approval decisions) — route through awip-api so
