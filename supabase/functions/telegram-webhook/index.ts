@@ -290,15 +290,19 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     });
   }
 
-  const message = update.message ?? update.edited_message;
+  const message = update.message
+    ?? update.edited_message
+    ?? update.channel_post
+    ?? update.edited_channel_post;
   if (!message?.chat?.id || typeof update.update_id !== 'number') {
     return new Response(JSON.stringify({ ok: true, ignored: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  const sourceKind = chatTypeToSource(message.chat.type);
 
   // Voice / audio detection — transcribe before persisting so message text is the transcript.
-  let textForRouting: string | null = message.text ?? null;
+  let textForRouting: string | null = message.text ?? message.caption ?? null;
   let voiceMeta: Record<string, unknown> | null = null;
   const voice = message.voice ?? message.audio ?? null;
   if (!textForRouting && voice?.file_id) {
@@ -319,6 +323,7 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     update_id: update.update_id,
     chat_id: message.chat.id,
     direction: 'inbound',
+    source: sourceKind,
     text: textForRouting,
     raw: voiceMeta ? { ...update, _voice: voiceMeta } : update,
   }, { onConflict: 'update_id' }).select('id').maybeSingle();
