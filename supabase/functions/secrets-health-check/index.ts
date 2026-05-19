@@ -82,18 +82,36 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // Mismatch detection: row present in BOTH places but values differ.
   // We never log raw values — only short fingerprints so operators can tell
   // which side rotated without leaking the secret.
-  const mismatches: { key: string; env_fp: string; db_fp: string }[] = [];
+  // Opt-in `?sync=env-to-db` aligns the DB to env (env is the rotation surface
+  // operators use via the Lovable secret form). Only available to operator-
+  // authed callers (Bearer auth), never to the cron path.
+  const url = new URL(req.url);
+  const syncMode = url.searchParams.get("sync");
+  const allowSync = !triggeredByCron && syncMode === "env-to-db";
+
+  const mismatches: { key: string; env_fp: string; db_fp: string; resynced?: boolean }[] = [];
   for (const key of REQUIRED_SECRETS) {
     const envVal = Deno.env.get(key);
     const dbVal = dbValues.get(key);
     if (!envVal || !dbVal) continue;
     if (envVal === dbVal) continue;
+    let resynced = false;
+    if (allowSync) {
+      const { error: upErr } = await sb.from("app_secrets").upsert({
+        key, value: envVal,
+        description: `Synced env→db by secrets-health-check (operator sync)`,
+      }, { onConflict: "key" });
+      if (!upErr) { dbValues.set(key, envVal); resynced = true; }
+    }
     mismatches.push({
       key,
       env_fp: await fingerprint(envVal),
       db_fp: await fingerprint(dbVal),
+      resynced,
     });
   }
+  // After sync, recompute mismatches (drop the ones we just aligned).
+  const effectiveMismatches = mismatches.filter((m) => !m.resynced);
 
   const ok = missingInDb.length === 0 && missingInEnv.length === 0 && mismatches.length === 0;
   const messageParts: string[] = [];
