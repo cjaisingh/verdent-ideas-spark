@@ -1,40 +1,53 @@
-## Why every walkthrough shows 10/10
+# Fix token mismatch + close the detection gap
 
-Each nightly run probes:
+Scope: the token rotation itself, plus the three guardrails that would have caught it within an hour instead of a day. Telegram re-registration and the broader independent-loop diagnosis stay as a separate follow-up.
 
-- 2 awip-api endpoints
-- 5 edge function OPTIONS/GET probes
-- 3 capability self-tests
+## 1. Rotate `AWIP_SERVICE_TOKEN` atomically
 
-= **10 checks**. The 7 UI route probes (`/`, `/auth`, `/roadmap`, `/overnight`, `/morning-review`, `/audits`, `/companion`) are only included when the function receives a `preview_origin` in the POST body. The cron job sends `{"source":"cron"}` — no origin — so `uiRouteProbes("")` returns `[]` and UI routes are silently skipped. That's been the case since day 1; the AWIP secret rotation didn't affect this.
+- Read the current value from `public.app_secrets.AWIP_SERVICE_TOKEN` (the DB-side value all cron jobs already use).
+- Use `secrets--update_secret` to push the same value into the edge-function env var `AWIP_SERVICE_TOKEN`.
+- Manually re-invoke one representative cron target per family and confirm `200` + a fresh row written:
+  - `sentinel-tick` → new `sentinel_findings` row
+  - `overnight-phase-runner` → status advance or "nothing to do" 200
+  - `tomorrow-plan-refresh` → new `tomorrow_plans` row dated today
+  - `scheduled-lessons-daily` → 200 (synth may legitimately produce 0 rows)
+- Confirm `automation_runs` shows `ok` for the next natural tick of each.
 
-Separately: cron.job_run_details says today's 02:15 UTC run succeeded, but no row exists in `walkthrough_runs` for 19 May. The edge function almost certainly 401'd before insert (token rotation timing). Need to confirm from logs and re-run once for today.
+Out of scope here: vault entry normalisation (handled in the follow-up change together with killing the duplicate read in `scheduled-lessons-daily`).
 
-## Plan
+## 2. Stop `secrets-health-check` self-DoSing  *(item 1 from prior message)*
 
-### 1. Make UI route probes run under cron
+- Change the cron entry for `secrets-health-check` so the `Authorization` header uses `SUPABASE_SERVICE_ROLE_KEY` (Bearer) instead of `x-service-token: AWIP_SERVICE_TOKEN`.
+- Update the edge function to accept service-role auth and skip the operator-JWT path.
+- Rationale: the detector for token drift must not authenticate with the very token it's verifying.
 
-- Add a new edge-function env var `WALKTHROUGH_PREVIEW_ORIGIN` (default to the published/preview origin, e.g. `https://id-preview--c58aeaea-93be-4b64-bb57-aeef50ab6dcd.lovable.app`).
-- In `supabase/functions/app-walkthrough/index.ts`, fall back to `Deno.env.get("WALKTHROUGH_PREVIEW_ORIGIN")` when the request body doesn't supply one.
-- Result: every nightly probes 17 targets (10 backend + 7 UI) instead of 10.
+## 3. Staleness sentinel on the detector  *(item 3)*
 
-### 2. Backfill today's missed run
+- New sentinel check `secrets_health_stale`: critical finding if `secrets-health-check` has no `ok` row in `automation_runs` within the last 26h.
+- Wire into `sentinel-tick`; surface on `/admin/edge-health` and Morning Review.
 
-- Manually invoke `app-walkthrough` once now so 19 May has a row.
-- Confirm next 02:15 UTC produces a fresh row.
+## 4. Aggregate `auth_failed` sentinel  *(item 4)*
 
-### 3. Verify
+- New sentinel check `cron_auth_failures_burst`: critical finding if `alert_log` shows `>5` rows with `reason='auth_failed'` across any cron jobs within a rolling 1h window.
+- Deduped per hour so it doesn't spam.
+- This is the check that would have fired at ~02:00 UTC last night.
 
-- After deploy, trigger one manual run from `/walkthrough` → expect `17/17 passed` (or surface real UI failures).
-- Confirm `cron.job_run_details` for `scheduled-app-walkthrough` and `walkthrough_runs` stay in lockstep going forward.
+## Verification
 
-### Out of scope
+- After (1): all four representative jobs return 200 within 5 min.
+- After (2): next 21:30 UTC `secrets-health-check` run produces an `ok` row even with operator-token churn.
+- After (3): manually clearing recent `ok` rows in a sandbox query reproduces the critical finding.
+- After (4): inject 6 synthetic `auth_failed` rows into `alert_log` → sentinel-tick produces one critical finding, second tick within the hour does not duplicate.
 
-- Retention / pagination of the runs list (currently shows last 50, DB has 13).
-- Adding more probes beyond the existing UI route set — can be a follow-up once we see which UI routes actually pass under cron.
+## Deferred to next change
+
+- (2 from prior msg) `rotate-awip-token` one-shot edge fn that writes DB + edge env + vault atomically and self-verifies via `secrets-health-check`.
+- (5 from prior msg) Kill the vault read in `scheduled-lessons-daily` so there is one source of truth.
+- Telegram webhook re-registration.
+- `awip_reviews` / `heygen_videos` / `credit_entries` independent-loop diagnosis.
 
 ## Technical notes
 
-- `supabase/functions/app-walkthrough/probes.ts` `uiRouteProbes(previewOrigin)` already returns `[]` on empty string — no change needed there.
-- Env var route avoids hardcoding the preview URL in source; user can override per environment.
-- No DB migration required.
+- Migrations needed: none for (1); none for (2) beyond a cron edit via `supabase--insert` on `cron.job`; (3) and (4) are pure additions inside `sentinel-tick` plus two new rows in `sentinel_check_definitions` if that table is used, otherwise inline.
+- `withLogger` wrap remains on all touched functions.
+- No schema changes, no RLS changes.
