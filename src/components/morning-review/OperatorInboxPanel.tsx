@@ -30,7 +30,7 @@ export function OperatorInboxPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async () => {
       const { data } = await supabase
         .from("v_operator_inbox_24h" as never)
         .select("*")
@@ -40,8 +40,17 @@ export function OperatorInboxPanel() {
         setRows((data ?? []) as Row[]);
         setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    const mountId = Math.random().toString(36).slice(2, 8);
+    const ch = supabase
+      .channel(`operator_inbox_panel_${mountId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "operator_messages" }, () => load())
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   const promoted = rows.filter((r) => r.promoted_action_id).length;
