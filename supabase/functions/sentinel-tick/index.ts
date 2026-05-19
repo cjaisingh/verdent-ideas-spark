@@ -172,6 +172,25 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
     ]);
 
+    // Operator Inbox signals.
+    const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
+    const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await Promise.all([
+      sb.from("ai_usage_log")
+        .select("status,created_at")
+        .eq("job", "route-operator-message:inbox-kind")
+        .gte("created_at", since24h)
+        .limit(2000),
+      sb.from("operator_inbox_sources")
+        .select("id,label,chat_id")
+        .eq("enabled", true)
+        .limit(200),
+      sb.from("operator_messages")
+        .select("source_chat_id")
+        .gte("created_at", since14d)
+        .not("source_chat_id", "is", null)
+        .limit(5000),
+    ]);
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
     const candidates: FindingCandidate[] = [
