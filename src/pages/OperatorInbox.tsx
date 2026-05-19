@@ -518,9 +518,27 @@ export default function OperatorInbox() {
           <Inbox className="h-5 w-5" />
           <h1 className="text-2xl font-semibold">Operator inbox</h1>
         </div>
-        <Button size="sm" variant="outline" onClick={load} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" disabled={exporting || loading}>
+                <Download className={`h-4 w-4 mr-2 ${exporting ? "animate-pulse" : ""}`} /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="text-xs">Current page ({rows.length})</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => exportCurrentPage("csv")}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportCurrentPage("json")}>JSON</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs">All matching ({total.toLocaleString("en-GB")}, max 5000)</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => exportAllMatching("csv")}>CSV</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => exportAllMatching("json")}>JSON</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" variant="outline" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </header>
 
       <Card className="p-3 flex flex-wrap gap-2 items-center text-xs">
