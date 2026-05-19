@@ -20,9 +20,13 @@ const PasteSchema = z.object({
   text: z.string().min(1).max(8000),
   source: z.literal("manual_paste").optional(),
 });
+const KindEnum = z.enum(["idea", "research", "suggestion", "question", "chat"]);
 const ReclassifySchema = z.object({
   message_id: z.string().uuid(),
-  kind: z.enum(["idea", "research", "suggestion", "question", "chat"]).nullable(),
+  kind: KindEnum.nullable().optional(),
+  action: z.enum(["promote", "unpromote"]).optional(),
+}).refine((v) => v.kind !== undefined || v.action !== undefined, {
+  message: "kind or action required",
 });
 
 function json(body: unknown, status = 200) {
