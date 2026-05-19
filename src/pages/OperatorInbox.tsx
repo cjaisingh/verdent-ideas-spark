@@ -59,6 +59,7 @@ export default function OperatorInbox() {
   const [actions, setActions] = useState<Record<string, ActionMeta>>({});
 
   // Filters
+  const [directionFilter, setDirectionFilter] = useState<string>("inbound"); // inbound | outbound | all
   const [kindFilter, setKindFilter] = useState<string>("all"); // all | <Kind> | untriaged
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [promotedFilter, setPromotedFilter] = useState<string>("all"); // all | promoted | unpromoted | actionable_unpromoted
