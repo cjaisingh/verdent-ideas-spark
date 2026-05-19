@@ -1090,7 +1090,7 @@ export function checkInboxSourceSilent(
 ): FindingCandidate[] {
   if (!sources.length) return [];
   const active = new Set(
-    recent.map((r) => (r.source_chat_id ?? "").toString()).filter(Boolean),
+    recent.map((r) => (r.chat_id ?? "").toString()).filter(Boolean),
   );
   const out: FindingCandidate[] = [];
   const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
