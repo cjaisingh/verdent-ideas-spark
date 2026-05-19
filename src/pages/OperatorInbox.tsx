@@ -94,7 +94,7 @@ export default function OperatorInbox() {
   }, [search]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [kindFilter, sourceFilter, promotedFilter, windowId]);
+  useEffect(() => { setPage(0); }, [directionFilter, kindFilter, sourceFilter, promotedFilter, windowId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,11 +105,12 @@ export default function OperatorInbox() {
 
     let q = supabase
       .from("operator_messages")
-      .select("id,created_at,chat_id,source,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
+      .select("id,created_at,chat_id,source,direction,kind,kind_source,kind_confidence,text,promoted_action_id", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(from, to);
 
     if (sinceISO) q = q.gte("created_at", sinceISO);
+    if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
     else if (kindFilter !== "all") q = q.eq("kind", kindFilter);
     if (sourceFilter !== "all") q = q.eq("source", sourceFilter);
@@ -140,7 +141,7 @@ export default function OperatorInbox() {
       setActions({});
     }
     setLoading(false);
-  }, [page, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
+  }, [page, directionFilter, kindFilter, sourceFilter, promotedFilter, windowId, searchDebounced, toast]);
 
   useEffect(() => { load(); }, [load]);
 
