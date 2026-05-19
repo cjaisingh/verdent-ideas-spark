@@ -1043,3 +1043,69 @@ export function checkCronAuthFailuresBurst(
     payload: { count: recent.length, by_job: byJob, threshold },
   }];
 }
+
+export type InboxKindUsageRow = { status: string | null; created_at: string };
+
+/**
+ * Inbox kind classifier failures. Triggers when >10% of LLM classify calls
+ * over the last 24h returned status='error' (network / gateway / no_tool_call).
+ * Requires at least 10 attempts to avoid noise on a quiet day.
+ */
+export function checkInboxKindClassifyFailures(
+  now: Date,
+  rows: InboxKindUsageRow[],
+  minAttempts = 10,
+  ratioThreshold = 0.1,
+): FindingCandidate[] {
+  if (rows.length < minAttempts) return [];
+  const errors = rows.filter((r) => r.status === "error").length;
+  const ratio = errors / rows.length;
+  if (ratio < ratioThreshold) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
+  return [{
+    kind: "inbox_kind_classify_failures",
+    severity: "medium",
+    summary:
+      `Operator inbox LLM classifier failed ${errors}/${rows.length} (${
+        (ratio * 100).toFixed(0)
+      }%) in last 24h. Messages will fall through to manual triage.`,
+    dedupe_key: `inbox_kind_classify_failures:${dayBucket}`,
+    subject_ref: { job: "route-operator-message:inbox-kind" },
+    payload: { errors, total: rows.length, ratio },
+  }];
+}
+
+export type InboxSourceRow = { id: string; label: string | null; chat_id: number | string };
+export type InboxMessageRecentRow = { source_chat_id: number | string | null };
+
+/**
+ * Inbox source silent. Any registered+enabled operator_inbox_sources entry
+ * that has produced zero operator_messages in the last 14d is flagged so the
+ * operator can disable it or check the bot membership.
+ */
+export function checkInboxSourceSilent(
+  now: Date,
+  sources: InboxSourceRow[],
+  recent: InboxMessageRecentRow[],
+): FindingCandidate[] {
+  if (!sources.length) return [];
+  const active = new Set(
+    recent.map((r) => (r.source_chat_id ?? "").toString()).filter(Boolean),
+  );
+  const out: FindingCandidate[] = [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
+  for (const s of sources) {
+    const key = s.chat_id.toString();
+    if (active.has(key)) continue;
+    out.push({
+      kind: "inbox_source_silent",
+      severity: "low",
+      summary:
+        `Operator inbox source "${s.label ?? key}" (chat ${key}) has had no messages in 14 days.`,
+      dedupe_key: `inbox_source_silent:${key}:${dayBucket}`,
+      subject_ref: { source_id: s.id, chat_id: key },
+      payload: { label: s.label, chat_id: key },
+    });
+  }
+  return out;
+}
