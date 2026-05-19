@@ -3,6 +3,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { withLogger } from "../_shared/logger.ts";
 import { logAiUsage } from "../_shared/ai-usage.ts";
 import { pickModel } from "../_shared/model-policy.ts";
+import { classifyInboxKind } from "../_shared/classifyInboxKind.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
