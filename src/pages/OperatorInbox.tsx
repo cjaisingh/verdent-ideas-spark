@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { Inbox, Send, RefreshCw, ExternalLink, ChevronLeft, ChevronRight, ArrowUpCircle, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type Kind = "idea" | "research" | "suggestion" | "question" | "chat";
@@ -165,16 +165,50 @@ export default function OperatorInbox() {
     return c;
   }, [rows]);
 
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   async function setKind(id: string, kind: Kind | null) {
+    setBusyId(id);
     const { data, error } = await supabase.functions.invoke("operator-inbox-ingest", {
       body: { message_id: id, kind },
     });
+    setBusyId(null);
     if (error) {
       toast({ title: "Re-tag failed", description: error.message, variant: "destructive" });
       return;
     }
     const promoted = (data as { promoted_action_id?: string | null } | null)?.promoted_action_id;
     toast({ title: "Re-tagged", description: `kind=${kind ?? "null"}${promoted ? " · promoted" : ""}` });
+    load();
+  }
+
+  async function promote(id: string) {
+    setBusyId(id);
+    const { data, error } = await supabase.functions.invoke("operator-inbox-ingest", {
+      body: { message_id: id, action: "promote" },
+    });
+    setBusyId(null);
+    if (error) {
+      toast({ title: "Promote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    const promoted = (data as { promoted_action_id?: string | null } | null)?.promoted_action_id;
+    toast({ title: "Promoted", description: promoted ? `→ action ${promoted.slice(0, 8)}` : "(no-op)" });
+    load();
+  }
+
+  async function unpromote(id: string) {
+    if (!confirm("Cancel the linked action and unlink it from this message?")) return;
+    setBusyId(id);
+    const { error } = await supabase.functions.invoke("operator-inbox-ingest", {
+      body: { message_id: id, action: "unpromote" },
+    });
+    setBusyId(null);
+    if (error) {
+      toast({ title: "Unpromote failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Unpromoted", description: "Linked action cancelled." });
     load();
   }
 
@@ -352,17 +386,41 @@ export default function OperatorInbox() {
                     )}
                   </td>
                   <td className="p-2 text-xs">
-                    {action ? (
-                      <Link to={`/jobs?action=${action.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-                        #{action.short_num ?? "?"} <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    ) : r.promoted_action_id ? (
-                      <Link to={`/jobs?action=${r.promoted_action_id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-                        link <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <div className="flex flex-col gap-1 items-start">
+                      {r.promoted_action_id ? (
+                        <>
+                          {action ? (
+                            <Link to={`/jobs?action=${action.id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                              #{action.short_num ?? "?"} <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : (
+                            <Link to={`/jobs?action=${r.promoted_action_id}`} className="inline-flex items-center gap-1 text-primary hover:underline">
+                              link <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          )}
+                          {action?.status && <span className="text-[10px] text-muted-foreground">{action.status}</span>}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-[11px]"
+                            disabled={busyId === r.id}
+                            onClick={() => unpromote(r.id)}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" /> Unpromote
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          disabled={busyId === r.id}
+                          onClick={() => promote(r.id)}
+                        >
+                          <ArrowUpCircle className="h-3 w-3 mr-1" /> Promote
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

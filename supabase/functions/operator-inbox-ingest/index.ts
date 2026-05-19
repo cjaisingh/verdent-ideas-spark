@@ -20,9 +20,13 @@ const PasteSchema = z.object({
   text: z.string().min(1).max(8000),
   source: z.literal("manual_paste").optional(),
 });
+const KindEnum = z.enum(["idea", "research", "suggestion", "question", "chat"]);
 const ReclassifySchema = z.object({
   message_id: z.string().uuid(),
-  kind: z.enum(["idea", "research", "suggestion", "question", "chat"]).nullable(),
+  kind: KindEnum.nullable().optional(),
+  action: z.enum(["promote", "unpromote"]).optional(),
+}).refine((v) => v.kind !== undefined || v.action !== undefined, {
+  message: "kind or action required",
 });
 
 function json(body: unknown, status = 200) {
@@ -57,7 +61,7 @@ Deno.serve(withLogger("operator-inbox-ingest", async (req) => {
 
   const body = await req.json().catch(() => ({}));
 
-  // Reclassify path
+  // Reclassify / promote / unpromote path
   if ("message_id" in body) {
     const parsed = ReclassifySchema.safeParse(body);
     if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
@@ -69,31 +73,62 @@ Deno.serve(withLogger("operator-inbox-ingest", async (req) => {
       .maybeSingle();
     if (!msg) return json({ error: "not_found" }, 404);
 
-    await sb
-      .from("operator_messages")
-      .update({
-        kind: parsed.data.kind,
-        kind_source: "manual",
-        kind_confidence: 1,
-      })
-      .eq("id", parsed.data.message_id);
+    // Unpromote: cancel the linked action and clear pointer
+    if (parsed.data.action === "unpromote") {
+      let cancelled_action_id: string | null = null;
+      if (msg.promoted_action_id) {
+        await sb
+          .from("discussion_actions")
+          .update({ status: "cancelled" })
+          .eq("id", msg.promoted_action_id);
+        cancelled_action_id = msg.promoted_action_id as string;
+      }
+      await sb
+        .from("operator_messages")
+        .update({ promoted_action_id: null })
+        .eq("id", msg.id);
+      return json({ ok: true, unpromoted: true, cancelled_action_id, promoted_action_id: null });
+    }
 
-    // Promote if newly actionable and not yet promoted
+    // Apply kind change if provided (skip when only `action: promote` was sent)
+    const newKind = parsed.data.kind !== undefined ? parsed.data.kind : (msg.kind as InboxKind | null);
+    if (parsed.data.kind !== undefined) {
+      await sb
+        .from("operator_messages")
+        .update({
+          kind: parsed.data.kind,
+          kind_source: "manual",
+          kind_confidence: 1,
+        })
+        .eq("id", parsed.data.message_id);
+    }
+
+    // Promote logic:
+    // - explicit { action: 'promote' } promotes regardless of kind (uses current/new kind for details)
+    // - kind change to actionable auto-promotes if not already promoted
     const actionable = new Set(["idea", "research", "suggestion"]);
+    const shouldPromote =
+      parsed.data.action === "promote"
+        ? !msg.promoted_action_id
+        : (!!newKind && actionable.has(newKind) && !msg.promoted_action_id);
+
     let promoted_action_id = msg.promoted_action_id as string | null;
-    if (parsed.data.kind && actionable.has(parsed.data.kind) && !promoted_action_id) {
+    if (shouldPromote) {
       const fromUser = (msg.raw as any)?.message?.from
         ?? (msg.raw as any)?.channel_post?.from
         ?? null;
       const fromTag = fromUser?.username ? `@${fromUser.username}` : "manual";
       const text = msg.text ?? "";
+      const promoteNote = parsed.data.action === "promote"
+        ? "_promoted manually by operator (forced)_"
+        : "_promoted manually by operator_";
       const { data: inserted, error: insErr } = await sb
         .from("discussion_actions")
         .insert({
           subject_type: "operator_message",
           subject_id: msg.id,
           title: text.slice(0, 80) || "(operator inbox)",
-          details: [text, "", `_promoted manually by operator_`, `_kind: ${parsed.data.kind}_`].join("\n"),
+          details: [text, "", promoteNote, `_kind: ${newKind ?? "unspecified"}_`].join("\n"),
           status: "open",
           priority: "med",
           risk: "low",
@@ -119,7 +154,7 @@ Deno.serve(withLogger("operator-inbox-ingest", async (req) => {
       }
     }
 
-    return json({ ok: true, kind: parsed.data.kind, promoted_action_id });
+    return json({ ok: true, kind: newKind, promoted_action_id });
   }
 
   // Paste path
