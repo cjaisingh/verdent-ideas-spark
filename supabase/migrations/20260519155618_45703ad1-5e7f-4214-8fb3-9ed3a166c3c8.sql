@@ -1,0 +1,1 @@
+ALTER TABLE public.lessons ALTER COLUMN source SET DEFAULT 'automation';
