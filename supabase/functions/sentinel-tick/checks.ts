@@ -29,7 +29,9 @@ export type FindingCandidate = {
     | "ai_jobs_stuck"
     | "ai_workers_offline"
     | "telegram_webhook_silent"
-    | "approvals_stale";
+    | "approvals_stale"
+    | "secrets_health_stale"
+    | "cron_auth_failures_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
