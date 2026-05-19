@@ -221,3 +221,8 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - New edge fn `rotate-awip-token` + `public.set_awip_service_token(text)` SECURITY DEFINER helper (service_role only).
 - Operator flow: update secret in Lovable Cloud → POST `/rotate-awip-token` with `{ new_token }` → fn verifies env matches, writes app_secrets + vault atomically, invokes secrets-health-check, returns 200 only if green.
 - Failure modes: 409 env_mismatch, 500 db_write, 502 health_check_unreachable, 503 health_not_green.
+
+## telegram-webhook-reregister (auto-recovery)
+- New `telegram-webhook-reregister` edge fn: probes `getWebhookInfo` and re-asserts `setWebhook` (same URL/secret/allowed_updates, preserves backlog) when Telegram reports `pending_update_count>0`, `last_error_date` within 15min, or empty URL.
+- Back-off: max 3 attempts in rolling 6h; after that, raises critical `telegram_webhook_silent` sentinel + best-effort operator Telegram alert.
+- `sentinel-tick` kicks it fire-and-forget every 15min; healthy probe auto-resolves any open `telegram_webhook_silent` finding.
