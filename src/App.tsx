@@ -65,6 +65,7 @@ import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
 import AdminVideos from "./pages/AdminVideos";
 import AdminSecretsHealth from "./pages/AdminSecretsHealth";
+import OperatorInbox from "./pages/OperatorInbox";
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
@@ -146,6 +147,7 @@ const App = () => (
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />
+            <Route path="/operator-inbox" element={<OperatorInbox />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/release-notes" element={<ReleaseNotes />} />
