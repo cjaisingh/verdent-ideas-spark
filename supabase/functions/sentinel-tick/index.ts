@@ -231,6 +231,12 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
+      ...checkInboxKindClassifyFailures(now, (inboxClassifyRes.data ?? []) as { status: string | null; created_at: string }[]),
+      ...checkInboxSourceSilent(
+        now,
+        (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
+        (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
+      ),
     ];
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
