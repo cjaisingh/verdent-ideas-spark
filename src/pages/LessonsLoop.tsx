@@ -54,7 +54,7 @@ export default function LessonsLoop() {
   const [running, setRunning] = useState<null | "daily" | "weekly">(null);
   const [tab, setTab] = useState<typeof STATUSES[number]>("proposed");
   const [search, setSearch] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "client" | typeof SOURCES[number]>("all");
+  const [sourceFilter, setSourceFilter] = useState<"all" | "client" | "unknown" | typeof SOURCES[number]>("all");
   const [cadenceFilter, setCadenceFilter] = useState<"all" | "daily" | "weekly">("all");
   const [draftDialog, setDraftDialog] = useState<{ kind: DraftKind; initial?: Record<string, unknown> } | null>(null);
 
@@ -80,6 +80,7 @@ export default function LessonsLoop() {
       .filter((r) => {
         if (sourceFilter === "all") return true;
         if (sourceFilter === "client") return r.source && CLIENT_SOURCES.has(r.source);
+        if (sourceFilter === "unknown") return !r.source;
         return r.source === sourceFilter;
       })
       .filter((r) => cadenceFilter === "all" || r.cadence === cadenceFilter)
@@ -195,6 +196,16 @@ export default function LessonsLoop() {
                 {s} <Badge variant="secondary" className="ml-1.5">{sourceCounts[s] ?? 0}</Badge>
               </Button>
             ))}
+            {(sourceCounts.unknown ?? 0) > 0 && (
+              <Button
+                size="sm"
+                variant={sourceFilter === "unknown" ? "default" : "outline"}
+                onClick={() => setSourceFilter("unknown")}
+                className={sourceFilter === "unknown" ? "" : "border-amber-500/40"}
+              >
+                unknown <Badge variant="secondary" className="ml-1.5">{sourceCounts.unknown}</Badge>
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground mr-1">Cadence:</span>
