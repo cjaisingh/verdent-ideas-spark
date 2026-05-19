@@ -383,10 +383,67 @@ export default function OperatorInbox() {
         />
       </div>
 
+      {selected.size > 0 && (
+        <Card className="p-3 flex flex-wrap gap-2 items-center sticky top-0 z-10 bg-accent/30 border-primary/40">
+          <span className="text-xs font-medium">{selected.size} selected</span>
+          <Select
+            onValueChange={(v) =>
+              bulkInvoke((id) => ({ message_id: id, kind: v === "none" ? null : v }), `Re-tag → ${v}`)
+            }
+            disabled={!!bulkBusy}
+          >
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <Tag className="h-3 w-3 mr-1" />
+              <SelectValue placeholder="Set kind…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">— (untriaged)</SelectItem>
+              {KINDS.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            disabled={!!bulkBusy}
+            onClick={() => bulkInvoke((id) => ({ message_id: id, action: "promote" }), "Promote")}
+          >
+            <ArrowUpCircle className="h-3 w-3 mr-1" /> Promote
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            disabled={!!bulkBusy}
+            onClick={() => {
+              if (!confirm(`Cancel linked actions for ${selected.size} message(s)?`)) return;
+              bulkInvoke((id) => ({ message_id: id, action: "unpromote" }), "Unpromote");
+            }}
+          >
+            <XCircle className="h-3 w-3 mr-1" /> Unpromote
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={!!bulkBusy} onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+          {bulkBusy && (
+            <span className="text-xs text-muted-foreground ml-auto">
+              {bulkBusy.done}/{bulkBusy.total}…
+            </span>
+          )}
+        </Card>
+      )}
+
       <Card className="p-0 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted-foreground border-b">
             <tr>
+              <th className="p-2 w-8">
+                <Checkbox
+                  checked={allVisibleSelected ? true : (someVisibleSelected ? "indeterminate" : false)}
+                  onCheckedChange={(v) => toggleAll(v === true)}
+                  aria-label="Select all on page"
+                />
+              </th>
               <th className="text-left p-2">When</th>
               <th className="text-left p-2">Source</th>
               <th className="text-left p-2">Text</th>
@@ -396,14 +453,22 @@ export default function OperatorInbox() {
           </thead>
           <tbody>
             {loading && rows.length === 0 ? (
-              <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">Loading…</td></tr>
+              <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">Loading…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">No messages match the current filters.</td></tr>
+              <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No messages match the current filters.</td></tr>
             ) : rows.map((r) => {
               const label = (r.chat_id != null && sourceLabels[String(r.chat_id)]) || r.source || "—";
               const action = r.promoted_action_id ? actions[r.promoted_action_id] : null;
+              const isSelected = selected.has(r.id);
               return (
-                <tr key={r.id} className="border-b hover:bg-muted/30 align-top">
+                <tr key={r.id} className={`border-b hover:bg-muted/30 align-top ${isSelected ? "bg-accent/20" : ""}`}>
+                  <td className="p-2">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={(v) => toggleRow(r.id, v === true)}
+                      aria-label="Select row"
+                    />
+                  </td>
                   <td className="p-2 whitespace-nowrap text-xs text-muted-foreground">
                     {new Date(r.created_at).toLocaleString("en-GB")}
                   </td>
