@@ -1076,7 +1076,7 @@ export function checkInboxKindClassifyFailures(
 }
 
 export type InboxSourceRow = { id: string; label: string | null; chat_id: number | string };
-export type InboxMessageRecentRow = { source_chat_id: number | string | null };
+export type InboxMessageRecentRow = { chat_id: number | string | null };
 
 /**
  * Inbox source silent. Any registered+enabled operator_inbox_sources entry
