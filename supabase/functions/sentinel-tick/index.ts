@@ -185,9 +185,9 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .eq("enabled", true)
         .limit(200),
       sb.from("operator_messages")
-        .select("source_chat_id")
+        .select("chat_id")
         .gte("created_at", since14d)
-        .not("source_chat_id", "is", null)
+        .not("chat_id", "is", null)
         .limit(5000),
     ]);
 
