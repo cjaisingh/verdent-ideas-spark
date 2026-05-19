@@ -55,7 +55,7 @@ export default function OperatorInbox() {
       .select("*")
       .limit(200);
     if (error) toast({ title: "Failed to load inbox", description: error.message, variant: "destructive" });
-    setRows((data ?? []) as Row[]);
+    setRows(((data ?? []) as unknown) as Row[]);
     setLoading(false);
   }
 
