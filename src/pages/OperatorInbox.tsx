@@ -61,6 +61,7 @@ const DEFAULTS = {
   window: "7d",
   q: "",
   page: "0",
+  lane: "operator",
 } as const;
 type ParamKey = keyof typeof DEFAULTS;
 
