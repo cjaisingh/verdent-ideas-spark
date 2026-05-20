@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, X, ArrowRight, RefreshCw } from "lucide-react";
+import { Check, X, ArrowRight, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -32,6 +32,16 @@ function firstMissing(r: Row): "entity" | "notebook" | "authority_rule" {
   if (!r.has_entity) return "entity";
   if (!r.has_authority_rule) return "authority_rule";
   return "notebook";
+}
+
+function deepLinkFor(r: Row): string {
+  const target = firstMissing(r);
+  const url = new URL(window.location.href);
+  url.searchParams.set("kind", "task");
+  url.searchParams.set("ref", r.id);
+  url.searchParams.set("focus", r.id);
+  url.searchParams.set("missing", target);
+  return url.toString();
 }
 
 export function UncoveredTasksPanel() {
@@ -80,6 +90,19 @@ export function UncoveredTasksPanel() {
         detail: { taskId: r.id, missing: target },
       }),
     );
+  };
+
+  const copyLink = async (r: Row, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const link = deepLinkFor(r);
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Deep link copied", {
+        description: `Opens task with ${firstMissing(r)} target pre-selected`,
+      });
+    } catch {
+      toast.error("Clipboard blocked", { description: link });
+    }
   };
 
   return (
@@ -152,6 +175,15 @@ export function UncoveredTasksPanel() {
                   <Pill ok={r.has_notebook} label="nb" />
                   <Pill ok={r.has_authority_rule} label="rule" />
                 </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={(e) => copyLink(r, e)}
+                  title="Copy deep link"
+                  aria-label="Copy deep link"
+                >
+                  <Link2 className="h-4 w-4" />
+                </Button>
                 <Button size="sm" variant="ghost" onClick={() => focus(r)}>
                   Link <ArrowRight className="h-3 w-3 ml-1" />
                 </Button>

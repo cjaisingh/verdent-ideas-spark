@@ -209,6 +209,30 @@ export default function Governance() {
     return () => window.removeEventListener("governance:focus-task", onFocus);
   }, []);
 
+  // Honour deep links: ?focus=<taskId>&missing=<entity|notebook|authority_rule>
+  // Fires once on mount; the focus handler above takes care of scroll + dialog.
+  useEffect(() => {
+    const focusId = params.get("focus");
+    const missingRaw = params.get("missing");
+    if (!focusId) return;
+    const allowed: Kind[] = ["entity", "notebook", "authority_rule"];
+    const missing = (allowed as string[]).includes(missingRaw ?? "")
+      ? (missingRaw as Kind)
+      : "entity";
+    // Defer so child mounts and the focus listener is wired before we dispatch.
+    const t = setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("governance:focus-task", {
+          detail: { taskId: focusId, missing },
+        }),
+      );
+    }, 0);
+    return () => clearTimeout(t);
+    // Mount-only — re-running on every param change would re-open the dialog
+    // every time the user changes the anchor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Sync URL
   useEffect(() => {
     const next = new URLSearchParams(params);
@@ -218,6 +242,7 @@ export default function Governance() {
     setParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorKind, anchorRef]);
+
 
   const anchorLabel =
     options.find((o) => o.ref === anchorRef)?.label || anchorRef;
