@@ -26,6 +26,7 @@ import { ClaimsPanel } from "@/components/governance/ClaimsPanel";
 import { TruthConflictsPanel } from "@/components/governance/TruthConflictsPanel";
 import { UncoveredTasksPanel } from "@/components/governance/UncoveredTasksPanel";
 import { W7SignoffChecklist } from "@/components/governance/W7SignoffChecklist";
+import { trackGovernanceDeepLink } from "@/lib/governance-telemetry";
 
 type Kind = "task" | "notebook" | "entity" | "authority_rule";
 type Relation = "touches" | "justifies" | "governs" | "supersedes";
