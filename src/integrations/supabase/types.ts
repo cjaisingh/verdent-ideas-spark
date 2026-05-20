@@ -6655,6 +6655,19 @@ export type Database = {
         Returns: Json
       }
       governance_coverage: { Args: { _days?: number }; Returns: Json }
+      governance_uncovered_tasks: {
+        Args: { _days?: number; _missing?: string }
+        Returns: {
+          has_authority_rule: boolean
+          has_entity: boolean
+          has_notebook: boolean
+          id: string
+          key: string
+          status: string
+          title: string
+          updated_at: string
+        }[]
+      }
       grant_user_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
