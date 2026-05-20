@@ -375,6 +375,7 @@ Deno.serve(withLogger("postmortem-generate", async (req, ctx) => {
         contributing_factors: Array.isArray(draft.contributing_factors) ? draft.contributing_factors : [],
         timeline: Array.isArray(draft.timeline) ? draft.timeline : [],
         what_changed: typeof draft.what_changed === "string" ? draft.what_changed : null,
+        evidence: input.context.evidence ?? [],
         status: "draft",
         model,
       });
