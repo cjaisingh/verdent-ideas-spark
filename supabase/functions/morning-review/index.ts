@@ -114,7 +114,7 @@ Deno.serve(withLogger("morning-review", async (req) => {
       sb.from("ai_usage_log")
         .select("cost_usd,created_at")
         .gte("created_at", since24h),
-    ]);
+    ]));
 
     const recentRuns: AutomationRun[] = (runsRes.data ?? []) as AutomationRun[];
     const openActions: DiscussionAction[] = (actionsRes.data ?? []) as DiscussionAction[];
