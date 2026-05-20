@@ -588,6 +588,14 @@ export default function OperatorInbox() {
       </Card>
 
       <div className="flex flex-wrap gap-2 items-center">
+        <Select value={laneFilter} onValueChange={setLaneFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="operator">Operator lane</SelectItem>
+            <SelectItem value="caprica">Caprica lane</SelectItem>
+            <SelectItem value="all">All lanes</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={directionFilter} onValueChange={setDirectionFilter}>
           <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
