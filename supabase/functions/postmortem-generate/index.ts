@@ -153,7 +153,7 @@ async function buildInput(
   };
 }
 
-Deno.serve(withLogger("postmortem-generate", async (req) => {
+Deno.serve(withLogger("postmortem-generate", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -167,12 +167,14 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
   const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
   const trigger = triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
+  const reqId = ctx.requestId;
 
   const recordRun = async (status: string, code: number, msg: string, detail: Record<string, unknown> = {}) => {
     try {
       await sb.from("automation_runs").insert({
         job: "postmortem-generate", trigger, status, status_code: code,
         duration_ms: Date.now() - startedAt, message: msg, detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
   };
