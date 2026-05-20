@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreditsUsagePanel } from "@/components/admin/CreditsUsagePanel";
 import { ToolPolicyPanel } from "@/components/admin/ToolPolicyPanel";
+import AiModuleMappingsPanel from "@/components/admin/AiModuleMappingsPanel";
 import { BudgetAlertBanner } from "@/components/admin/BudgetAlertBanner";
 import { BalanceSnapshotDialog } from "@/components/admin/BalanceSnapshotDialog";
 import { Skeleton } from "@/components/ui/skeleton";
