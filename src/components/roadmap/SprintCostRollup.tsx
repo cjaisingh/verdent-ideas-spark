@@ -1,6 +1,6 @@
 // Per-sprint cost rollup driven by v_ai_cost_per_sprint.
 // Click a row to drill into per-task token + cost breakdown from v_ai_cost_per_task.
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
