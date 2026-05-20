@@ -26,6 +26,8 @@ export type AiUsageInput = {
   cost_usd?: number | null;          // override; otherwise computed from model+tokens
   error?: string | null;
   request_ref?: Record<string, unknown> | null;
+  task_id?: string | null;           // roadmap_tasks.id when call is attributable to a task
+  module?: string | null;            // feature slug; helps the sprint cost rollup
 };
 
 /**
@@ -53,6 +55,8 @@ export async function logAiUsage(sb: SbLike, input: AiUsageInput): Promise<void>
     price_out_per_mtok: price?.out ?? null,
     error: input.error ?? null,
     request_ref: input.request_ref ?? {},
+    task_id: input.task_id ?? null,
+    module: input.module ?? null,
   };
 
   try {
@@ -80,6 +84,8 @@ export async function logAiCall(
     json?: { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } } | null;
     errorText?: string | null;
     request_ref?: Record<string, unknown> | null;
+    task_id?: string | null;
+    module?: string | null;
   },
 ): Promise<void> {
   const latency = Date.now() - args.startedAt;
@@ -97,5 +103,7 @@ export async function logAiCall(
     total_tokens: usage.total_tokens ?? null,
     error: ok ? null : (args.errorText ?? `HTTP ${args.response.status}`).slice(0, 500),
     request_ref: args.request_ref ?? null,
+    task_id: args.task_id ?? null,
+    module: args.module ?? null,
   });
 }
