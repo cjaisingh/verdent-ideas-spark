@@ -190,6 +190,25 @@ export default function Governance() {
     if (anchorRef) loadChain(anchorKind, anchorRef);
   }, [anchorKind, anchorRef]);
 
+  // Listen for "focus task" from UncoveredTasksPanel
+  useEffect(() => {
+    const onFocus = (e: Event) => {
+      const detail = (e as CustomEvent<{ taskId: string; missing: Kind }>).detail;
+      if (!detail?.taskId) return;
+      setAnchorKind("task");
+      setAnchorRef(detail.taskId);
+      setInitialToKind(detail.missing);
+      setDialogOpen(true);
+      setTimeout(() => {
+        document
+          .getElementById("governance-anchor-card")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    };
+    window.addEventListener("governance:focus-task", onFocus);
+    return () => window.removeEventListener("governance:focus-task", onFocus);
+  }, []);
+
   // Sync URL
   useEffect(() => {
     const next = new URLSearchParams(params);
