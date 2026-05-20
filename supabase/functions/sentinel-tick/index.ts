@@ -463,6 +463,38 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       resolved++;
     }
 
+    // Per-check performance rows. Open depth uses the same `open` snapshot
+    // we already fetched for auto-resolve, minus rows we just resolved.
+    try {
+      const wasResolved = (r: { dedupe_key: string; kind: string }) =>
+        !liveKeys.has(r.dedupe_key) && r.kind !== "role_grant";
+      const openByKind = new Map<string, number>();
+      for (const r of (open ?? []) as { dedupe_key: string; kind: string }[]) {
+        if (wasResolved(r)) continue;
+        openByKind.set(r.kind, (openByKind.get(r.kind) ?? 0) + 1);
+      }
+      const rows: Array<Record<string, unknown>> = [];
+      for (const [key, pc] of perCheck) {
+        let depth = 0;
+        for (const k of pc.kinds) depth += openByKind.get(k) ?? 0;
+        rows.push({
+          tick_id: tickId,
+          check_key: key,
+          duration_ms: pc.duration_ms,
+          candidates_emitted: pc.candidates_count,
+          alerts_dispatched: pc.alerts,
+          alert_retries: pc.retries,
+          open_depth_after: depth,
+          error: pc.error,
+        });
+      }
+      if (rows.length > 0) {
+        await sb.from("sentinel_check_runs").insert(rows);
+      }
+    } catch (e) { console.error("sentinel_check_runs insert failed", e); }
+
+
+
     // Daily Telegram heartbeat — if a chat_id is configured but no successful
     // telegram-send in the last 25h, fire a one-line ping so silent outbound
     // breakage surfaces within a day rather than going stale for a week.
