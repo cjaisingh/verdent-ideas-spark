@@ -131,6 +131,7 @@ const SprintCostRollup = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8"></TableHead>
                     <TableHead>Sprint</TableHead>
                     <TableHead className="text-right">Tasks (done / total)</TableHead>
                     <TableHead className="text-right">Calls</TableHead>
@@ -140,33 +141,108 @@ const SprintCostRollup = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((r) => (
-                    <TableRow key={r.sprint_id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <code className="text-[10px] text-muted-foreground">{r.sprint_key}</code>
-                          <span className="text-sm">{r.sprint_title}</span>
-                          <Badge variant="outline" className="text-[9px] uppercase">{r.sprint_status}</Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {r.tasks_done} / {r.task_count}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{r.attributed_calls}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtTokens(Number(r.attributed_tokens ?? 0))}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {fmtUsd(Number(r.attributed_cost_usd ?? 0))}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {r.cost_per_done_task_usd != null
-                          ? fmtUsd(Number(r.cost_per_done_task_usd))
-                          : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {rows.map((r) => {
+                    const isOpen = expanded.has(r.sprint_id);
+                    const tr = taskRows[r.sprint_id];
+                    return (
+                      <>
+                        <TableRow
+                          key={r.sprint_id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleSprint(r.sprint_id)}
+                        >
+                          <TableCell className="pr-0">
+                            {isOpen
+                              ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <code className="text-[10px] text-muted-foreground">{r.sprint_key}</code>
+                              <span className="text-sm">{r.sprint_title}</span>
+                              <Badge variant="outline" className="text-[9px] uppercase">{r.sprint_status}</Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.tasks_done} / {r.task_count}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{r.attributed_calls}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {fmtTokens(Number(r.attributed_tokens ?? 0))}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {fmtUsd(Number(r.attributed_cost_usd ?? 0))}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {r.cost_per_done_task_usd != null
+                              ? fmtUsd(Number(r.cost_per_done_task_usd))
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                        </TableRow>
+                        {isOpen && (
+                          <TableRow key={`${r.sprint_id}-drill`} className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell></TableCell>
+                            <TableCell colSpan={6} className="py-2">
+                              {tr === "loading" && <Skeleton className="h-16 w-full" />}
+                              {tr && typeof tr === "object" && "error" in tr && (
+                                <p className="text-xs text-destructive">Failed: {tr.error}</p>
+                              )}
+                              {Array.isArray(tr) && tr.length === 0 && (
+                                <p className="text-xs text-muted-foreground">No tasks in this sprint.</p>
+                              )}
+                              {Array.isArray(tr) && tr.length > 0 && (
+                                <div className="overflow-x-auto">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead>Task</TableHead>
+                                        <TableHead>Module</TableHead>
+                                        <TableHead className="text-right">Calls</TableHead>
+                                        <TableHead className="text-right">Tokens in</TableHead>
+                                        <TableHead className="text-right">Tokens out</TableHead>
+                                        <TableHead className="text-right">Tokens total</TableHead>
+                                        <TableHead className="text-right">$ cost</TableHead>
+                                        <TableHead className="text-right">Last used</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {tr.map((t) => (
+                                        <TableRow key={t.task_id}>
+                                          <TableCell>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm">{t.task_title}</span>
+                                              <Badge variant="outline" className="text-[9px] uppercase">{t.task_status}</Badge>
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="text-xs text-muted-foreground font-mono">
+                                            {t.module ?? "—"}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">{t.call_count}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{fmtTokens(Number(t.tokens_in ?? 0))}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{fmtTokens(Number(t.tokens_out ?? 0))}</TableCell>
+                                          <TableCell className="text-right tabular-nums">{fmtTokens(Number(t.tokens_total ?? 0))}</TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {Number(t.cost_usd ?? 0) > 0
+                                              ? fmtUsd(Number(t.cost_usd))
+                                              : <span className="text-muted-foreground">—</span>}
+                                          </TableCell>
+                                          <TableCell className="text-right text-xs text-muted-foreground">
+                                            {t.last_used_at ? new Date(t.last_used_at).toLocaleDateString() : "—"}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
                 </TableBody>
+
               </Table>
             </div>
           </>
