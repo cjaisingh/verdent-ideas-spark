@@ -72,3 +72,21 @@ Rolls up shipped tasks in the window and counts how many have an entity link, a 
 2. W7.2 — claims pipeline + write-time enforcement against `decision_authorities`.
 3. W7.3 — promote frequently-linked notebook entries into typed decision records.
 4. W7.4 — confidence/decay model on the claims pipeline.
+
+## Uncovered-tasks worklist
+
+`/governance` now leads with an **Uncovered shipped tasks** panel backed by:
+
+```sql
+public.governance_uncovered_tasks(_days int default 30, _missing text default 'any')
+-- _missing ∈ {'entity','notebook','authority_rule','any'}
+-- operator/admin only; limit 200; ordered by updated_at desc
+```
+
+Filter chips toggle the `_missing` argument (Any gap / Missing entity / Missing notebook / Missing rule) and window (7/30/90d). Each row shows three coverage pills (`ent` / `nb` / `rule`). Clicking a row:
+
+1. Sets the page anchor to that task.
+2. Scrolls to the Anchor card.
+3. Opens `AddLinkDialog` with `initialToKind` pre-selected to the first missing leg (entity → rule → notebook).
+
+Realtime on `governance_links` means linked tasks drop out of the queue within ~1s. No bulk linking, no auto-inference — the friction is the point.
