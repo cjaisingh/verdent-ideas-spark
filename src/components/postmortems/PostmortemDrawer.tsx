@@ -192,6 +192,29 @@ export function PostmortemDrawer({
             </section>
           )}
 
+          {row.evidence && row.evidence.length > 0 && (
+            <section>
+              <h3 className="font-semibold mb-2">Evidence ({row.evidence.length})</h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Raw events the AI was shown when drafting this postmortem — use to verify the
+                root cause and contributing factors.
+              </p>
+              <ol className="space-y-1.5">
+                {row.evidence.map((e, i) => (
+                  <li key={i} className="text-xs border-l-2 border-border pl-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(e.at).toLocaleString()}
+                      </span>
+                      <Badge variant="outline" className="text-[10px]">{e.kind.replace(/_/g, " ")}</Badge>
+                    </div>
+                    <div className="text-foreground/90 mt-0.5">{e.summary}</div>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
           <section>
             <h3 className="font-semibold mb-2">What changed</h3>
             <Textarea
