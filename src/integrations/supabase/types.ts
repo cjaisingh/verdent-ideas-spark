@@ -6330,6 +6330,15 @@ export type Database = {
         }
         Relationships: []
       }
+      v_automation_runs_latest_per_job: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          job: string | null
+          status: string | null
+        }
+        Relationships: []
+      }
       v_credit_balance_latest: {
         Row: {
           as_of: string | null
