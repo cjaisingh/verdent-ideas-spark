@@ -8,7 +8,7 @@ import { withLogger } from "../_shared/logger.ts";
 import { pickModel } from "../_shared/model-policy.ts";
 import { logAiCall } from "../_shared/ai-usage.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
-import type { PostmortemDraft, PostmortemInput } from "../_shared/contracts/postmortem-generate.ts";
+import type { PostmortemDraft, PostmortemInput, EvidenceItem } from "../_shared/contracts/postmortem-generate.ts";
 import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
