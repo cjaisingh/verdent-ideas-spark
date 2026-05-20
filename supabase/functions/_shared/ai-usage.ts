@@ -26,6 +26,8 @@ export type AiUsageInput = {
   cost_usd?: number | null;          // override; otherwise computed from model+tokens
   error?: string | null;
   request_ref?: Record<string, unknown> | null;
+  task_id?: string | null;           // roadmap_tasks.id when call is attributable to a task
+  module?: string | null;            // feature slug; helps the sprint cost rollup
 };
 
 /**
