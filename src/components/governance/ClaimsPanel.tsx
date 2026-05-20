@@ -154,7 +154,8 @@ export function ClaimsPanel() {
   };
 
   return (
-    <Card>
+    <Card ref={cardRef}>
+
       <CardHeader>
         <CardTitle>Claims & truth resolution</CardTitle>
       </CardHeader>
@@ -179,7 +180,7 @@ export function ClaimsPanel() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={resolve} disabled={loading}>{loading ? "Resolving…" : "Resolve truth"}</Button>
+          <Button onClick={() => resolve()} disabled={loading}>{loading ? "Resolving…" : "Resolve truth"}</Button>
         </div>
 
         {resolved && (
