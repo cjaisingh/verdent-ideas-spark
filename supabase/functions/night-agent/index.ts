@@ -28,7 +28,8 @@ import { recordStep } from "../_shared/steps.ts";
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
 
-Deno.serve(withLogger("night-agent", async (req) => {
+Deno.serve(withLogger("night-agent", async (req, ctx) => {
+  const reqId = ctx.requestId;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
