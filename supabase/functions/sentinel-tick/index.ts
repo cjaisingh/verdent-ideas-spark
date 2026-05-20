@@ -74,6 +74,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
 
     const truthConflictsRes = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:truth_conflicts",
+      request_id: reqId,
       step_label: "Scan truth_conflicts view", phase_kind: "db_scan",
     }, () => sb.from("truth_conflicts")
       .select("entity,entity_id,field,top_source,next_source").limit(200));
@@ -82,6 +83,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
     const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes, runwayRes, snapshotAgeRes] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:budget_signals",
+      request_id: reqId,
       step_label: "Gather budget + credit signals", phase_kind: "db_scan",
     }, () => Promise.all([
       sb.from("v_tool_policy_signals").select("budget,burn_7d_per_day,projected_month_end").maybeSingle(),
@@ -96,6 +98,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     const monitoredJobs = Object.keys(SENTINEL_CADENCES);
     const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes, lastSecretsOkRes, authFailLogRes] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:monitored_signals",
+      request_id: reqId,
       step_label: "Gather runs/edge/secrets/audit/lint/streams", phase_kind: "db_scan",
       detail: { batch_size: 16 },
     }, () => Promise.all([
@@ -187,6 +190,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
 
     const [aiJobsRes, aiWorkersRes, aiQueueRes] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:ai_workers",
+      request_id: reqId,
       step_label: "Scan AI jobs + workers + queue", phase_kind: "db_scan",
     }, () => Promise.all([
       sb.from("ai_jobs").select("id,kind,attempts,heartbeat_at,claimed_at").eq("status","claimed").limit(200),
@@ -198,6 +202,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
     const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:inbox_signals",
+      request_id: reqId,
       step_label: "Scan operator inbox signals", phase_kind: "db_scan",
     }, () => Promise.all([
       sb.from("ai_usage_log")
@@ -226,6 +231,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     // the sample is bounded by job count, not row count.
     const { data: latestPerJob } = await recordStep(sb, {
       job: "sentinel-tick", step_key: "db_scan:latest_per_job",
+      request_id: reqId,
       step_label: "Scan latest run per monitored job", phase_kind: "db_scan",
     }, () => sb
       .from("v_automation_runs_latest_per_job")
@@ -266,6 +272,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
 
     const candidates: FindingCandidate[] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "compute:run_checks",
+      request_id: reqId,
       step_label: "Run all in-memory sentinel checks", phase_kind: "compute",
       detail: { checks: 28 },
     }, async () => [

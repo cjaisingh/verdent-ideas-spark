@@ -99,6 +99,7 @@ Deno.serve(withLogger("night-agent", async (req) => {
                     : "Night-agent smoke test";
     res = await recordStep(sb, {
       job, step_key: `compute:${job}`, step_label: stepLabel, phase_kind: "compute",
+      request_id: reqId,
       detail: { path, trigger },
     }, async () => {
       if (path.startsWith("/open")) return openShift(sb, settings ?? null);

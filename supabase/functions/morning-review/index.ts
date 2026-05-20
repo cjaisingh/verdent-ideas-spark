@@ -88,6 +88,7 @@ Deno.serve(withLogger("morning-review", async (req) => {
       aiRes,
     ] = await recordStep(sb, {
       job: "morning-review", step_key: "db_scan:sources",
+      request_id: reqId,
       step_label: "Gather runs/actions/findings/shifts/ai", phase_kind: "db_scan",
     }, () => Promise.all([
       sb.from("automation_runs")

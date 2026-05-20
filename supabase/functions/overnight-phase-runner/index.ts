@@ -89,6 +89,7 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
     const aiStart = Date.now();
     const aiResp = await recordStep(sb, {
       job: "overnight-phase-runner", step_key: "ai_call:gateway",
+      request_id: reqId,
       step_label: `Night plan via ${model}`, phase_kind: "ai_call",
       detail: { run_id: runId, model, phase_key: run.phase_key },
     }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
