@@ -4230,6 +4230,60 @@ export type Database = {
         }
         Relationships: []
       }
+      postmortems: {
+        Row: {
+          contributing_factors: Json
+          created_at: string
+          days_late: number
+          id: string
+          model: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          root_cause: string | null
+          slipped_on: string
+          status: string
+          subject_id: string
+          subject_kind: string
+          subject_label: string
+          timeline: Json
+          what_changed: string | null
+        }
+        Insert: {
+          contributing_factors?: Json
+          created_at?: string
+          days_late?: number
+          id?: string
+          model?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          root_cause?: string | null
+          slipped_on: string
+          status?: string
+          subject_id: string
+          subject_kind: string
+          subject_label: string
+          timeline?: Json
+          what_changed?: string | null
+        }
+        Update: {
+          contributing_factors?: Json
+          created_at?: string
+          days_late?: number
+          id?: string
+          model?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          root_cause?: string | null
+          slipped_on?: string
+          status?: string
+          subject_id?: string
+          subject_kind?: string
+          subject_label?: string
+          timeline?: Json
+          what_changed?: string | null
+        }
+        Relationships: []
+      }
       qa_check_events: {
         Row: {
           actor: string | null
