@@ -2702,6 +2702,39 @@ export type Database = {
         }
         Relationships: []
       }
+      governance_deeplink_events: {
+        Row: {
+          actor: string | null
+          created_at: string
+          event_type: string
+          id: string
+          missing: string
+          payload: Json
+          source: string
+          task_id: string
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          missing: string
+          payload?: Json
+          source?: string
+          task_id: string
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          missing?: string
+          payload?: Json
+          source?: string
+          task_id?: string
+        }
+        Relationships: []
+      }
       governance_link_events: {
         Row: {
           actor: string | null
@@ -6489,6 +6522,16 @@ export type Database = {
           last_30d_pct: number | null
           mtd_credits: number | null
           mtd_pct: number | null
+        }
+        Relationships: []
+      }
+      v_governance_deeplink_funnel: {
+        Row: {
+          copies_30d: number | null
+          distinct_tasks_30d: number | null
+          missing: string | null
+          opens_30d: number | null
+          tasks_linked_within_24h: number | null
         }
         Relationships: []
       }
