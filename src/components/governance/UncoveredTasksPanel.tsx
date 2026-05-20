@@ -86,9 +86,16 @@ export function UncoveredTasksPanel() {
 
   const focus = (r: Row) => {
     const target = firstMissing(r);
+    // "open" from the panel — i.e. operator clicked Link, not pasted a URL.
+    void trackGovernanceDeepLink({
+      event_type: "open",
+      task_id: r.id,
+      missing: target,
+      source: "uncovered_panel",
+    });
     window.dispatchEvent(
       new CustomEvent("governance:focus-task", {
-        detail: { taskId: r.id, missing: target },
+        detail: { taskId: r.id, missing: target, source: "uncovered_panel" },
       }),
     );
   };
@@ -96,15 +103,23 @@ export function UncoveredTasksPanel() {
   const copyLink = async (r: Row, e: React.MouseEvent) => {
     e.stopPropagation();
     const link = deepLinkFor(r);
+    const target = firstMissing(r);
+    void trackGovernanceDeepLink({
+      event_type: "copy",
+      task_id: r.id,
+      missing: target,
+      source: "uncovered_panel",
+    });
     try {
       await navigator.clipboard.writeText(link);
       toast.success("Deep link copied", {
-        description: `Opens task with ${firstMissing(r)} target pre-selected`,
+        description: `Opens task with ${target} target pre-selected`,
       });
     } catch {
       toast.error("Clipboard blocked", { description: link });
     }
   };
+
 
   return (
     <Card>
