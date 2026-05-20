@@ -84,6 +84,8 @@ export async function logAiCall(
     json?: { usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } } | null;
     errorText?: string | null;
     request_ref?: Record<string, unknown> | null;
+    task_id?: string | null;
+    module?: string | null;
   },
 ): Promise<void> {
   const latency = Date.now() - args.startedAt;
@@ -101,5 +103,7 @@ export async function logAiCall(
     total_tokens: usage.total_tokens ?? null,
     error: ok ? null : (args.errorText ?? `HTTP ${args.response.status}`).slice(0, 500),
     request_ref: args.request_ref ?? null,
+    task_id: args.task_id ?? null,
+    module: args.module ?? null,
   });
 }
