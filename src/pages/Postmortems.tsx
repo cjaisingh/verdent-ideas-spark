@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PostmortemDrawer, type PostmortemRow } from "@/components/postmortems/PostmortemDrawer";
 import { toast } from "sonner";
 
-type Filter = "draft" | "reviewed" | "all";
+type Filter = "draft" | "reviewed" | "archived" | "all";
 
 export default function Postmortems() {
   const [rows, setRows] = useState<PostmortemRow[]>([]);
