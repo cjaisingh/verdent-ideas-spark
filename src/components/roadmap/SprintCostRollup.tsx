@@ -1,6 +1,5 @@
 // Per-sprint cost rollup driven by v_ai_cost_per_sprint.
-// Honest about attribution: shows attributed_calls so the operator can see
-// how much of the spend has actually been tied to a task vs left in module-only.
+// Click a row to drill into per-task token + cost breakdown from v_ai_cost_per_task.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Coins } from "lucide-react";
+import { Coins, ChevronRight, ChevronDown } from "lucide-react";
+
+type TaskRow = {
+  task_id: string;
+  sprint_id: string;
+  task_title: string;
+  task_status: string;
+  module: string | null;
+  call_count: number;
+  tokens_in: number;
+  tokens_out: number;
+  tokens_total: number;
+  cost_usd: number;
+  last_used_at: string | null;
+};
 
 type Row = {
   sprint_id: string;
