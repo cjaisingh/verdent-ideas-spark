@@ -55,6 +55,8 @@ export async function logAiUsage(sb: SbLike, input: AiUsageInput): Promise<void>
     price_out_per_mtok: price?.out ?? null,
     error: input.error ?? null,
     request_ref: input.request_ref ?? {},
+    task_id: input.task_id ?? null,
+    module: input.module ?? null,
   };
 
   try {
