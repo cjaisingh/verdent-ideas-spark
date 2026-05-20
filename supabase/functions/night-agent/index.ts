@@ -28,7 +28,8 @@ import { recordStep } from "../_shared/steps.ts";
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
 
-Deno.serve(withLogger("night-agent", async (req) => {
+Deno.serve(withLogger("night-agent", async (req, ctx) => {
+  const reqId = ctx.requestId;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const url = new URL(req.url);
@@ -53,6 +54,7 @@ Deno.serve(withLogger("night-agent", async (req) => {
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
       message: reason, detail,
+      request_id: reqId,
     });
     await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
@@ -99,6 +101,7 @@ Deno.serve(withLogger("night-agent", async (req) => {
                     : "Night-agent smoke test";
     res = await recordStep(sb, {
       job, step_key: `compute:${job}`, step_label: stepLabel, phase_kind: "compute",
+      request_id: reqId,
       detail: { path, trigger },
     }, async () => {
       if (path.startsWith("/open")) return openShift(sb, settings ?? null);
@@ -114,6 +117,7 @@ Deno.serve(withLogger("night-agent", async (req) => {
         duration_ms: Date.now() - startedAt,
         message: res.ok ? `${job} completed` : `${job} returned ${res.status}`,
         detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
     return res;
@@ -124,6 +128,7 @@ Deno.serve(withLogger("night-agent", async (req) => {
       await sb.from("automation_runs").insert({
         job, trigger, status: "error", status_code: 500,
         duration_ms: Date.now() - startedAt, message: msg, detail: { path },
+        request_id: reqId,
       });
     } catch {}
     return json({ error: msg }, 500);

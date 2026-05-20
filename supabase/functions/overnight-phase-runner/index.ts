@@ -89,6 +89,7 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
     const aiStart = Date.now();
     const aiResp = await recordStep(sb, {
       job: "overnight-phase-runner", step_key: "ai_call:gateway",
+      request_id: reqId,
       step_label: `Night plan via ${model}`, phase_kind: "ai_call",
       detail: { run_id: runId, model, phase_key: run.phase_key },
     }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -163,7 +164,8 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
   }
 }
 
-Deno.serve(withLogger("overnight-phase-runner", async (req) => {
+Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
+  const reqId = ctx.requestId;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const provided = req.headers.get("x-service-token");
@@ -184,6 +186,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req) => {
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
       message: reason, detail,
+      request_id: reqId,
     });
     await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
@@ -204,6 +207,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req) => {
       duration_ms: 0,
       message: "skipped: outside_night_window",
       detail: { utc_hour: new Date().getUTCHours(), skipped: true },
+      request_id: reqId,
     });
     return json({ skipped: "outside_night_window", utc_hour: new Date().getUTCHours() });
   }
@@ -230,6 +234,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req) => {
       await sb.from("automation_runs").insert({
         job: "overnight-phase-runner-15m", trigger, status, status_code,
         duration_ms: Date.now() - startedAt, message, detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
   };

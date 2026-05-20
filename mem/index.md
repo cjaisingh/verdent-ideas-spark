@@ -37,6 +37,7 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [Tomorrow Plan](mem://features/tomorrow-plan) — operator daily plan dashboard on /morning-review (Tomorrow tab); tomorrow_plans*/items + 15-min auto-refresh
 - [Sentinel Agent (W3)](mem://features/sentinel) — 15-min watcher, sentinel_findings table, rolled into morning review
 - [Edge Function Health](mem://features/edge-health) — sentinel checks + /admin/edge-health page + safeInvoke wrapper + client-error-beacon for browser transport fails
+- [Jobs status panel](mem://features/jobs-status-panel) — /admin/jobs live runs + step timeline + edge-log tail; runs↔steps↔logs joined by request_id (threaded via withLogger ctx)
 - [Lessons Loop (W4)](mem://features/lessons-loop) — weekly AI synthesis into public.lessons + /admin/lessons
 - [Deep Audit (W5)](mem://features/deep-audit) — weekly+monthly platform audit, 5 modules, auto-promotes high/critical to lessons, /audits page
 - [App Walkthrough](mem://features/app-walkthrough) — nightly 02:15 UTC route + capability self-test sweep, failures → sentinel

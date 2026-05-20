@@ -153,7 +153,7 @@ async function buildInput(
   };
 }
 
-Deno.serve(withLogger("postmortem-generate", async (req) => {
+Deno.serve(withLogger("postmortem-generate", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -167,12 +167,14 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
   const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
   const trigger = triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
+  const reqId = ctx.requestId;
 
   const recordRun = async (status: string, code: number, msg: string, detail: Record<string, unknown> = {}) => {
     try {
       await sb.from("automation_runs").insert({
         job: "postmortem-generate", trigger, status, status_code: code,
         duration_ms: Date.now() - startedAt, message: msg, detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
   };
@@ -190,6 +192,7 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
     const today = new Date().toISOString().slice(0, 10);
     const slipped = await recordStep(sb, {
       job: "postmortem-generate", step_key: "db_scan:slipped_subjects",
+      request_id: reqId,
       step_label: "Find slipped phases + sprints", phase_kind: "db_scan",
     }, () => gatherSlippedSubjects(sb));
 
@@ -214,12 +217,14 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
 
       const input = await recordStep(sb, {
         job: "postmortem-generate", step_key: "db_scan:context",
+        request_id: reqId,
         step_label: `Gather context for ${s.kind} ${s.label}`, phase_kind: "db_scan",
         detail: { subject_kind: s.kind, subject_id: s.id },
       }, () => buildInput(sb, s, today));
       const aiStart = Date.now();
       const aiRes = await recordStep(sb, {
         job: "postmortem-generate", step_key: "ai_call:gateway",
+        request_id: reqId,
         step_label: `Draft postmortem (${model})`, phase_kind: "ai_call",
         detail: { model, subject_kind: s.kind, subject_id: s.id },
       }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
