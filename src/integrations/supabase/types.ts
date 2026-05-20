@@ -289,12 +289,14 @@ export type Database = {
           job: string
           latency_ms: number | null
           model: string
+          module: string | null
           price_in_per_mtok: number | null
           price_out_per_mtok: number | null
           prompt_tokens: number | null
           request_ref: Json
           status: string
           status_code: number | null
+          task_id: string | null
           total_tokens: number | null
           trigger: string
         }
@@ -307,12 +309,14 @@ export type Database = {
           job: string
           latency_ms?: number | null
           model: string
+          module?: string | null
           price_in_per_mtok?: number | null
           price_out_per_mtok?: number | null
           prompt_tokens?: number | null
           request_ref?: Json
           status?: string
           status_code?: number | null
+          task_id?: string | null
           total_tokens?: number | null
           trigger?: string
         }
@@ -325,16 +329,40 @@ export type Database = {
           job?: string
           latency_ms?: number | null
           model?: string
+          module?: string | null
           price_in_per_mtok?: number | null
           price_out_per_mtok?: number | null
           prompt_tokens?: number | null
           request_ref?: Json
           status?: string
           status_code?: number | null
+          task_id?: string | null
           total_tokens?: number | null
           trigger?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "ai_usage_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
+          },
+        ]
       }
       ai_workers: {
         Row: {
@@ -2059,6 +2087,13 @@ export type Database = {
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "credit_entries_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
+          },
         ]
       }
       credit_settings: {
@@ -2606,6 +2641,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_actions_promoted_task_id_fkey"
+            columns: ["promoted_task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
           },
         ]
       }
@@ -4473,6 +4515,13 @@ export type Database = {
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "roadmap_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
+          },
         ]
       }
       roadmap_finding_discussion_messages: {
@@ -4969,6 +5018,13 @@ export type Database = {
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "roadmap_task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
+          },
         ]
       }
       roadmap_task_checklist: {
@@ -5192,6 +5248,13 @@ export type Database = {
             referencedRelation: "roadmap_sprints"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "roadmap_tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_sprint"
+            referencedColumns: ["sprint_id"]
+          },
         ]
       }
       roadmap_work_log: {
@@ -5275,6 +5338,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "roadmap_tasks"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_work_log_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
           },
         ]
       }
@@ -6330,6 +6400,53 @@ export type Database = {
         }
         Relationships: []
       }
+      v_ai_cost_per_sprint: {
+        Row: {
+          attributed_calls: number | null
+          attributed_cost_usd: number | null
+          attributed_tokens: number | null
+          cost_per_done_task_usd: number | null
+          sprint_id: string | null
+          sprint_key: string | null
+          sprint_order: number | null
+          sprint_status: string | null
+          sprint_title: string | null
+          task_count: number | null
+          tasks_done: number | null
+        }
+        Relationships: []
+      }
+      v_ai_cost_per_task: {
+        Row: {
+          call_count: number | null
+          cost_usd: number | null
+          last_used_at: string | null
+          module: string | null
+          sprint_id: string | null
+          task_id: string | null
+          task_status: string | null
+          task_title: string | null
+          tokens_in: number | null
+          tokens_out: number | null
+          tokens_total: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_sprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "roadmap_tasks_sprint_id_fkey"
+            columns: ["sprint_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_sprint"
+            referencedColumns: ["sprint_id"]
+          },
+        ]
+      }
       v_automation_runs_latest_per_job: {
         Row: {
           created_at: string | null
@@ -6690,6 +6807,7 @@ export type Database = {
           title: string
         }[]
       }
+      backfill_ai_usage_attribution: { Args: never; Returns: Json }
       cancel_overnight_run: { Args: { _id: string }; Returns: undefined }
       db_analyze_public: { Args: never; Returns: undefined }
       db_list_all_columns: {
@@ -6767,6 +6885,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      infer_ai_job_module: { Args: { _job: string }; Returns: string }
       infer_task_entity: {
         Args: { _module: string; _title: string }
         Returns: string
