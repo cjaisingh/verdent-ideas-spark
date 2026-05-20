@@ -18,6 +18,7 @@ Operating instructions for AI agents (Lovable, Claude Code, Cursor, Codex) worki
 - Idempotency-Key is mandatory on `/okr/ingest` and `/events/ingest`. Same key + different body → `409`.
 - Speak about the backend as "Lovable Cloud", not Supabase, when addressing the user.
 - Before adding a new autonomous surface (cron, edge function, LLM loop), declare a typed input contract in `supabase/functions/_shared/contracts/<name>.ts` — see [`docs/agents/contract-checklist.md`](./docs/agents/contract-checklist.md) and the `night-agent.ts` reference.
+- Don't introduce new `any`. `bun run lint:ratchet` fails the build; files outside `.lint-baselines/no-explicit-any.json` are `error`. See [`docs/lint-policy.md`](./docs/lint-policy.md).
 
 ## Agent skills
 
