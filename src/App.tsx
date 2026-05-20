@@ -151,6 +151,7 @@ const App = () => (
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/timeline" element={<AdminTimeline />} />
             <Route path="/admin/sentinel-perf" element={<SentinelPerf />} />
+            <Route path="/admin/jobs" element={<AdminJobs />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />
