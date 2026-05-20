@@ -44,7 +44,9 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [Review cadence](mem://preferences/review-cadence) — full per-PR/daily/weekly/monthly/quarterly cadence map (cite this when asked "how often is X reviewed?")
 - [CI/CD hardening (W6)](mem://preferences/ci-cd-hardening) — workflow inventory + branch-protection checklist for `main`
 - [Lint policy](mem://preferences/lint-policy) — `no-explicit-any` ratcheted via `.lint-baselines/no-explicit-any.json`; clean files auto-promoted to error; cleanup tracked by action #20
-- [Verification discipline](mem://preferences/verification-discipline) — what is/isn't verifiable from the sandbox + required phrasing for unverifiable state
+- [Verification discipline](mem://preferences/verification-discipline) — sandbox-verifiable vs not + plan-before-fix rules (read live, detector-wrong-first, verify-before-scope)
+- [Doc hygiene](mem://preferences/doc-hygiene) — caps: mem ≤30 lines, docs ≤200, index ≤150 chars; .md is reference not narrative
+- [Verify completion](mem://preferences/verify-completion) — per-change-type DoD checks + binding persona-consultation map (9 agents in docs/agents/team/)
 - [AWIP Companion](mem://features/companion) — `/companion` browser chat (Ollama + RAG) and Rork iPhone surface; Gemini TTS is the default voice
 - [Gemini TTS](mem://features/gemini-tts) — `gemini-tts` edge function, 8 voices, audio/wav, ai_usage_log, used by Rork iPhone app
 - [Rork iPhone spec](docs/rork-companion-spec.md) — contract between Core and the separate Expo project
