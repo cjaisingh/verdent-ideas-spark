@@ -3,6 +3,15 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import { readFileSync, existsSync } from "node:fs";
+
+// Files that still carry `any` per .lint-baselines/no-explicit-any.json.
+// Everything else is held to `error` so once-clean files cannot regress.
+// Baseline is shrink-only via `bun run lint:ratchet -- --write`.
+const BASELINE_PATH = ".lint-baselines/no-explicit-any.json";
+const baselineFiles = existsSync(BASELINE_PATH)
+  ? Object.keys(JSON.parse(readFileSync(BASELINE_PATH, "utf8")).files ?? {})
+  : [];
 
 export default tseslint.config(
   { ignores: ["dist"] },
@@ -21,9 +30,8 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
-      // Tracked tech debt: ~480 pre-existing `any` usages. Demoted to warn so CI
-      // unblocks while the cleanup action chips away at them. See
-      // mem://features/lint-policy and the open discussion_action.
+      // Default: warn for files in the legacy baseline. The override below
+      // promotes everything *not* in the baseline to error. See docs/lint-policy.md.
       "@typescript-eslint/no-explicit-any": "warn",
       // Pre-existing code-quality issues across the repo — demoted to warn so
       // CI unblocks. Tracked separately; do not introduce new occurrences.
@@ -35,6 +43,26 @@ export default tseslint.config(
       "prefer-const": "warn",
     },
   },
+  // Hard-fail no-explicit-any on every file that isn't in the legacy baseline.
+  // Baseline shrinks → set of error-promoted files automatically grows.
+  ...(baselineFiles.length > 0
+    ? [
+        {
+          files: ["**/*.{ts,tsx}"],
+          ignores: baselineFiles,
+          rules: {
+            "@typescript-eslint/no-explicit-any": "error",
+          },
+        },
+      ]
+    : [
+        {
+          files: ["**/*.{ts,tsx}"],
+          rules: {
+            "@typescript-eslint/no-explicit-any": "error",
+          },
+        },
+      ]),
   {
     // Playwright fixtures legitimately use a `use` callback parameter that
     // collides with React's hook-naming rule. Scope the override narrowly.
