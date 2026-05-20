@@ -102,21 +102,20 @@ export function PostmortemDrawer({
   const setStatus = async (status: "draft" | "reviewed" | "archived") => {
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const patch: Record<string, unknown> = { status };
-    if (status === "reviewed") {
-      patch.reviewed_at = new Date().toISOString();
-      patch.reviewed_by = user?.id ?? null;
-      patch.archived_at = null;
-      patch.archived_by = null;
-    } else if (status === "archived") {
-      patch.archived_at = new Date().toISOString();
-      patch.archived_by = user?.id ?? null;
-    } else {
-      patch.reviewed_at = null;
-      patch.reviewed_by = null;
-      patch.archived_at = null;
-      patch.archived_by = null;
-    }
+    const nowIso = new Date().toISOString();
+    const patch =
+      status === "reviewed" ? {
+        status, reviewed_at: nowIso, reviewed_by: user?.id ?? undefined,
+        archived_at: null as string | null, archived_by: null as string | null,
+      }
+      : status === "archived" ? {
+        status, archived_at: nowIso, archived_by: user?.id ?? undefined,
+      }
+      : {
+        status,
+        reviewed_at: null as string | null, reviewed_by: null as string | null,
+        archived_at: null as string | null, archived_by: null as string | null,
+      };
     const { error } = await supabase.from("postmortems").update(patch).eq("id", row.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
