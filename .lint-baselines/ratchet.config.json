@@ -1,0 +1,11 @@
+{
+  "$schema": "Tracks ESLint rules that must shrink over time. See docs/lint-policy.md.",
+  "rules": [
+    {
+      "rule": "@typescript-eslint/no-explicit-any",
+      "baseline": ".lint-baselines/no-explicit-any.json",
+      "promoteOutsideBaselineTo": "error",
+      "baselineSeverity": "warn"
+    }
+  ]
+}

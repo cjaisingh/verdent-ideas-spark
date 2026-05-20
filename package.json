@@ -20,8 +20,8 @@
     "subprocessors:check": "bun run scripts/generate-subprocessor-list.ts --check",
     "test:pw": "playwright test",
     "test:pw:headed": "playwright test --headed",
-    "lint:ratchet": "bun scripts/lint-any-ratchet.ts",
-    "lint:freeze": "bun scripts/lint-any-freeze.ts"
+    "lint:ratchet": "bun scripts/lint-ratchet.ts",
+    "lint:freeze": "bun scripts/lint-ratchet-freeze.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
