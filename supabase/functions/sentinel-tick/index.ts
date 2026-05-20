@@ -131,11 +131,13 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .eq("function_name", "telegram-webhook")
         .order("created_at", { ascending: false })
         .limit(1).maybeSingle(),
-      // Approvals: latest row regardless of status. Silence here means the
-      // operator approval channel is broken upstream.
+      // Approvals: oldest PENDING row. An empty queue is not a fire — only
+      // pending requests that have aged past threshold indicate a broken
+      // operator channel (or a delinquent operator).
       sb.from("approval_queue")
         .select("created_at")
-        .order("created_at", { ascending: false })
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
         .limit(1).maybeSingle(),
       // Detector-of-the-detector: most recent ok run of secrets-health-check.
       sb.from("automation_runs")
