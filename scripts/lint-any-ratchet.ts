@@ -29,6 +29,31 @@ type Baseline = {
   files: Record<string, number>;
 };
 
+type Occurrence = { line: number; column: number };
+type FileReport = { count: number; occurrences: Occurrence[] };
+
+const IN_GHA = process.env.GITHUB_ACTIONS === "true";
+
+function gha(line: string) {
+  if (IN_GHA) console.log(line);
+}
+
+function ghaAnnotation(
+  level: "error" | "warning" | "notice",
+  file: string,
+  loc: Occurrence | null,
+  message: string,
+) {
+  if (!IN_GHA) return;
+  const parts = [`file=${file}`];
+  if (loc) {
+    parts.push(`line=${loc.line}`, `col=${loc.column}`);
+  }
+  // Escape per GH workflow command rules.
+  const msg = message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  console.log(`::${level} ${parts.join(",")}::${msg}`);
+}
+
 function loadBaseline(): Baseline {
   if (!existsSync(BASELINE_PATH)) {
     console.error(`✗ baseline missing: ${BASELINE_PATH}`);
@@ -37,38 +62,49 @@ function loadBaseline(): Baseline {
   return JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as Baseline;
 }
 
-function runEslint(): Record<string, number> {
+function runEslint(): Record<string, FileReport> {
   const res = spawnSync("npx", ["eslint", "--format", "json", "."], {
     encoding: "utf8",
     maxBuffer: 200 * 1024 * 1024,
   });
-  // eslint exits non-zero whenever there are problems; we only care about stdout.
   if (!res.stdout) {
     console.error("✗ eslint produced no JSON output");
     console.error(res.stderr);
     process.exit(2);
   }
-  let parsed: Array<{ filePath: string; messages: Array<{ ruleId: string | null }> }>;
+  let parsed: Array<{
+    filePath: string;
+    messages: Array<{ ruleId: string | null; line?: number; column?: number }>;
+  }>;
   try {
     parsed = JSON.parse(res.stdout);
   } catch (e) {
     console.error("✗ failed to parse eslint JSON:", (e as Error).message);
     process.exit(2);
   }
-  const counts: Record<string, number> = {};
+  const out: Record<string, FileReport> = {};
   for (const f of parsed) {
-    let n = 0;
-    for (const m of f.messages) if (m.ruleId === RULE) n++;
-    if (n > 0) counts[relative(ROOT, f.filePath)] = n;
+    const occ: Occurrence[] = [];
+    for (const m of f.messages) {
+      if (m.ruleId === RULE) {
+        occ.push({ line: m.line ?? 1, column: m.column ?? 1 });
+      }
+    }
+    if (occ.length > 0) {
+      out[relative(ROOT, f.filePath)] = { count: occ.length, occurrences: occ };
+    }
   }
-  return counts;
+  return out;
 }
 
 function main() {
   const baseline = loadBaseline();
   const live = runEslint();
 
-  const liveTotal = Object.values(live).reduce((a, b) => a + b, 0);
+  const liveCounts: Record<string, number> = Object.fromEntries(
+    Object.entries(live).map(([p, r]) => [p, r.count]),
+  );
+  const liveTotal = Object.values(liveCounts).reduce((a, b) => a + b, 0);
   const liveFiles = Object.keys(live).length;
 
   const regressedFiles: Array<{ path: string; was: number; now: number }> = [];
@@ -76,8 +112,9 @@ function main() {
   const improvedFiles: Array<{ path: string; was: number; now: number }> = [];
   const clearedFiles: string[] = [];
 
-  for (const [path, now] of Object.entries(live)) {
+  for (const [path, report] of Object.entries(live)) {
     const was = baseline.files[path] ?? 0;
+    const now = report.count;
     if (was === 0) newFiles.push({ path, now });
     else if (now > was) regressedFiles.push({ path, was, now });
     else if (now < was) improvedFiles.push({ path, was, now });
@@ -95,13 +132,38 @@ function main() {
   const failed = regressedFiles.length > 0 || newFiles.length > 0 || liveTotal > baseline.total;
 
   if (newFiles.length) {
+    gha(`::group::no-explicit-any: ${newFiles.length} new file(s)`);
     console.error(`\n✗ ${newFiles.length} file(s) introduced new \`any\` (not in baseline):`);
-    for (const f of newFiles) console.error(`    +${f.now}  ${f.path}`);
+    for (const f of newFiles) {
+      console.error(`    +${f.now}  ${f.path}`);
+      // One annotation per occurrence so reviewers see every offending line.
+      for (const loc of live[f.path].occurrences) {
+        ghaAnnotation(
+          "error",
+          f.path,
+          loc,
+          `no-explicit-any: new \`any\` in file not in baseline (file total +${f.now}). Narrow the type.`,
+        );
+      }
+    }
+    gha(`::endgroup::`);
   }
   if (regressedFiles.length) {
+    gha(`::group::no-explicit-any: ${regressedFiles.length} regressed file(s)`);
     console.error(`\n✗ ${regressedFiles.length} file(s) regressed:`);
-    for (const f of regressedFiles)
+    for (const f of regressedFiles) {
       console.error(`    ${f.was} → ${f.now}  ${f.path}`);
+      // No line-level baseline, so flag every occurrence in the file.
+      for (const loc of live[f.path].occurrences) {
+        ghaAnnotation(
+          "error",
+          f.path,
+          loc,
+          `no-explicit-any: file regressed ${f.was} → ${f.now} (budget exceeded by ${f.now - f.was}).`,
+        );
+      }
+    }
+    gha(`::endgroup::`);
   }
 
   if (improvedFiles.length || clearedFiles.length) {
@@ -110,6 +172,54 @@ function main() {
     );
     if (!WRITE) {
       console.log(`  run \`bun run lint:ratchet -- --write\` to lower the baseline.`);
+    }
+    // Surface improvements as notices to encourage baseline updates.
+    for (const f of improvedFiles) {
+      ghaAnnotation(
+        "notice",
+        f.path,
+        null,
+        `no-explicit-any: improved ${f.was} → ${f.now}. Run \`bun run lint:ratchet -- --write\` to lock it in.`,
+      );
+    }
+    for (const path of clearedFiles) {
+      ghaAnnotation(
+        "notice",
+        path,
+        null,
+        `no-explicit-any: file cleared (was ${baseline.files[path]}). Run \`bun run lint:ratchet -- --write\` to remove from baseline.`,
+      );
+    }
+  }
+
+  // Job summary — table of offenders, only when failing.
+  if (IN_GHA && failed && process.env.GITHUB_STEP_SUMMARY) {
+    const lines: string[] = [];
+    lines.push(`### no-explicit-any ratchet failed`);
+    lines.push(``);
+    lines.push(`Live total **${liveTotal}** vs baseline **${baseline.total}**.`);
+    lines.push(``);
+    if (newFiles.length) {
+      lines.push(`#### New files (not in baseline)`);
+      lines.push(`| file | new \`any\` |`);
+      lines.push(`| --- | ---: |`);
+      for (const f of newFiles) lines.push(`| \`${f.path}\` | ${f.now} |`);
+      lines.push(``);
+    }
+    if (regressedFiles.length) {
+      lines.push(`#### Regressed files`);
+      lines.push(`| file | baseline | live | delta |`);
+      lines.push(`| --- | ---: | ---: | ---: |`);
+      for (const f of regressedFiles)
+        lines.push(`| \`${f.path}\` | ${f.was} | ${f.now} | +${f.now - f.was} |`);
+      lines.push(``);
+    }
+    lines.push(`Fix: narrow the type, or — if intentional cleanup elsewhere — run \`bun run lint:ratchet -- --write\` locally and commit the updated baseline.`);
+    try {
+      const { appendFileSync } = require("node:fs") as typeof import("node:fs");
+      appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+    } catch {
+      // Best-effort; never let summary writing fail the run.
     }
   }
 
@@ -121,9 +231,9 @@ function main() {
   if (WRITE) {
     // Lower-only merge: never raise any entry beyond its current baseline.
     const merged: Record<string, number> = {};
-    for (const [path, now] of Object.entries(live)) {
+    for (const [path, report] of Object.entries(live)) {
       const was = baseline.files[path] ?? Number.POSITIVE_INFINITY;
-      merged[path] = Math.min(now, was);
+      merged[path] = Math.min(report.count, was);
     }
     const sorted = Object.fromEntries(Object.entries(merged).sort());
     const newTotal = Object.values(sorted).reduce((a, b) => a + b, 0);
@@ -139,5 +249,6 @@ function main() {
     console.log(`\n✓ within budget.`);
   }
 }
+
 
 main();
