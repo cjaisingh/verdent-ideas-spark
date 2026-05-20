@@ -21,16 +21,19 @@ const FLAG_MAP: Record<string, string> = {
   auth_failed: "alert_on_auth_failed",
 };
 
+export type AlertDispatchResult = { delivered: boolean; attempts: number };
+
 export async function dispatchAlert(
   sb: SupabaseClient,
   job: string,
   reason: string,
   message: string,
   payload: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<AlertDispatchResult> {
   let delivered = false;
   let status_code: number | null = null;
   let error: string | null = null;
+  let attempts = 0;
   try {
     const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
     const flag = FLAG_MAP[reason];
