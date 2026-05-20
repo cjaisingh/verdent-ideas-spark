@@ -774,6 +774,7 @@ export type Database = {
           id: string
           job: string
           message: string | null
+          request_id: string | null
           status: string
           status_code: number | null
           trigger: string
@@ -785,6 +786,7 @@ export type Database = {
           id?: string
           job: string
           message?: string | null
+          request_id?: string | null
           status: string
           status_code?: number | null
           trigger?: string
@@ -796,6 +798,7 @@ export type Database = {
           id?: string
           job?: string
           message?: string | null
+          request_id?: string | null
           status?: string
           status_code?: number | null
           trigger?: string
@@ -811,6 +814,7 @@ export type Database = {
           id: string
           job: string
           phase_kind: string
+          request_id: string | null
           run_id: string | null
           started_at: string
           status: string
@@ -825,6 +829,7 @@ export type Database = {
           id?: string
           job: string
           phase_kind: string
+          request_id?: string | null
           run_id?: string | null
           started_at?: string
           status?: string
@@ -839,6 +844,7 @@ export type Database = {
           id?: string
           job?: string
           phase_kind?: string
+          request_id?: string | null
           run_id?: string | null
           started_at?: string
           status?: string
@@ -6841,6 +6847,58 @@ export type Database = {
           missing: string | null
           opens_30d: number | null
           tasks_linked_within_24h: number | null
+        }
+        Relationships: []
+      }
+      v_job_eta_baseline: {
+        Row: {
+          job: string | null
+          max_ms: number | null
+          median_ms: number | null
+          p95_ms: number | null
+          samples: number | null
+        }
+        Relationships: []
+      }
+      v_jobs_recent: {
+        Row: {
+          detail: Json | null
+          duration_ms: number | null
+          elapsed_ms: number | null
+          job: string | null
+          message: string | null
+          request_id: string | null
+          run_id: string | null
+          started_at: string | null
+          status: string | null
+          status_code: number | null
+          trigger: string | null
+        }
+        Insert: {
+          detail?: Json | null
+          duration_ms?: number | null
+          elapsed_ms?: never
+          job?: string | null
+          message?: string | null
+          request_id?: string | null
+          run_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          status_code?: number | null
+          trigger?: string | null
+        }
+        Update: {
+          detail?: Json | null
+          duration_ms?: number | null
+          elapsed_ms?: never
+          job?: string | null
+          message?: string | null
+          request_id?: string | null
+          run_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          status_code?: number | null
+          trigger?: string | null
         }
         Relationships: []
       }
