@@ -233,7 +233,7 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
           ],
           response_format: { type: "json_object" },
         }),
-      });
+      }));
       if (!aiRes.ok) {
         const t = await aiRes.text();
         await logAiCall(sb, { job: "postmortem-generate", model, trigger, startedAt: aiStart, response: aiRes, errorText: t, request_ref: { subject_kind: s.kind, subject_id: s.id } });
