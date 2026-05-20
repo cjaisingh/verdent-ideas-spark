@@ -340,8 +340,16 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
           } catch (e) { console.error("auto_link_finding_to_action failed", e); }
         }
         if (c.severity === "high" || c.severity === "critical") {
-          await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
+          const r = await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
           alerts++;
+          const checkKey = (c as unknown as { __check_key?: string }).__check_key;
+          if (checkKey) {
+            const pc = perCheck.get(checkKey);
+            if (pc) {
+              pc.alerts += 1;
+              pc.retries += Math.max(0, r.attempts - 1);
+            }
+          }
         }
 
         // Budget projection side-effects: insert credit_alerts row + optional Telegram push.
