@@ -4417,6 +4417,7 @@ export type Database = {
           contributing_factors: Json
           created_at: string
           days_late: number
+          evidence: Json
           id: string
           model: string | null
           reviewed_at: string | null
@@ -4436,6 +4437,7 @@ export type Database = {
           contributing_factors?: Json
           created_at?: string
           days_late?: number
+          evidence?: Json
           id?: string
           model?: string | null
           reviewed_at?: string | null
@@ -4455,6 +4457,7 @@ export type Database = {
           contributing_factors?: Json
           created_at?: string
           days_late?: number
+          evidence?: Json
           id?: string
           model?: string | null
           reviewed_at?: string | null

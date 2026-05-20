@@ -8,6 +8,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Archive, CheckCircle, RotateCcw, Save, History } from "lucide-react";
 
+export type EvidenceItem = {
+  at: string;
+  kind: "sentinel_finding" | "failed_run" | "cost_spike" | "log_error" | "discussion_action" | "automation_failure";
+  summary: string;
+  ref?: Record<string, unknown>;
+};
+
 export type PostmortemRow = {
   id: string;
   subject_kind: "phase" | "sprint";
@@ -24,6 +31,7 @@ export type PostmortemRow = {
   created_at: string;
   reviewed_at: string | null;
   archived_at: string | null;
+  evidence: EvidenceItem[];
 };
 
 type EventRow = {
@@ -178,6 +186,29 @@ export function PostmortemDrawer({
                   <li key={i}>
                     <span className="font-mono text-xs mr-2">{t.at}</span>
                     {t.what}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {row.evidence && row.evidence.length > 0 && (
+            <section>
+              <h3 className="font-semibold mb-2">Evidence ({row.evidence.length})</h3>
+              <p className="text-xs text-muted-foreground mb-2">
+                Raw events the AI was shown when drafting this postmortem — use to verify the
+                root cause and contributing factors.
+              </p>
+              <ol className="space-y-1.5">
+                {row.evidence.map((e, i) => (
+                  <li key={i} className="text-xs border-l-2 border-border pl-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {new Date(e.at).toLocaleString()}
+                      </span>
+                      <Badge variant="outline" className="text-[10px]">{e.kind.replace(/_/g, " ")}</Badge>
+                    </div>
+                    <div className="text-foreground/90 mt-0.5">{e.summary}</div>
                   </li>
                 ))}
               </ol>
