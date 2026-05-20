@@ -224,51 +224,90 @@ export default function Governance() {
   // so a stale or hand-edited link still opens AddLinkDialog instead of dying
   // silently.
   useEffect(() => {
-    const focusId = params.get("focus");
-    const missingRaw = params.get("missing");
+    const STORAGE_KEY = "governance:last-deeplink";
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const allowed: Kind[] = ["entity", "notebook", "authority_rule"];
+
+    let focusId = params.get("focus");
+    let missingRaw = params.get("missing");
+    let restored = false;
+
+    // If the URL has no deep-link params, replay the last one from
+    // sessionStorage so a refresh reopens the same task once. Consumed
+    // immediately — subsequent refreshes (without params) won't reopen.
+    if (!focusId) {
+      try {
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          sessionStorage.removeItem(STORAGE_KEY);
+          const parsed = JSON.parse(raw) as { focus?: string; missing?: string };
+          if (parsed?.focus && uuidRe.test(parsed.focus)) {
+            focusId = parsed.focus;
+            missingRaw = parsed.missing ?? null;
+            restored = true;
+          }
+        }
+      } catch {
+        // ignore malformed storage
+      }
+    }
+
     if (!focusId) return;
 
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRe.test(focusId)) {
       toast.error("Invalid deep link", {
         description: `focus=${focusId.slice(0, 20)} is not a task id. Ignoring.`,
       });
-      // Strip the bogus params so a refresh doesn't keep re-firing this toast.
       const next = new URLSearchParams(params);
       next.delete("focus");
       next.delete("missing");
       setParams(next, { replace: true });
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
       return;
     }
 
-    const allowed: Kind[] = ["entity", "notebook", "authority_rule"];
     let missing: Kind = "entity";
     if (missingRaw && (allowed as string[]).includes(missingRaw)) {
       missing = missingRaw as Kind;
     } else if (missingRaw) {
-      // Known param but unknown value — open the dialog on the safe default
-      // and tell the operator what happened.
       toast.warning("Unknown link target", {
         description: `missing=${missingRaw} isn't one of entity/notebook/authority_rule. Defaulting to entity.`,
       });
     }
 
-    // Track the deep-link arrival so /admin analytics can correlate URL opens
-    // with downstream link creations. Coerced fallback (`missing` defaulted to
-    // entity) is also recorded — we want to see those in the funnel too.
+    // Persist the validated pair so a refresh replays it once. Don't
+    // re-arm when we're already replaying — replays must not loop.
+    if (!restored) {
+      try {
+        sessionStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ focus: focusId, missing }),
+        );
+      } catch {
+        // storage may be unavailable (private mode); non-fatal
+      }
+    }
+
     void trackGovernanceDeepLink({
       event_type: "open",
       task_id: focusId,
       missing: missing as "entity" | "notebook" | "authority_rule",
-      source: "deeplink_url",
+      source: restored ? "deeplink_restore" : "deeplink_url",
       payload: missingRaw && missing !== missingRaw ? { coerced_from: missingRaw } : {},
     });
 
-    // Defer so child mounts and the focus listener is wired before we dispatch.
     const t = setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("governance:focus-task", {
-          detail: { taskId: focusId, missing, source: "deeplink_url" },
+          detail: {
+            taskId: focusId,
+            missing,
+            source: restored ? "deeplink_restore" : "deeplink_url",
+          },
         }),
       );
     }, 0);
