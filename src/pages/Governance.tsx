@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { Trash2, Plus, ArrowRight } from "lucide-react";
 import { ClaimsPanel } from "@/components/governance/ClaimsPanel";
 import { TruthConflictsPanel } from "@/components/governance/TruthConflictsPanel";
+import { UncoveredTasksPanel } from "@/components/governance/UncoveredTasksPanel";
 import { W7SignoffChecklist } from "@/components/governance/W7SignoffChecklist";
 
 type Kind = "task" | "notebook" | "entity" | "authority_rule";
