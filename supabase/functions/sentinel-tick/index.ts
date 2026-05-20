@@ -279,7 +279,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
         (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
       ),
-    ];
+    ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
     for (const c of candidates) {
