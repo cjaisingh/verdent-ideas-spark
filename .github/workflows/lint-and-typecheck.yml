@@ -39,5 +39,8 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: no-explicit-any ratchet
+        run: bun run lint:ratchet
+
       - name: Typecheck
         run: bunx tsc --noEmit
