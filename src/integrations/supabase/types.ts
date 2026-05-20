@@ -4369,8 +4369,51 @@ export type Database = {
         }
         Relationships: []
       }
+      postmortem_events: {
+        Row: {
+          action: string
+          actor: string | null
+          after_value: string | null
+          before_value: string | null
+          created_at: string
+          field: string | null
+          id: string
+          postmortem_id: string
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          after_value?: string | null
+          before_value?: string | null
+          created_at?: string
+          field?: string | null
+          id?: string
+          postmortem_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          after_value?: string | null
+          before_value?: string | null
+          created_at?: string
+          field?: string | null
+          id?: string
+          postmortem_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "postmortem_events_postmortem_id_fkey"
+            columns: ["postmortem_id"]
+            isOneToOne: false
+            referencedRelation: "postmortems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       postmortems: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           contributing_factors: Json
           created_at: string
           days_late: number
@@ -4388,6 +4431,8 @@ export type Database = {
           what_changed: string | null
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           contributing_factors?: Json
           created_at?: string
           days_late?: number
@@ -4405,6 +4450,8 @@ export type Database = {
           what_changed?: string | null
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           contributing_factors?: Json
           created_at?: string
           days_late?: number
