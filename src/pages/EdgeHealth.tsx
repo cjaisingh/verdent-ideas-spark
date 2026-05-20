@@ -190,6 +190,9 @@ export default function EdgeHealth() {
               {h}h
             </Button>
           ))}
+          <Button asChild size="sm" variant="outline">
+            <Link to="/admin/sentinel-perf"><Gauge className="h-4 w-4 mr-1" />Sentinel checks</Link>
+          </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
