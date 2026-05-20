@@ -53,7 +53,22 @@ Insert is idempotent via the unique `(subject_type, subject_id)` index. Defaults
 - `inbox_source_silent` (low) — enabled source with zero messages in 14d.
   Dedupe per source per day.
 
+## Lanes
+
+`operator_inbox_sources.lane` and `operator_messages.lane` (default `operator`,
+also `caprica`) split the inbox into two streams. `v_operator_inbox_24h` filters
+to `lane='operator'`; `v_caprica_inbox_24h` exposes the Caprica lane.
+
+## Known gap: image messages
+
+`telegram-webhook` only classifies / routes on `text`. Photo messages land in
+`operator_messages.raw->'message'->'photo'` (Telegram `file_id` array) with
+`text` NULL — the row exists but nothing reads the picture, and the inbox UI
+renders an empty body. Vision branch (download top-res `file_id` → Gemini 2.5
+Flash → store description as `text`, then route as normal) is deferred.
+
 ## Views
 
-- `v_operator_inbox_24h` — last 24h, joined to `operator_inbox_sources` for label.
+- `v_operator_inbox_24h` — last 24h, operator lane, joined to `operator_inbox_sources` for label.
 - `v_operator_inbox_unpromoted` — actionable kinds with `promoted_action_id IS NULL`.
+- `v_caprica_inbox_24h` — last 24h, Caprica lane.
