@@ -103,6 +103,7 @@ export default function OperatorInbox() {
   const promotedFilter = getParam("promoted");
   const windowId = getParam("window");
   const searchDebounced = getParam("q");
+  const laneFilter = getParam("lane");
   const page = Math.max(0, parseInt(getParam("page"), 10) || 0);
 
   const setDirectionFilter = (v: string) => updateParams({ direction: v, page: "0" });
@@ -112,6 +113,7 @@ export default function OperatorInbox() {
   const setPromotedFilter = (v: string | ((prev: string) => string)) =>
     updateParams({ promoted: typeof v === "function" ? v(promotedFilter) : v, page: "0" });
   const setWindowId = (v: string) => updateParams({ window: v, page: "0" });
+  const setLaneFilter = (v: string) => updateParams({ lane: v, page: "0" });
   const setPage = (v: number | ((prev: number) => number)) =>
     updateParams({ page: String(typeof v === "function" ? v(page) : v) });
 
