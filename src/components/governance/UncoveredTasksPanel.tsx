@@ -3,10 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Check, X, ArrowRight, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { trackGovernanceDeepLink } from "@/lib/governance-telemetry";
+import { shortenAppUrl } from "@/lib/short-link";
+
+const SHORT_LINK_PREF_KEY = "governance:short-links";
 
 type Missing = "any" | "entity" | "notebook" | "authority_rule";
 type Row = {
@@ -51,6 +56,22 @@ export function UncoveredTasksPanel() {
   const [days, setDays] = useState<number>(30);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const [useShortLinks, setUseShortLinks] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SHORT_LINK_PREF_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [shortening, setShortening] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHORT_LINK_PREF_KEY, useShortLinks ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [useShortLinks]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,14 +130,33 @@ export function UncoveredTasksPanel() {
       task_id: r.id,
       missing: target,
       source: "uncovered_panel",
+      payload: useShortLinks ? { short: true } : {},
     });
+
+    let toCopy = link;
+    let wasShortened = false;
+    if (useShortLinks) {
+      setShortening(r.id);
+      try {
+        const short = await shortenAppUrl(link);
+        if (short !== link) {
+          toCopy = short;
+          wasShortened = true;
+        }
+      } finally {
+        setShortening(null);
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(link);
-      toast.success("Deep link copied", {
-        description: `Opens task with ${target} target pre-selected`,
+      await navigator.clipboard.writeText(toCopy);
+      toast.success(wasShortened ? "Short link copied" : "Deep link copied", {
+        description: wasShortened
+          ? toCopy.replace(/^https?:\/\//, "")
+          : `Opens task with ${target} target pre-selected`,
       });
     } catch {
-      toast.error("Clipboard blocked", { description: link });
+      toast.error("Clipboard blocked", { description: toCopy });
     }
   };
 
@@ -126,7 +166,20 @@ export function UncoveredTasksPanel() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between gap-3">
           <span>Uncovered shipped tasks</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Switch
+                id="gov-short-links"
+                checked={useShortLinks}
+                onCheckedChange={setUseShortLinks}
+              />
+              <Label
+                htmlFor="gov-short-links"
+                className="text-xs font-normal text-muted-foreground cursor-pointer"
+              >
+                Short links
+              </Label>
+            </div>
             <Badge variant="outline">{rows.length}</Badge>
             <Button size="icon" variant="ghost" onClick={load} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -195,10 +248,15 @@ export function UncoveredTasksPanel() {
                   size="icon"
                   variant="ghost"
                   onClick={(e) => copyLink(r, e)}
-                  title="Copy deep link"
-                  aria-label="Copy deep link"
+                  disabled={shortening === r.id}
+                  title={useShortLinks ? "Copy short link" : "Copy deep link"}
+                  aria-label={useShortLinks ? "Copy short link" : "Copy deep link"}
                 >
-                  <Link2 className="h-4 w-4" />
+                  {shortening === r.id ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4" />
+                  )}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => focus(r)}>
                   Link <ArrowRight className="h-3 w-3 ml-1" />
