@@ -277,6 +277,7 @@ export default function Governance() {
               setOpen={setDialogOpen}
               fromKind={anchorKind}
               fromRef={anchorRef}
+              initialToKind={initialToKind}
               onCreated={() => loadChain(anchorKind, anchorRef)}
             />
           )}
