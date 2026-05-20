@@ -211,14 +211,39 @@ export default function Governance() {
 
   // Honour deep links: ?focus=<taskId>&missing=<entity|notebook|authority_rule>
   // Fires once on mount; the focus handler above takes care of scroll + dialog.
+  // Unknown / malformed values fall back to a safe default and surface a toast
+  // so a stale or hand-edited link still opens AddLinkDialog instead of dying
+  // silently.
   useEffect(() => {
     const focusId = params.get("focus");
     const missingRaw = params.get("missing");
     if (!focusId) return;
+
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRe.test(focusId)) {
+      toast.error("Invalid deep link", {
+        description: `focus=${focusId.slice(0, 20)} is not a task id. Ignoring.`,
+      });
+      // Strip the bogus params so a refresh doesn't keep re-firing this toast.
+      const next = new URLSearchParams(params);
+      next.delete("focus");
+      next.delete("missing");
+      setParams(next, { replace: true });
+      return;
+    }
+
     const allowed: Kind[] = ["entity", "notebook", "authority_rule"];
-    const missing = (allowed as string[]).includes(missingRaw ?? "")
-      ? (missingRaw as Kind)
-      : "entity";
+    let missing: Kind = "entity";
+    if (missingRaw && (allowed as string[]).includes(missingRaw)) {
+      missing = missingRaw as Kind;
+    } else if (missingRaw) {
+      // Known param but unknown value — open the dialog on the safe default
+      // and tell the operator what happened.
+      toast.warning("Unknown link target", {
+        description: `missing=${missingRaw} isn't one of entity/notebook/authority_rule. Defaulting to entity.`,
+      });
+    }
+
     // Defer so child mounts and the focus listener is wired before we dispatch.
     const t = setTimeout(() => {
       window.dispatchEvent(
@@ -232,6 +257,7 @@ export default function Governance() {
     // every time the user changes the anchor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   // Sync URL
   useEffect(() => {
