@@ -233,7 +233,7 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     ctx.attach('lane', source.lane ?? 'operator');
   }
   const incomingLane: 'operator' | 'caprica' =
-    (ctx.get?.('lane') as 'operator' | 'caprica' | undefined) ?? 'operator';
+    (ctx.meta.lane as 'operator' | 'caprica' | undefined) ?? 'operator';
 
   function chatTypeToSource(type: string | undefined): 'dm' | 'group' | 'channel' {
     if (type === 'channel') return 'channel';
