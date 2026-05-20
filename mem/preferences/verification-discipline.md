@@ -35,3 +35,8 @@ Never write "synced to GitHub", "pushed", "CI passed", "deployed to production",
 1. Acknowledge the gap in one sentence.
 2. Fix the offending memory file in the same turn.
 3. If the mistake is a class of error (not a one-off fact), add or update a rule here.
+
+## Plan-before-fix rules
+- **Read live before planning.** First tool call on any "fix findings / triage X" request queries the live source (`sentinel_findings`, `automation_runs`, etc.), never cached state.
+- **Detector-wrong before system-broken.** When a finding fires, default hypothesis is "the detector measures the wrong thing." Cheaper to fix one query than diagnose a phantom outage.
+- **Verify-before-scope.** "Stop on first green" needs a matching "start on first real signal" — confirm the finding reflects reality before scoping a fix.
