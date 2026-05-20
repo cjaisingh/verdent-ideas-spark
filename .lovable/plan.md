@@ -1,78 +1,80 @@
-## Live platform timeline with labelled phases + p95 flagging
+## Goal
 
-A live view of every cron / edge function / sentinel check as it runs, with per-phase labels (AI call, DB scan, lock wait, back-off) and an auto-flag when a step exceeds its rolling p95 baseline.
+Per-sentinel-check performance metrics so you can see which checks are slow, noisy, or backed up — not just the aggregate `compute:run_checks` step that exists today.
 
-### Data
+## What's there now
 
-**New table `automation_steps`** (one row per phase inside a run; complements existing `automation_runs` which holds the parent summary):
-- `id`, `created_at`
-- `run_id` (uuid, nullable FK → `automation_runs.id` for stitching; sometimes the parent row arrives last)
-- `job` (text — same value as `automation_runs.job`, denormalised so we can query without the join)
-- `step_key` (text — stable identifier, e.g. `ai_gateway_call`, `db_scan:slipped_subjects`, `sentinel_check:companion_streams_stalled`)
-- `step_label` (text — human-readable)
-- `phase_kind` (text — `ai_call` | `db_scan` | `lock_wait` | `backoff` | `external_http` | `compute` | `other`)
-- `started_at`, `finished_at` (timestamptz; finished_at null while in-flight)
-- `duration_ms` (int, generated/updated on finish)
-- `status` (`running` | `ok` | `error` | `skipped`)
-- `detail` (jsonb — model name, rows scanned, retry count, error snippet)
-- index on `(job, started_at desc)`, partial index on `(status) where status='running'`
+`sentinel-tick` runs ~28 check functions inside one `recordStep("compute:run_checks", ...)` block. The whole batch shares one `duration_ms`. There's no per-check timing, no per-check candidate count, no queue-depth signal, and `dispatchAlert` retries (if any) aren't counted anywhere.
 
-**New view `v_automation_step_p95_30d`**: per `(job, step_key)`, the p95 `duration_ms` over the trailing 30 days where `status='ok'`. Used by the UI to flag regressions.
+## What this adds
 
-Operator-only RLS via `has_role()`; inserts service-role only; realtime on (for the live page).
+### 1. New table `sentinel_check_runs`
 
-### Shared helper
+One row per (tick, check kind). Operator-only RLS, realtime on.
 
-`supabase/functions/_shared/steps.ts`:
-- `recordStep(sb, { job, run_id?, step_key, step_label, phase_kind, detail? }, fn)` — wraps an async fn, inserts a `running` row before, updates to `ok`/`error` with `finished_at`+`duration_ms`+merged detail after.
-- `beginStep(...)` / `endStep(id, status, detail?)` for cases where the operation can't be wrapped (e.g. fire-and-forget heartbeats).
-- Failures inside `recordStep` never throw to the caller — instrumentation must not break the underlying job.
+| Column | Notes |
+|---|---|
+| `id`, `created_at` | standard |
+| `tick_id uuid` | groups all rows from one tick |
+| `check_kind text` | e.g. `five_xx_spike`, `voice_pipeline_red` — matches existing finding kinds |
+| `duration_ms int` | wall-time of just that check fn |
+| `candidates_emitted int` | findings produced this tick |
+| `alerts_dispatched int` | high/critical alerts fired |
+| `alert_retries int` | retry attempts inside `dispatchAlert` (0 if first try succeeded) |
+| `open_depth_after int` | `count(sentinel_findings where kind=X and status='open')` after persist |
+| `error text` | non-null when the check threw |
 
-### Instrumentation rollout (this PR)
+Indexes: `(check_kind, created_at desc)`, `(tick_id)`.
 
-Wrap the steps that account for visible latency. Each instrumented site = one labelled phase.
+### 2. View `v_sentinel_check_perf_24h`
 
-1. **`sentinel-tick`** — each of the ~15 checks in `checks.ts` becomes a `db_scan` or `compute` step (`step_key='sentinel_check:<name>'`). This is the headline win: today you only see one `automation_runs` row for the whole tick.
-2. **`postmortem-generate`** — `db_scan:slipped_subjects`, `ai_call:gateway` per subject, `db_scan:context` per subject.
-3. **`morning-review`** — top-level aggregator phases (`db_scan:triage`, `db_scan:findings`, `compute:render`, `ai_call:summarise` if present).
-4. **`night-agent-open` / `night-agent-close`** — per-action loop iteration as a step.
-5. **`overnight-phase-runner`** — `lock_wait:claim`, `ai_call:gateway`, `db_scan:write_back`.
+Per `check_kind` over last 24h: `runs`, `errors`, `p50_ms`, `p95_ms`, `max_ms`, `total_candidates`, `total_alerts`, `total_retries`, `avg_open_depth`, `last_run_at`.
 
-Other functions stay unchanged; they can opt in later. Logger middleware is untouched.
+### 3. `sentinel-tick` instrumentation
 
-### UI
+- Add a tiny `timeCheck(kind, fn)` helper that wraps each check call, captures duration + error, accumulates results into both `candidates` (existing flow) and a `perCheck` map.
+- Replace the giant `[...checkX(), ...checkY()]` spread with a loop over an array of `{ kind, fn }` entries so timing is uniform.
+- Instrument `dispatchAlert` to return `{ ok, attempts }` and accumulate `alert_retries` into the per-check tally (attempts − 1 on success, attempts on final failure).
+- After the persist loop, single batched `insert` into `sentinel_check_runs` with one row per check kind, including `open_depth_after` from a grouped count query (`select kind, count(*) from sentinel_findings where status='open' and kind = any($kinds) group by kind`).
+- Keep the existing `compute:run_checks` `automation_steps` row as the umbrella — don't double-record.
 
-**New page `/admin/timeline`** (added to admin nav):
-- Top strip: 3 cards — `Running now` (count + oldest start), `Slowest in last 1h` (top 5 by duration), `Over p95` (count flagged this hour).
-- Main panel: live stream of steps newest first, columns = `Job`, `Step`, `Phase`, `Started`, `Duration` (live ticking for `running`), `Status`, `Detail` (expand). Filters: job, phase_kind, status, "over p95 only".
-- Each row joins to `v_automation_step_p95_30d` client-side; if `duration_ms > p95` (or `now - started_at > p95` for running rows), show an amber chip "p95 was Xms".
-- Realtime subscribe to `automation_steps` inserts/updates with unique channel name per mount.
+### 4. UI: `/admin/sentinel-perf`
 
-**Compact chip on `/morning-review`**: `TimelineNowChip` component showing `running: N · over-p95: M (1h)` linking to `/admin/timeline`. Polls every 30s.
+- Sortable table from `v_sentinel_check_perf_24h`: kind, runs, errors, p50, p95, max, candidates, alerts, retries, open depth, last run.
+- Row click → drawer with last 50 ticks for that kind: tiny inline bar chart of `duration_ms`, list with timestamp / candidates / alerts / retries / error.
+- Highlight rules (visual only, no alerting):
+  - `p95_ms > 500` → amber row
+  - `errors > 0` in window → red row
+  - `avg_open_depth > 10` → amber "backed up" badge
+- Realtime subscribe to `sentinel_check_runs` so the table updates as ticks land.
 
-### Out of scope
+### 5. Surfacing
 
-- No backfill of historical step data — p95 builds from new rows forward.
-- No instrumentation of every edge function — only the 5 listed above. Adding more is a one-line wrap per call site.
-- No alerting / sentinel detector on p95 regression — UI signal only this round.
-- No per-AI-call token breakdown beyond what `ai_usage_log` already stores (separate `task_id` work).
+- Add a "Sentinel checks" tab on `/admin/edge-health` linking to the new page.
+- Add a top-3-slowest-checks line to the existing `TimelineNowChip` block on `/morning-review` (uses `v_sentinel_check_perf_24h`, p95 desc, limit 3).
 
-### Files
+## Out of scope
 
-- migration: `automation_steps` table + RLS + realtime + `v_automation_step_p95_30d` view
-- `supabase/functions/_shared/steps.ts` (new helper)
-- edits to `supabase/functions/{sentinel-tick,postmortem-generate,morning-review,night-agent,overnight-phase-runner}/index.ts` (wrap target phases)
-- `src/pages/AdminTimeline.tsx` (new page)
-- `src/components/timeline/TimelineNowChip.tsx` (Morning Review chip)
-- route registration in `src/App.tsx`
-- `mem/features/automation-steps.md` + `mem/index.md` entry
-- `CHANGELOG.md`
+- No sentinel-on-sentinel: nothing auto-flags a slow check as a finding. Operator interprets.
+- No historical backfill — metrics start from first tick after migration.
+- No per-row DB scan cost — `db_scan:*` aggregates already exist in `automation_steps` and stay as-is.
+- No changes to check logic, thresholds, or alert routing.
 
-### Verification before claiming done
+## Verification
 
-- Migration applied; `read_query` confirms table + view + RLS.
-- Invoke `postmortem-generate` manually; `read_query` confirms ≥1 step row per call with `ok`/`error` status and non-null `duration_ms`.
-- Run `sentinel-tick` once; assert ≥10 step rows tagged `sentinel_check:*`, all terminal, with sensible durations.
-- Load `/admin/timeline`; confirm realtime row appears within 2s of a manual `postmortem-generate` invoke; confirm "over p95" chip doesn't false-fire on the first run (needs baseline).
-- Load `/morning-review`; confirm `TimelineNowChip` renders and link works.
-- Console + network clean.
+1. Migration applied, view returns rows after one tick.
+2. Hand-invoke `sentinel-tick` → confirm ~28 rows in `sentinel_check_runs` sharing one `tick_id`.
+3. Force a check to throw (temporary) → confirm `error` column populated and row still inserted.
+4. `/admin/sentinel-perf` renders, sort + drawer work, realtime row appends on next tick.
+5. Morning Review chip shows top-3 slowest by p95.
+
+## Files
+
+- `supabase/migrations/<ts>_sentinel_check_runs.sql`
+- `supabase/functions/sentinel-tick/index.ts` (refactor checks into table + timing wrapper, instrument dispatchAlert)
+- `supabase/functions/_shared/alerts.ts` or wherever `dispatchAlert` lives — return attempts
+- `src/pages/admin/SentinelPerf.tsx` (new)
+- `src/components/admin/SentinelCheckDrawer.tsx` (new)
+- `src/components/morning-review/TimelineNowChip.tsx` (append slowest-checks line)
+- `src/App.tsx` route
+- `CHANGELOG.md`, `mem://features/sentinel-perf` (new memory)
