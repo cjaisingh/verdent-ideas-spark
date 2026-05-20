@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PostmortemDrawer, type PostmortemRow } from "@/components/postmortems/PostmortemDrawer";
 import { toast } from "sonner";
 
-type Filter = "draft" | "reviewed" | "all";
+type Filter = "draft" | "reviewed" | "archived" | "all";
 
 export default function Postmortems() {
   const [rows, setRows] = useState<PostmortemRow[]>([]);
@@ -71,11 +71,14 @@ export default function Postmortems() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">
-            {filter === "draft" ? "Unreviewed drafts" : filter === "reviewed" ? "Reviewed" : "All"}
+            {filter === "draft" ? "Unreviewed drafts"
+              : filter === "reviewed" ? "Reviewed"
+              : filter === "archived" ? "Archived"
+              : "All"}
             <span className="ml-2 text-muted-foreground text-sm">({filtered.length})</span>
           </CardTitle>
           <div className="flex gap-1">
-            {(["draft","reviewed","all"] as Filter[]).map((f) => (
+            {(["draft","reviewed","archived","all"] as Filter[]).map((f) => (
               <Button
                 key={f}
                 size="sm"
