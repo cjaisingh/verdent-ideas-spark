@@ -190,14 +190,21 @@ export default function Governance() {
     if (anchorRef) loadChain(anchorKind, anchorRef);
   }, [anchorKind, anchorRef]);
 
-  // Listen for "focus task" from UncoveredTasksPanel
+  // Listen for "focus task" from UncoveredTasksPanel or deep-link dispatcher.
+  // Coerces unknown / missing targets to the "entity" default so the dialog
+  // still opens on something useful.
   useEffect(() => {
+    const allowed: Kind[] = ["entity", "notebook", "authority_rule"];
     const onFocus = (e: Event) => {
-      const detail = (e as CustomEvent<{ taskId: string; missing: Kind }>).detail;
+      const detail = (e as CustomEvent<{ taskId?: string; missing?: Kind }>).detail;
       if (!detail?.taskId) return;
+      const safeMissing: Kind =
+        detail.missing && (allowed as string[]).includes(detail.missing)
+          ? detail.missing
+          : "entity";
       setAnchorKind("task");
       setAnchorRef(detail.taskId);
-      setInitialToKind(detail.missing);
+      setInitialToKind(safeMissing);
       setDialogOpen(true);
       setTimeout(() => {
         document
@@ -208,6 +215,7 @@ export default function Governance() {
     window.addEventListener("governance:focus-task", onFocus);
     return () => window.removeEventListener("governance:focus-task", onFocus);
   }, []);
+
 
   // Honour deep links: ?focus=<taskId>&missing=<entity|notebook|authority_rule>
   // Fires once on mount; the focus handler above takes care of scroll + dialog.
