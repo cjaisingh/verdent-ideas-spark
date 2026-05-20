@@ -253,6 +253,7 @@ export default function AdminAiUsage() {
           <TabsTrigger value="ai-calls">AI calls</TabsTrigger>
           <TabsTrigger value="credits">Credits &amp; Usage</TabsTrigger>
           <TabsTrigger value="tool-policy">Tool Policy</TabsTrigger>
+          <TabsTrigger value="mappings">Attribution</TabsTrigger>
         </TabsList>
 
         <TabsContent value="credits" className="mt-6">
@@ -261,6 +262,10 @@ export default function AdminAiUsage() {
 
         <TabsContent value="tool-policy" className="mt-6">
           <ToolPolicyPanel />
+        </TabsContent>
+
+        <TabsContent value="mappings" className="mt-6">
+          <AiModuleMappingsPanel />
         </TabsContent>
 
         <TabsContent value="ai-calls" className="mt-6 space-y-6">
