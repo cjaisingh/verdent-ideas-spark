@@ -70,6 +70,7 @@ import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
 import ReleaseNotes from "./pages/ReleaseNotes";
+import Postmortems from "./pages/Postmortems";
 import NotFound from "./pages/NotFound";
 import ShortLinkResolve from "./pages/ShortLinkResolve";
 import ResizableDemo from "./pages/ResizableDemo";
@@ -149,6 +150,7 @@ const App = () => (
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />
             <Route path="/operator-inbox" element={<OperatorInbox />} />
+            <Route path="/postmortems" element={<Postmortems />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/whats-new" element={<WhatsNew />} />
             <Route path="/release-notes" element={<ReleaseNotes />} />

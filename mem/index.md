@@ -70,3 +70,4 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [Sentinel monitoring coverage](mem://features/sentinel-monitoring-coverage) — SENTINEL_CADENCES must list every essential cron + automation_runs query must filter by .in(job,...) to dodge PostgREST 1000-row cap; telegram_webhook_silent + approvals_stale watch the operator channel
 - [AI Jobs / Ollama worker](mem://features/ai-jobs-ollama) — pull-based queue (ai_jobs/ai_job_results/ai_draft_outputs/ai_workers); 5 edge fns + sentinel checks shipped; UI + worker script still TODO
 - [Per-task cost accounting](mem://features/cost-per-task) — ai_usage_log.task_id+module, v_ai_cost_per_sprint, SprintCostRollup on /master-plan; forward-only attribution
+- [Postmortems](mem://features/postmortems) — auto-postmortem on phase/sprint slip; daily 06:30 UTC cron + /postmortems page; prose only, no enforcement

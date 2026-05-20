@@ -1,70 +1,64 @@
+## Auto-postmortem on schedule slip
 
-## Goal
+Trigger: a roadmap phase or sprint passes its end date without `status ∈ (done, shipped, cancelled)`. A daily cron drafts a postmortem; operator reads it on a new page. Prose only — no enforcement, no auto-detector creation.
 
-Three durable rules + one structural fix, so the retro lessons don't evaporate next session.
+### Data
 
-## 1. Save the retro lessons (memory, not docs)
+New table `postmortems`:
+- `subject_kind` (`'phase' | 'sprint'`), `subject_id` (uuid), `subject_label` (text)
+- `slipped_on` (date — first day past due that we detected)
+- `days_late` (int)
+- `root_cause` (text — AI draft)
+- `contributing_factors` (jsonb array of strings)
+- `timeline` (jsonb — key events: created, last status change, blockers, related sentinel findings, related failed overnight runs)
+- `what_changed` (text — AI draft of what's already been done since the slip)
+- `status` (`'draft' | 'reviewed' | 'archived'`, default `draft`)
+- `created_at`, `reviewed_at`, `reviewed_by`
+- unique `(subject_kind, subject_id, slipped_on)` so one slip → one report
 
-Append to existing `mem/preferences/verification-discipline.md` (already covers sandbox-vs-not; missing the three new lessons):
+Operator-only RLS via `has_role(auth.uid(),'admin')`. Realtime enabled.
 
-- **Read live before planning.** First tool call on any "fix the findings / triage X" request must query the live source (`sentinel_findings`, `automation_runs`, etc.), not summarise cached state.
-- **Detector-wrong before system-broken.** When a finding fires, default hypothesis is "the detector is measuring the wrong thing." Cheaper to fix one query than diagnose a phantom outage.
-- **Verify-before-scope.** "Stop on first green" needs a matching "start on first real signal" — confirm the finding reflects reality before scoping a fix.
+### Cron + edge function
 
-No new file. One file edited. ~15 lines added.
+New edge function `postmortem-generate` (wrapped with `withLogger`, contract under `_shared/contracts/postmortem-generate.ts`):
+1. Query phases + sprints past `ends_on` (or equivalent end-date column — confirm during build) and not done/shipped/cancelled.
+2. For each, skip if a `postmortems` row already exists for `(kind, id, slipped_on=ends_on)`.
+3. Gather context: status history, linked `discussion_actions`, `sentinel_findings` in the period, `roadmap_phase_overnight_runs` failures, `okr_node_events` for the phase's OKR.
+4. Call `pickModel()` (night-cheap policy still applies) via Lovable AI Gateway with a structured-output schema: `{ root_cause, contributing_factors[], what_changed, timeline[] }`.
+5. Insert one `postmortems` row per slip.
 
-## 2. Doc-hygiene rule (new, small)
+New cron `scheduled-postmortem-generate` runs daily 06:30 UTC (after Morning Review at 06:00) using `AWIP_SERVICE_TOKEN`.
 
-New `mem/preferences/doc-hygiene.md`:
+### UI
 
-- `.md` files are reference, not narrative. No session recaps, no "what we did today", no changelog-in-prose.
-- Hard caps: `mem/**` entries ≤ 30 lines; `docs/**` feature docs ≤ 200 lines. Over cap → split or prune.
-- CHANGELOG entries one line each. Release notes go in `src/content/release-notes/`, not docs.
-- Before editing any `.md`, check line count; if near cap, prune stale sections in the same edit.
-- Index (`mem/index.md`) entries one line, ≤ 150 chars (already a rule, restate here).
+New route `/postmortems`:
+- Table of draft + reviewed postmortems, newest first, filter by kind/status.
+- Row click → drawer with full prose (root cause, contributing factors, timeline, what changed) + link back to the phase/sprint.
+- "Mark reviewed" button stamps `reviewed_at`/`reviewed_by`.
+- Count badge on Morning Review row when there are unreviewed drafts.
 
-Add a single line to `mem/index.md` Core: *"Docs are reference, not narrative. Mem ≤30 lines, docs ≤200. Prune in same edit."*
+### Out of scope (per your answers)
 
-## 3. Test-completed-work rule
+- No sentinel detector or rule proposal from postmortems.
+- No automatic discussion_action creation.
+- No migration drafting.
+- Cost-overrun and overnight-failure postmortems — separate future request.
 
-New `mem/preferences/verify-completion.md`:
+### Files
 
-- Definition of done per change type:
-  - **Edge function edit** → `supabase--test_edge_functions` for that function (if test exists) OR a `curl_edge_functions` smoke + log check.
-  - **Migration** → `supabase--read_query` confirming the new shape + one row insert/select round-trip where applicable.
-  - **Detector/sentinel logic** → re-query `sentinel_findings` post-deploy and paste the count.
-  - **UI** → console + network check on the affected route via the preview tools.
-- "Deployed" ≠ "verified." Never claim done from inference.
-- If no automated check is possible, say so explicitly and ask the operator to eyeball.
+- migration: `postmortems` table + RLS + realtime
+- `supabase/functions/_shared/contracts/postmortem-generate.ts`
+- `supabase/functions/postmortem-generate/index.ts`
+- cron registration `scheduled-postmortem-generate`
+- `src/pages/Postmortems.tsx` + route in `App.tsx`
+- `src/components/postmortems/PostmortemDrawer.tsx`
+- Morning Review badge addition
+- `mem/features/postmortems.md` + `mem/index.md` entry
+- `CHANGELOG.md`
 
-## 4. Make the 9 agents binding (the real fix)
+### Verification before claiming done
 
-Today the personas in `docs/agents/team/` only load if I remember to invoke them. Two options — pick one:
-
-**Option A (lightweight, recommended):** Add a triage rule to `mem/index.md` Core that maps request type → required persona to consult before planning. Example:
-- contract/API/schema change → `awip-core-rules` + `event-engineer`
-- sentinel / triage / findings → `sentinel` + `compliance-auditor`
-- new cron/agent loop → `contract-first` checklist + `event-engineer`
-- doc/foundation change → `product-historian`
-- routing logic in Core → `control-plane-operator` (block)
-
-Three lines in Core, no new files. I cite which persona I consulted in the plan.
-
-**Option B (heavier):** Same mapping but as a checklist file `docs/agents/triage-map.md` referenced from Core. More discoverable for other humans/agents, one extra file.
-
-## What I'm NOT doing
-
-- Not touching live sentinel/data this turn.
-- Not creating new agents or personas — the 9 are sufficient, the gap is invocation.
-- Not editing any of the 9 persona files themselves.
-
-## Verification when implemented
-
-- `wc -l mem/preferences/{verification-discipline,doc-hygiene,verify-completion}.md` all ≤ 30.
-- `mem/index.md` Core gains ≤ 3 lines, total Core still scannable.
-- Next session I cite a persona by name in the first plan response touching its domain — if I don't, the rule failed.
-
-## Choice for you
-
-- **A or B** for binding the 9 agents?
-- Anything to add/remove from the three lessons in §1?
+- Migration applied; `read_query` confirms table + RLS.
+- Manually invoke `postmortem-generate` against a synthetic slipped phase; assert row inserted with non-empty `root_cause`.
+- Re-invoke; assert no duplicate (unique constraint holds).
+- Load `/postmortems`; confirm drawer renders and "Mark reviewed" updates the row (network + console clean).
