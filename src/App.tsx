@@ -71,6 +71,7 @@ import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import NotFound from "./pages/NotFound";
+import ShortLinkResolve from "./pages/ShortLinkResolve";
 import ResizableDemo from "./pages/ResizableDemo";
 import RequireAuth from "./components/RequireAuth";
 import OperatorLayout from "./components/OperatorLayout";
@@ -153,6 +154,7 @@ const App = () => (
             <Route path="/release-notes" element={<ReleaseNotes />} />
             <Route path="/approvals/:id" element={<ApprovalDetail />} />
             <Route path="/admin/resizable-demo" element={<ResizableDemo />} />
+            <Route path="/s/:slug" element={<ShortLinkResolve />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
