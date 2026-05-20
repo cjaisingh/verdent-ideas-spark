@@ -46,6 +46,8 @@ const fmtUsd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
 const SprintCostRollup = () => {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [taskRows, setTaskRows] = useState<Record<string, TaskRow[] | "loading" | { error: string }>>({});
 
   useEffect(() => {
     let alive = true;
@@ -60,6 +62,26 @@ const SprintCostRollup = () => {
     })();
     return () => { alive = false; };
   }, []);
+
+  const toggleSprint = async (sprintId: string) => {
+    const next = new Set(expanded);
+    if (next.has(sprintId)) {
+      next.delete(sprintId);
+      setExpanded(next);
+      return;
+    }
+    next.add(sprintId);
+    setExpanded(next);
+    if (taskRows[sprintId] && taskRows[sprintId] !== "loading" && !("error" in (taskRows[sprintId] as object))) return;
+    setTaskRows((s) => ({ ...s, [sprintId]: "loading" }));
+    const { data, error } = await supabase
+      .from("v_ai_cost_per_task")
+      .select("*")
+      .eq("sprint_id", sprintId)
+      .order("cost_usd", { ascending: false });
+    if (error) setTaskRows((s) => ({ ...s, [sprintId]: { error: error.message } }));
+    else setTaskRows((s) => ({ ...s, [sprintId]: (data ?? []) as TaskRow[] }));
+  };
 
   const totals = useMemo(() => {
     if (!rows) return null;
