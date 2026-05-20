@@ -1,74 +1,104 @@
 ## Goal
 
-Make manual governance linking a real workflow, not a hunt-and-peck. The `/governance` page already has anchor selection + `AddLinkDialog` + a coverage rollup, but the operator has no view of *which* shipped tasks are uncovered, so coverage sits at 0%. This change surfaces the gap and turns it into a clickable queue.
+Stop the bleeding on `@typescript-eslint/no-explicit-any` without flipping CI red on day one. Today the rule is `warn` and there are **302 occurrences in `src/`** (eslint count, lower than the 458 grep figure that includes generic angle brackets in strings) tracked by open `discussion_action #20`. We need a ratchet: count can only go *down*, and any file currently at zero must stay at zero — promoted to a hard error per-file.
 
-Scope: UI + one read-only RPC. No changes to `governance_links` schema, RLS, or `governance_coverage`.
+Two-lever approach, both deterministic, both cheap to maintain.
 
 ## What gets built
 
-### 1. New RPC: `governance_uncovered_tasks(_days int, _missing text)`
+### 1. Baseline snapshot — `.lint-baselines/no-explicit-any.json`
 
-Mirrors `governance_coverage` but returns *rows* instead of counts. Operator/admin only (`has_role`), `security definer`, `stable`.
+Generated once by running `bun run lint --format json`, filtering on rule `@typescript-eslint/no-explicit-any`, grouping by `filePath` (relative). Shape:
 
-- `_days` (default 30) — same shipped-in-window filter as `governance_coverage`.
-- `_missing` — one of `'entity' | 'notebook' | 'authority_rule' | 'any'`. Returns shipped tasks that lack at least one link of that kind. `'any'` = missing entity OR notebook OR rule.
+```json
+{
+  "generatedAt": "2026-05-20T…Z",
+  "rule": "@typescript-eslint/no-explicit-any",
+  "total": 302,
+  "files": {
+    "src/components/foo/Bar.tsx": 7,
+    "src/lib/x.ts": 2
+  }
+}
+```
 
-Returns `setof` rows: `{ id uuid, key text, title text, status text, updated_at timestamptz, has_entity bool, has_notebook bool, has_authority_rule bool }` ordered by `updated_at desc`, limit 200.
+Checked in. This is the budget — it can only shrink.
 
-This is the only schema change — a single function, no new table.
+### 2. Ratchet script — `scripts/lint-any-ratchet.ts`
 
-### 2. New component: `UncoveredTasksPanel`
+Bun script. Runs eslint, parses JSON, compares against the baseline:
 
-`src/components/governance/UncoveredTasksPanel.tsx`. Rendered on `/governance` between the Anchor card and the existing Chain card.
+- **Fails (exit 1)** if `total` > baseline.total.
+- **Fails** if any file's count > baseline.files[path] (i.e. regressed in place).
+- **Fails** if a file appears that isn't in baseline AND has ≥1 occurrence (new code introducing `any`).
+- **Passes + prints diff** if counts dropped — and tells the operator: "run `bun run lint:ratchet -- --write` to lower the baseline."
+- `--write` flag: rewrites the JSON with current counts, refusing to *raise* any entry (defence in depth — `--write` shouldn't accidentally enshrine a regression).
 
-- Filter chip row: **Any gap** (default) · **Missing entity** · **Missing notebook** · **Missing rule** · window selector (7d / 30d / 90d).
-- Table: `key — title`, three coverage pills (✓/✗ for entity, notebook, rule), `updated_at` relative.
-- Row click: sets the page anchor to `kind=task, ref=<id>` (reuses existing state), scrolls to the Chain card, and **auto-opens the existing `AddLinkDialog`** with the first missing target kind pre-selected.
-- "Link →" inline button: same behaviour as row click, kept explicit for clarity.
-- Realtime: subscribe to `public.governance_links` (unique per-mount channel) — when a link is added, refetch so the row drops out of the worklist within ~1s.
-- Empty state: "All shipped tasks in the last {N}d are linked. Coverage is healthy."
+Single file, no deps beyond `bun:` builtins. ~120 lines.
 
-### 3. Wire `AddLinkDialog` to accept an initial target kind
+### 3. `eslint.config.js` — promote clean files to `error`
 
-Currently `AddLinkDialog` hard-codes `toKind = "entity"`. Add an optional `initialToKind?: Kind` prop, default `"entity"`. The worklist passes whichever leg is missing first, so one click lands you on the right dropdown.
+After loading `.lint-baselines/no-explicit-any.json` at config time, add a third config block:
 
-Also expose a controlled "open" trigger that hides the built-in `+ Link` button when invoked from the worklist (parent owns the open state — already the case).
+```js
+{
+  files: ALL_TS_FILES_NOT_IN_BASELINE,   // computed from disk + baseline keys
+  rules: { "@typescript-eslint/no-explicit-any": "error" }
+}
+```
 
-### 4. Coverage rollup gets a "Refresh" affordance + delta hint
+So:
+- Files already clean today cannot regress — `error` blocks the PR locally.
+- Files in the baseline keep `warn` (legacy debt).
+- As baseline shrinks via `--write`, more files automatically slide into the `error` bucket. Self-tightening.
 
-Same coverage card as today, but:
-- Add a small **Refresh** button that re-runs `governance_coverage`.
-- Show a one-line subtext: `"{n} task(s) missing an entity link · {m} missing a rule"`, sourced from `governance_uncovered_tasks` counts. This makes the gap legible at a glance even before scrolling to the worklist.
+The baseline file is `import`-able JSON so config stays one statement.
 
-### 5. Lock the workflow into the page header
+### 4. Package script + CI wire-up
 
-Replace the current intro paragraph with two short lines:
+`package.json`:
+```json
+"lint:ratchet": "bun scripts/lint-any-ratchet.ts"
+```
 
-1. "Pick an uncovered task below, then **+ Link** it to the entity it touches and the authority rule that governs it."
-2. Existing "Gaps are the holes W7.2 will close." sentence stays.
+`.github/workflows/lint-and-typecheck.yml` — add one step after `bun run lint`:
+```yaml
+- name: no-explicit-any ratchet
+  run: bun run lint:ratchet
+```
 
-No new docs page; the existing `docs/governance-joins.md` keeps the conceptual reference.
+Same job, no new workflow. Branch-protection requirement on "Lint + Typecheck" already covers it.
+
+### 5. Docs + memory
+
+- `CHANGELOG.md` — Unreleased / Changed: ratchet wired, baseline 302, clean files now `error`.
+- `mem/preferences/lint-policy.md` — currently *referenced* in `mem/index.md` but missing on disk. Create it with the new policy:
+  - Rule stays `warn` globally for backward compat.
+  - Ratchet enforces "never up, only down".
+  - Files at zero are auto-promoted to `error` via baseline diff.
+  - To intentionally lower the baseline after a cleanup: `bun run lint:ratchet -- --write`, commit the JSON.
+- `docs/lint-policy.md` (new, one short page) — same content as the memory, but linked from `AGENTS.md` working agreements.
+- Update `AGENTS.md` working agreements with a bullet: "Don't introduce new `any`. Ratchet fails the build."
 
 ## Technical notes
 
-- New RPC keeps the same `has_role` gate as `governance_coverage` so nothing leaks to non-operators.
-- Worklist query is one RPC call; no joins on the client.
-- All new tables — none. Only the new function. So this is a schema migration containing exactly one `create or replace function`.
-- Realtime channel name: `gov-uncovered-${useId()}` per the realtime naming rule.
-- Reuse `KIND_LABEL`, `RELATIONS`, `AnchorOption`, `AddLinkDialog`, `shortRef` from `Governance.tsx` — extract them to `src/components/governance/types.ts` (cheap shared module) so the worklist can import without circular deps.
+- Ratchet uses the same `eslint .` invocation the lint job already uses — no second compile/load cost beyond eslint itself.
+- `tsx` codemod work for the existing 302 is **out of scope** here — that's `codemod-any-enqueue` + discussion_action #20.
+- The baseline file is *human-readable* so reviews can sanity-check ratchet movements in the diff.
+- No new tables, no edge functions, no migration. Pure repo-config change.
 
 ## Definition of done
 
-- New RPC deployed; calling it as operator returns rows, as anon raises `not authorized`.
-- `/governance` shows the worklist with live count; clicking a row opens `AddLinkDialog` pre-targeted to the missing leg.
-- Linking a task moves the coverage numbers up and removes the row from the worklist (realtime).
-- `mem://features/governance-joins` updated with one line about the worklist surface.
-- `CHANGELOG.md` and `docs/governance-joins.md` get a short note.
-- No TypeScript or lint regressions; no changes to RLS, claims, sentinel, or resolver.
+- `.lint-baselines/no-explicit-any.json` committed with current 302 budget.
+- `bun run lint:ratchet` passes on `main`, exits non-zero when I add a `: any` to a previously-clean file (verified by a throwaway local diff).
+- New step green in `lint-and-typecheck.yml`.
+- `eslint.config.js` error-promotes files not in baseline.
+- `CHANGELOG.md`, `docs/lint-policy.md`, `mem/preferences/lint-policy.md`, `AGENTS.md` updated.
+- `discussion_action #20` gets a note: "Ratchet shipped; cleanup work now reduces baseline numbers — every PR that lowers a count should re-run `lint:ratchet --write`."
 
 ## Out of scope
 
-- Bulk linking (multi-select → one entity). Worth doing later if the queue is consistently long.
-- Auto-suggesting an entity from task title/keywords. Manual-only is the W7.1.5 design.
-- Backfilling links for historical tasks — explicit non-goal per the memory rule "no backfill, no enforcement".
-- Anything touching W7.2 enforcement.
+- Actually deleting any of the 302. Cleanup belongs to `codemod-any-enqueue` + the existing discussion action.
+- Tightening any other ESLint rule (`no-unused-expressions`, `prefer-const`, etc.). Same pattern would apply but is a separate decision.
+- Flipping the global rule to `error`. Not yet — that lands when the baseline hits 0.
+- Edge-function `supabase/functions/*` — already excluded from the lint workflow scope; same exclusion stays. (If we want them too, separate plan.)
