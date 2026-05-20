@@ -252,14 +252,26 @@ export default function Governance() {
       });
     }
 
+    // Track the deep-link arrival so /admin analytics can correlate URL opens
+    // with downstream link creations. Coerced fallback (`missing` defaulted to
+    // entity) is also recorded — we want to see those in the funnel too.
+    void trackGovernanceDeepLink({
+      event_type: "open",
+      task_id: focusId,
+      missing,
+      source: "deeplink_url",
+      payload: missingRaw && missing !== missingRaw ? { coerced_from: missingRaw } : {},
+    });
+
     // Defer so child mounts and the focus listener is wired before we dispatch.
     const t = setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent("governance:focus-task", {
-          detail: { taskId: focusId, missing },
+          detail: { taskId: focusId, missing, source: "deeplink_url" },
         }),
       );
     }, 0);
+
     return () => clearTimeout(t);
     // Mount-only — re-running on every param change would re-open the dialog
     // every time the user changes the anchor.
