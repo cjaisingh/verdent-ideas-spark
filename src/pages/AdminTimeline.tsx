@@ -74,7 +74,7 @@ export default function AdminTimeline() {
     ]);
     setRows((stepsRes.data ?? []) as StepRow[]);
     const m = new Map<string, number>();
-    for (const r of (p95Res.data ?? []) as P95Row[]) {
+    for (const r of ((p95Res.data ?? []) as unknown) as P95Row[]) {
       m.set(`${r.job}|${r.step_key}`, r.p95_ms);
     }
     setP95(m);

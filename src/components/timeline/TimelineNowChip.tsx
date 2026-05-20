@@ -41,11 +41,11 @@ export default function TimelineNowChip() {
       if (cancelled) return;
       setRunning(runningRes.count ?? 0);
       const p95map = new Map<string, number>();
-      for (const r of (p95Res.data ?? []) as P95Row[]) {
+      for (const r of ((p95Res.data ?? []) as unknown) as P95Row[]) {
         p95map.set(`${r.job}|${r.step_key}`, r.p95_ms);
       }
       let over = 0;
-      for (const r of (recentRes.data ?? []) as StepRow[]) {
+      for (const r of ((recentRes.data ?? []) as unknown) as StepRow[]) {
         const p = p95map.get(`${r.job}|${r.step_key}`);
         if (p && r.duration_ms && r.duration_ms > p && (r.duration_ms - p) > 50) over++;
       }
