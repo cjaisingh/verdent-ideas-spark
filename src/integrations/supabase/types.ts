@@ -5452,6 +5452,39 @@ export type Database = {
           },
         ]
       }
+      short_links: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          hit_count: number
+          last_used_at: string | null
+          slug: string
+          target_hash: string
+          target_path: string
+          target_query: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          hit_count?: number
+          last_used_at?: string | null
+          slug: string
+          target_hash: string
+          target_path: string
+          target_query?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          hit_count?: number
+          last_used_at?: string | null
+          slug?: string
+          target_hash?: string
+          target_path?: string
+          target_query?: Json
+        }
+        Relationships: []
+      }
       telegram_gateway_logs: {
         Row: {
           attempt: number
@@ -6828,6 +6861,13 @@ export type Database = {
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
         Returns: undefined
+      }
+      short_link_resolve: {
+        Args: { _slug: string }
+        Returns: {
+          target_path: string
+          target_query: Json
+        }[]
       }
       sign_off_workstream: {
         Args: {
