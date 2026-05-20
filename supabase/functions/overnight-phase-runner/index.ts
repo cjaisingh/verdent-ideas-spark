@@ -164,7 +164,8 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
   }
 }
 
-Deno.serve(withLogger("overnight-phase-runner", async (req) => {
+Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
+  const reqId = ctx.requestId;
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const provided = req.headers.get("x-service-token");
