@@ -217,7 +217,7 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     // are silently dropped and surfaced via sentinel.
     const { data: source } = await supabase
       .from('operator_inbox_sources')
-      .select('chat_id, enabled')
+      .select('chat_id, enabled, lane')
       .eq('chat_id', incomingChatId)
       .maybeSingle();
     if (!source || source.enabled === false) {
@@ -229,7 +229,11 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     }
+    // Stash lane on the request context so downstream insert + routing can read it.
+    ctx.attach('lane', source.lane ?? 'operator');
   }
+  const incomingLane: 'operator' | 'caprica' =
+    (ctx.get?.('lane') as 'operator' | 'caprica' | undefined) ?? 'operator';
 
   function chatTypeToSource(type: string | undefined): 'dm' | 'group' | 'channel' {
     if (type === 'channel') return 'channel';
