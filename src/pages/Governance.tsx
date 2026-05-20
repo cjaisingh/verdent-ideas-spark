@@ -259,7 +259,7 @@ export default function Governance() {
     void trackGovernanceDeepLink({
       event_type: "open",
       task_id: focusId,
-      missing,
+      missing: missing as "entity" | "notebook" | "authority_rule",
       source: "deeplink_url",
       payload: missingRaw && missing !== missingRaw ? { coerced_from: missingRaw } : {},
     });
