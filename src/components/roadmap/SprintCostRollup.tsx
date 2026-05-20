@@ -238,7 +238,7 @@ const SprintCostRollup = () => {
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </TableBody>
