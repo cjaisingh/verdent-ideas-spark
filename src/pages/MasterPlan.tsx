@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft } from "lucide-react";
 import OvernightCandidatesCard from "@/components/roadmap/OvernightCandidatesCard";
 import { OvernightRunControl } from "@/components/roadmap/OvernightRunControl";
+import SprintCostRollup from "@/components/roadmap/SprintCostRollup";
 
 type Phase = { id: string; key: string; title: string; summary: string | null; order: number; status: string };
 type Sprint = { id: string; phase_id: string; key: string; title: string; goal: string | null; order: number; status: string };
