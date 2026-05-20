@@ -156,6 +156,11 @@ const MasterPlan = () => {
         })}
       </section>
 
+      <section id="sprint-cost" className="space-y-2">
+        <h2 className="text-xl font-semibold">Cost effectiveness by sprint</h2>
+        <SprintCostRollup />
+      </section>
+
       <section id="working-agreements" className="space-y-2 pb-12">
         <h2 className="text-xl font-semibold">Working agreements</h2>
         <ul className="text-sm space-y-1 list-disc pl-5 text-foreground/90">
