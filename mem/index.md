@@ -19,7 +19,7 @@ Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔author
 ## Memories
 - [Ontology](mem://features/ontology) — 11 canonical entities with lifecycle/ownership/audit; source docs/ontology.md, surface /ontology
 - [Decision Authority (W7.1)](mem://features/decision-authority) — decision_authorities table + resolve_truth(); operator>ai default, git-versioned rules, read-only card on /ontology
-- [Governance Joins (W7.1.5)](mem://features/governance-joins) — governance_links + governance_chain + /governance page connecting tasks↔notebooks↔entities↔rules
+- [Governance Joins (W7.1.5)](mem://features/governance-joins) — links + chain + coverage + uncovered-tasks worklist on /governance (click → auto-opens AddLinkDialog on missing leg)
 - [Claims pipeline (W7.2)](mem://features/claims-pipeline) — claims/claim_events tables, real resolve_truth winner selection, truth_conflicts view, claims-ingest edge fn, ClaimsPanel on /governance, truth_conflicts_unresolved sentinel
 - [Automation jobs](mem://features/automation) — cron cadences, tables, alert webhook contract
 - [Doc structure](mem://preferences/docs) — where to add docs and how to update README + CHANGELOG

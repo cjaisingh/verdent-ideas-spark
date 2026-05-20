@@ -1,68 +1,74 @@
 ## Goal
 
-Surface unresolved rows from `public.truth_conflicts` directly on `/governance` so the operator can see every tie at a glance, jump straight into the existing `ClaimsPanel` with the row pre-filled, and file a tie-breaking claim without copy-pasting UUIDs.
+Make manual governance linking a real workflow, not a hunt-and-peck. The `/governance` page already has anchor selection + `AddLinkDialog` + a coverage rollup, but the operator has no view of *which* shipped tasks are uncovered, so coverage sits at 0%. This change surfaces the gap and turns it into a clickable queue.
 
-Scope: UI only. No schema changes, no new edge functions, no change to the sentinel check or resolver.
+Scope: UI + one read-only RPC. No changes to `governance_links` schema, RLS, or `governance_coverage`.
 
 ## What gets built
 
-### 1. `TruthConflictsPanel` (new component)
+### 1. New RPC: `governance_uncovered_tasks(_days int, _missing text)`
 
-`src/components/governance/TruthConflictsPanel.tsx`
+Mirrors `governance_coverage` but returns *rows* instead of counts. Operator/admin only (`has_role`), `security definer`, `stable`.
 
-- Reads `public.truth_conflicts` via supabase client (RLS already gates by `has_role`).
-- Renders a card titled **"Unresolved truth conflicts"** with:
-  - Count badge (severity-tinted: ≥5 destructive, ≥2 amber, else muted — mirrors sentinel bands).
-  - Refresh button + realtime subscription on `public.claims` (unique per-mount channel name, per the realtime naming rule) so the list updates when a claim is filed/voided.
-  - Empty state: "No competing claims within 10%. Truth is unambiguous."
-- Table/list of rows, each showing:
-  - `entity.field` (mono)
-  - `entity_id` (short, with copy button)
-  - top vs next: two pills (`source` + `score`), separated by `vs`
-  - Score-gap percentage (small muted text)
-  - **Resolve →** action button
+- `_days` (default 30) — same shipped-in-window filter as `governance_coverage`.
+- `_missing` — one of `'entity' | 'notebook' | 'authority_rule' | 'any'`. Returns shipped tasks that lack at least one link of that kind. `'any'` = missing entity OR notebook OR rule.
 
-### 2. Wire the action into `ClaimsPanel`
+Returns `setof` rows: `{ id uuid, key text, title text, status text, updated_at timestamptz, has_entity bool, has_notebook bool, has_authority_rule bool }` ordered by `updated_at desc`, limit 200.
 
-`ClaimsPanel` already drives state from local `entity` / `entityId` / `field`. Lift those to URL params so the triage panel can deep-link.
+This is the only schema change — a single function, no new table.
 
-- `ClaimsPanel` reads/writes `?claim_entity=&claim_id=&claim_field=` on mount and on change.
-- Auto-runs `resolve()` when all three are present in the URL and `entity_id` is a valid UUID.
-- Pre-selects `source = operator` and pre-fills the **Note** with `"Tie-breaker for {top_source} vs {next_source}"` when arriving from the triage row.
-- Scrolls the claims card into view after navigation.
+### 2. New component: `UncoveredTasksPanel`
 
-### 3. Place the panel on `/governance`
+`src/components/governance/UncoveredTasksPanel.tsx`. Rendered on `/governance` between the Anchor card and the existing Chain card.
 
-In `src/pages/Governance.tsx`, render `<TruthConflictsPanel />` directly above `<ClaimsPanel />`. Keep `W7SignoffChecklist` where it is.
+- Filter chip row: **Any gap** (default) · **Missing entity** · **Missing notebook** · **Missing rule** · window selector (7d / 30d / 90d).
+- Table: `key — title`, three coverage pills (✓/✗ for entity, notebook, rule), `updated_at` relative.
+- Row click: sets the page anchor to `kind=task, ref=<id>` (reuses existing state), scrolls to the Chain card, and **auto-opens the existing `AddLinkDialog`** with the first missing target kind pre-selected.
+- "Link →" inline button: same behaviour as row click, kept explicit for clarity.
+- Realtime: subscribe to `public.governance_links` (unique per-mount channel) — when a link is added, refetch so the row drops out of the worklist within ~1s.
+- Empty state: "All shipped tasks in the last {N}d are linked. Coverage is healthy."
+
+### 3. Wire `AddLinkDialog` to accept an initial target kind
+
+Currently `AddLinkDialog` hard-codes `toKind = "entity"`. Add an optional `initialToKind?: Kind` prop, default `"entity"`. The worklist passes whichever leg is missing first, so one click lands you on the right dropdown.
+
+Also expose a controlled "open" trigger that hides the built-in `+ Link` button when invoked from the worklist (parent owns the open state — already the case).
+
+### 4. Coverage rollup gets a "Refresh" affordance + delta hint
+
+Same coverage card as today, but:
+- Add a small **Refresh** button that re-runs `governance_coverage`.
+- Show a one-line subtext: `"{n} task(s) missing an entity link · {m} missing a rule"`, sourced from `governance_uncovered_tasks` counts. This makes the gap legible at a glance even before scrolling to the worklist.
+
+### 5. Lock the workflow into the page header
+
+Replace the current intro paragraph with two short lines:
+
+1. "Pick an uncovered task below, then **+ Link** it to the entity it touches and the authority rule that governs it."
+2. Existing "Gaps are the holes W7.2 will close." sentence stays.
+
+No new docs page; the existing `docs/governance-joins.md` keeps the conceptual reference.
 
 ## Technical notes
 
-- Read shape from the existing view:
-  ```ts
-  type Row = {
-    entity: string;
-    entity_id: string;
-    field: string;
-    top_source: string | null;
-    top_score: number | null;
-    next_source: string | null;
-    next_score: number | null;
-  };
-  ```
-- Sort client-side by `(top_score - next_score)/top_score` ascending (tightest tie first), then by entity.
-- Realtime: `supabase.channel(\`gov-conflicts-${useId()}\`)` listening to `postgres_changes` on `public.claims`, refetch on any event. Conflicts only change when claims do.
-- No new migration — `truth_conflicts` view + `claims` RLS are already in place.
-- No change to `sentinel-tick/checks.ts` or `resolve_truth`.
+- New RPC keeps the same `has_role` gate as `governance_coverage` so nothing leaks to non-operators.
+- Worklist query is one RPC call; no joins on the client.
+- All new tables — none. Only the new function. So this is a schema migration containing exactly one `create or replace function`.
+- Realtime channel name: `gov-uncovered-${useId()}` per the realtime naming rule.
+- Reuse `KIND_LABEL`, `RELATIONS`, `AnchorOption`, `AddLinkDialog`, `shortRef` from `Governance.tsx` — extract them to `src/components/governance/types.ts` (cheap shared module) so the worklist can import without circular deps.
 
 ## Definition of done
 
-- New panel renders on `/governance`, shows live count, empty state works.
-- Clicking **Resolve →** scrolls to `ClaimsPanel` with entity/id/field pre-filled and the resolver auto-run.
-- Filing an operator claim that breaks the tie causes the conflict row to disappear from the panel within ~1s (via realtime).
-- No TypeScript or lint regressions.
-- `mem://features/claims-pipeline` gets a one-line update noting the new triage surface.
+- New RPC deployed; calling it as operator returns rows, as anon raises `not authorized`.
+- `/governance` shows the worklist with live count; clicking a row opens `AddLinkDialog` pre-targeted to the missing leg.
+- Linking a task moves the coverage numbers up and removes the row from the worklist (realtime).
+- `mem://features/governance-joins` updated with one line about the worklist surface.
+- `CHANGELOG.md` and `docs/governance-joins.md` get a short note.
+- No TypeScript or lint regressions; no changes to RLS, claims, sentinel, or resolver.
 
 ## Out of scope
 
-- Bulk resolve, inline-claim form on the triage row, sentinel UI changes, paging — single-list view is enough at the expected volumes (sentinel goes `high` at ≥5).
-- Any change to the 10% threshold or scoring rules.
+- Bulk linking (multi-select → one entity). Worth doing later if the queue is consistently long.
+- Auto-suggesting an entity from task title/keywords. Manual-only is the W7.1.5 design.
+- Backfilling links for historical tasks — explicit non-goal per the memory rule "no backfill, no enforcement".
+- Anything touching W7.2 enforcement.
