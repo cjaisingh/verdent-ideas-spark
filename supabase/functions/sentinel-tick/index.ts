@@ -48,10 +48,14 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
   };
 
   if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await recordRun("error", 401, "Missing auth.");
+    // Record as "rejected", not "error" — these are hostile/wrong callers,
+    // not job failures. job_error_rate filters on status === "error" only,
+    // so unauthorized hits no longer pollute the error rate.
+    await recordRun("rejected", 401, "Missing auth.");
     await dispatchAlert(sb, "sentinel-tick", "auth_failed", "sentinel-tick unauthorized");
     return json({ error: "unauthorized" }, 401);
   }
+
 
   try {
     const now = new Date();
@@ -131,11 +135,13 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .eq("function_name", "telegram-webhook")
         .order("created_at", { ascending: false })
         .limit(1).maybeSingle(),
-      // Approvals: latest row regardless of status. Silence here means the
-      // operator approval channel is broken upstream.
+      // Approvals: oldest PENDING row. An empty queue is not a fire — only
+      // pending requests that have aged past threshold indicate a broken
+      // operator channel (or a delinquent operator).
       sb.from("approval_queue")
         .select("created_at")
-        .order("created_at", { ascending: false })
+        .eq("status", "pending")
+        .order("created_at", { ascending: true })
         .limit(1).maybeSingle(),
       // Detector-of-the-detector: most recent ok run of secrets-health-check.
       sb.from("automation_runs")
@@ -240,7 +246,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
       // 12h: operator sleeps; 6h fired every morning before first message.
       ...checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null, 12),
-      // 168h (1 week): approvals are batched, not continuous; 72h fired every quiet week.
+      // 168h (1 week): fires only if a PENDING approval has been aging past threshold.
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null, 168),
       ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),

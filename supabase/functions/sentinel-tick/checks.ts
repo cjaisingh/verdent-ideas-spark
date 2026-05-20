@@ -162,12 +162,16 @@ export function checkJobErrorRate(
     const ok24 = last24.filter((r) => r.status === "ok");
     const err1h = err24.filter((r) => +new Date(r.created_at) >= since1h);
 
+    // Require RECENT errors. A 24h spike with zero errors in the last hour is
+    // a stale rotation aftershock, not an active fire — let it decay silently.
     let sev: FindingCandidate["severity"] | null = null;
     let reason = "";
-    if (err24.length >= 1 && ok24.length === 0) {
+    if (err1h.length >= 5) {
+      sev = "high"; reason = `${err1h.length} errors in last hour`;
+    } else if (err24.length >= 20 && err1h.length >= 1) {
+      sev = "high"; reason = `${err24.length} errors in last 24h (${err1h.length} in last hour)`;
+    } else if (err1h.length >= 1 && ok24.length === 0) {
       sev = "high"; reason = `${err24.length} error(s) and 0 successes in last 24h`;
-    } else if (err24.length >= 5) {
-      sev = "high"; reason = `${err24.length} errors in last 24h`;
     } else if (err1h.length >= 2) {
       sev = "medium"; reason = `${err1h.length} errors in last hour`;
     }
@@ -524,16 +528,17 @@ export function checkWhatsNewDraftsStale(
     now.getTime(),
   );
   const ageDays = (now.getTime() - oldest) / (24 * 3600_000);
-  const tooMany = drafts.length > 20;
-  const tooOld = ageDays > 7;
-  if (!tooMany && !tooOld) return [];
+  // Drop the volume threshold: the system can generate >20 drafts/day on its
+  // own, so `tooMany` is just noise. Only AGE indicates a real review backlog.
+  const tooOld = ageDays > 14;
+  if (!tooOld) return [];
   const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
   return [{
     kind: "whats_new_drafts_stale",
     severity: "medium",
     summary:
-      `What's New: ${drafts.length} unreviewed draft${drafts.length === 1 ? "" : "s"}` +
-      (tooOld ? `, oldest ${Math.floor(ageDays)}d old` : "") + ".",
+      `What's New: ${drafts.length} unreviewed draft${drafts.length === 1 ? "" : "s"}, ` +
+      `oldest ${Math.floor(ageDays)}d old.`,
     dedupe_key: `whats_new_drafts_stale:${dayBucket}`,
     subject_ref: {},
     payload: { drafts: drafts.length, oldest_age_days: Math.floor(ageDays) },
@@ -956,30 +961,27 @@ export function checkTelegramWebhookSilent(
 }
 
 /**
- * Approvals staleness. Operator approval channel quiet for too long
- * usually means upstream (Telegram, awip-api) is silently dropping
- * requests. Fires when no new approval_queue row in N hours.
- *
- * Threshold: 72h → medium. Pure-quiet window in practice rarely exceeds
- * 48h; 72h means the channel is broken, not just unused.
+ * Approvals staleness. Caller must pass the `created_at` of the OLDEST
+ * PENDING row in `approval_queue` (not the latest of any status). Empty
+ * pending queue → caller passes null → no finding. Pending row older than
+ * threshold → operator approval channel may be broken or operator delinquent.
  */
 export function checkApprovalsStale(
   now: Date,
-  lastCreatedAt: string | null,
+  oldestPendingCreatedAt: string | null,
   staleHours = 72,
 ): FindingCandidate[] {
-  const ageMs = lastCreatedAt ? now.getTime() - +new Date(lastCreatedAt) : Infinity;
+  if (!oldestPendingCreatedAt) return [];
+  const ageMs = now.getTime() - +new Date(oldestPendingCreatedAt);
   const thresholdMs = staleHours * 3600_000;
   if (ageMs <= thresholdMs) return [];
   return [{
     kind: "approvals_stale",
     severity: "medium",
-    summary: `No new approvals in ${
-      isFinite(ageMs) ? Math.round(ageMs / 3600_000) + "h" : "ever"
-    } (threshold ${staleHours}h). Operator approval channel may be broken.`,
+    summary: `Oldest pending approval is ${Math.round(ageMs / 3600_000)}h old (threshold ${staleHours}h). Operator approval channel may be broken.`,
     dedupe_key: `approvals_stale`,
     subject_ref: { table: "approval_queue" },
-    payload: { last_created_at: lastCreatedAt, stale_hours_threshold: staleHours },
+    payload: { oldest_pending_created_at: oldestPendingCreatedAt, stale_hours_threshold: staleHours },
   }];
 }
 
