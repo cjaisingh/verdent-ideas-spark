@@ -92,6 +92,85 @@ function daysBetween(end: string, today: string): number {
   return Math.max(0, Math.round((b - a) / 86400000));
 }
 
+async function gatherCostSpikes(
+  sb: ReturnType<typeof createClient>,
+  sinceIso: string,
+  endsOn: string,
+): Promise<EvidenceItem[]> {
+  // Daily $ spend in the slip window; flag any day above 2× median.
+  const { data: rows } = await sb
+    .from("ai_usage_log")
+    .select("created_at,cost_usd")
+    .gte("created_at", sinceIso)
+    .lte("created_at", endsOn + "T23:59:59Z")
+    .limit(5000);
+  const byDay = new Map<string, number>();
+  for (const r of (rows ?? []) as Array<{ created_at: string; cost_usd: number | null }>) {
+    const d = (r.created_at ?? "").slice(0, 10);
+    if (!d) continue;
+    byDay.set(d, (byDay.get(d) ?? 0) + Number(r.cost_usd ?? 0));
+  }
+  if (byDay.size < 3) return [];
+  const sorted = [...byDay.values()].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  if (median <= 0) return [];
+  const out: EvidenceItem[] = [];
+  for (const [day, cost] of byDay) {
+    if (cost >= median * 2 && cost >= 0.5) {
+      out.push({
+        at: `${day}T12:00:00Z`,
+        kind: "cost_spike",
+        summary: `AI spend $${cost.toFixed(2)} on ${day} (median in window $${median.toFixed(2)}).`,
+        ref: { day, cost_usd: cost, median_usd: median },
+      });
+    }
+  }
+  return out;
+}
+
+async function gatherLogErrors(
+  sb: ReturnType<typeof createClient>,
+  sinceIso: string,
+): Promise<EvidenceItem[]> {
+  const { data: rows } = await sb
+    .from("edge_request_logs")
+    .select("function_name,status_code,error_message,created_at,request_id")
+    .gte("created_at", sinceIso)
+    .gte("status_code", 500)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return ((rows ?? []) as Array<{
+    function_name: string; status_code: number; error_message: string | null;
+    created_at: string; request_id: string | null;
+  }>).map((r) => ({
+    at: r.created_at,
+    kind: "log_error",
+    summary: `${r.function_name} returned ${r.status_code}${r.error_message ? `: ${r.error_message.slice(0, 140)}` : ""}`,
+    ref: { function_name: r.function_name, status_code: r.status_code, request_id: r.request_id },
+  }));
+}
+
+async function gatherAutomationFailures(
+  sb: ReturnType<typeof createClient>,
+  sinceIso: string,
+): Promise<EvidenceItem[]> {
+  const { data: rows } = await sb
+    .from("automation_runs")
+    .select("job,status,status_code,message,created_at")
+    .gte("created_at", sinceIso)
+    .eq("status", "error")
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return ((rows ?? []) as Array<{
+    job: string; status: string; status_code: number | null; message: string | null; created_at: string;
+  }>).map((r) => ({
+    at: r.created_at,
+    kind: "automation_failure",
+    summary: `${r.job} errored${r.status_code ? ` (${r.status_code})` : ""}${r.message ? `: ${r.message.slice(0, 140)}` : ""}`,
+    ref: { job: r.job, status_code: r.status_code },
+  }));
+}
+
 async function buildInput(
   sb: ReturnType<typeof createClient>,
   s: SubjectRow,
@@ -140,6 +219,40 @@ async function buildInput(
     .order("created_at", { ascending: false })
     .limit(25);
   ctx.linkedActions = (actions ?? []) as PostmortemInput["context"]["linkedActions"];
+
+  // Roll everything into a single chronological evidence array.
+  const evidence: EvidenceItem[] = [];
+  for (const f of ctx.sentinelFindings ?? []) {
+    evidence.push({
+      at: f.first_seen_at,
+      kind: "sentinel_finding",
+      summary: `[${f.severity}] ${f.kind}: ${f.summary}`,
+      ref: { id: f.id, kind: f.kind, severity: f.severity },
+    });
+  }
+  for (const r of ctx.failedOvernightRuns ?? []) {
+    evidence.push({
+      at: r.requested_at,
+      kind: "failed_run",
+      summary: `Overnight run ${r.status}${r.error ? `: ${r.error.slice(0, 140)}` : ""}`,
+      ref: { id: r.id, status: r.status },
+    });
+  }
+  for (const a of ctx.linkedActions ?? []) {
+    evidence.push({
+      at: a.created_at,
+      kind: "discussion_action",
+      summary: `[${a.priority}] ${a.title} (${a.status})`,
+      ref: { id: a.id, status: a.status, priority: a.priority },
+    });
+  }
+  // Best-effort: ignore failures of these auxiliary fetches.
+  try { evidence.push(...await gatherCostSpikes(sb, sinceIso, s.ends_on)); } catch (e) { console.warn("cost spikes failed", e); }
+  try { evidence.push(...await gatherLogErrors(sb, sinceIso)); } catch (e) { console.warn("log errors failed", e); }
+  try { evidence.push(...await gatherAutomationFailures(sb, sinceIso)); } catch (e) { console.warn("automation failures failed", e); }
+
+  evidence.sort((a, b) => a.at.localeCompare(b.at));
+  ctx.evidence = evidence.slice(0, 80); // keep prompt budget sane
 
   return {
     subject: {
