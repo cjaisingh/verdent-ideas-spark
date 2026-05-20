@@ -15,6 +15,7 @@ import {
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
+import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -69,12 +70,18 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     const since24h = new Date(now.getTime() - 24 * 3600_000).toISOString();
     const since5mAgo = new Date(now.getTime() - 5 * 60_000).toISOString();
 
-    const truthConflictsRes = await sb.from("truth_conflicts")
-      .select("entity,entity_id,field,top_source,next_source").limit(200);
+    const truthConflictsRes = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:truth_conflicts",
+      step_label: "Scan truth_conflicts view", phase_kind: "db_scan",
+    }, () => sb.from("truth_conflicts")
+      .select("entity,entity_id,field,top_source,next_source").limit(200));
 
     // Budget projection signals + state
     const ym = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes, runwayRes, snapshotAgeRes] = await Promise.all([
+    const [budgetSignalsRes, budgetSettingsRes, budgetAlertsRes, runwayRes, snapshotAgeRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:budget_signals",
+      step_label: "Gather budget + credit signals", phase_kind: "db_scan",
+    }, () => Promise.all([
       sb.from("v_tool_policy_signals").select("budget,burn_7d_per_day,projected_month_end").maybeSingle(),
       sb.from("credit_settings")
         .select("operator_telegram_chat_id,alerts_enabled")
@@ -82,10 +89,14 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       sb.from("credit_alerts").select("year_month,threshold_pct,kind").eq("year_month", ym),
       sb.from("v_credit_runway").select("balance,as_of,estimated_balance_now,burn_per_day_21d,days_runway_21d,runway_exhaustion_date_21d").maybeSingle(),
       sb.from("v_credit_snapshot_latest_age").select("latest_as_of,minutes_since_latest,snapshots_24h,entries_since_latest").maybeSingle(),
-    ]);
+    ]));
 
     const monitoredJobs = Object.keys(SENTINEL_CADENCES);
-    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes, lastSecretsOkRes, authFailLogRes] = await Promise.all([
+    const [runsRes, edgeRes, voiceEdgeRes, secretsRes, auditRes, feRes, cliRes, allowRes, draftRes, lintRes, stalledStreamsRes, heygenFailedRes, tgWebhookRes, lastApprovalRes, lastSecretsOkRes, authFailLogRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:monitored_signals",
+      step_label: "Gather runs/edge/secrets/audit/lint/streams", phase_kind: "db_scan",
+      detail: { batch_size: 16 },
+    }, () => Promise.all([
       // Filter to monitored jobs only. Without this filter, high-frequency jobs
       // like automation-auth-monitor (every 15min × 15d = 1440 rows) blow past
       // PostgREST's default 1000-row cap and push lower-volume jobs out of the
@@ -154,7 +165,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .select("job,reason,created_at")
         .eq("reason", "auth_failed")
         .gte("created_at", since60m).limit(500),
-    ]);
+    ]));
 
     // Slice 1: reclaim stalled night workers (10-min staleness threshold).
     let reclaimResult: Record<string, number> = {};
@@ -172,15 +183,21 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       console.error("reclaim_stale_ai_jobs failed", e);
     }
 
-    const [aiJobsRes, aiWorkersRes, aiQueueRes] = await Promise.all([
+    const [aiJobsRes, aiWorkersRes, aiQueueRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:ai_workers",
+      step_label: "Scan AI jobs + workers + queue", phase_kind: "db_scan",
+    }, () => Promise.all([
       sb.from("ai_jobs").select("id,kind,attempts,heartbeat_at,claimed_at").eq("status","claimed").limit(200),
       sb.from("ai_workers").select("name,enabled,last_seen_at").limit(50),
       sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
-    ]);
+    ]));
 
     // Operator Inbox signals.
     const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
-    const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await Promise.all([
+    const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:inbox_signals",
+      step_label: "Scan operator inbox signals", phase_kind: "db_scan",
+    }, () => Promise.all([
       sb.from("ai_usage_log")
         .select("status,created_at")
         .eq("job", "route-operator-message:inbox-kind")
@@ -195,7 +212,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
         .gte("created_at", since14d)
         .not("chat_id", "is", null)
         .limit(5000),
-    ]);
+    ]));
 
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
