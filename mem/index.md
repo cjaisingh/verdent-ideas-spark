@@ -38,7 +38,7 @@ Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔author
 - [AWIP Reviews](mem://features/awip-reviews) — Mon 05:30 UTC pull of weekly external reviews → RAG + actions + sentinel
 - [Review cadence](mem://preferences/review-cadence) — full per-PR/daily/weekly/monthly/quarterly cadence map (cite this when asked "how often is X reviewed?")
 - [CI/CD hardening (W6)](mem://preferences/ci-cd-hardening) — workflow inventory + branch-protection checklist for `main`
-- [Lint policy](mem://preferences/lint-policy) — `no-explicit-any` is warn, not error; gated by discussion_action #20 cleanup
+- [Lint policy](mem://preferences/lint-policy) — `no-explicit-any` ratcheted via `.lint-baselines/no-explicit-any.json`; clean files auto-promoted to error; cleanup tracked by action #20
 - [Verification discipline](mem://preferences/verification-discipline) — what is/isn't verifiable from the sandbox + required phrasing for unverifiable state
 - [AWIP Companion](mem://features/companion) — `/companion` browser chat (Ollama + RAG) and Rork iPhone surface; Gemini TTS is the default voice
 - [Gemini TTS](mem://features/gemini-tts) — `gemini-tts` edge function, 8 voices, audio/wav, ai_usage_log, used by Rork iPhone app
