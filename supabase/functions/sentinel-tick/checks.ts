@@ -960,19 +960,18 @@ export function checkTelegramWebhookSilent(
 }
 
 /**
- * Approvals staleness. Operator approval channel quiet for too long
- * usually means upstream (Telegram, awip-api) is silently dropping
- * requests. Fires when no new approval_queue row in N hours.
- *
- * Threshold: 72h → medium. Pure-quiet window in practice rarely exceeds
- * 48h; 72h means the channel is broken, not just unused.
+ * Approvals staleness. Caller must pass the `created_at` of the OLDEST
+ * PENDING row in `approval_queue` (not the latest of any status). Empty
+ * pending queue → caller passes null → no finding. Pending row older than
+ * threshold → operator approval channel may be broken or operator delinquent.
  */
 export function checkApprovalsStale(
   now: Date,
-  lastCreatedAt: string | null,
+  oldestPendingCreatedAt: string | null,
   staleHours = 72,
 ): FindingCandidate[] {
-  const ageMs = lastCreatedAt ? now.getTime() - +new Date(lastCreatedAt) : Infinity;
+  if (!oldestPendingCreatedAt) return [];
+  const ageMs = now.getTime() - +new Date(oldestPendingCreatedAt);
   const thresholdMs = staleHours * 3600_000;
   if (ageMs <= thresholdMs) return [];
   return [{
