@@ -83,6 +83,7 @@ export default function Governance() {
   const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [initialToKind, setInitialToKind] = useState<Kind>("entity");
 
   // Load anchor options when kind changes
   useEffect(() => {
