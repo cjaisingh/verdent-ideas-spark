@@ -230,7 +230,9 @@ export const SENTINEL_CADENCES: Record<string, number> = {
   "nightly-rollup-analytics": 24 * 60,
   "ingest-external-data": 24 * 60,
   "cache-warm": 24 * 60,
-  "app-walkthrough": 24 * 60,
+  // NOTE: app-walkthrough writes to walkthrough_runs, not automation_runs —
+  // monitor via its own table, not the cron-silence sample. Same for
+  // ci-status-sync-30m (its rows live in discussion_actions ci_* columns).
   "overnight-prequeue": 24 * 60,
   "overnight-recommender": 24 * 60,
   "record-test-run": 24 * 60,
