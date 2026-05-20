@@ -222,13 +222,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
     // lessons-synthesize) and produced false-positive cron_silence findings.
     // v_automation_runs_latest_per_job returns at most one row per job, so
     // the sample is bounded by job count, not row count.
-    const { data: latestPerJob } = await sb
+    const { data: latestPerJob } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:latest_per_job",
+      step_label: "Scan latest run per monitored job", phase_kind: "db_scan",
+    }, () => sb
       .from("v_automation_runs_latest_per_job")
       .select("job,id,status,created_at")
-      .in("job", Object.keys(SENTINEL_CADENCES));
+      .in("job", Object.keys(SENTINEL_CADENCES)));
 
-    const candidates: FindingCandidate[] = [
-      ...checkCronSilence(now, SENTINEL_CADENCES, (latestPerJob ?? []) as typeof runs),
+    const candidates: FindingCandidate[] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "compute:run_checks",
+      step_label: "Run all in-memory sentinel checks", phase_kind: "compute",
+      detail: { checks: 28 },
+    }, async () => [
       ...checkFiveXxSpike(now, 15, edgeLogs),
       ...checkEdgeFunctionErrorRate(now, 30, edgeLogs),
       ...checkClientTransportErrors(now, 30, cliRes.data ?? []),
