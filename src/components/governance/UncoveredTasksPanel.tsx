@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, X, ArrowRight, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { trackGovernanceDeepLink } from "@/lib/governance-telemetry";
 
 type Missing = "any" | "entity" | "notebook" | "authority_rule";
 type Row = {
