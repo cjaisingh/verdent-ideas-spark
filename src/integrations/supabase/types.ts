@@ -279,6 +279,94 @@ export type Database = {
           },
         ]
       }
+      ai_module_mappings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: string
+          module: string
+          notes: string | null
+          pattern: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module: string
+          notes?: string | null
+          pattern: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          module?: string
+          notes?: string | null
+          pattern?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ai_module_task_pins: {
+        Row: {
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          id: string
+          module: string
+          notes: string | null
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          module: string
+          notes?: string | null
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          module?: string
+          notes?: string | null
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_module_task_pins_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_task_outcome_health"
+            referencedColumns: ["task_id"]
+          },
+          {
+            foreignKeyName: "ai_module_task_pins_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_module_task_pins_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "v_ai_cost_per_task"
+            referencedColumns: ["task_id"]
+          },
+        ]
+      }
       ai_usage_log: {
         Row: {
           completion_tokens: number | null
