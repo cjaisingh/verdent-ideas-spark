@@ -977,12 +977,10 @@ export function checkApprovalsStale(
   return [{
     kind: "approvals_stale",
     severity: "medium",
-    summary: `No new approvals in ${
-      isFinite(ageMs) ? Math.round(ageMs / 3600_000) + "h" : "ever"
-    } (threshold ${staleHours}h). Operator approval channel may be broken.`,
+    summary: `Oldest pending approval is ${Math.round(ageMs / 3600_000)}h old (threshold ${staleHours}h). Operator approval channel may be broken.`,
     dedupe_key: `approvals_stale`,
     subject_ref: { table: "approval_queue" },
-    payload: { last_created_at: lastCreatedAt, stale_hours_threshold: staleHours },
+    payload: { oldest_pending_created_at: oldestPendingCreatedAt, stale_hours_threshold: staleHours },
   }];
 }
 
