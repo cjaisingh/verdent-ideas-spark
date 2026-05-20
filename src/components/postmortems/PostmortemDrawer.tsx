@@ -8,6 +8,13 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Archive, CheckCircle, RotateCcw, Save, History } from "lucide-react";
 
+export type EvidenceItem = {
+  at: string;
+  kind: "sentinel_finding" | "failed_run" | "cost_spike" | "log_error" | "discussion_action" | "automation_failure";
+  summary: string;
+  ref?: Record<string, unknown>;
+};
+
 export type PostmortemRow = {
   id: string;
   subject_kind: "phase" | "sprint";
@@ -24,6 +31,7 @@ export type PostmortemRow = {
   created_at: string;
   reviewed_at: string | null;
   archived_at: string | null;
+  evidence: EvidenceItem[];
 };
 
 type EventRow = {
