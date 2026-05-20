@@ -31,7 +31,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-Deno.serve(withLogger("morning-review", async (req) => {
+Deno.serve(withLogger("morning-review", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -44,6 +44,7 @@ Deno.serve(withLogger("morning-review", async (req) => {
   const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
   const trigger = triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
+  const reqId = ctx.requestId;
 
   const recordRun = async (
     status: string,
@@ -60,6 +61,7 @@ Deno.serve(withLogger("morning-review", async (req) => {
         duration_ms: Date.now() - startedAt,
         message,
         detail,
+        request_id: reqId,
       });
     } catch (e) {
       console.error("automation_runs insert failed", e);
