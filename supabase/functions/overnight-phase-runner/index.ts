@@ -10,6 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { pickModel, isNightUTC } from "../_shared/model-policy.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import { withLogger } from "../_shared/logger.ts";
+import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,7 +87,11 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
       "Do NOT propose changes to the roadmap itself; the operator decides.";
 
     const aiStart = Date.now();
-    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResp = await recordStep(sb, {
+      job: "overnight-phase-runner", step_key: "ai_call:gateway",
+      step_label: `Night plan via ${model}`, phase_kind: "ai_call",
+      detail: { run_id: runId, model, phase_key: run.phase_key },
+    }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -97,7 +102,7 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
         ],
         response_format: { type: "json_object" },
       }),
-    });
+    }));
     const aiLatency = Date.now() - aiStart;
 
     if (!aiResp.ok) {
