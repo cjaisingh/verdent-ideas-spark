@@ -193,8 +193,19 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
 
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
+
+    // Cron-silence needs ONE row per job (the most recent). Using the same
+    // 5000-row runs sample crowded out low-frequency jobs (e.g. weekly
+    // lessons-synthesize) and produced false-positive cron_silence findings.
+    // v_automation_runs_latest_per_job returns at most one row per job, so
+    // the sample is bounded by job count, not row count.
+    const { data: latestPerJob } = await sb
+      .from("v_automation_runs_latest_per_job")
+      .select("job,id,status,created_at")
+      .in("job", Object.keys(SENTINEL_CADENCES));
+
     const candidates: FindingCandidate[] = [
-      ...checkCronSilence(now, SENTINEL_CADENCES, runs),
+      ...checkCronSilence(now, SENTINEL_CADENCES, (latestPerJob ?? []) as typeof runs),
       ...checkFiveXxSpike(now, 15, edgeLogs),
       ...checkEdgeFunctionErrorRate(now, 30, edgeLogs),
       ...checkClientTransportErrors(now, 30, cliRes.data ?? []),
