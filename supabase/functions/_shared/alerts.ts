@@ -63,6 +63,7 @@ export async function dispatchAlert(
         job, reason, message, payload, ts: new Date().toISOString(),
       });
       try {
+        attempts++;
         const r = await fetch((settings as any).webhook_url, {
           method: "POST", headers: { "Content-Type": "application/json" }, body,
         });
