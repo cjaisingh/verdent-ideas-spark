@@ -2,7 +2,7 @@
 // Operator-facing manual claim filing + winner display. Reads/writes go
 // directly through the supabase client (RLS gates by has_role). For
 // system/CI ingestion, use the claims-ingest edge function.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,9 +43,21 @@ type ResolveResult = {
 };
 
 export function ClaimsPanel() {
-  const [entity, setEntity] = useState("OkrNode");
-  const [entityId, setEntityId] = useState("");
-  const [field, setField] = useState("*");
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const readUrl = () => {
+    const p = new URLSearchParams(window.location.search);
+    return {
+      entity: p.get("claim_entity"),
+      id: p.get("claim_id"),
+      field: p.get("claim_field"),
+      tiebreak: p.get("tiebreak"),
+    };
+  };
+  const initial = typeof window !== "undefined" ? readUrl() : { entity: null, id: null, field: null, tiebreak: null };
+
+  const [entity, setEntity] = useState(initial.entity && ENTITIES.includes(initial.entity) ? initial.entity : "OkrNode");
+  const [entityId, setEntityId] = useState(initial.id ?? "");
+  const [field, setField] = useState(initial.field ?? "*");
   const [resolved, setResolved] = useState<ResolveResult | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -55,16 +67,21 @@ export function ClaimsPanel() {
   const [confidence, setConfidence] = useState(1);
   const [evidenceText, setEvidenceText] = useState("");
   const [supersedesId, setSupersedesId] = useState("");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(
+    initial.tiebreak ? `Tie-breaker for ${initial.tiebreak.replace("|", " vs ")}` : "",
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
-  const resolve = async () => {
-    if (!isUuid(entityId)) { toast.error("entity_id must be a UUID"); return; }
+  const resolve = async (overrides?: { entity?: string; entityId?: string; field?: string }) => {
+    const _entity = overrides?.entity ?? entity;
+    const _id = overrides?.entityId ?? entityId;
+    const _field = overrides?.field ?? field;
+    if (!isUuid(_id)) { toast.error("entity_id must be a UUID"); return; }
     setLoading(true);
     const { data, error } = await supabase.rpc("resolve_truth", {
-      _entity: entity, _entity_id: entityId, _field: field || "*",
+      _entity, _entity_id: _id, _field: _field || "*",
     });
     setLoading(false);
     if (error) { toast.error(error.message); return; }
@@ -72,6 +89,43 @@ export function ClaimsPanel() {
   };
 
   useEffect(() => { setResolved(null); }, [entity, entityId, field]);
+
+  // Sync state → URL so deep-links and back/forward work.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (entityId) p.set("claim_entity", entity); else p.delete("claim_entity");
+    if (entityId) p.set("claim_id", entityId); else p.delete("claim_id");
+    if (entityId && field) p.set("claim_field", field); else p.delete("claim_field");
+    const qs = p.toString();
+    const next = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+    window.history.replaceState(null, "", next);
+  }, [entity, entityId, field]);
+
+  // Auto-resolve on initial mount if URL has all three.
+  useEffect(() => {
+    if (initial.entity && initial.id && isUuid(initial.id)) {
+      void resolve({ entity: initial.entity, entityId: initial.id, field: initial.field ?? "*" });
+      setTimeout(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+    }
+    // Listen for triage panel deep-link events.
+    const onJump = () => {
+      const u = readUrl();
+      if (!u.entity || !u.id || !isUuid(u.id)) return;
+      setEntity(ENTITIES.includes(u.entity) ? u.entity : "OkrNode");
+      setEntityId(u.id);
+      setField(u.field ?? "*");
+      setSource("operator");
+      if (u.tiebreak) setNote(`Tie-breaker for ${u.tiebreak.replace("|", " vs ")}`);
+      setTimeout(() => {
+        void resolve({ entity: u.entity!, entityId: u.id!, field: u.field ?? "*" });
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    };
+    window.addEventListener("governance:claim-jump", onJump);
+    return () => window.removeEventListener("governance:claim-jump", onJump);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const fileClaim = async () => {
     if (!isUuid(entityId)) { toast.error("entity_id must be a UUID"); return; }
