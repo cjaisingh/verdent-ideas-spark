@@ -468,17 +468,28 @@ function AddLinkDialog({
   fromKind,
   fromRef,
   onCreated,
+  initialToKind = "entity",
 }: {
   open: boolean;
   setOpen: (b: boolean) => void;
   fromKind: Kind;
   fromRef: string;
   onCreated: () => void;
+  initialToKind?: Kind;
 }) {
-  const [toKind, setToKind] = useState<Kind>("entity");
+  const [toKind, setToKind] = useState<Kind>(initialToKind);
   const [toRef, setToRef] = useState("");
   const [relation, setRelation] = useState<Relation>("touches");
   const [opts, setOpts] = useState<AnchorOption[]>([]);
+
+  // Re-sync target kind when the dialog is re-opened with a new initial target
+  useEffect(() => {
+    if (open) {
+      setToKind(initialToKind);
+      setToRef("");
+    }
+  }, [open, initialToKind]);
+
 
   useEffect(() => {
     if (!open) return;
