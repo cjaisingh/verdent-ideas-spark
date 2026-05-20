@@ -5516,6 +5516,45 @@ export type Database = {
         }
         Relationships: []
       }
+      sentinel_check_runs: {
+        Row: {
+          alert_retries: number
+          alerts_dispatched: number
+          candidates_emitted: number
+          check_key: string
+          created_at: string
+          duration_ms: number
+          error: string | null
+          id: string
+          open_depth_after: number
+          tick_id: string
+        }
+        Insert: {
+          alert_retries?: number
+          alerts_dispatched?: number
+          candidates_emitted?: number
+          check_key: string
+          created_at?: string
+          duration_ms?: number
+          error?: string | null
+          id?: string
+          open_depth_after?: number
+          tick_id: string
+        }
+        Update: {
+          alert_retries?: number
+          alerts_dispatched?: number
+          candidates_emitted?: number
+          check_key?: string
+          created_at?: string
+          duration_ms?: number
+          error?: string | null
+          id?: string
+          open_depth_after?: number
+          tick_id?: string
+        }
+        Relationships: []
+      }
       sentinel_findings: {
         Row: {
           created_at: string
@@ -6871,6 +6910,22 @@ export type Database = {
           phase_id?: string | null
           phase_key?: string | null
           phase_title?: string | null
+        }
+        Relationships: []
+      }
+      v_sentinel_check_perf_24h: {
+        Row: {
+          avg_open_depth: number | null
+          check_key: string | null
+          errors: number | null
+          last_run_at: string | null
+          max_ms: number | null
+          p50_ms: number | null
+          p95_ms: number | null
+          runs: number | null
+          total_alerts: number | null
+          total_candidates: number | null
+          total_retries: number | null
         }
         Relationships: []
       }

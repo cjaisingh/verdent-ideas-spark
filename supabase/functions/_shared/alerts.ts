@@ -21,16 +21,19 @@ const FLAG_MAP: Record<string, string> = {
   auth_failed: "alert_on_auth_failed",
 };
 
+export type AlertDispatchResult = { delivered: boolean; attempts: number };
+
 export async function dispatchAlert(
   sb: SupabaseClient,
   job: string,
   reason: string,
   message: string,
   payload: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<AlertDispatchResult> {
   let delivered = false;
   let status_code: number | null = null;
   let error: string | null = null;
+  let attempts = 0;
   try {
     const { data: settings } = await sb.from("alert_settings").select("*").eq("id", true).maybeSingle();
     const flag = FLAG_MAP[reason];
@@ -60,6 +63,7 @@ export async function dispatchAlert(
         job, reason, message, payload, ts: new Date().toISOString(),
       });
       try {
+        attempts++;
         const r = await fetch((settings as any).webhook_url, {
           method: "POST", headers: { "Content-Type": "application/json" }, body,
         });
@@ -79,6 +83,7 @@ export async function dispatchAlert(
       const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
       if (SUPABASE_URL && SERVICE_ROLE && SERVICE_TOKEN) {
         try {
+          attempts++;
           const r = await fetch(`${SUPABASE_URL}/functions/v1/telegram-send`, {
             method: "POST",
             headers: {
@@ -116,11 +121,12 @@ export async function dispatchAlert(
   // alongside the wrapping function's request id (W1 logger coverage).
   try {
     console.log(JSON.stringify({
-      tag: "alerts.dispatch", job, reason, delivered, status_code,
+      tag: "alerts.dispatch", job, reason, delivered, status_code, attempts,
       error: error ? error.slice(0, 200) : null,
       message: message.slice(0, 200),
     }));
   } catch { /**/ }
+  return { delivered, attempts };
 }
 
 function escapeHtml(s: string): string {

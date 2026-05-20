@@ -64,6 +64,7 @@ import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
 import AdminTimeline from "./pages/AdminTimeline";
+import SentinelPerf from "./pages/SentinelPerf";
 import AdminVideos from "./pages/AdminVideos";
 import AdminSecretsHealth from "./pages/AdminSecretsHealth";
 import OperatorInbox from "./pages/OperatorInbox";
@@ -148,6 +149,7 @@ const App = () => (
             <Route path="/connections" element={<Connections />} />
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/timeline" element={<AdminTimeline />} />
+            <Route path="/admin/sentinel-perf" element={<SentinelPerf />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />

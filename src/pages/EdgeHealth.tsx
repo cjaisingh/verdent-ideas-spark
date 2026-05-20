@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { RefreshCw, AlertTriangle, FileCode2 } from "lucide-react";
+import { RefreshCw, AlertTriangle, FileCode2, Gauge } from "lucide-react";
+import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 
@@ -189,6 +190,9 @@ export default function EdgeHealth() {
               {h}h
             </Button>
           ))}
+          <Button asChild size="sm" variant="outline">
+            <Link to="/admin/sentinel-perf"><Gauge className="h-4 w-4 mr-1" />Sentinel checks</Link>
+          </Button>
           <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>

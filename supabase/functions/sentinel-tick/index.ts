@@ -230,55 +230,85 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       .select("job,id,status,created_at")
       .in("job", Object.keys(SENTINEL_CADENCES)));
 
+    // Per-check timing: each check runs inside timeCheck() so we can attribute
+    // duration, candidates, alerts, retries and queue depth back to a single
+    // check function. Tagging each candidate with __check_key lets the persist
+    // loop bump per-check counters as alerts fire.
+    type PerCheck = {
+      duration_ms: number; error: string | null;
+      candidates_count: number; kinds: Set<string>;
+      alerts: number; retries: number; open_depth: number;
+    };
+    const perCheck = new Map<string, PerCheck>();
+    const tickId = crypto.randomUUID();
+    const tagCandidates = (key: string, list: FindingCandidate[]): FindingCandidate[] => {
+      for (const c of list) (c as unknown as { __check_key: string }).__check_key = key;
+      return list;
+    };
+    const timeCheck = (key: string, fn: () => FindingCandidate[]): FindingCandidate[] => {
+      const t0 = performance.now();
+      let result: FindingCandidate[] = [];
+      let err: string | null = null;
+      try { result = fn(); }
+      catch (e) { err = e instanceof Error ? e.message : String(e); }
+      const dur = Math.round(performance.now() - t0);
+      const kinds = new Set<string>();
+      for (const c of result) kinds.add(c.kind);
+      perCheck.set(key, {
+        duration_ms: dur, error: err,
+        candidates_count: result.length, kinds,
+        alerts: 0, retries: 0, open_depth: 0,
+      });
+      return tagCandidates(key, result);
+    };
+
     const candidates: FindingCandidate[] = await recordStep(sb, {
       job: "sentinel-tick", step_key: "compute:run_checks",
       step_label: "Run all in-memory sentinel checks", phase_kind: "compute",
       detail: { checks: 28 },
     }, async () => [
-      ...checkFiveXxSpike(now, 15, edgeLogs),
-      ...checkEdgeFunctionErrorRate(now, 30, edgeLogs),
-      ...checkClientTransportErrors(now, 30, cliRes.data ?? []),
-      ...checkVoicePipelineRed(now, 60, voiceEdgeRes.data ?? []),
-      ...checkSecretAge(now, secretsRes.data ?? []),
-      ...checkAdminGrants(now, 15, auditRes.data ?? []),
-      ...checkJobErrorRate(now, runs),
-      ...checkFrontendRealtimeErrors(now, 30, feRes.data ?? []),
-      ...checkNightJobsStalled(now, reclaimResult),
-      ...checkAllowlistRejects(now, allowRes.data ?? []),
-      ...checkWhatsNewDraftsStale(now, (draftRes.data ?? []) as { id: string; created_at: string }[]),
-      ...checkLintDeltaFailures(now, (lintRes.data ?? []) as { id: string; created_at: string; caller: string | null; file_path: string | null; error_class: string | null }[]),
-      ...checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[]),
-      ...checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[]),
-      ...checkTruthConflictsUnresolved(now, (truthConflictsRes.data ?? []) as { entity: string; entity_id: string; field: string; top_source: string | null; next_source: string | null }[]),
-      ...checkBudgetProjection(
+      ...timeCheck("five_xx_spike", () => checkFiveXxSpike(now, 15, edgeLogs)),
+      ...timeCheck("edge_function_error_rate", () => checkEdgeFunctionErrorRate(now, 30, edgeLogs)),
+      ...timeCheck("client_transport_error", () => checkClientTransportErrors(now, 30, cliRes.data ?? [])),
+      ...timeCheck("voice_pipeline_red", () => checkVoicePipelineRed(now, 60, voiceEdgeRes.data ?? [])),
+      ...timeCheck("secret_age", () => checkSecretAge(now, secretsRes.data ?? [])),
+      ...timeCheck("role_grant", () => checkAdminGrants(now, 15, auditRes.data ?? [])),
+      ...timeCheck("job_error_rate", () => checkJobErrorRate(now, runs)),
+      ...timeCheck("frontend_realtime_error", () => checkFrontendRealtimeErrors(now, 30, feRes.data ?? [])),
+      ...timeCheck("night_jobs_stalled", () => checkNightJobsStalled(now, reclaimResult)),
+      ...timeCheck("allowlist_rejects", () => checkAllowlistRejects(now, allowRes.data ?? [])),
+      ...timeCheck("whats_new_drafts_stale", () => checkWhatsNewDraftsStale(now, (draftRes.data ?? []) as { id: string; created_at: string }[])),
+      ...timeCheck("lint_delta_failures", () => checkLintDeltaFailures(now, (lintRes.data ?? []) as { id: string; created_at: string; caller: string | null; file_path: string | null; error_class: string | null }[])),
+      ...timeCheck("companion_streams_stalled", () => checkCompanionStreamsStalled(now, (stalledStreamsRes.data ?? []) as { id: string; thread_id: string | null; streamed_at: string | null; created_at: string }[])),
+      ...timeCheck("heygen_videos_failed", () => checkHeygenVideosFailed(now, (heygenFailedRes.data ?? []) as { id: string; kind: string; error: string | null; created_at: string }[])),
+      ...timeCheck("truth_conflicts_unresolved", () => checkTruthConflictsUnresolved(now, (truthConflictsRes.data ?? []) as { entity: string; entity_id: string; field: string; top_source: string | null; next_source: string | null }[])),
+      ...timeCheck("budget_projection", () => checkBudgetProjection(
         now,
         (budgetSignalsRes.data ?? null) as { budget: number | null; burn_7d_per_day: number | null; projected_month_end: number | null } | null,
         (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
-      ),
-      ...checkCreditRunway(
+      )),
+      ...timeCheck("credit_runway", () => checkCreditRunway(
         now,
         (runwayRes.data ?? null) as { balance: number | null; as_of: string | null; estimated_balance_now: number | null; burn_per_day_21d: number | null; days_runway_21d: number | null; runway_exhaustion_date_21d: string | null } | null,
         (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
-      ),
-      ...checkCreditSnapshotStale(
+      )),
+      ...timeCheck("credit_snapshot_stale", () => checkCreditSnapshotStale(
         now,
         (snapshotAgeRes.data ?? null) as { latest_as_of: string | null; minutes_since_latest: number | null; snapshots_24h: number | null; entries_since_latest: number | null } | null,
         (budgetAlertsRes.data ?? []) as { year_month: string; threshold_pct: number | null; kind?: string }[],
-      ),
-      ...checkAiJobsStuck(now, (aiJobsRes.data ?? []) as { id: string; kind: string; attempts: number | null; heartbeat_at: string | null; claimed_at: string | null }[]),
-      ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
-      // 12h: operator sleeps; 6h fired every morning before first message.
-      ...checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null, 12),
-      // 168h (1 week): fires only if a PENDING approval has been aging past threshold.
-      ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null, 168),
-      ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
-      ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
-      ...checkInboxKindClassifyFailures(now, (inboxClassifyRes.data ?? []) as { status: string | null; created_at: string }[]),
-      ...checkInboxSourceSilent(
+      )),
+      ...timeCheck("ai_jobs_stuck", () => checkAiJobsStuck(now, (aiJobsRes.data ?? []) as { id: string; kind: string; attempts: number | null; heartbeat_at: string | null; claimed_at: string | null }[])),
+      ...timeCheck("ai_workers_offline", () => checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0)),
+      ...timeCheck("telegram_webhook_silent", () => checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null, 12)),
+      ...timeCheck("approvals_stale", () => checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null, 168)),
+      ...timeCheck("secrets_health_stale", () => checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null)),
+      ...timeCheck("cron_auth_failures_burst", () => checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[])),
+      ...timeCheck("inbox_kind_classify_failures", () => checkInboxKindClassifyFailures(now, (inboxClassifyRes.data ?? []) as { status: string | null; created_at: string }[])),
+      ...timeCheck("inbox_source_silent", () => checkInboxSourceSilent(
         now,
         (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
         (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
-      ),
+      )),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
@@ -310,8 +340,16 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
           } catch (e) { console.error("auto_link_finding_to_action failed", e); }
         }
         if (c.severity === "high" || c.severity === "critical") {
-          await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
+          const r = await dispatchAlert(sb, "sentinel-tick", "high_finding", `${c.kind}: ${c.summary}`, c.payload);
           alerts++;
+          const checkKey = (c as unknown as { __check_key?: string }).__check_key;
+          if (checkKey) {
+            const pc = perCheck.get(checkKey);
+            if (pc) {
+              pc.alerts += 1;
+              pc.retries += Math.max(0, r.attempts - 1);
+            }
+          }
         }
 
         // Budget projection side-effects: insert credit_alerts row + optional Telegram push.
@@ -424,6 +462,38 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       }).eq("id", (r as any).id);
       resolved++;
     }
+
+    // Per-check performance rows. Open depth uses the same `open` snapshot
+    // we already fetched for auto-resolve, minus rows we just resolved.
+    try {
+      const wasResolved = (r: { dedupe_key: string; kind: string }) =>
+        !liveKeys.has(r.dedupe_key) && r.kind !== "role_grant";
+      const openByKind = new Map<string, number>();
+      for (const r of (open ?? []) as { dedupe_key: string; kind: string }[]) {
+        if (wasResolved(r)) continue;
+        openByKind.set(r.kind, (openByKind.get(r.kind) ?? 0) + 1);
+      }
+      const rows: Array<Record<string, unknown>> = [];
+      for (const [key, pc] of perCheck) {
+        let depth = 0;
+        for (const k of pc.kinds) depth += openByKind.get(k) ?? 0;
+        rows.push({
+          tick_id: tickId,
+          check_key: key,
+          duration_ms: pc.duration_ms,
+          candidates_emitted: pc.candidates_count,
+          alerts_dispatched: pc.alerts,
+          alert_retries: pc.retries,
+          open_depth_after: depth,
+          error: pc.error,
+        });
+      }
+      if (rows.length > 0) {
+        await sb.from("sentinel_check_runs").insert(rows);
+      }
+    } catch (e) { console.error("sentinel_check_runs insert failed", e); }
+
+
 
     // Daily Telegram heartbeat — if a chat_id is configured but no successful
     // telegram-send in the last 25h, fire a one-line ping so silent outbound
