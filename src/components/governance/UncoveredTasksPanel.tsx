@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Check, X, ArrowRight, RefreshCw, Link2 } from "lucide-react";
+import { Check, X, ArrowRight, RefreshCw, Link2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { trackGovernanceDeepLink } from "@/lib/governance-telemetry";
@@ -258,8 +258,15 @@ export function UncoveredTasksPanel() {
                     <Link2 className="h-4 w-4" />
                   )}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => focus(r)}>
-                  Link <ArrowRight className="h-3 w-3 ml-1" />
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => focus(r)}
+                  title="Focus this task and open the Add link dialog"
+                  aria-label="Open Add link dialog for this task"
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Open link
                 </Button>
               </li>
             ))}
