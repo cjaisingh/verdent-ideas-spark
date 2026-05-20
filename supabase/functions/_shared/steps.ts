@@ -20,6 +20,7 @@ export interface StepInit {
   step_label: string;
   phase_kind: PhaseKind;
   run_id?: string | null;
+  request_id?: string | null;
   detail?: Record<string, unknown>;
 }
 
@@ -33,6 +34,7 @@ async function safeInsert(sb: SupabaseClient, init: StepInit): Promise<string | 
         step_label: init.step_label,
         phase_kind: init.phase_kind,
         run_id: init.run_id ?? null,
+        request_id: init.request_id ?? null,
         detail: init.detail ?? {},
         status: "running",
       })
