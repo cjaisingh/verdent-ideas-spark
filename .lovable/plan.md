@@ -1,29 +1,34 @@
-### Why nothing's arriving
 
-Webhook logs for the last 24h show only 3 hits — all from your operator DM. Zero rejected channel posts. So traffic from the two channels isn't even reaching the webhook. The most likely cause: `setWebhook` was registered with `allowed_updates: ["message","edited_message"]` only, so Telegram drops `channel_post`/`edited_channel_post` server-side before delivery. Bot being admin isn't enough — `allowed_updates` has to include those types.
+## Doc-drift audit results
 
-### Steps
+Ran `scripts/check-doc-drift.ts` at two windows.
 
-1. **Re-register the webhook** with expanded `allowed_updates`:
-   - `message`, `edited_message`, `channel_post`, `edited_channel_post`, `callback_query`
-   - Done via `telegram-webhook-reregister` (already exists, called by sentinel) — patch its `allowed_updates` payload.
+**Last 5 commits — 3 real gaps:**
+- 4 migrations (20260520084200 / 084444 / 084700 / 090754) shipped without named CHANGELOG entries
+- 3 pages touched without docs file co-edit: `AdminAiUsage`, `OperatorInbox`, `Postmortems`
 
-2. **You post one short message** in each of the two chats (anything — "ping"). The webhook will reject them (not in `platform_allowlist`) but the reject path attaches `rejected_chat_id`, `chat_type`, `chat_title` to the log row. I'll read those out of `edge_request_logs.meta` to get the IDs.
+**Last 20 commits — 11 page-drift errors.** Mostly old; not worth back-filling.
 
-3. **Insert rows** (one migration):
-   - `platform_allowlist`: `(telegram, <lovable_chat_id>)`, `(telegram, <caprica_chat_id>)`
-   - `operator_inbox_sources`: `(<lovable_chat_id>, channel/group, "Lovable feed", enabled, lane='operator')` and `(<caprica_chat_id>, ..., "Caprica feed", enabled, lane='caprica')`
+**Content check:** CHANGELOG `[Unreleased]` already describes *what* those migrations and pages do (BalanceTrackingPanel, Unified Operator Inbox, Auto-postmortem). The drift script trips on file-touch heuristic, not missing prose. Inbox doc has no mention of Caprica image-blind behaviour — that's a genuine gap.
 
-4. **Verify**: post once more in each, confirm rows land in `operator_messages` with the right `lane`, and that the Caprica row does NOT auto-create a `discussion_action`.
+**File size hygiene:** all `mem/features/*.md` within 30-line cap. `docs/operator-inbox.md` at 59 / 200 lines (fine). `mem/index.md` at 77 lines — getting busy but legal.
 
-### What I need from you next
+---
 
-- Approve this plan.
-- After I patch the reregister payload, send "ping" (or any message) from inside each of the two chats. Reply "done" and I'll pull the IDs and finish the wiring.
+## Proposed fixes (small, in-scope)
 
-### Technical notes
+1. **Inspect the 4 unattributed migrations** — read them, confirm they belong to one of the existing `[Unreleased]` bullets, and add a one-line "Migrations:" suffix to the relevant bullet so the heuristic stops complaining.
+2. **`docs/operator-inbox.md`** — add a short "Known gap: image messages" section noting Caprica photo file_ids land in `raw->'message'->'photo'` but are not OCR'd / vision-described, so they currently render as empty rows. Link to the deferred vision-branch work.
+3. **No changes** to AdminAiUsage / Postmortems doc trail — content already covered in CHANGELOG, would be busywork.
+4. **No back-fill** of the older 8 page-drift errors. They're behind us; doc-drift gate only runs on PR diffs against `main`, so they don't block anything.
 
-- Files touched: `supabase/functions/telegram-webhook-reregister/index.ts` (allowed_updates list), one new migration for the two allowlist + two inbox-source rows.
-- No schema changes — `lane` already exists from the previous turn.
-- If a chat is a **channel**, the bot must remain admin. If it's a **group/supergroup**, privacy mode must be off (BotFather → `/setprivacy` → Disable) so it sees non-command messages. Confirm before step 2 if unsure.
-- Bot can't ingest from *another bot*. If `@caprica_awip_bot` posts into the Caprica chat as a bot, our bot only sees those messages if Telegram delivers `channel_post`s (it will, once allowed_updates is fixed) — bot-authored posts in channels arrive normally.
+Skipping: `mem/index.md` entry for "Caprica lane is image-blind" — would be a transient state note, violates `mem://preferences/doc-hygiene`. Keep it in the operator-inbox doc only.
+
+## Out of scope
+- The vision branch itself (deferred per your previous turn).
+- Operator Inbox image thumbnail rendering.
+- Lint baseline drain.
+
+If you want, I can also expand `scripts/check-doc-drift.ts` to look inside CHANGELOG `[Unreleased]` for migration filenames, so future "migration without CHANGELOG entry" warnings only fire when the prose is actually missing — but that's a tooling change, separate ticket.
+
+Approve and I'll do (1) + (2) only.
