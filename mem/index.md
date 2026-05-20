@@ -15,6 +15,11 @@ Quarterly reviews open Jan/Apr/Jul/Oct 1 @ 09:00 UTC via `quarterly-review-open`
 Ontology of 11 entities locked at `docs/ontology.md` and surfaced at `/ontology` (W1.1). Source of truth is the markdown file — no editing UI; changes go through git + CHANGELOG.
 Truth arbitration goes through `public.resolve_truth(entity, entity_id, field)` against `decision_authorities` (W7.1) + `claims` (W7.2). Rules are git-versioned via migrations + CHANGELOG; no editing UI. Defaults: operator beats AI for every entity; CI hard-owns TestRun; system hard-owns CapabilityEvent. Resolver picks winner by precedence then weight×confidence; status `resolved`/`conflict`/`no-claims`. Claims via /governance UI or `claims-ingest` edge fn; `truth_conflicts_unresolved` sentinel surfaces ties.
 Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔authority_rule, relations touches/justifies/governs/supersedes) + `governance_chain()` + `governance_coverage()` surfaced at `/governance`. Manual links only, no backfill, no enforcement — coverage starts at 0% by design to make holes visible before W7.2.
+Docs are reference, not narrative. `mem/**` ≤30 lines, `docs/**` ≤200, index entries ≤150 chars. Prune in same edit.
+Read live before planning (query `sentinel_findings`/`automation_runs`, not cached state); default hypothesis on a finding is "detector wrong" before "system broken"; verify-before-scope.
+"Deployed" ≠ "verified" — run the relevant check (test/curl/read_query/findings re-query/console) and cite the persona consulted from `docs/agents/team/` before planning. See [verify-completion](mem://preferences/verify-completion).
+
+
 
 ## Memories
 - [Ontology](mem://features/ontology) — 11 canonical entities with lifecycle/ownership/audit; source docs/ontology.md, surface /ontology
@@ -39,7 +44,9 @@ Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔author
 - [Review cadence](mem://preferences/review-cadence) — full per-PR/daily/weekly/monthly/quarterly cadence map (cite this when asked "how often is X reviewed?")
 - [CI/CD hardening (W6)](mem://preferences/ci-cd-hardening) — workflow inventory + branch-protection checklist for `main`
 - [Lint policy](mem://preferences/lint-policy) — `no-explicit-any` ratcheted via `.lint-baselines/no-explicit-any.json`; clean files auto-promoted to error; cleanup tracked by action #20
-- [Verification discipline](mem://preferences/verification-discipline) — what is/isn't verifiable from the sandbox + required phrasing for unverifiable state
+- [Verification discipline](mem://preferences/verification-discipline) — sandbox-verifiable vs not + plan-before-fix rules (read live, detector-wrong-first, verify-before-scope)
+- [Doc hygiene](mem://preferences/doc-hygiene) — caps: mem ≤30 lines, docs ≤200, index ≤150 chars; .md is reference not narrative
+- [Verify completion](mem://preferences/verify-completion) — per-change-type DoD checks + binding persona-consultation map (9 agents in docs/agents/team/)
 - [AWIP Companion](mem://features/companion) — `/companion` browser chat (Ollama + RAG) and Rork iPhone surface; Gemini TTS is the default voice
 - [Gemini TTS](mem://features/gemini-tts) — `gemini-tts` edge function, 8 voices, audio/wav, ai_usage_log, used by Rork iPhone app
 - [Rork iPhone spec](docs/rork-companion-spec.md) — contract between Core and the separate Expo project
