@@ -23,7 +23,7 @@ export async function trackGovernanceDeepLink(evt: DeepLinkEvent): Promise<void>
       task_id: evt.task_id,
       missing: evt.missing,
       source: evt.source ?? "unknown",
-      payload: evt.payload ?? {},
+      payload: (evt.payload ?? {}) as never,
     });
     if (error) {
       // RLS rejection for non-operators is expected; swallow quietly.
