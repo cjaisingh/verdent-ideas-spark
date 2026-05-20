@@ -186,6 +186,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
       message: reason, detail,
+      request_id: reqId,
     });
     await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
@@ -206,6 +207,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
       duration_ms: 0,
       message: "skipped: outside_night_window",
       detail: { utc_hour: new Date().getUTCHours(), skipped: true },
+      request_id: reqId,
     });
     return json({ skipped: "outside_night_window", utc_hour: new Date().getUTCHours() });
   }
@@ -232,6 +234,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
       await sb.from("automation_runs").insert({
         job: "overnight-phase-runner-15m", trigger, status, status_code,
         duration_ms: Date.now() - startedAt, message, detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
   };
