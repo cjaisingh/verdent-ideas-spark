@@ -145,7 +145,7 @@ const SprintCostRollup = () => {
                     const isOpen = expanded.has(r.sprint_id);
                     const tr = taskRows[r.sprint_id];
                     return (
-                      <>
+                      <Fragment key={r.sprint_id}>
                         <TableRow
                           key={r.sprint_id}
                           className="cursor-pointer hover:bg-muted/50"
