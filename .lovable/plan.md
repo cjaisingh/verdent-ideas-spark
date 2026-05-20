@@ -1,77 +1,71 @@
-## Goal
+## What's actually broken
 
-A single panel where you can see every background job that is **currently running** (or just finished), what step it's on, an honest ETA, and a tail of its edge-function logs — without bouncing between `/admin/timeline`, `automation_runs`, and Supabase logs.
+The webhook code is fine. Two gates simply have only your DM registered:
 
-## What's there now
+- `platform_allowlist (platform='telegram')` — 1 row: `7139482467` (your DM).
+- `operator_inbox_sources` — 1 row: same chat_id.
 
-- `automation_runs` — one row per job execution (status, duration_ms, message, detail).
-- `automation_steps` — one row per phase inside a run (started_at, finished_at, duration_ms, status, phase_kind). **No `run_id` FK** — only `job` + `started_at` link them today.
-- `v_automation_step_p95_30d` — rolling p95 per `(job, step_key)`.
-- `edge_request_logs` — per HTTP call (request_id, function_name, status, latency_ms, error_message, meta, created_at).
-- No `request_id` on `automation_runs` or `automation_steps`, so logs are joined heuristically (function_name + time window).
+Anything from the Lovable or Caprica chats is silently dropped before it ever hits `operator_messages`. No bug; just unregistered sources. That's why yesterday "Lovable channel" and today "Caprica channel" were invisible.
 
-## What this adds
+Also worth flagging while we're here: `sentinel-tick` and `overnight-phase-runner-15m` have been throwing `auth_failed` (service-token mismatch) for ~24h — separate issue, not blocking this one, but I'll note it for a follow-up.
 
-### 1. Migration — link runs ↔ steps ↔ logs
+## Plan
 
-- Add `run_id uuid` to `public.automation_steps` (nullable, indexed). Backfill is **not** attempted; new ticks populate it forward.
-- Add `request_id text` and `run_id uuid` columns to `public.automation_runs` (nullable, indexed on `request_id`). `request_id` lets us join `edge_request_logs` exactly; `run_id` is just the row's own id for forward-compat with externally-started runs.
-- New view `v_running_jobs`:
-  ```
-  select r.id as run_id, r.job, r.trigger, r.created_at as started_at,
-         coalesce(r.duration_ms, extract(epoch from (now() - r.created_at))*1000)::int as elapsed_ms,
-         r.status, r.message, r.detail
-    from automation_runs r
-   where r.created_at > now() - interval '6 hours'
-     and (r.status in ('running','ok','error','rejected'))
-  ```
-- New view `v_run_eta` per `(job)`: median + p95 total duration over last 30 days (computed from `automation_runs.duration_ms` where `status='ok'`). ETA = `max(0, median - elapsed_ms)`; if `elapsed > p95`, mark **`overdue`**.
+### 1. Collect the two chat IDs (need from you)
 
-### 2. Edge-function instrumentation (small)
+I can't guess these. Easiest way:
+- For each chat/channel, send any message to the bot from inside it, then I'll read `update.message.chat.id` from `edge_request_logs`. Or you paste the numeric chat IDs directly.
+- For a Telegram **channel**, the bot must be an **admin** of the channel and `allowed_updates` must include `channel_post`. Confirm bot is admin in both.
 
-- `withLogger` already mints a `requestId`. Expose it on the request context and update the cron-style functions (`sentinel-tick`, `morning-review`, `postmortem-generate`, `night-agent-*`, `overnight-phase-runner`) so their `recordRun` insert into `automation_runs` includes `request_id` and a self-referential `run_id` (return it from the insert, then pass it to every `recordStep` call as `run_id`).
-- `_shared/steps.ts → recordStep()` gains an optional `run_id` field on `init` and writes it on the row. Backward-compatible: omitted → null (existing instrumentation keeps working).
-- No new edge function. No new cron.
+### 2. Schema: add a "lane" to keep Caprica isolated
 
-### 3. UI — `/admin/jobs`
+```text
+operator_inbox_sources
+  + lane text not null default 'operator'   -- 'operator' | 'caprica'
+  + check (lane in ('operator','caprica'))
+```
 
-- Top: live cards for each currently running run (status badge, elapsed, step now executing, ETA "~2m left" or "overdue by 45s").
-- Below: table of last 50 finished runs in the 6h window (job, trigger, started, duration, status, message). Click → drawer.
-- **Run drawer**:
-  - Header: job, started, duration / ETA, status, message.
-  - **Steps timeline**: ordered list of `automation_steps` for that `run_id`, with duration bars, status pip, p95 baseline tick mark. Running step pulses.
-  - **Logs tail**: `edge_request_logs` rows matched by `request_id` (exact) if present, otherwise by `function_name=job` + `created_at` within `[started_at, started_at + elapsed + 1m]`. Show timestamp, status, latency, error_message, expandable `meta`. Banner "fuzzy match — request_id not recorded" when fallback is used.
-- Realtime: subscribe to `automation_runs` + `automation_steps` so cards/steps update live.
-- Filter chip: **all jobs / cron only / errored only**.
+Views become lane-aware:
+- `v_operator_inbox_24h` and `v_operator_inbox_unpromoted` filter `lane = 'operator'` (no behavioural change for existing rows — they default to `operator`).
+- New `v_caprica_inbox_24h` mirrors the shape for the Caprica lane.
 
-### 4. Surfacing
+`route-operator-message` auto-promotion to `discussion_actions` only runs for `lane = 'operator'`. Caprica rows are captured and surfaced but don't pollute your action queue.
 
-- New top-nav link "Jobs" under the existing admin area.
-- Add an entry on `/admin/timeline` linking to `/admin/jobs` for the run-centric view (timeline stays step-centric).
+### 3. Register the new sources
 
-## Out of scope
+Two `platform_allowlist` rows + two `operator_inbox_sources` rows (lane set appropriately, `kind = 'channel'` or `'group'` depending on what each one actually is):
 
-- No retry / cancel buttons. This is read-only.
-- No log streaming beyond `edge_request_logs` (no `console.log` capture — those live in the platform log tool only).
-- No ETA modelling beyond median/p95; no per-step ETA prediction (covered by the existing p95 tick on the timeline).
-- No backfill of `run_id` / `request_id` on historical rows.
-- No notifications when a job goes "overdue" — visual flag only.
+```text
+platform_allowlist:   (telegram, <lovable_chat_id>),   (telegram, <caprica_chat_id>)
+operator_inbox_sources: (<lovable_chat_id>, ..., lane='operator'),
+                        (<caprica_chat_id>, ..., lane='caprica')
+```
 
-## Verification
+Lovable channel → `operator` lane (you said treat it as first-class).
+Caprica channel → `caprica` lane (isolated).
 
-1. Migration applied; `select run_id from automation_steps limit 1` returns null for old rows.
-2. Hand-invoke `sentinel-tick`; new run row has `request_id` populated; its `automation_steps` rows all carry the same `run_id`.
-3. `/admin/jobs` shows the run; drawer steps tab lists ~30 steps; logs tab lists at least one `edge_request_logs` row for that `request_id`.
-4. Median ETA cross-checks against `select percentile_cont(0.5) within group (order by duration_ms) from automation_runs where job='sentinel-tick' and status='ok' and created_at > now()-interval '30 days'`.
-5. Force a run to overshoot (or pick an old slow one) → "overdue" badge renders.
+### 4. Webhook tweak
 
-## Files
+`telegram-webhook` needs one change: pass the source's `lane` through to `operator_messages` (new column `lane text not null default 'operator'`) and skip the auto-promotion call when `lane != 'operator'`.
 
-- `supabase/migrations/<ts>_jobs_status_panel.sql` (add columns, indexes, two views)
-- `supabase/functions/_shared/logger.ts` (export requestId on context if not already)
-- `supabase/functions/_shared/steps.ts` (accept `run_id`)
-- `supabase/functions/sentinel-tick/index.ts`, `morning-review/index.ts`, `postmortem-generate/index.ts`, `night-agent-open/index.ts`, `night-agent-close/index.ts`, `overnight-phase-runner/index.ts` (pass `requestId` + `run_id` into `recordRun`/`recordStep`)
-- `src/pages/AdminJobs.tsx` (new)
-- `src/components/admin/JobRunDrawer.tsx` (new)
-- `src/App.tsx` route + nav
-- `CHANGELOG.md`, `mem://features/jobs-status-panel`
+### 5. UI surface (minimal)
+
+- `/operator-inbox` gets a small "Lane" filter (defaults to Operator). Caprica tab shows the new view. No new page.
+
+### 6. Verify
+
+- You send a test message in each of the two chats.
+- I confirm a row lands in `operator_messages` with the correct `lane` and that nothing is rejected with `__classified_error`.
+- Stop there.
+
+## Technical notes
+
+- Migration is additive — no breaking change to existing inbox behaviour.
+- `setWebhook` already includes `message` + `edited_message` + callback updates; I'll re-register with `channel_post`/`edited_channel_post` added so channel posts actually reach us (currently they'd arrive but only if the type is in `allowed_updates`).
+- Telegram **groups**: the bot must have privacy mode off (via @BotFather → `/setprivacy` → Disable) to read non-command messages. I'll check `getBotInfo` once IDs are in.
+- Files (.md docs): once a source is registered, `message.document` payloads will flow into `operator_messages.raw`. Optional follow-up: extract document text into `text` for inline display — out of scope for this fix.
+
+## What I need from you to proceed
+
+1. The two chat IDs (or just trigger one message in each so I can pull them from the log).
+2. Confirm the bot is an admin in the Lovable & Caprica channels (or a member of the group with privacy mode disabled).
