@@ -162,12 +162,16 @@ export function checkJobErrorRate(
     const ok24 = last24.filter((r) => r.status === "ok");
     const err1h = err24.filter((r) => +new Date(r.created_at) >= since1h);
 
+    // Require RECENT errors. A 24h spike with zero errors in the last hour is
+    // a stale rotation aftershock, not an active fire — let it decay silently.
     let sev: FindingCandidate["severity"] | null = null;
     let reason = "";
-    if (err24.length >= 1 && ok24.length === 0) {
+    if (err1h.length >= 5) {
+      sev = "high"; reason = `${err1h.length} errors in last hour`;
+    } else if (err24.length >= 20 && err1h.length >= 1) {
+      sev = "high"; reason = `${err24.length} errors in last 24h (${err1h.length} in last hour)`;
+    } else if (err1h.length >= 1 && ok24.length === 0) {
       sev = "high"; reason = `${err24.length} error(s) and 0 successes in last 24h`;
-    } else if (err24.length >= 5) {
-      sev = "high"; reason = `${err24.length} errors in last 24h`;
     } else if (err1h.length >= 2) {
       sev = "medium"; reason = `${err1h.length} errors in last hour`;
     }
