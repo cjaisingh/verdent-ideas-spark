@@ -242,7 +242,7 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
       ...checkAiWorkersOffline(now, (aiWorkersRes.data ?? []) as { name: string; enabled: boolean; last_seen_at: string | null }[], aiQueueRes.count ?? 0),
       // 12h: operator sleeps; 6h fired every morning before first message.
       ...checkTelegramWebhookSilent(now, (tgWebhookRes.data as { created_at: string } | null)?.created_at ?? null, 12),
-      // 168h (1 week): approvals are batched, not continuous; 72h fired every quiet week.
+      // 168h (1 week): fires only if a PENDING approval has been aging past threshold.
       ...checkApprovalsStale(now, (lastApprovalRes.data as { created_at: string } | null)?.created_at ?? null, 168),
       ...checkSecretsHealthStale(now, (lastSecretsOkRes.data as { created_at: string } | null)?.created_at ?? null),
       ...checkCronAuthFailuresBurst(now, (authFailLogRes.data ?? []) as { job: string; reason: string; created_at: string }[]),
