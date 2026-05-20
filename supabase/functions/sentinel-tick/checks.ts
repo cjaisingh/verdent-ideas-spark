@@ -216,7 +216,9 @@ export const SENTINEL_CADENCES: Record<string, number> = {
   "overnight-phase-runner-15m": 15,
   "automation-auth-monitor": 15,
   // 30-minute
-  "ci-status-sync-30m": 30,
+  // NOTE: ci-status-sync-30m doesn't write to automation_runs — its state
+  // is recorded in discussion_actions ci_* columns. Skip cron-silence here.
+  // "ci-status-sync-30m": 30,
   // ~12-hourly
   "secrets-health-check": 12 * 60,
   // daily
