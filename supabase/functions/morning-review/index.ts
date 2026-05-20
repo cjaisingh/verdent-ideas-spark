@@ -16,6 +16,7 @@ import {
   type NightShift,
   type AiUsageRow,
 } from "./aggregator.ts";
+import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,7 +86,10 @@ Deno.serve(withLogger("morning-review", async (req) => {
       deferredRes,
       shiftsRes,
       aiRes,
-    ] = await Promise.all([
+    ] = await recordStep(sb, {
+      job: "morning-review", step_key: "db_scan:sources",
+      step_label: "Gather runs/actions/findings/shifts/ai", phase_kind: "db_scan",
+    }, () => Promise.all([
       sb.from("automation_runs")
         .select("job,status,status_code,duration_ms,created_at")
         .gte("created_at", since24h),
@@ -110,7 +114,7 @@ Deno.serve(withLogger("morning-review", async (req) => {
       sb.from("ai_usage_log")
         .select("cost_usd,created_at")
         .gte("created_at", since24h),
-    ]);
+    ]));
 
     const recentRuns: AutomationRun[] = (runsRes.data ?? []) as AutomationRun[];
     const openActions: DiscussionAction[] = (actionsRes.data ?? []) as DiscussionAction[];

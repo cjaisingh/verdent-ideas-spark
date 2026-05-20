@@ -9,6 +9,7 @@ import { pickModel } from "../_shared/model-policy.ts";
 import { logAiCall } from "../_shared/ai-usage.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import type { PostmortemDraft, PostmortemInput } from "../_shared/contracts/postmortem-generate.ts";
+import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -187,7 +188,10 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
 
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const slipped = await gatherSlippedSubjects(sb);
+    const slipped = await recordStep(sb, {
+      job: "postmortem-generate", step_key: "db_scan:slipped_subjects",
+      step_label: "Find slipped phases + sprints", phase_kind: "db_scan",
+    }, () => gatherSlippedSubjects(sb));
 
     if (slipped.length === 0) {
       await recordRun("ok", 200, "no slipped subjects");
@@ -208,9 +212,17 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
         .maybeSingle();
       if (existing) { skipped++; continue; }
 
-      const input = await buildInput(sb, s, today);
+      const input = await recordStep(sb, {
+        job: "postmortem-generate", step_key: "db_scan:context",
+        step_label: `Gather context for ${s.kind} ${s.label}`, phase_kind: "db_scan",
+        detail: { subject_kind: s.kind, subject_id: s.id },
+      }, () => buildInput(sb, s, today));
       const aiStart = Date.now();
-      const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const aiRes = await recordStep(sb, {
+        job: "postmortem-generate", step_key: "ai_call:gateway",
+        step_label: `Draft postmortem (${model})`, phase_kind: "ai_call",
+        detail: { model, subject_kind: s.kind, subject_id: s.id },
+      }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -221,7 +233,7 @@ Deno.serve(withLogger("postmortem-generate", async (req) => {
           ],
           response_format: { type: "json_object" },
         }),
-      });
+      }));
       if (!aiRes.ok) {
         const t = await aiRes.text();
         await logAiCall(sb, { job: "postmortem-generate", model, trigger, startedAt: aiStart, response: aiRes, errorText: t, request_ref: { subject_kind: s.kind, subject_id: s.id } });

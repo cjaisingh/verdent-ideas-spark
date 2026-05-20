@@ -23,6 +23,7 @@ import { closeShift } from "./close.ts";
 import { smokeTest } from "./smoke.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import { withLogger } from "../_shared/logger.ts";
+import { recordStep } from "../_shared/steps.ts";
 
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
@@ -93,10 +94,18 @@ Deno.serve(withLogger("night-agent", async (req) => {
   const startedAt = Date.now();
   try {
     let res: Response;
-    if (path.startsWith("/open")) res = await openShift(sb, settings ?? null);
-    else if (path.startsWith("/close")) res = await closeShift(sb);
-    else if (path.startsWith("/smoke")) res = await smokeTest(sb, settings ?? null, url);
-    else return json({ error: "not_found", path }, 404);
+    const stepLabel = path.startsWith("/open") ? "Open night shift"
+                    : path.startsWith("/close") ? "Close night shift digest"
+                    : "Night-agent smoke test";
+    res = await recordStep(sb, {
+      job, step_key: `compute:${job}`, step_label: stepLabel, phase_kind: "compute",
+      detail: { path, trigger },
+    }, async () => {
+      if (path.startsWith("/open")) return openShift(sb, settings ?? null);
+      if (path.startsWith("/close")) return closeShift(sb);
+      if (path.startsWith("/smoke")) return smokeTest(sb, settings ?? null, url);
+      return json({ error: "not_found", path }, 404);
+    });
     try {
       const cloned = res.clone();
       const detail = await cloned.json().catch(() => ({}));

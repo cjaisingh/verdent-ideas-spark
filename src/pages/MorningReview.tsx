@@ -16,6 +16,7 @@ import { DiscussThisButton } from "@/components/discussions/DiscussThisButton";
 import { cn } from "@/lib/utils";
 import { SentinelTriageActivityPanel } from "@/components/SentinelTriageActivityPanel";
 import OperatorInboxPanel from "@/components/morning-review/OperatorInboxPanel";
+import TimelineNowChip from "@/components/timeline/TimelineNowChip";
 
 type Review = {
   id: string;
@@ -311,9 +312,12 @@ export default function MorningReview() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Morning Review</h1>
-        <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold">Morning Review</h1>
+          <p className="text-sm text-muted-foreground">Yesterday's roll-up and tomorrow's plan.</p>
+        </div>
+        <TimelineNowChip />
       </div>
       <SentinelTriageActivityPanel />
       <OperatorInboxPanel />

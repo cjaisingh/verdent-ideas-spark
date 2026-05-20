@@ -1,64 +1,78 @@
-## Auto-postmortem on schedule slip
+## Live platform timeline with labelled phases + p95 flagging
 
-Trigger: a roadmap phase or sprint passes its end date without `status ∈ (done, shipped, cancelled)`. A daily cron drafts a postmortem; operator reads it on a new page. Prose only — no enforcement, no auto-detector creation.
+A live view of every cron / edge function / sentinel check as it runs, with per-phase labels (AI call, DB scan, lock wait, back-off) and an auto-flag when a step exceeds its rolling p95 baseline.
 
 ### Data
 
-New table `postmortems`:
-- `subject_kind` (`'phase' | 'sprint'`), `subject_id` (uuid), `subject_label` (text)
-- `slipped_on` (date — first day past due that we detected)
-- `days_late` (int)
-- `root_cause` (text — AI draft)
-- `contributing_factors` (jsonb array of strings)
-- `timeline` (jsonb — key events: created, last status change, blockers, related sentinel findings, related failed overnight runs)
-- `what_changed` (text — AI draft of what's already been done since the slip)
-- `status` (`'draft' | 'reviewed' | 'archived'`, default `draft`)
-- `created_at`, `reviewed_at`, `reviewed_by`
-- unique `(subject_kind, subject_id, slipped_on)` so one slip → one report
+**New table `automation_steps`** (one row per phase inside a run; complements existing `automation_runs` which holds the parent summary):
+- `id`, `created_at`
+- `run_id` (uuid, nullable FK → `automation_runs.id` for stitching; sometimes the parent row arrives last)
+- `job` (text — same value as `automation_runs.job`, denormalised so we can query without the join)
+- `step_key` (text — stable identifier, e.g. `ai_gateway_call`, `db_scan:slipped_subjects`, `sentinel_check:companion_streams_stalled`)
+- `step_label` (text — human-readable)
+- `phase_kind` (text — `ai_call` | `db_scan` | `lock_wait` | `backoff` | `external_http` | `compute` | `other`)
+- `started_at`, `finished_at` (timestamptz; finished_at null while in-flight)
+- `duration_ms` (int, generated/updated on finish)
+- `status` (`running` | `ok` | `error` | `skipped`)
+- `detail` (jsonb — model name, rows scanned, retry count, error snippet)
+- index on `(job, started_at desc)`, partial index on `(status) where status='running'`
 
-Operator-only RLS via `has_role(auth.uid(),'admin')`. Realtime enabled.
+**New view `v_automation_step_p95_30d`**: per `(job, step_key)`, the p95 `duration_ms` over the trailing 30 days where `status='ok'`. Used by the UI to flag regressions.
 
-### Cron + edge function
+Operator-only RLS via `has_role()`; inserts service-role only; realtime on (for the live page).
 
-New edge function `postmortem-generate` (wrapped with `withLogger`, contract under `_shared/contracts/postmortem-generate.ts`):
-1. Query phases + sprints past `ends_on` (or equivalent end-date column — confirm during build) and not done/shipped/cancelled.
-2. For each, skip if a `postmortems` row already exists for `(kind, id, slipped_on=ends_on)`.
-3. Gather context: status history, linked `discussion_actions`, `sentinel_findings` in the period, `roadmap_phase_overnight_runs` failures, `okr_node_events` for the phase's OKR.
-4. Call `pickModel()` (night-cheap policy still applies) via Lovable AI Gateway with a structured-output schema: `{ root_cause, contributing_factors[], what_changed, timeline[] }`.
-5. Insert one `postmortems` row per slip.
+### Shared helper
 
-New cron `scheduled-postmortem-generate` runs daily 06:30 UTC (after Morning Review at 06:00) using `AWIP_SERVICE_TOKEN`.
+`supabase/functions/_shared/steps.ts`:
+- `recordStep(sb, { job, run_id?, step_key, step_label, phase_kind, detail? }, fn)` — wraps an async fn, inserts a `running` row before, updates to `ok`/`error` with `finished_at`+`duration_ms`+merged detail after.
+- `beginStep(...)` / `endStep(id, status, detail?)` for cases where the operation can't be wrapped (e.g. fire-and-forget heartbeats).
+- Failures inside `recordStep` never throw to the caller — instrumentation must not break the underlying job.
+
+### Instrumentation rollout (this PR)
+
+Wrap the steps that account for visible latency. Each instrumented site = one labelled phase.
+
+1. **`sentinel-tick`** — each of the ~15 checks in `checks.ts` becomes a `db_scan` or `compute` step (`step_key='sentinel_check:<name>'`). This is the headline win: today you only see one `automation_runs` row for the whole tick.
+2. **`postmortem-generate`** — `db_scan:slipped_subjects`, `ai_call:gateway` per subject, `db_scan:context` per subject.
+3. **`morning-review`** — top-level aggregator phases (`db_scan:triage`, `db_scan:findings`, `compute:render`, `ai_call:summarise` if present).
+4. **`night-agent-open` / `night-agent-close`** — per-action loop iteration as a step.
+5. **`overnight-phase-runner`** — `lock_wait:claim`, `ai_call:gateway`, `db_scan:write_back`.
+
+Other functions stay unchanged; they can opt in later. Logger middleware is untouched.
 
 ### UI
 
-New route `/postmortems`:
-- Table of draft + reviewed postmortems, newest first, filter by kind/status.
-- Row click → drawer with full prose (root cause, contributing factors, timeline, what changed) + link back to the phase/sprint.
-- "Mark reviewed" button stamps `reviewed_at`/`reviewed_by`.
-- Count badge on Morning Review row when there are unreviewed drafts.
+**New page `/admin/timeline`** (added to admin nav):
+- Top strip: 3 cards — `Running now` (count + oldest start), `Slowest in last 1h` (top 5 by duration), `Over p95` (count flagged this hour).
+- Main panel: live stream of steps newest first, columns = `Job`, `Step`, `Phase`, `Started`, `Duration` (live ticking for `running`), `Status`, `Detail` (expand). Filters: job, phase_kind, status, "over p95 only".
+- Each row joins to `v_automation_step_p95_30d` client-side; if `duration_ms > p95` (or `now - started_at > p95` for running rows), show an amber chip "p95 was Xms".
+- Realtime subscribe to `automation_steps` inserts/updates with unique channel name per mount.
 
-### Out of scope (per your answers)
+**Compact chip on `/morning-review`**: `TimelineNowChip` component showing `running: N · over-p95: M (1h)` linking to `/admin/timeline`. Polls every 30s.
 
-- No sentinel detector or rule proposal from postmortems.
-- No automatic discussion_action creation.
-- No migration drafting.
-- Cost-overrun and overnight-failure postmortems — separate future request.
+### Out of scope
+
+- No backfill of historical step data — p95 builds from new rows forward.
+- No instrumentation of every edge function — only the 5 listed above. Adding more is a one-line wrap per call site.
+- No alerting / sentinel detector on p95 regression — UI signal only this round.
+- No per-AI-call token breakdown beyond what `ai_usage_log` already stores (separate `task_id` work).
 
 ### Files
 
-- migration: `postmortems` table + RLS + realtime
-- `supabase/functions/_shared/contracts/postmortem-generate.ts`
-- `supabase/functions/postmortem-generate/index.ts`
-- cron registration `scheduled-postmortem-generate`
-- `src/pages/Postmortems.tsx` + route in `App.tsx`
-- `src/components/postmortems/PostmortemDrawer.tsx`
-- Morning Review badge addition
-- `mem/features/postmortems.md` + `mem/index.md` entry
+- migration: `automation_steps` table + RLS + realtime + `v_automation_step_p95_30d` view
+- `supabase/functions/_shared/steps.ts` (new helper)
+- edits to `supabase/functions/{sentinel-tick,postmortem-generate,morning-review,night-agent,overnight-phase-runner}/index.ts` (wrap target phases)
+- `src/pages/AdminTimeline.tsx` (new page)
+- `src/components/timeline/TimelineNowChip.tsx` (Morning Review chip)
+- route registration in `src/App.tsx`
+- `mem/features/automation-steps.md` + `mem/index.md` entry
 - `CHANGELOG.md`
 
 ### Verification before claiming done
 
-- Migration applied; `read_query` confirms table + RLS.
-- Manually invoke `postmortem-generate` against a synthetic slipped phase; assert row inserted with non-empty `root_cause`.
-- Re-invoke; assert no duplicate (unique constraint holds).
-- Load `/postmortems`; confirm drawer renders and "Mark reviewed" updates the row (network + console clean).
+- Migration applied; `read_query` confirms table + view + RLS.
+- Invoke `postmortem-generate` manually; `read_query` confirms ≥1 step row per call with `ok`/`error` status and non-null `duration_ms`.
+- Run `sentinel-tick` once; assert ≥10 step rows tagged `sentinel_check:*`, all terminal, with sensible durations.
+- Load `/admin/timeline`; confirm realtime row appears within 2s of a manual `postmortem-generate` invoke; confirm "over p95" chip doesn't false-fire on the first run (needs baseline).
+- Load `/morning-review`; confirm `TimelineNowChip` renders and link works.
+- Console + network clean.

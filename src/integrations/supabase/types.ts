@@ -802,6 +802,51 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_steps: {
+        Row: {
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          finished_at: string | null
+          id: string
+          job: string
+          phase_kind: string
+          run_id: string | null
+          started_at: string
+          status: string
+          step_key: string
+          step_label: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          job: string
+          phase_kind: string
+          run_id?: string | null
+          started_at?: string
+          status?: string
+          step_key: string
+          step_label: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          finished_at?: string | null
+          id?: string
+          job?: string
+          phase_kind?: string
+          run_id?: string | null
+          started_at?: string
+          status?: string
+          step_key?: string
+          step_label?: string
+        }
+        Relationships: []
+      }
       awip_doc_chunks: {
         Row: {
           content: string
@@ -6507,6 +6552,18 @@ export type Database = {
           id: string | null
           job: string | null
           status: string | null
+        }
+        Relationships: []
+      }
+      v_automation_step_p95_30d: {
+        Row: {
+          job: string | null
+          max_ms: number | null
+          p50_ms: number | null
+          p95_ms: number | null
+          phase_kind: string | null
+          sample_count: number | null
+          step_key: string | null
         }
         Relationships: []
       }
