@@ -187,21 +187,6 @@ export function UncoveredTasksPanel() {
           </div>
         </CardTitle>
       </CardHeader>
-
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-3">
-          <span>Uncovered shipped tasks</span>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{rows.length}</Badge>
-            <Button size="icon" variant="ghost" onClick={load} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </CardTitle>
-      </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {(Object.keys(MISSING_LABEL) as Missing[]).map((m) => (
@@ -263,10 +248,15 @@ export function UncoveredTasksPanel() {
                   size="icon"
                   variant="ghost"
                   onClick={(e) => copyLink(r, e)}
-                  title="Copy deep link"
-                  aria-label="Copy deep link"
+                  disabled={shortening === r.id}
+                  title={useShortLinks ? "Copy short link" : "Copy deep link"}
+                  aria-label={useShortLinks ? "Copy short link" : "Copy deep link"}
                 >
-                  <Link2 className="h-4 w-4" />
+                  {shortening === r.id ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Link2 className="h-4 w-4" />
+                  )}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => focus(r)}>
                   Link <ArrowRight className="h-3 w-3 ml-1" />
