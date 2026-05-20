@@ -157,6 +157,7 @@ export default function OperatorInbox() {
       .order("created_at", { ascending: false });
     if (opts.range) q = q.range(opts.range[0], opts.range[1]);
     if (sinceISO) q = q.gte("created_at", sinceISO);
+    if (laneFilter !== "all") q = q.eq("lane", laneFilter);
     if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
     else if (kindFilter !== "all") q = q.eq("kind", kindFilter);
@@ -168,7 +169,7 @@ export default function OperatorInbox() {
     }
     if (searchDebounced) q = q.ilike("text", `%${searchDebounced}%`);
     return q;
-  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced]);
+  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced, laneFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
