@@ -48,10 +48,14 @@ Deno.serve(withLogger("sentinel-tick", async (req) => {
   };
 
   if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await recordRun("error", 401, "Missing auth.");
+    // Record as "rejected", not "error" — these are hostile/wrong callers,
+    // not job failures. job_error_rate filters on status === "error" only,
+    // so unauthorized hits no longer pollute the error rate.
+    await recordRun("rejected", 401, "Missing auth.");
     await dispatchAlert(sb, "sentinel-tick", "auth_failed", "sentinel-tick unauthorized");
     return json({ error: "unauthorized" }, 401);
   }
+
 
   try {
     const now = new Date();
