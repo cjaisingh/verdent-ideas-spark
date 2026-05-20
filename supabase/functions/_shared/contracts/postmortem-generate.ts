@@ -22,7 +22,23 @@ export type PostmortemInput = {
     sentinelFindings?: Array<{ id: string; kind: string; severity: string; summary: string; first_seen_at: string }>;
     failedOvernightRuns?: Array<{ id: string; status: string; requested_at: string; finished_at: string | null; error?: string | null }>;
     recentEvents?: Array<{ source: string; event_type: string; created_at: string; payload?: unknown }>;
+    evidence?: EvidenceItem[];
   };
+};
+
+export type EvidenceKind =
+  | "sentinel_finding"
+  | "failed_run"
+  | "cost_spike"
+  | "log_error"
+  | "discussion_action"
+  | "automation_failure";
+
+export type EvidenceItem = {
+  at: string;             // ISO timestamp
+  kind: EvidenceKind;
+  summary: string;
+  ref?: Record<string, unknown>;
 };
 
 export type PostmortemDraft = {
