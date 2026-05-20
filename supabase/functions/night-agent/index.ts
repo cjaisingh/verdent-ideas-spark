@@ -54,6 +54,7 @@ Deno.serve(withLogger("night-agent", async (req, ctx) => {
     await sb.from("automation_runs").insert({
       job, trigger: "cron", status: "error", status_code: 401,
       message: reason, detail,
+      request_id: reqId,
     });
     await dispatchAlert(sb, job, "auth_failed", `${job} 401 — ${reason}`, detail);
     return json({ error: "unauthorized", reason }, 401);
@@ -116,6 +117,7 @@ Deno.serve(withLogger("night-agent", async (req, ctx) => {
         duration_ms: Date.now() - startedAt,
         message: res.ok ? `${job} completed` : `${job} returned ${res.status}`,
         detail,
+        request_id: reqId,
       });
     } catch (e) { console.error("automation_runs insert failed", e); }
     return res;
@@ -126,6 +128,7 @@ Deno.serve(withLogger("night-agent", async (req, ctx) => {
       await sb.from("automation_runs").insert({
         job, trigger, status: "error", status_code: 500,
         duration_ms: Date.now() - startedAt, message: msg, detail: { path },
+        request_id: reqId,
       });
     } catch {}
     return json({ error: msg }, 500);
