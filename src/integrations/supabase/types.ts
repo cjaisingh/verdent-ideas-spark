@@ -4040,6 +4040,7 @@ export type Database = {
           enabled: boolean
           kind: string
           label: string
+          lane: string
           notes: string | null
         }
         Insert: {
@@ -4048,6 +4049,7 @@ export type Database = {
           enabled?: boolean
           kind: string
           label: string
+          lane?: string
           notes?: string | null
         }
         Update: {
@@ -4056,6 +4058,7 @@ export type Database = {
           enabled?: boolean
           kind?: string
           label?: string
+          lane?: string
           notes?: string | null
         }
         Relationships: []
@@ -4070,6 +4073,7 @@ export type Database = {
           kind: string | null
           kind_confidence: number | null
           kind_source: string | null
+          lane: string
           promoted_action_id: string | null
           raw: Json
           source: string
@@ -4085,6 +4089,7 @@ export type Database = {
           kind?: string | null
           kind_confidence?: number | null
           kind_source?: string | null
+          lane?: string
           promoted_action_id?: string | null
           raw?: Json
           source?: string
@@ -4100,6 +4105,7 @@ export type Database = {
           kind?: string | null
           kind_confidence?: number | null
           kind_source?: string | null
+          lane?: string
           promoted_action_id?: string | null
           raw?: Json
           source?: string
@@ -6750,6 +6756,19 @@ export type Database = {
         }
         Relationships: []
       }
+      v_caprica_inbox_24h: {
+        Row: {
+          chat_id: number | null
+          created_at: string | null
+          id: string | null
+          kind: string | null
+          lane: string | null
+          source: string | null
+          source_label: string | null
+          text: string | null
+        }
+        Relationships: []
+      }
       v_credit_balance_latest: {
         Row: {
           as_of: string | null
@@ -7051,6 +7070,7 @@ export type Database = {
           kind: string | null
           kind_confidence: number | null
           kind_source: string | null
+          lane: string | null
           promoted_action_id: string | null
           source: string | null
           source_label: string | null
@@ -7079,6 +7099,7 @@ export type Database = {
           created_at: string | null
           id: string | null
           kind: string | null
+          lane: string | null
           source: string | null
           source_label: string | null
           text: string | null

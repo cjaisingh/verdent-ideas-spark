@@ -61,6 +61,7 @@ const DEFAULTS = {
   window: "7d",
   q: "",
   page: "0",
+  lane: "operator",
 } as const;
 type ParamKey = keyof typeof DEFAULTS;
 
@@ -102,6 +103,7 @@ export default function OperatorInbox() {
   const promotedFilter = getParam("promoted");
   const windowId = getParam("window");
   const searchDebounced = getParam("q");
+  const laneFilter = getParam("lane");
   const page = Math.max(0, parseInt(getParam("page"), 10) || 0);
 
   const setDirectionFilter = (v: string) => updateParams({ direction: v, page: "0" });
@@ -111,6 +113,7 @@ export default function OperatorInbox() {
   const setPromotedFilter = (v: string | ((prev: string) => string)) =>
     updateParams({ promoted: typeof v === "function" ? v(promotedFilter) : v, page: "0" });
   const setWindowId = (v: string) => updateParams({ window: v, page: "0" });
+  const setLaneFilter = (v: string) => updateParams({ lane: v, page: "0" });
   const setPage = (v: number | ((prev: number) => number)) =>
     updateParams({ page: String(typeof v === "function" ? v(page) : v) });
 
@@ -154,6 +157,7 @@ export default function OperatorInbox() {
       .order("created_at", { ascending: false });
     if (opts.range) q = q.range(opts.range[0], opts.range[1]);
     if (sinceISO) q = q.gte("created_at", sinceISO);
+    if (laneFilter !== "all") q = q.eq("lane", laneFilter);
     if (directionFilter !== "all") q = q.eq("direction", directionFilter);
     if (kindFilter === "untriaged") q = q.is("kind", null);
     else if (kindFilter !== "all") q = q.eq("kind", kindFilter);
@@ -165,7 +169,7 @@ export default function OperatorInbox() {
     }
     if (searchDebounced) q = q.ilike("text", `%${searchDebounced}%`);
     return q;
-  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced]);
+  }, [windowId, directionFilter, kindFilter, sourceFilter, promotedFilter, searchDebounced, laneFilter]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -584,6 +588,14 @@ export default function OperatorInbox() {
       </Card>
 
       <div className="flex flex-wrap gap-2 items-center">
+        <Select value={laneFilter} onValueChange={setLaneFilter}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="operator">Operator lane</SelectItem>
+            <SelectItem value="caprica">Caprica lane</SelectItem>
+            <SelectItem value="all">All lanes</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={directionFilter} onValueChange={setDirectionFilter}>
           <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>

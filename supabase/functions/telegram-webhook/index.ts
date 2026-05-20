@@ -217,7 +217,7 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     // are silently dropped and surfaced via sentinel.
     const { data: source } = await supabase
       .from('operator_inbox_sources')
-      .select('chat_id, enabled')
+      .select('chat_id, enabled, lane')
       .eq('chat_id', incomingChatId)
       .maybeSingle();
     if (!source || source.enabled === false) {
@@ -229,7 +229,11 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     }
+    // Stash lane on the request context so downstream insert + routing can read it.
+    ctx.attach('lane', source.lane ?? 'operator');
   }
+  const incomingLane: 'operator' | 'caprica' =
+    (ctx.meta.lane as 'operator' | 'caprica' | undefined) ?? 'operator';
 
   function chatTypeToSource(type: string | undefined): 'dm' | 'group' | 'channel' {
     if (type === 'channel') return 'channel';
@@ -324,6 +328,7 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     chat_id: message.chat.id,
     direction: 'inbound',
     source: sourceKind,
+    lane: incomingLane,
     text: textForRouting,
     raw: voiceMeta ? { ...update, _voice: voiceMeta } : update,
   }, { onConflict: 'update_id' }).select('id').maybeSingle();
@@ -350,9 +355,10 @@ Deno.serve(withLogger("telegram-webhook", async (req, ctx) => {
     }
   }
 
-  // Fire-and-forget routing for text messages (now includes transcribed voice)
+  // Fire-and-forget routing for text messages (now includes transcribed voice).
+  // Caprica-lane traffic is captured but NOT auto-promoted to discussion_actions.
   const serviceToken = Deno.env.get('AWIP_SERVICE_TOKEN');
-  if (inserted?.id && textForRouting && serviceToken) {
+  if (inserted?.id && textForRouting && serviceToken && incomingLane === 'operator') {
     const url = `${Deno.env.get('SUPABASE_URL')}/functions/v1/route-operator-message`;
     fetch(url, {
       method: 'POST',
