@@ -528,16 +528,17 @@ export function checkWhatsNewDraftsStale(
     now.getTime(),
   );
   const ageDays = (now.getTime() - oldest) / (24 * 3600_000);
-  const tooMany = drafts.length > 20;
-  const tooOld = ageDays > 7;
-  if (!tooMany && !tooOld) return [];
+  // Drop the volume threshold: the system can generate >20 drafts/day on its
+  // own, so `tooMany` is just noise. Only AGE indicates a real review backlog.
+  const tooOld = ageDays > 14;
+  if (!tooOld) return [];
   const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
   return [{
     kind: "whats_new_drafts_stale",
     severity: "medium",
     summary:
-      `What's New: ${drafts.length} unreviewed draft${drafts.length === 1 ? "" : "s"}` +
-      (tooOld ? `, oldest ${Math.floor(ageDays)}d old` : "") + ".",
+      `What's New: ${drafts.length} unreviewed draft${drafts.length === 1 ? "" : "s"}, ` +
+      `oldest ${Math.floor(ageDays)}d old.`,
     dedupe_key: `whats_new_drafts_stale:${dayBucket}`,
     subject_ref: {},
     payload: { drafts: drafts.length, oldest_age_days: Math.floor(ageDays) },
