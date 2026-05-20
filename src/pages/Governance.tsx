@@ -227,13 +227,15 @@ export default function Governance() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Governance</h1>
         <p className="text-muted-foreground">
-          Walk the chain: <strong>task → entity → authority rule</strong> and{" "}
-          <strong>task → notebook → entity</strong>. Gaps are the holes that
+          Pick an uncovered task below, then <strong>+ Link</strong> it to the entity it
+          touches and the authority rule that governs it. Gaps are the holes that
           enforcement (W7.2) will close.
         </p>
       </header>
 
-      <Card>
+      <UncoveredTasksPanel />
+
+      <Card id="governance-anchor-card">
         <CardHeader>
           <CardTitle>Anchor</CardTitle>
         </CardHeader>
