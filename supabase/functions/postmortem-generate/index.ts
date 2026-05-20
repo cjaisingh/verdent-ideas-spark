@@ -21,7 +21,7 @@ const json = (b: unknown, s = 200) =>
 
 const DONE = new Set(["done", "shipped", "cancelled"]);
 
-const PROMPT = `You write concise engineering postmortems for AWIP Core. You receive ONE slipped phase or sprint with surrounding evidence (linked discussion actions, sentinel findings, failed overnight runs, recent events).
+const PROMPT = `You write concise engineering postmortems for AWIP Core. You receive ONE slipped phase or sprint with surrounding evidence (linked discussion actions, sentinel findings, failed overnight runs, recent events, and a chronological "evidence" array of observable spikes/errors/findings).
 
 Return STRICT JSON:
 {
@@ -32,7 +32,8 @@ Return STRICT JSON:
 }
 
 Rules:
-- Be specific and grounded in the evidence given. If evidence is thin, say so.
+- Be specific and grounded in the evidence given. EVERY claim in root_cause and contributing_factors should be defensible from the evidence array — if it isn't, hedge or omit it.
+- The timeline you return should reference real events from the evidence array (same timestamps where possible).
 - No blame, no speculation beyond what the data supports.
 - Don't propose fixes or actions — that's a separate loop.
 - UK English. Plain prose, no markdown headings inside the strings.`;
