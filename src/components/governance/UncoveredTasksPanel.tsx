@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Check, X, ArrowRight, RefreshCw, Link2, ExternalLink } from "lucide-react";
+import { Check, X, RefreshCw, Link2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { trackGovernanceDeepLink } from "@/lib/governance-telemetry";
