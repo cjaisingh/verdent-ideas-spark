@@ -3849,6 +3849,48 @@ export type Database = {
         }
         Relationships: []
       }
+      observability_registry: {
+        Row: {
+          created_at: string
+          declared_in: string | null
+          domain_silence_window_hours: number | null
+          expected_cadence_minutes: number | null
+          id: string
+          notes: string | null
+          owner: string | null
+          surface_id: string
+          surface_kind: string
+          updated_at: string
+          watcher_kinds: string[]
+        }
+        Insert: {
+          created_at?: string
+          declared_in?: string | null
+          domain_silence_window_hours?: number | null
+          expected_cadence_minutes?: number | null
+          id?: string
+          notes?: string | null
+          owner?: string | null
+          surface_id: string
+          surface_kind: string
+          updated_at?: string
+          watcher_kinds?: string[]
+        }
+        Update: {
+          created_at?: string
+          declared_in?: string | null
+          domain_silence_window_hours?: number | null
+          expected_cadence_minutes?: number | null
+          id?: string
+          notes?: string | null
+          owner?: string | null
+          surface_id?: string
+          surface_kind?: string
+          updated_at?: string
+          watcher_kinds?: string[]
+        }
+        Relationships: []
+      }
       okr_measurements: {
         Row: {
           attribution_rules: Json
@@ -5981,6 +6023,42 @@ export type Database = {
           latency_ms?: number | null
           ok?: boolean
           status_code?: number | null
+        }
+        Relationships: []
+      }
+      telegram_send_log: {
+        Row: {
+          attempts: number
+          caller: string | null
+          chat_id: string | null
+          created_at: string
+          error: string | null
+          http_status: number | null
+          id: string
+          payload_hash: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          caller?: string | null
+          chat_id?: string | null
+          created_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          payload_hash?: string | null
+          status: string
+        }
+        Update: {
+          attempts?: number
+          caller?: string | null
+          chat_id?: string | null
+          created_at?: string
+          error?: string | null
+          http_status?: number | null
+          id?: string
+          payload_hash?: string | null
+          status?: string
         }
         Relationships: []
       }
