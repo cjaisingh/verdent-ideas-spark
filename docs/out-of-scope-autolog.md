@@ -9,8 +9,12 @@ contract closes the gap: every out-of-scope item becomes a
 
 | Caller | Source tag | source_ref shape |
 |---|---|---|
-| `plan-footer-ingest` edge fn | `plan_footer` | `plan:<plan_id>` |
+| `plan-footer-ingest` edge fn (origin=core, default) | `plan_footer` | `plan:<plan_id>` |
+| `plan-footer-ingest` edge fn (origin=companion\|rork) | `plan_footer` | `plan:<origin>:<plan_id>` |
 | `session-summary-log` edge fn | `session_summary` | `session:<session_summary_id>` |
+
+Cross-project callers (AWIP Companion browser surface, Rork iPhone app) MUST pass `origin: "companion" | "rork"` in the JSON body so the origin is preserved in `source_ref`. Core callers may omit `origin` — it defaults to `"core"` and keeps the legacy `plan:<id>` shape.
+
 
 Both call the shared writer at `supabase/functions/_shared/out-of-scope.ts`
 (`recordOutOfScope`). The writer is the single point of truth — never

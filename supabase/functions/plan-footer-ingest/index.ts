@@ -22,13 +22,17 @@ const json = (b: unknown, s = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+type Origin = "core" | "companion" | "rork";
 type Body = {
   plan_id?: string;
   plan_markdown?: string;
   /** Optional pre-extracted items — bypasses parsing. */
   items?: string[];
   default_priority?: "low" | "med" | "high";
+  /** Origin project for the plan; defaults to "core". Stamps source_ref as plan:<origin>:<id>. */
+  origin?: Origin;
 };
+
 
 Deno.serve(withLogger("plan-footer-ingest", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -60,21 +64,29 @@ Deno.serve(withLogger("plan-footer-ingest", async (req) => {
   const items = body.items ?? parseOutOfScope(body.plan_markdown ?? "");
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
+  const origin: Origin = body.origin ?? "core";
+  const sourceRef = origin === "core"
+    ? `plan:${body.plan_id}`
+    : `plan:${origin}:${body.plan_id}`;
+
   try {
     const result = await recordOutOfScope(sb, {
       items,
       source: "plan_footer",
-      source_ref: `plan:${body.plan_id}`,
+      source_ref: sourceRef,
       default_priority: body.default_priority,
     });
     return json({
       plan_id: body.plan_id,
+      origin,
+      source_ref: sourceRef,
       parsed_count: result.parsed_count,
       created_count: result.created.length,
       skipped_count: result.skipped.length,
       created: result.created,
       skipped: result.skipped,
     });
+
   } catch (e) {
     console.error("plan-footer-ingest failed", e);
     return json({ error: "ingest_failed", detail: String(e) }, 500);

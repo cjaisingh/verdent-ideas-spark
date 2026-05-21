@@ -4,6 +4,15 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-21 wave 2)
+- **Cross-project origin** in `plan-footer-ingest` — new optional `origin: "core" | "companion" | "rork"` field. Default `core` keeps legacy `source_ref: plan:<id>`. Companion/Rork callers stamp `source_ref: plan:<origin>:<id>` so cross-project plan footers stay attributable. Docs updated in `docs/out-of-scope-autolog.md`. Smoke-tested with `origin: "companion"` — idempotent on re-post.
+- **Plan-footer backfill script** (`scripts/backfill-plan-footers.ts`) — walks `.lovable/plan-history/*.md` + current plan, POSTs each to `plan-footer-ingest`. Idempotent via existing dedupe index. Requires `AWIP_SERVICE_TOKEN` env var.
+
+### Fixed (2026-05-21 wave 2)
+- **`session-summary-log` insert** — function was passing `null` into NOT NULL columns (`outcome`, `decisions`, `followups`, `unresolved`, the `open_*_at_*` counters) and overriding their defaults, and was also writing the now-generated `duration_minutes` column. Insert is now conditional on the caller actually providing each field, so defaults stand. Verified end-to-end: row created + 8 `out_of_scope` items fanned out to `discussion_actions`.
+
+
+
 ### Added
 - **Out-of-scope auto-logger** (`docs/out-of-scope-autolog.md`) — plan footers no longer leak. New shared writer `supabase/functions/_shared/out-of-scope.ts` parses `Out of scope` / `Not in scope` / `Deferred` / `Won't do` headings and inserts one idempotent `discussion_actions` row per bullet. Two callers: `plan-footer-ingest` (POST `{plan_id, plan_markdown}`) and `session-summary-log` (new `out_of_scope[]` field). Idempotency via partial unique index `uniq_discussion_actions_autolog (source, source_ref, title)`. New `source_ref` column on `discussion_actions`. New sentinel check `out_of_scope_stale` (medium, 15-min cadence, grouped by source_ref) fires when any auto-logged action is open >14 days. Both surfaces registered in `observability_registry`. Tests: 6 in `supabase/functions/plan-footer-ingest/parser_test.ts` (parser variants + staleness grouping).
 
