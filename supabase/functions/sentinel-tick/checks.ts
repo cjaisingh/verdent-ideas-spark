@@ -36,7 +36,8 @@ export type FindingCandidate = {
     | "inbox_source_silent"
     | "out_of_scope_stale"
     | "observability_missing_watcher"
-    | "observability_stale_surface";
+    | "observability_stale_surface"
+    | "resolver_low_confidence_rate";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
