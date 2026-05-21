@@ -1,54 +1,89 @@
-## Where we are
+## Goal
 
-Just landed Phase 5/6/6b/7 prep scaffolding (retrieval contracts, source-adapter contract, ADR-0003..0006 stubs). Overnight runner now has shaped slots to fill.
+Lock the four Phase 5/6 retrieval contracts (`retrieval-ingest-concierge`, `retrieval-validation-agent`, `retrieval-resolver`, `retrieval-conflict-triage`) so the overnight runner cannot drift the shape. Two layers:
 
-Open board is thin:
+1. **Compile-time** — the contract `const` literal must have every required key with the right `shape` value, and the `Input` type must stay derivable from a single source of truth.
+2. **Lightweight runtime** — valid samples parse; invalid samples (wrong shape, bad enum, missing required field, over-budget sampleSize) get rejected with a clear error.
 
-| Action | Status | Notes |
-|---|---|---|
-| `ee7937ce` Replace ~480 `no-explicit-any` | in_progress | low/low, night-eligible |
-| `ff5743f8` Disable CodeQL + dismiss 28 alerts | open | low/low, night-eligible |
+Pattern follows `ai-jobs.ts` — Zod schemas live alongside the types in the same contract file, types derived via `z.infer`. Identical to how `ai-jobs.ts` already does it.
 
-Overnight queue (`run_overnight=true`): Phase 5, 6, 6b, 7 — all `planned`, waiting on the scaffolding we just shipped + an ADR-0006 decision before s6.2 can move.
+## Deliverables
 
-## Four candidates
+### 1. Add Zod input schemas to each contract file (4 edits)
 
-### A. Close CodeQL action (`ff5743f8`)
-Disable GitHub default CodeQL setup, bulk-dismiss the 28 alerts with reason, log capability_event. ~20 min. Clears one of two open actions; no runtime risk.
+Each `retrieval-*.ts` file gets:
 
-### B. Drain `no-explicit-any` baseline (`ee7937ce`)
-Run codemod-any-enqueue on a batched slice (e.g. 30–50 files), review the drafts, land the cleanest. Shrinks the 517-site budget. Mechanical, night-friendly — but better as overnight work than blocking foreground attention.
+- `import { z } from "https://esm.sh/zod@3.23.8";` (same version as `ai-jobs.ts`)
+- An `<Name>InputSchema` (Zod) capturing the existing `Input` type's invariants, including the documented refusal rules:
+  - `retrieval-ingest-concierge`: `sourceRef` requires at least one of `rawRecordId` / `url`; `query` non-empty; `siblingFanout` integer 0–10.
+  - `retrieval-validation-agent`: `sampleSize` ≤ 200 (matches the documented "refuse > 200" fallback); `columns` non-empty strings.
+  - `retrieval-resolver`: `tenantId` uuid; `descriptors` non-empty; each descriptor `value` non-empty; `topK` 1–50.
+  - `retrieval-conflict-triage`: `conflictId` uuid; `siblingWindowDays` 1–365.
+- The existing `export type <Name>Input` is rewritten as `z.infer<typeof <Name>InputSchema>` so the type and the schema cannot drift.
+- Output types untouched (runtime validation on outputs is the implementer's job per sprint, not this round).
+- The contract `const` is widened with a `RetrievalContractMeta` type-assert via `satisfies` so missing/typoed keys fail typecheck.
 
-### C. Caprica vision branch
-Wire photo `file_id` → Gemini 2.5 Flash vision → caption → route as text in `telegram-webhook`. Closes the documented inbox gap. Touches one edge fn + one helper. ~45 min including tests.
+### 2. New shared type — `_shared/contracts/retrieval-contract.ts`
 
-### D. Decide ADR-0006 (embedding model + index)
-Promote `docs/adr/0006-embedding-model-and-index.md` from `proposed` → `accepted` with the lean (`gemini-embedding-001` @ 1536d + hnsw). This is the single decision that unblocks Phase 6 s6.2 (`canonical_facts` + ingest concierge embeddings). No code yet — just the ADR body, a CHANGELOG line, and a pgvector readiness note.
+Tiny module exporting:
 
-Without D, Phase 6 overnight runs will keep re-deriving the same question.
+```ts
+export type RetrievalShape =
+  | "prose" | "hierarchical-doc" | "tabular" | "graph" | "relational" | "time-series";
 
-## Recommendation
+export type RetrievalContractMeta = {
+  shape: RetrievalShape;
+  store: string;
+  primaryKey: string;
+  tokenBudget: number;
+  freshnessWindow: string;
+  fallback: string;
+  declaredBy: string;
+};
+```
 
-**D, then A** in this session:
-1. Fill out ADR-0006 — chosen option, rationale, consequences, rollout (extension enable + index choice at corpus thresholds), and the trigger to revisit (cost/quality at 100k chunks). Update `mem://features/phase-5-6-prep.md` lean → accepted.
-2. Close CodeQL action (`ff5743f8`) — disable default setup via API or doc the manual step, bulk-dismiss with reason, emit capability_event, mark action `done`.
+Each contract const closes with `} as const satisfies RetrievalContractMeta;`. Compile-time guarantee that every contract carries every required key with the right enum value.
 
-B (any-baseline drain) is queued for overnight via the existing codemod path. C (Caprica vision) stays deferred unless you want it tonight.
+### 3. One Deno test file — `supabase/functions/_shared/contracts/retrieval_contracts_test.ts`
 
-## Out of scope
+Single file, ~150 lines. Imports the four contracts + their schemas. Tests:
 
-- Any Phase 5/6 migrations (`canonical_facts`, `raw_records`, vector indexes) — wait for ADR acceptance to land first.
-- Phase 7 connector contract — depends on Phase 6 source-adapter shape stabilising.
-- Touching the any-baseline foreground.
+- **Per contract — contract literal sanity** (4 cases): `tokenBudget > 0`, `shape` is one of the allowed enums, `declaredBy` and `fallback` non-empty.
+- **Per contract — valid input round-trips** (4 cases): a minimal valid sample parses cleanly.
+- **Per contract — invalid input rejected** (4 cases, grouped):
+  - ingest-concierge: empty `sourceRef` (neither rawRecordId nor url) → error.
+  - validation-agent: `sampleSize: 1000` → error mentioning the 200 cap.
+  - resolver: `tenantId: "not-a-uuid"` and empty `descriptors` → error.
+  - conflict-triage: `siblingWindowDays: 9999` → error.
+- **Type-derivation guard** (1 case): `expectType<<Name>Input, z.infer<typeof <Name>InputSchema>>()` helper so a future drift in either direction breaks the test build.
+
+Uses the same imports as `alerts_dispatch_log_test.ts`:
+```
+import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
+```
+
+Runs via the `supabase--test_edge_functions` tool — no other harness.
 
 ## Verification
 
-- ADR-0006: `scripts/check-doc-drift.ts` clean (CHANGELOG bullet covers it).
-- CodeQL close: GitHub UI shows default CodeQL disabled + 0 open alerts; `discussion_actions` row flips to `done` with capability_event row.
+- `supabase--test_edge_functions` with `functions: []` (or scoped to `_shared` if the runner supports it) — all 13 new test cases pass.
+- `bun run lint` clean on the four edited contracts + two new files.
+- `scripts/check-doc-drift.ts` unaffected (no new doc surface; CHANGELOG bullet covers it).
+- `scripts/check-logger-coverage.ts` unaffected (no new edge function).
+
+## Out of scope
+
+- No runtime validation on the `Output` types — those land per implementer sprint.
+- No changes to `night-agent.ts`, `source-adapter.ts`, `ai-jobs.ts`, `postmortem-generate.ts`, `credit-snapshot.ts`.
+- No new edge function, no migration, no cron, no UI.
+- ADR-0006 already accepted last turn — not touched.
 
 ## Size
 
-ADR-0006 fill: ~1 file edit, ~1 CHANGELOG line, ~1 mem update.
-CodeQL close: ~0 repo files (GitHub API call + DB update via migration or `awip-api`).
+- 4 contract files edited (~20 lines each).
+- 1 new shared type file (~25 lines).
+- 1 new Deno test file (~150 lines).
+- 1 CHANGELOG bullet under `[Unreleased] › Added`.
+- 1 mem update to `mem://features/phase-5-6-prep` noting the lockdown.
 
-Pick D+A, or override with A/B/C only.
+~7 files touched, no runtime behaviour change.
