@@ -2725,6 +2725,7 @@ export type Database = {
           risk: string
           short_num: number
           source: string
+          source_ref: string | null
           status: string
           subject_id: string
           subject_type: string
@@ -2757,6 +2758,7 @@ export type Database = {
           risk?: string
           short_num?: number
           source?: string
+          source_ref?: string | null
           status?: string
           subject_id: string
           subject_type: string
@@ -2789,6 +2791,7 @@ export type Database = {
           risk?: string
           short_num?: number
           source?: string
+          source_ref?: string | null
           status?: string
           subject_id?: string
           subject_type?: string
