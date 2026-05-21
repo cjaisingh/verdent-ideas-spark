@@ -33,7 +33,8 @@ export type FindingCandidate = {
     | "secrets_health_stale"
     | "cron_auth_failures_burst"
     | "inbox_kind_classify_failures"
-    | "inbox_source_silent";
+    | "inbox_source_silent"
+    | "out_of_scope_stale";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
