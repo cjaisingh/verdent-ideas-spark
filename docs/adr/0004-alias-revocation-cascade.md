@@ -24,3 +24,21 @@ Current lean: option 3 (hybrid). Soft flag covers the everyday "we got the alias
 ## Consequences
 
 To be filled in once the decision lands. Whichever option wins, revocation must emit an `okr_node_event` so OKR owners can see why a rollup just changed.
+
+## Acceptance (s5.3 M3/M4)
+
+Decision is locked to **option 3 (hybrid)**: soft revoke by default, admin-only `hardRevoke=true` with `reason.length >= 8` enforced by `tenant_node_aliases_hard_revoke_reason_chk`. Lookup performance must hold on the resolver hot path, gated by this checklist:
+
+| Condition (from `scripts/adr-bench/adr-0004-revocation.ts`) | Action |
+|---|---|
+| `lookup_p95_ms ≤ 15` at current corpus | Keep in-table — no change needed. |
+| `15 < lookup_p95_ms ≤ 40` | Add `BRIN` index on `revoked_at` and re-bench. |
+| `lookup_p95_ms > 40` OR write amplification > 2× baseline | Flip to `mv_active_aliases` materialised view, refreshed on `entity_resolution_events` trigger, gated behind feature flag `resolver.use_mv_aliases`. |
+| `compliance_revocation_count_30d == 0` over 90d | Drop the hard path. Revisit at end of Phase 5. |
+
+Bench JSON lands in `bench-results/adr-0004-<timestamp>.json` and uploads to `public.adr_bench_results` (`tripped_triggers` reflects which row above the run matched). CHANGELOG entry records the chosen branch.
+
+### M3/M4 milestones
+
+- **M3** — embedding-hint branch on `/resolve` (cap 0.6, skipped when authoritative descriptor hits or topK full); `alias_revoke_burst` sentinel check (>10 in 15min/tenant → high; ≥3 hard → critical); `idx_alias_tenant_revoked` index added.
+- **M4** — admin-role JWT harness for `alias_hard_revoke_requires_admin_role` test; first acceptance bench run; ADR-0004 Consequences section finalised and `mem://features/entity-resolver` updated with the chosen branch.

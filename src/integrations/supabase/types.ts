@@ -7809,6 +7809,20 @@ export type Database = {
           user_id: string
         }[]
       }
+      match_alias_embedding: {
+        Args: {
+          _min_similarity?: number
+          _query: string
+          _tenant_id: string
+          _top_k?: number
+        }
+        Returns: {
+          alias_id: string
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          node_id: string
+          similarity: number
+        }[]
+      }
       normalise_alias: { Args: { _v: string }; Returns: string }
       purge_all_rows: { Args: { _table: string }; Returns: number }
       purge_console_captures: { Args: never; Returns: number }

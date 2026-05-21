@@ -37,7 +37,8 @@ export type FindingCandidate = {
     | "out_of_scope_stale"
     | "observability_missing_watcher"
     | "observability_stale_surface"
-    | "resolver_low_confidence_rate";
+    | "resolver_low_confidence_rate"
+    | "alias_revoke_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -1285,6 +1286,58 @@ export function checkResolverLowConfidenceRate(
       dedupe_key: `resolver_low_confidence_rate:${tenantId}:${hourBucket}`,
       subject_ref: { tenant_id: tenantId, no_match: c.no_match, total: c.total },
       payload: { no_match_pct: pct, fix_url: "/entities" },
+    });
+  }
+  return out;
+}
+
+// ----- s5.3 M3: alias_revoke_burst ---------------------------------------
+// >10 alias_revoke events in 15min for one tenant → high. Catches sloppy
+// scripted revocations and the early-warning sign of a tenant-tree mis-merge.
+export type AliasRevokeEventRow = {
+  tenant_id: string;
+  kind: string; // alias_revoke or alias_hard_revoke
+  created_at: string;
+};
+
+export function checkAliasRevokeBurst(
+  now: Date,
+  windowMinutes: number,
+  threshold: number,
+  rows: AliasRevokeEventRow[],
+): FindingCandidate[] {
+  const out: FindingCandidate[] = [];
+  const cutoff = now.getTime() - windowMinutes * 60_000;
+  const byTenant = new Map<string, { soft: number; hard: number }>();
+  for (const r of rows) {
+    if (r.kind !== "alias_revoke" && r.kind !== "alias_hard_revoke") continue;
+    if (+new Date(r.created_at) < cutoff) continue;
+    const cur = byTenant.get(r.tenant_id) ?? { soft: 0, hard: 0 };
+    if (r.kind === "alias_hard_revoke") cur.hard++;
+    else cur.soft++;
+    byTenant.set(r.tenant_id, cur);
+  }
+  // Bucket the window so dedupe doesn't churn while the burst is ongoing.
+  const windowBucket = Math.floor(now.getTime() / (windowMinutes * 60_000));
+  for (const [tenantId, c] of byTenant) {
+    const total = c.soft + c.hard;
+    if (total < threshold) continue;
+    out.push({
+      kind: "alias_revoke_burst",
+      severity: c.hard >= 3 ? "critical" : "high",
+      summary:
+        `Alias revoke burst: ${total} in ${windowMinutes}m for tenant ` +
+        `${tenantId.slice(0, 8)} (${c.soft} soft, ${c.hard} hard). ` +
+        `Check for a misfiring script or tenant-tree mis-merge.`,
+      dedupe_key: `alias_revoke_burst:${tenantId}:${windowBucket}`,
+      subject_ref: { tenant_id: tenantId, soft: c.soft, hard: c.hard, window_minutes: windowMinutes },
+      payload: {
+        soft_revokes: c.soft,
+        hard_revokes: c.hard,
+        window_minutes: windowMinutes,
+        threshold,
+        fix_url: "/entities",
+      },
     });
   }
   return out;

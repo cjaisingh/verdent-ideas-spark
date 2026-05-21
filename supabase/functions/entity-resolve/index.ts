@@ -12,7 +12,8 @@
 // Weights come from `descriptor_weights` (per-tenant override → zero-UUID default).
 // Confidence bands: ≥0.85 auto_bind / 0.55–<0.85 conflict / <0.55 no_match.
 // Ancestry is read directly from `tenant_nodes.ancestry_ids` (s5.2 materialised path).
-// embedding_hint is deferred to s5.3 (requires tenant-scoped vector store).
+// embedding_hint (s5.3 M3): tenant-scoped pgvector ANN via match_alias_embedding(),
+//   capped at 0.6, skipped when authoritative descriptors hit OR topK already full.
 // Resolver NEVER crosses tenant_id. All write endpoints require Idempotency-Key.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.23.8";
@@ -292,6 +293,39 @@ Deno.serve(
         }
       }
 
+      // (4) embedding_hint — pgvector ANN, tenant-scoped, score capped at 0.6.
+      // Skipped when authoritative descriptors already hit OR topK already full.
+      // Never auto-binds on its own — caps land in the conflict band by design.
+      let embeddingHintUsed = false;
+      let embeddingHintCandidatesAdded = 0;
+      const HINT_CAP = 0.6;
+      if (
+        p.embeddingHint &&
+        !authoritativeHit &&
+        byNode.size < topK
+      ) {
+        const minSim = p.embeddingHint.minSimilarity ?? HINT_CAP;
+        const { data: hintRows, error: hintErr } = await sb.rpc("match_alias_embedding", {
+          _tenant_id: p.tenantId,
+          _query: p.embeddingHint.vector as unknown as number[],
+          _min_similarity: minSim,
+          _top_k: topK,
+        });
+        if (!hintErr) {
+          embeddingHintUsed = true;
+          for (
+            const r of (hintRows ?? []) as Array<
+              { alias_id: string; node_id: string; kind: Kind; similarity: number }
+            >
+          ) {
+            if (byNode.size >= topK && !byNode.has(r.node_id)) break;
+            const score = Math.min(HINT_CAP, Number(r.similarity));
+            addHit(r.node_id, score, r.kind, "embedding_hint");
+            embeddingHintCandidatesAdded++;
+          }
+        }
+      }
+
       // Filter to parent (if requested) via materialised ancestry_ids.
       const allIds = Array.from(byNode.keys());
       if (allIds.length) {
@@ -338,6 +372,8 @@ Deno.serve(
           authoritative_hit: authoritativeHit,
           confidence_band: confidenceBand,
           top_score: topScore,
+          embedding_hint_used: embeddingHintUsed,
+          embedding_hint_candidates_added: embeddingHintCandidatesAdded,
         },
       });
 

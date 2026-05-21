@@ -32,12 +32,28 @@ export const ResolverDescriptorSchema = z
 
 export type ResolverDescriptor = z.infer<typeof ResolverDescriptorSchema>;
 
+// s5.3 M3 — embedding-hint branch. When provided, the resolver runs a
+// tenant-scoped pgvector search after deterministic descriptor scans, and
+// only when topK is not already full and no authoritative descriptor hit.
+// The hint score is capped at 0.6 (sits in the conflict band by design —
+// embeddings never auto-bind on their own).
+export const EmbeddingHintSchema = z
+  .object({
+    vector: z.array(z.number()).min(8).max(4096),
+    model: z.string().min(1).optional(),
+    minSimilarity: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+
+export type EmbeddingHint = z.infer<typeof EmbeddingHintSchema>;
+
 export const ResolverRetrievalInputSchema = z
   .object({
     tenantId: z.string().uuid("tenantId must be a uuid"),
     descriptors: z.array(ResolverDescriptorSchema).min(1, "descriptors must be non-empty"),
     parentNodeId: z.string().uuid().optional(),
     topK: z.number().int().min(1).max(50).optional(),
+    embeddingHint: EmbeddingHintSchema.optional(),
   })
   .strict();
 
