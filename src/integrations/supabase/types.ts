@@ -7245,6 +7245,20 @@ export type Database = {
         }
         Relationships: []
       }
+      v_observability_registry_status: {
+        Row: {
+          declared_in: string | null
+          expected_cadence_minutes: number | null
+          id: string | null
+          last_seen_at: string | null
+          owner: string | null
+          status: string | null
+          surface_id: string | null
+          surface_kind: string | null
+          watcher_kinds: string[] | null
+        }
+        Relationships: []
+      }
       v_operator_inbox_24h: {
         Row: {
           action_short_num: number | null
