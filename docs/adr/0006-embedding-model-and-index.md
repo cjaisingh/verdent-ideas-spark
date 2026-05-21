@@ -83,8 +83,17 @@ create index if not exists <table>_embedding_idx
 - We are NOT supporting hybrid (vector + FTS) search in this ADR. Phase 6 ships with vector-only; FTS is a separate decision when retrieval quality complaints arrive.
 - We are NOT picking a sovereign embedding model now. The BGE self-host option is deferred, not killed.
 
+## Measured
+
+| Date (UTC) | `embedding_spend_usd_30d` | `vector_row_count_max` | `hnsw_query_p95_ms` | `re_embed_jobs_30d` | Status |
+|---|---|---|---|---|---|
+| 2026-05-21 | 0 | 0 | 0 | 0 | green (pre-Phase-6 baseline — no `public.*` table has an `embedding` column yet) |
+
+Baseline meaning: until Phase 6 ships an `embedding`-bearing table, `vector_row_count_max` and `hnsw_query_p95_ms` are structurally `0`, not "no data". The first non-zero spend row will start the real clock against the €50/mo intent (metric is USD because `ai_usage_log.cost_usd`).
+
 ## Revisit trigger
 
-Re-open this ADR if any of: (a) embedding-only spend exceeds €50/mo on the Lovable AI Gateway, (b) sovereignty posture flips to "embeddings must run on owned infra", (c) any single vector store crosses 1M rows, or (d) Gemini embedding API gets deprecated by Google.
+Re-open this ADR if any of: (a) embedding-only spend exceeds €50/mo on the Lovable AI Gateway (measured as `embedding_spend_usd_30d > 50`), (b) sovereignty posture flips to "embeddings must run on owned infra", (c) any single vector store crosses 1M rows, or (d) Gemini embedding API gets deprecated by Google.
 
 > Measurement harness: see [`docs/adr/benchmarks.md § ADR-0006`](./benchmarks.md#adr-0006--embedding-model--index-revisit-instrumentation) and `scripts/adr-bench/adr-0006-embedding.ts`.
+

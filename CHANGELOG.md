@@ -4,6 +4,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Measured (2026-05-21)
+- **ADR-0006 baseline bench** — first real run of `scripts/adr-bench/adr-0006-embedding.ts`. Result: `embedding_spend_usd_30d=0`, `vector_row_count_max=0`, `hnsw_query_p95_ms=0`, `re_embed_jobs_30d=0`. Status: **green** — pre-Phase-6 baseline; no `public.*` table carries an `embedding` column yet, so vector metrics are structurally `0` (not "no data"). Result uploaded to `adr_bench_results` and surfaced on `/admin/adr-bench`. Numbers pasted into ADR-0006 Consequences as the first data point.
+
+### Fixed (2026-05-21 wave 3)
+- **ADR-0006 bench script schema drift** (`scripts/adr-bench/adr-0006-embedding.ts`) — column was `cost_eur`; real schema is `cost_usd`. Renamed metric `embedding_spend_eur_30d` → `embedding_spend_usd_30d` (ADR intent stays €50/mo; metric is whatever `ai_usage_log` stores). Dropped the unused `pg` driver dependency — script now shells out to `psql` via the standard `PG*` env, matching the rest of the sandbox. `src/lib/adr-bench-thresholds.ts` and `docs/adr/benchmarks.md § ADR-0006` updated in lockstep.
+
+
 ### Added (2026-05-21 wave 2)
 - **Cross-project origin** in `plan-footer-ingest` — new optional `origin: "core" | "companion" | "rork"` field. Default `core` keeps legacy `source_ref: plan:<id>`. Companion/Rork callers stamp `source_ref: plan:<origin>:<id>` so cross-project plan footers stay attributable. Docs updated in `docs/out-of-scope-autolog.md`. Smoke-tested with `origin: "companion"` — idempotent on re-post.
 - **Plan-footer backfill script** (`scripts/backfill-plan-footers.ts`) — walks `.lovable/plan-history/*.md` + current plan, POSTs each to `plan-footer-ingest`. Idempotent via existing dedupe index. Requires `AWIP_SERVICE_TOKEN` env var.
