@@ -1,73 +1,88 @@
 ## Goal
 
-Give the operator a one-stop, plain-language guide that answers — for each of Phase 5, 6, 6b, 7 — *"what will the overnight runner actually do tonight, what should I see in the morning, and which contract/ADR is governing the behaviour?"*
+Wire the Phase 5/6/6b retrieval contracts into `supabase/functions/overnight-phase-runner/index.ts` so each queued `roadmap_phase_overnight_runs` row consumes the typed contract end-to-end — without faking Phase 5/6 ingest (the underlying `tenant_nodes` / `canonical_facts` / `fact_conflicts` tables don't exist yet).
 
-Existing `docs/phases-5-6-6b-research.md` is research-flavoured (locked invariants + open questions) and doesn't cover Phase 7. The overnight recommender doc explains scheduling but says nothing about per-phase expected outcomes. This adds the missing layer.
+The honest integration is: **the runner stamps the contract identity into the prompt, validates the AI's structured response against a Zod envelope, and refuses to mark the run `done` if the contract isn't acknowledged.** Types flow from `_shared/contracts/*.ts` → mapping → runner prompt → AI response → Zod parse → run row + `ai_usage_log.request_ref`.
 
-Doc-only. No code, no schema, no runtime change.
+## Why this shape
 
-## Deliverable
+The contracts already exist as types + Zod schemas. The runner today produces unstructured `{summary, risks, recommendations}` with no link back to the governing contract or ADR. That's the gap. Adding a phase→contract mapping and a typed response envelope makes the contract identity load-bearing instead of decorative — break the type, break the build; ignore the contract, fail the run.
 
-### 1. New file `docs/phases-overnight-operator-guide.md` (~250 lines)
+## Deliverables
 
-Structure:
+### 1. `supabase/functions/_shared/contracts/phase-contract-map.ts` (new, ~80 lines)
 
-**Top of file**
-- One-paragraph framing: "Core is substrate, not a brain. Overnight runs operate inside the contracts in `supabase/functions/_shared/contracts/` and against the ADRs in `docs/adr/`. If a behaviour isn't listed here, it didn't happen — file it as a discussion_action."
-- "How to read this guide" mini-key: **Governed by**, **What the run does**, **Won't do**, **Morning checks**, **What unblocks the next sprint**.
-- Pointer back to `phases-5-6-6b-research.md` for invariants + open questions and to `docs/adr/benchmarks.md` for the data that closes ADR stubs.
+- `import` all four `RETRIEVAL_*_CONTRACT` consts + `RetrievalContractMeta`.
+- `export type PhaseKey = "phase-5" | "phase-6" | "phase-6b" | "phase-7";`
+- `export type PhaseContractBinding = { phaseKey: PhaseKey; contract: RetrievalContractMeta; adrs: readonly string[]; guardrails: readonly string[]; };`
+- `export const PHASE_CONTRACTS: Record<PhaseKey, PhaseContractBinding>` populated from the docs we already wrote (`docs/phases-overnight-operator-guide.md` "Won't do" lines map to `guardrails`; "Governed by" lines map to `adrs`).
+- `export function getPhaseBinding(phaseKey: string): PhaseContractBinding | null` — returns `null` for any key not in the map; runner treats that as "no contract — proceed as today" so unrelated phases (phase-1..4) aren't broken.
 
-**Per-phase section** (Phase 5, 6, 6b, 7 — same fixed shape):
+### 2. `supabase/functions/_shared/contracts/overnight-envelope.ts` (new, ~40 lines)
 
-1. **Governed by** — bullet list naming the contracts (`retrieval-*.ts`, `source-adapter.ts`) and ADRs (0003–0006) in play, with one-line "lean direction" reminder for stub ADRs.
-2. **What tonight's run does** — concrete steps the night agent / phase runner will perform inside the fixed shape (e.g. for Phase 5: "resolves descriptors against `tenant_nodes` in deterministic → alias-FTS → embedding-hint order per `retrieval-resolver` contract; proposes new nodes when no match; never auto-binds without operator approval").
-3. **Won't do** — the non-negotiables, framed as guard rails not failures. Pulled directly from invariants already in `phases-5-6-6b-research.md` (e.g. "won't promote facts with guessed `tenant_node_id`", "won't embed canonical facts", "won't pick a final ancestry storage — ADR-0003 still proposed").
-4. **Morning checks** — exact UI surfaces to inspect (Morning Review panel name, /admin/jobs for the run, `bench-results/` for any ADR bench output, sentinel findings with the matching `__check_key`).
-5. **What unblocks the next sprint** — the trigger event from `docs/adr/benchmarks.md` (e.g. for Phase 5: "first imported tenant tree ≥ 5k nodes unblocks ADR-0003 decision at s5.2").
+- `OvernightResponseEnvelopeSchema` (Zod):
+  - `contract_acknowledged: z.string().min(1)` — must match `binding.contract.declaredBy` or `binding.contract.store` exactly (cross-checked in runner, not in schema).
+  - `guardrails_respected: z.array(z.string()).min(1)` — must be a non-empty subset of `binding.guardrails`.
+  - `would_violate: z.array(z.string())` — anything the AI considered but rejected.
+  - `summary: z.string().min(1).max(4000)`.
+  - `risks: z.array(z.string().min(1)).max(10)`.
+  - `recommendations: z.array(z.string().min(1)).max(10)`.
+- `export type OvernightResponseEnvelope = z.infer<typeof ...>`.
 
-**Phase-specific content** (drafted from existing artefacts — no new claims):
+### 3. `supabase/functions/overnight-phase-runner/index.ts` (modify in place)
 
-- **Phase 5 — Entity & Tenant Resolution.** Governed by `retrieval-resolver.ts` (graph, 1k, deterministic→alias FTS→embedding-hint), ADR-0003 (ancestry, lean: `ancestry_ids[]`), ADR-0004 (revocation cascade, lean: hybrid). Won't: cross tenant boundaries, auto-commit fuzzy aliases, choose ancestry storage. Morning checks: /admin/jobs filter `night-agent`, Morning Review "Phase progress" panel.
+Surgical edits:
 
-- **Phase 6 — Ingest & Canonicalisation.** Governed by `retrieval-ingest-concierge.ts` (hierarchical-doc, 8k, embedding fallback per ADR-0006), `source-adapter.ts` auto-promote trio (mapping approved + validations pass + no PII without lawful basis + idempotency-derived key), ADR-0005 (bulk conflicts, lean: hybrid heuristic+LLM), ADR-0006 (**accepted** — `gemini-embedding-001@1536` + hnsw). Won't: silently overwrite, embed canonical facts, run hybrid vector+FTS, auto-resolve conflicts without proposing a `conflict_rules` row. Morning checks: ingest run rows, `fact_conflicts` count delta, `bench-results/adr-0006-*.json`.
+- Import `getPhaseBinding` + `OvernightResponseEnvelopeSchema`.
+- After fetching `run`, call `getPhaseBinding(run.phase_key)`. If non-null:
+  - Inject contract identity into the system prompt: shape, store, token budget, fallback rule, ADR list, the literal `guardrails` array, and explicit instruction "your JSON must include `contract_acknowledged`, `guardrails_respected`, `would_violate` fields".
+  - Truncate user payload to `binding.contract.tokenBudget * 4` chars (rough token→char proxy) instead of the current hard 40 000.
+- After `JSON.parse(aiJson.content)`:
+  - If binding exists, run `OvernightResponseEnvelopeSchema.safeParse(parsed)`. On failure or if `contract_acknowledged` doesn't match `binding.contract.declaredBy`/`store` or any `guardrails_respected` entry is not in `binding.guardrails` → set run `status='auto_blocked'`, `last_error='contract envelope rejected: <reason>'`, do **not** charge attempts back to queue (this is a hard block), and `dispatchAlert`.
+  - On success, store the envelope + `phase_binding: { phaseKey, contractStore: binding.contract.store, adrs: binding.adrs }` on the run row's `result`.
+- Add `phase_binding` to `ai_usage_log.request_ref` so per-phase contract spend is queryable later.
+- No change for runs with `phase_key` not in the map — backward-compat path stays identical.
 
-- **Phase 6b — Ingest Observability.** Governed by `retrieval-validation-agent.ts` (tabular, 2k, `sampleSize ≤ 200`). Won't: bypass the sample cap, mutate the source rows it's sampling. Morning checks: validation-agent panel + `automation_steps` view for per-phase timing.
+### 4. Tests — extend `supabase/functions/_shared/contracts/retrieval_contracts_test.ts`
 
-- **Phase 7 — Truth & Governance.** Governed by `retrieval-conflict-triage.ts` (relational, 4k), existing `decision_authorities` + `claims` (W7.1/W7.2), `governance_links` (W7.1.5). Won't: edit authority rules outside git, infer governance links, auto-resolve `truth_conflicts_unresolved`. Morning checks: /governance coverage, `truth_conflicts_unresolved` sentinel.
+New `Deno.test` cases (4 added, ~50 lines):
 
-**Footer**
-- "When this guide is wrong" — instruction to update this file in the same PR as any contract/ADR change, mirrored in `mem://preferences/docs`.
+- **mapping completeness**: every entry in `PHASE_CONTRACTS` points to a real `RETRIEVAL_*_CONTRACT` const (identity, not deep equal).
+- **mapping coverage**: keys are exactly `["phase-5","phase-6","phase-6b","phase-7"]`.
+- **envelope rejects unknown guardrail**: a `guardrails_respected` entry not in `binding.guardrails` → cross-check helper returns false.
+- **envelope rejects bad shape**: missing `contract_acknowledged` → `safeParse(...).success === false`.
 
-### 2. Cross-links — three 1-line edits
+Run via `supabase--test_edge_functions` — must stay all-green.
 
-- `docs/phases-5-6-6b-research.md` — top-of-file pointer: "Operator-facing overnight expectations: see `docs/phases-overnight-operator-guide.md`."
-- `docs/overnight-recommender.md` — top-of-file pointer to the same.
-- `docs/adr/benchmarks.md` — under "Readiness gates" add: "Operator-facing expectations per phase: see `docs/phases-overnight-operator-guide.md`."
+### 5. Docs + memory
 
-### 3. README + CHANGELOG + memory
-
-- `README.md` — add the new guide under the docs index where the other phase docs live.
-- `CHANGELOG.md` — one `### Added` bullet under `[Unreleased]`.
-- `mem/features/phase-5-6-prep.md` — append a one-line link under the existing "Overnight runner expectations" section.
+- `docs/phases-overnight-operator-guide.md` — append a "How the runner enforces this" subsection per phase pointing to `phase-contract-map.ts` and the envelope.
+- `CHANGELOG.md` — one `### Changed` bullet under `[Unreleased]`.
+- `mem/features/phase-5-6-prep.md` — add a "Runner integration" line under "Overnight runner expectations".
+- No new memory file — extending the existing one is enough.
 
 ## Out of scope
 
-- No code, no migrations, no edge functions, no UI.
-- No re-statement of invariants already in `phases-5-6-6b-research.md` beyond what's needed for the "Won't do" list.
-- No new operator workflow — only documents what already happens.
-- Not touching ADR text (already back-pointed via the benchmarks plan).
-- Not touching `mem://features/automation` or any sentinel doc.
+- No new database tables (Phase 5/6 tables don't exist yet).
+- No new edge functions, no cron changes, no UI.
+- No change to `night-agent`, `overnight-prequeue`, or `overnight-recommender`.
+- No fake retrieval execution against non-existent tables — the contract types flow end-to-end through prompt + response validation, not through a stub query.
+- No change to retry semantics for non-contract errors (`max_retries` path stays as-is).
+- No model change — still `gemini-2.5-flash-lite`.
 
 ## Verification
 
-- `bun run lint:ratchet` and `bun run typecheck` unaffected (markdown only).
-- `scripts/check-doc-drift.ts` runs clean (new file referenced from README + CHANGELOG).
-- Manual read-through: every "Governed by" entry matches an actual file in `supabase/functions/_shared/contracts/` or `docs/adr/`.
+1. `supabase--test_edge_functions` — all retrieval contract tests + 4 new ones pass.
+2. `bun run lint:ratchet` + typecheck clean (no new `any`).
+3. Re-deploy `overnight-phase-runner` via `supabase--deploy_edge_functions`.
+4. `supabase--curl_edge_functions` POST with `{run_id: "<a-real-queued-row>"}` against a Phase 5 run if one exists — confirm `result.phase_binding.contractStore === "tenant_nodes + tenant_node_aliases..."`. If no queued row, skip; the test suite is the load-bearing check.
+5. `scripts/check-logger-coverage.ts` unaffected (`withLogger` already wrapping).
 
 ## Size
 
-- 1 new doc (~250 lines).
-- 3 one-line cross-links.
-- README + CHANGELOG + memory bullet.
+- 2 new shared files (~120 lines total).
+- 1 modified edge function (~30 lines net added; surgical, not a rewrite).
+- 1 extended test file (~50 lines).
+- 3 doc/memory bullets.
 
-~6 files touched, zero runtime change.
+~7 files touched. Runtime behaviour changes for runs whose `phase_key` is in `{phase-5, phase-6, phase-6b, phase-7}`; identical for everything else.
