@@ -151,6 +151,16 @@ export function DiscussionActionsBody() {
                     {r.priority}
                   </span>
                   <span className="text-muted-foreground">#{r.short_num}</span>
+                  {r.source === "plan_footer" && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-amber-500/40 text-amber-600" title={r.source_ref ?? undefined}>
+                      from plan
+                    </span>
+                  )}
+                  {r.source === "session_summary" && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-indigo-500/40 text-indigo-600" title={r.source_ref ?? undefined}>
+                      from session
+                    </span>
+                  )}
                   {r.status === "in_progress" && (
                     <span className="text-[10px] text-tint-discussion">in progress</span>
                   )}
