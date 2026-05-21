@@ -34,6 +34,46 @@ export function writeBenchResult(result: BenchResult): string {
   return path;
 }
 
+/**
+ * Optionally upload a bench result to public.adr_bench_results so it shows on
+ * /admin/adr-bench. Silent no-op when SUPABASE_URL or service role key are
+ * absent (CI / local without secrets). Service role required: RLS allows
+ * inserts only from authenticated operators or service role.
+ */
+export async function uploadBenchResult(
+  result: BenchResult,
+  trippedTriggers: ReadonlyArray<string> = [],
+  source: "script" | "manual" = "script",
+): Promise<{ uploaded: boolean; reason?: string }> {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return { uploaded: false, reason: "no SUPABASE_URL or SERVICE_ROLE_KEY" };
+  try {
+    const resp = await fetch(`${url}/rest/v1/adr_bench_results`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        adr: result.adr,
+        ran_at: result.ran_at,
+        dataset_hash: result.dataset_hash,
+        metrics: result.metrics,
+        notes: result.notes ?? null,
+        tripped_triggers: trippedTriggers,
+        source,
+      }),
+    });
+    if (!resp.ok) return { uploaded: false, reason: `${resp.status} ${await resp.text().then((t) => t.slice(0, 200))}` };
+    return { uploaded: true };
+  } catch (e) {
+    return { uploaded: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export function notRunnable(adr: string, reason: string): never {
   throw new Error(
     `[${adr}] not yet runnable: ${reason}. See docs/adr/benchmarks.md § ${adr.toUpperCase()} for dataset prereqs.`,

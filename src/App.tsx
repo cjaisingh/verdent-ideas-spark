@@ -52,6 +52,7 @@ import AdminLogs from "./pages/AdminLogs";
 import AdminErrors from "./pages/AdminErrors";
 import AdminAiUsage from "./pages/AdminAiUsage";
 import AdminAiJobs from "./pages/AdminAiJobs";
+import AdminAdrBench from "./pages/AdminAdrBench";
 import MorningReview from "./pages/MorningReview";
 import LessonsLoop from "./pages/LessonsLoop";
 import Audits from "./pages/Audits";
@@ -138,6 +139,7 @@ const App = () => (
             <Route path="/admin/errors" element={<AdminErrors />} />
             <Route path="/admin/ai-usage" element={<AdminAiUsage />} />
             <Route path="/admin/ai-jobs" element={<AdminAiJobs />} />
+            <Route path="/admin/adr-bench" element={<AdminAdrBench />} />
             <Route path="/morning-review" element={<MorningReview />} />
             <Route path="/admin/lessons" element={<LessonsLoop />} />
             <Route path="/audits" element={<Audits />} />

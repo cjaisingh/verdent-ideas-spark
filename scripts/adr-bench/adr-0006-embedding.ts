@@ -14,7 +14,7 @@
  * emits a zero-filled result so the harness stays exercised.
  */
 import { z } from "zod";
-import { hashDataset, writeBenchResult, type BenchResult } from "./_shared.ts";
+import { hashDataset, writeBenchResult, uploadBenchResult, type BenchResult } from "./_shared.ts";
 
 export const InputSchema = z.object({
   pgUrl: z.string().url().optional(),
@@ -49,7 +49,7 @@ async function connect(pgUrl: string | undefined): Promise<PgClient | null> {
   }
 }
 
-export async function run(input: Input): Promise<BenchResult> {
+export async function run(input: Input): Promise<{ result: BenchResult; trips: string[] }> {
   const ranAt = new Date().toISOString();
   const client = await connect(input.pgUrl);
   const metrics: Record<string, number> = Object.fromEntries(
@@ -114,7 +114,7 @@ export async function run(input: Input): Promise<BenchResult> {
   if (metrics.vector_row_count_max > 1_000_000) trips.push("rows>1M");
   if (trips.length) result.notes = `REVISIT ADR-0006: ${trips.join(", ")}`;
 
-  return result;
+  return { result, trips };
 }
 
 if (import.meta.main) {
@@ -122,7 +122,8 @@ if (import.meta.main) {
     pgUrl: process.env.PGURL,
     windowDays: process.env.WINDOW_DAYS ? Number(process.env.WINDOW_DAYS) : undefined,
   });
-  const result = await run(input);
+  const { result, trips } = await run(input);
   const path = writeBenchResult(result);
-  console.log(JSON.stringify({ wrote: path, result }, null, 2));
+  const upload = await uploadBenchResult(result, trips);
+  console.log(JSON.stringify({ wrote: path, upload, result }, null, 2));
 }

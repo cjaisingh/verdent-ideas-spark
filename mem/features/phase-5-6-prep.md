@@ -72,3 +72,10 @@ Rule: a bench result alone does not flip an ADR — paste the numbers into
 the ADR's Consequences, set `status: accepted`, add a CHANGELOG `### Decided`
 bullet, then update this file.
 
+History viewer at [`/admin/adr-bench`](../../src/pages/AdminAdrBench.tsx) reads
+`public.adr_bench_results` (operator-only RLS, realtime). Scripts upload
+automatically via `uploadBenchResult()` in `_shared.ts` when
+`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set. Status pill is computed
+client-side in `src/lib/adr-bench-thresholds.ts` — mirror of `benchmarks.md`,
+keep both in sync.
+
