@@ -46,11 +46,12 @@ function evalAdr0005(m: Metrics): BenchEvaluation {
 }
 
 function evalAdr0006(m: Metrics): BenchEvaluation {
+  // ai_usage_log stores cost_usd; the ADR's intent is €50/mo but the metric is USD.
   const tripped: string[] = [];
   const watch: string[] = [];
-  if (n(m, "embedding_spend_eur_30d") > 50) tripped.push("embedding_spend_eur_30d > €50");
+  if (n(m, "embedding_spend_usd_30d") > 50) tripped.push("embedding_spend_usd_30d > $50");
   if (n(m, "vector_row_count_max") > 1_000_000) tripped.push("vector_row_count_max > 1M");
-  if (n(m, "embedding_spend_eur_30d") > 25) watch.push("spend > €25 (half of revisit threshold)");
+  if (n(m, "embedding_spend_usd_30d") > 25) watch.push("spend > $25 (half of revisit threshold)");
   if (n(m, "vector_row_count_max") > 500_000) watch.push("rows > 500k (half of revisit threshold)");
   return { status: tripped.length ? "revisit" : watch.length ? "watch" : "green", tripped, watch };
 }

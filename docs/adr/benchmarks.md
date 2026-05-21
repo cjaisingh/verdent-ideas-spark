@@ -142,24 +142,24 @@ For tables that don't exist yet, the bench script throws with a pointer back to 
 
 **Decision question.** Are any of the four revisit triggers tripping in live data?
 
-**Trigger event.** Continuous — run weekly once Phase 6 ingest-concierge ships. Runnable today against `awip_doc_chunks` + `ai_usage_log`.
+**Trigger event.** Continuous — run weekly once Phase 6 ingest-concierge ships. Runnable today against `ai_usage_log`; vector-store metrics are structurally `0` until any `public.*` table grows an `embedding` column.
 
-**Required dataset.** Live `ai_usage_log` (embedding-tagged rows) + every table carrying an `embedding_model_version` column.
+**Required dataset.** Live `ai_usage_log` (embedding-tagged rows) + every table carrying an `embedding` column.
 
 **Metrics** (emitted by `scripts/adr-bench/adr-0006-embedding.ts`):
 
 | Metric | Definition |
 |---|---|
-| `embedding_spend_eur_30d` | Sum of `ai_usage_log.cost_eur` where `job` ~ `'%embed%'` over trailing 30d. |
-| `vector_row_count_max` | Max `count(*)` across tables with an `embedding` column. |
-| `hnsw_query_p95_ms` | Per store, sampled from the bench's own 200-query loop. |
+| `embedding_spend_usd_30d` | Sum of `ai_usage_log.cost_usd` where `job` ~ `'%embed%'` over trailing 30d. ADR intent is €50/mo; metric is USD because that's what the column stores. |
+| `vector_row_count_max` | Max `count(*)` across tables with an `embedding` column. Structurally `0` pre-Phase-6. |
+| `hnsw_query_p95_ms` | Per store, sampled from the bench's own 200-query loop. Structurally `0` when no vector tables exist. |
 | `re_embed_jobs_30d` | Count of `ai_usage_log` rows tagged `job='re-embed'`. |
 
 **Revisit triggers** (locked in the ADR; this just locks the measurement):
 
 | Condition | Action |
 |---|---|
-| `embedding_spend_eur_30d > 50` | Re-open ADR-0006. |
+| `embedding_spend_usd_30d > 50` | Re-open ADR-0006. |
 | `vector_row_count_max > 1_000_000` | Re-open ADR-0006. |
 | Gemini embedding API deprecation announced | Re-open ADR-0006 (manual signal). |
 | Sovereignty posture flips to "must self-host embeddings" | Re-open ADR-0006 (manual signal). |
