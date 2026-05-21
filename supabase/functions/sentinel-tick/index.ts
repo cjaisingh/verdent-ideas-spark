@@ -13,6 +13,7 @@ import {
   checkTelegramWebhookSilent, checkApprovalsStale,
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
+  checkOutOfScopeStale,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
