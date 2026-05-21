@@ -91,6 +91,10 @@ export default function AdminObservabilityRegistry() {
     });
   }, [rows, activity]);
 
+  const missingCount = enriched.filter((r) => r.status === "missing-watcher").length;
+  const staleCount = enriched.filter((r) => r.status === "stale").length;
+  const hasAlerts = missingCount + staleCount > 0;
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div>
@@ -99,6 +103,22 @@ export default function AdminObservabilityRegistry() {
           Read-only inventory of monitored surfaces. Declared in migrations under <code>observability_registry</code>.
         </p>
       </div>
+      {hasAlerts && (
+        <Card className="border-destructive bg-destructive/10">
+          <CardContent className="py-4 flex items-center justify-between gap-4">
+            <div className="text-sm">
+              <span className="font-semibold text-destructive">Watcher gaps detected.</span>{" "}
+              {missingCount > 0 && (
+                <span>{missingCount} surface{missingCount === 1 ? "" : "s"} have <strong>no watcher</strong> (sentinel <code>observability_missing_watcher</code>, high). </span>
+              )}
+              {staleCount > 0 && (
+                <span>{staleCount} surface{staleCount === 1 ? "" : "s"} are <strong>stale</strong> (sentinel <code>observability_stale_surface</code>, medium).</span>
+              )}
+            </div>
+            <Badge variant="destructive">{missingCount + staleCount} open</Badge>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>{loading ? "Loading…" : `${enriched.length} surfaces`}</CardTitle>
