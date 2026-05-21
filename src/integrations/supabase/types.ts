@@ -41,6 +41,42 @@ export type Database = {
         }
         Relationships: []
       }
+      adr_bench_results: {
+        Row: {
+          adr: string
+          created_at: string
+          dataset_hash: string
+          id: string
+          metrics: Json
+          notes: string | null
+          ran_at: string
+          source: string
+          tripped_triggers: string[]
+        }
+        Insert: {
+          adr: string
+          created_at?: string
+          dataset_hash: string
+          id?: string
+          metrics?: Json
+          notes?: string | null
+          ran_at: string
+          source?: string
+          tripped_triggers?: string[]
+        }
+        Update: {
+          adr?: string
+          created_at?: string
+          dataset_hash?: string
+          id?: string
+          metrics?: Json
+          notes?: string | null
+          ran_at?: string
+          source?: string
+          tripped_triggers?: string[]
+        }
+        Relationships: []
+      }
       agent_onboarding_sessions: {
         Row: {
           activity: string | null
