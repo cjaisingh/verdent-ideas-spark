@@ -97,9 +97,10 @@ Deno.serve(withLogger("morning-review", async (req, ctx) => {
         .select("job,status,status_code,duration_ms,created_at")
         .gte("created_at", since24h),
       sb.from("discussion_actions")
-        .select("id,short_num,title,status,priority,promoted_task_id,created_at,updated_at")
+        .select("id,short_num,title,status,priority,promoted_task_id,created_at,updated_at,source,source_ref")
         .eq("status", "open")
         .limit(500),
+
       sb.from("roadmap_review_findings")
         .select("id,severity,category,title,acknowledged,created_at")
         .eq("acknowledged", false)
