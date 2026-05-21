@@ -7,7 +7,7 @@ import { localParts, inWindow } from "./time.ts";
 import { classifyJob, inferPhaseAndSuite, worse } from "./classify.ts";
 import { buildNightAgentInput, type NightAgentInput } from "../_shared/contracts/night-agent.ts";
 
-export async function openShift(sb: SbClient, settings: NightSettings) {
+export async function openShift(sb: SbClient, settings: NightSettings, opts: { force?: boolean } = {}) {
   const tz = (settings?.night_timezone as string) || "UTC";
   const winStart = (settings?.night_window_start as string) || "22:00";
   const winEnd = (settings?.night_window_end as string) || "06:00";
@@ -23,9 +23,8 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
   const enabled = settings?.night_agent_enabled !== false;
   const inWin = inWindow(local.hhmm, winStart, winEnd);
   const blackoutHit = blackouts.includes(local.date);
+  const forced = opts.force === true;
 
-  // Gate snapshot — persisted on the shift row so the promotion audit
-  // report can show the exact pre-conditions of every promotion.
   const gatesSnapshot = {
     timezone: tz,
     window: `${winStart}-${winEnd}`,
@@ -36,20 +35,22 @@ export async function openShift(sb: SbClient, settings: NightSettings) {
     blackout_hit: blackoutHit,
     allowed_kinds: allowedKinds,
     blackout_dates: blackouts,
+    forced,
   };
 
   if (!enabled) {
     return json({ skipped: true, reason: "night_agent_disabled", gates: gatesSnapshot });
   }
-  if (blackoutHit) {
+  if (!forced && blackoutHit) {
     return json({ skipped: true, reason: "blackout_date", tz, date: local.date, gates: gatesSnapshot });
   }
-  if (!inWin) {
+  if (!forced && !inWin) {
     return json({ skipped: true, reason: "outside_window", tz, local: local.hhmm, window: `${winStart}-${winEnd}`, gates: gatesSnapshot });
   }
   if (allowedKinds.length === 0) {
     return json({ skipped: true, reason: "no_allowed_kinds", gates: gatesSnapshot });
   }
+
 
   // Window timestamps recorded against the wall clock; tz remembered in summary.
   const windowStart = new Date(now);

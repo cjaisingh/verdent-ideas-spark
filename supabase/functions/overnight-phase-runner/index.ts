@@ -103,12 +103,13 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string, re
           ...binding.guardrails.map((g) => `- ${g}`),
           "",
           "Return STRICT JSON with EXACTLY these keys:",
-          `  contract_acknowledged: string  // MUST be exactly "${binding.contract.store}" (or "${binding.contract.declaredBy}")`,
+          `  contract_acknowledged: string  // MUST be one of: "${binding.contract.store}", "${binding.contract.declaredBy}", or "${binding.phaseKey}". Copy ONE of these strings verbatim — do not paraphrase or invent.`,
           `  guardrails_respected:  string[] // non-empty subset, each entry copied VERBATIM from the guard rails listed above`,
           "  would_violate:         string[] // anything you considered but rejected",
           "  summary:               string",
           "  risks:                 string[] (≤10)",
           "  recommendations:       string[] (≤10)",
+
         ].join("\n")
       : baseSystem +
         " Return STRICT JSON: {summary:string, risks:string[], recommendations:string[]}.";

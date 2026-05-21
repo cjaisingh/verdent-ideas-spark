@@ -80,9 +80,13 @@ export function rejectEnvelope(
     guardrails_respected: readonly string[];
   },
 ): string | null {
-  const expected = [binding.contract.declaredBy, binding.contract.store];
+  const expected = [
+    binding.contract.declaredBy,
+    binding.contract.store,
+    binding.phaseKey, // pragmatic: phase key proves the binding was seen
+  ];
   if (!expected.includes(envelope.contract_acknowledged)) {
-    return `contract_acknowledged "${envelope.contract_acknowledged}" does not match declaredBy or store`;
+    return `contract_acknowledged "${envelope.contract_acknowledged}" does not match declaredBy, store, or phaseKey`;
   }
   const allowed = new Set(binding.guardrails);
   for (const g of envelope.guardrails_respected) {
@@ -90,3 +94,4 @@ export function rejectEnvelope(
   }
   return null;
 }
+

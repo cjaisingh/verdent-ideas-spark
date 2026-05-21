@@ -99,16 +99,24 @@ Deno.serve(withLogger("night-agent", async (req, ctx) => {
     const stepLabel = path.startsWith("/open") ? "Open night shift"
                     : path.startsWith("/close") ? "Close night shift digest"
                     : "Night-agent smoke test";
+    // Parse body once so /open can honour { force: true } from operator UI.
+    const body = req.method === "POST"
+      ? await req.clone().json().catch(() => ({}))
+      : {};
+    // Force-open bypasses the window/blackout gates. Operator JWT only —
+    // cron must never auto-bypass its own window.
+    const forceOpen = body?.force === true && !triggeredByCron;
     res = await recordStep(sb, {
       job, step_key: `compute:${job}`, step_label: stepLabel, phase_kind: "compute",
       request_id: reqId,
-      detail: { path, trigger },
+      detail: { path, trigger, force: forceOpen },
     }, async () => {
-      if (path.startsWith("/open")) return openShift(sb, settings ?? null);
+      if (path.startsWith("/open")) return openShift(sb, settings ?? null, { force: forceOpen });
       if (path.startsWith("/close")) return closeShift(sb);
       if (path.startsWith("/smoke")) return smokeTest(sb, settings ?? null, url);
       return json({ error: "not_found", path }, 404);
     });
+
     try {
       const cloned = res.clone();
       const detail = await cloned.json().catch(() => ({}));
