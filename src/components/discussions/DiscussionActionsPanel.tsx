@@ -71,6 +71,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [autoOnly, setAutoOnly] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
