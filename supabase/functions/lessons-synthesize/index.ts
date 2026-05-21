@@ -145,10 +145,28 @@ Deno.serve(withLogger("lessons-synthesize", async (req) => {
       }
     }
 
-    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated}/p${promoted})`, {
-      signals: totalSignals, inserted, updated, promoted, model,
+    // Fan high-severity lessons into copilot_lessons (idempotent on
+    // source='lessons-synthesize' + lesson text). The copilot reads from this
+    // table; without this fan-out it stays empty even when lessons exist.
+    let copilotFanned = 0;
+    for (const l of norm) {
+      if (l.severity !== "high" && l.severity !== "critical") continue;
+      const lessonText = `${l.title}\n\n${l.recommendation}`.slice(0, 4000);
+      const { data: existing } = await sb.from("copilot_lessons")
+        .select("id").eq("source", "lessons-synthesize").eq("lesson", lessonText).maybeSingle();
+      if (existing) continue;
+      await sb.from("copilot_lessons").insert({
+        lesson: lessonText, scope: l.category, source: "lessons-synthesize",
+        active: true, created_by: "lessons-synthesize",
+      });
+      copilotFanned++;
+    }
+
+    await recordRun("ok", 200, `synthesised ${norm.length} (i${inserted}/u${updated}/p${promoted} cl${copilotFanned})`, {
+      signals: totalSignals, inserted, updated, promoted, copilot_fanned: copilotFanned, model,
     });
-    return json({ ok: true, inserted, updated, promoted, total: norm.length, model });
+    return json({ ok: true, inserted, updated, promoted, copilot_fanned: copilotFanned, total: norm.length, model });
+
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await recordRun("error", 500, msg);
