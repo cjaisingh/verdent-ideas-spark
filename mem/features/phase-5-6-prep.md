@@ -25,14 +25,12 @@ One per agent surface, each declares shape + store + token budget per
 approved + validations pass + no PII without basis), idempotency derivation,
 hard invariants. Every Phase 6 connector implements this shape.
 
-## ADR stubs (`docs/adr/`)
+## ADRs (`docs/adr/`)
 
-All **proposed**; decision deferred to the sprint that exercises them.
-
-- **0003** tenant-node ancestry — lean: denormalised `ancestry_ids[]`; decide at s5.2.
-- **0004** alias revocation — lean: hybrid soft+hard; decide at s5.3.
-- **0005** bulk conflict patterns — lean: heuristic+LLM hybrid; decide at s6.1.
-- **0006** embedding model + index — lean: `gemini-embedding-001` @ 1536d + hnsw; decide at s6.2.
+- **0003** tenant-node ancestry — **proposed**, lean: denormalised `ancestry_ids[]`; decide at s5.2.
+- **0004** alias revocation — **proposed**, lean: hybrid soft+hard; decide at s5.3.
+- **0005** bulk conflict patterns — **proposed**, lean: heuristic+LLM hybrid; decide at s6.1.
+- **0006** embedding model + index — **ACCEPTED** (2026-05-21): `gemini-embedding-001` @ 1536d + pgvector hnsw (`vector_cosine_ops`, m=16, ef_construction=64). `embedding_model_version` column mandatory. Revisit triggers: embedding spend > €50/mo, sovereignty flip, any store > 1M rows, or Gemini API deprecated.
 
 ## Overnight runner expectations
 
