@@ -184,3 +184,21 @@ describe("entity-resolve — s5.1 deterministic path", () => {
     expect(top.score).toBe(1.0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// s5.3 — alias lifecycle + embedding-hint. Stubbed as `it.todo` until handlers
+// land in Milestone 2/3. Each todo names the exact behaviour to assert; the
+// stub block keeps the contract visible in vitest output.
+// ---------------------------------------------------------------------------
+describe("entity-resolve — s5.3 alias lifecycle + embedding-hint", () => {
+  it.todo("alias_revoke_invisible_after — revoked alias no longer matches in /resolve");
+  it.todo("alias_revoke_requires_idempotency_key — 400 without key, replay returns same body");
+  it.todo("alias_hard_revoke_requires_admin_role — operator 403, admin 200, event row carries hard_revoke=true");
+  it.todo("alias_merge_redirects_old_ids — both old alias_ids resolve to new canonical node");
+  it.todo("alias_merge_rejects_cross_tenant — 422 + no row written");
+  it.todo("alias_split_emits_pair — one alias → two; old superseded, two new visible, two events emitted");
+  it.todo("embedding_hint_caps_at_0_6 — embedding-only candidate score never exceeds 0.6");
+  it.todo("embedding_hint_skipped_when_authoritative_hits — no embed call when authoritative or alias_exact already hit");
+  it.todo("embedding_hint_skipped_when_topk_full — no embed call when byNode.size >= topK");
+});
+
