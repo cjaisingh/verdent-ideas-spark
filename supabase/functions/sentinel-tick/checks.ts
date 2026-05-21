@@ -34,7 +34,9 @@ export type FindingCandidate = {
     | "cron_auth_failures_burst"
     | "inbox_kind_classify_failures"
     | "inbox_source_silent"
-    | "out_of_scope_stale";
+    | "out_of_scope_stale"
+    | "observability_missing_watcher"
+    | "observability_stale_surface";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -1169,6 +1171,81 @@ export function checkOutOfScopeStale(
         ),
       },
     });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// observability_registry watchers
+// Fires per offending row in v_observability_registry_status:
+//   - missing-watcher → high (no watcher declared for this surface)
+//   - stale           → medium (cadence breached or last_seen missing)
+// dedupe_key keys per (kind, surface_kind, surface_id) so the row stays open
+// until the operator either declares a watcher or the surface goes healthy.
+// ---------------------------------------------------------------------------
+
+export type ObservabilityStatusRow = {
+  surface_kind: string;
+  surface_id: string;
+  expected_cadence_minutes: number | null;
+  watcher_kinds: string[] | null;
+  owner: string | null;
+  last_seen_at: string | null;
+  status: string;
+};
+
+export function checkObservabilityRegistry(
+  _now: Date,
+  rows: ObservabilityStatusRow[],
+): FindingCandidate[] {
+  const out: FindingCandidate[] = [];
+  for (const r of rows) {
+    if (r.status === "missing-watcher") {
+      out.push({
+        kind: "observability_missing_watcher",
+        severity: "high",
+        summary:
+          `observability_registry: ${r.surface_kind}/${r.surface_id} has no watcher declared` +
+          (r.owner ? ` (owner: ${r.owner})` : ""),
+        dedupe_key: `observability_missing_watcher:${r.surface_kind}:${r.surface_id}`,
+        subject_ref: {
+          surface_kind: r.surface_kind,
+          surface_id: r.surface_id,
+        },
+        payload: {
+          owner: r.owner,
+          expected_cadence_minutes: r.expected_cadence_minutes,
+          watcher_kinds: r.watcher_kinds ?? [],
+          fix_url: "/admin/observability-registry",
+        },
+      });
+    } else if (r.status === "stale") {
+      const ageMin = r.last_seen_at
+        ? Math.round((Date.now() - new Date(r.last_seen_at).getTime()) / 60_000)
+        : null;
+      out.push({
+        kind: "observability_stale_surface",
+        severity: "medium",
+        summary:
+          `observability_registry: ${r.surface_kind}/${r.surface_id} is stale` +
+          (ageMin !== null
+            ? ` (last seen ${ageMin} min ago, cadence ${r.expected_cadence_minutes ?? "?"} min)`
+            : " (no recent activity)"),
+        dedupe_key: `observability_stale_surface:${r.surface_kind}:${r.surface_id}`,
+        subject_ref: {
+          surface_kind: r.surface_kind,
+          surface_id: r.surface_id,
+        },
+        payload: {
+          owner: r.owner,
+          expected_cadence_minutes: r.expected_cadence_minutes,
+          watcher_kinds: r.watcher_kinds ?? [],
+          last_seen_at: r.last_seen_at,
+          age_minutes: ageMin,
+          fix_url: "/admin/observability-registry",
+        },
+      });
+    }
   }
   return out;
 }

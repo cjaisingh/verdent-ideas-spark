@@ -14,7 +14,8 @@ import {
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
   checkOutOfScopeStale,
-  SENTINEL_CADENCES, type FindingCandidate,
+  checkObservabilityRegistry,
+  SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
 
@@ -236,6 +237,17 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .gte("created_at", since30d)
       .limit(500));
 
+    // Observability registry status (W: observability_missing_watcher / stale).
+    const { data: obsStatusRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:observability_registry_status",
+      request_id: reqId,
+      step_label: "Scan observability_registry surface status", phase_kind: "db_scan",
+    }, () => sb
+      .from("v_observability_registry_status")
+      .select("surface_kind, surface_id, expected_cadence_minutes, watcher_kinds, owner, last_seen_at, status")
+      .in("status", ["missing-watcher", "stale"])
+      .limit(500));
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
@@ -336,6 +348,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       ...timeCheck("out_of_scope_stale", () => checkOutOfScopeStale(
         now,
         (oosStaleRows ?? []) as { id: string; short_num: number; title: string; source: string; source_ref: string | null; created_at: string }[],
+      )),
+      ...timeCheck("observability_registry", () => checkObservabilityRegistry(
+        now,
+        (obsStatusRows ?? []) as ObservabilityStatusRow[],
       )),
     ]);
 
