@@ -12,6 +12,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ### Fixed
 - **`telegram_send_log` writer wired** (`supabase/functions/telegram-send/index.ts`) — every send attempt now inserts one row with `status` (`success` / `failed` / `error`), `http_status`, `error`, `payload_hash` (first 16 bytes of SHA-256 over `chat_id|text`), and `caller` (from `x-caller` header, defaults `unknown`). Logging happens on every code path — success, non-2xx, and thrown exceptions — so the `telegram_send_failures_burst` and `telegram_outbound_silent` sentinels finally have real data. Added `x-force-fail: 1` test escape hatch (forces an immediate `error` row without touching the gateway) for the upcoming smoke test. CORS allowlist expanded for `x-caller` + `x-force-fail`. Resolves the **critical wire-up gap** flagged in `docs/empty-tables-audit-2026-05-21.md`.
 
+### Added (2026-05-21 batch close)
+- **Observability registry surface** (`/admin/observability-registry`, `src/pages/AdminObservabilityRegistry.tsx`) — read-only inventory of the 31 declared surfaces in `observability_registry`. Joins last activity (`automation_runs` for crons, `edge_request_logs` for fns), derives a status pill (`missing-watcher` / `stale` / `ok` / `unknown`) and sorts missing-watcher first then stalest. No write UI — registry is migration-only.
+- **Sentinel coverage memory update** (`mem/features/sentinel-monitoring-coverage.md`) — added `out_of_scope_stale`, `telegram_send_failures_burst`, `telegram_outbound_silent`, `observability_coverage_gap` to the cadence inventory so "anything not listed is NOT watched" stays accurate.
+- **Telegram send-failure smoke test** (`e2e/telegram-send-failure.test.ts`) — hits `telegram-send` with `x-force-fail: 1`, asserts a `telegram_send_log` row with `status='error'` and `caller='e2e-smoke'`. Skipped automatically when `AWIP_SERVICE_TOKEN` is absent.
+- **Session-lifecycle skill** (`.agents/skills/awip-session-lifecycle/SKILL.md`) — session-start / session-end checklist + `plan-footer-ingest` + `session-summary-log` contract. Applied via `skills--apply_draft`.
+- **Post-PR sentinel sweep 2026-05-21** — re-ran `sentinel-tick` after tasks 1–9 landed; 24h counts: `cron_auth_failures_burst` critical ×2, `night_jobs_stalled` medium ×2. No regressions from the autologger or `telegram_send_log` wire-up.
+
 ### Changed
 
 
