@@ -20,7 +20,10 @@ export type DiscussionAction = {
   created_at: string;
   updated_at: string;
   short_num: number;
+  source?: string | null;       // "plan_footer" | "session_summary" | "manual" | "extracted" | null
+  source_ref?: string | null;
 };
+
 
 export type RoadmapTask = {
   id: string;
