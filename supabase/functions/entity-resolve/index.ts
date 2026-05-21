@@ -371,6 +371,8 @@ Deno.serve(
           authoritative_hit: authoritativeHit,
           confidence_band: confidenceBand,
           top_score: topScore,
+          embedding_hint_used: embeddingHintUsed,
+          embedding_hint_candidates_added: embeddingHintCandidatesAdded,
         },
       });
 
