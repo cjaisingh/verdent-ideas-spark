@@ -1,140 +1,73 @@
 ## Goal
 
-When the first real tenant tree, alias revocations, and conflict pile land, we should be running a pre-agreed benchmark — not improvising one. This plan writes a single source-of-truth checklist (`docs/adr/benchmarks.md`) plus thin runnable stubs that lock the metric shape now, so the deferred decisions (0003 ancestry, 0004 cascade, 0005 bulk conflicts) and the revisit triggers for the already-accepted 0006 are settled by data, not opinion.
+Give the operator a one-stop, plain-language guide that answers — for each of Phase 5, 6, 6b, 7 — *"what will the overnight runner actually do tonight, what should I see in the morning, and which contract/ADR is governing the behaviour?"*
 
-Doc-first, no schema, no edge functions, no migrations.
+Existing `docs/phases-5-6-6b-research.md` is research-flavoured (locked invariants + open questions) and doesn't cover Phase 7. The overnight recommender doc explains scheduling but says nothing about per-phase expected outcomes. This adds the missing layer.
 
-## Deliverables
+Doc-only. No code, no schema, no runtime change.
 
-### 1. `docs/adr/benchmarks.md` — single new file
+## Deliverable
 
-Sections in this exact order; one per ADR plus a top-level "Readiness gates" and "Where the data comes from" section.
+### 1. New file `docs/phases-overnight-operator-guide.md` (~250 lines)
 
-For every ADR section:
+Structure:
 
-- **Decision question** (one sentence, copied from the ADR's Context).
-- **Trigger event** (what data has to land before the benchmark is meaningful).
-- **Required dataset** (rows / shape / minimum size) — see per-ADR below.
-- **Metrics to collect** — fixed list per ADR; same metric names as the runnable stub emits.
-- **Decision thresholds** — concrete numbers, not adjectives. Lean wins if all "lean threshold" rows pass; switch to alternate if any "switch threshold" row trips.
-- **Owner + when** — which sprint/operator runs it.
-- **Output** — path of the JSON dump from the bench stub + the line to add to the ADR's Consequences section.
+**Top of file**
+- One-paragraph framing: "Core is substrate, not a brain. Overnight runs operate inside the contracts in `supabase/functions/_shared/contracts/` and against the ADRs in `docs/adr/`. If a behaviour isn't listed here, it didn't happen — file it as a discussion_action."
+- "How to read this guide" mini-key: **Governed by**, **What the run does**, **Won't do**, **Morning checks**, **What unblocks the next sprint**.
+- Pointer back to `phases-5-6-6b-research.md` for invariants + open questions and to `docs/adr/benchmarks.md` for the data that closes ADR stubs.
 
-#### Per-ADR specifics
+**Per-phase section** (Phase 5, 6, 6b, 7 — same fixed shape):
 
-**ADR-0003 (ancestry storage)** — trigger: first imported tenant tree ≥ 5k nodes.
+1. **Governed by** — bullet list naming the contracts (`retrieval-*.ts`, `source-adapter.ts`) and ADRs (0003–0006) in play, with one-line "lean direction" reminder for stub ADRs.
+2. **What tonight's run does** — concrete steps the night agent / phase runner will perform inside the fixed shape (e.g. for Phase 5: "resolves descriptors against `tenant_nodes` in deterministic → alias-FTS → embedding-hint order per `retrieval-resolver` contract; proposes new nodes when no match; never auto-binds without operator approval").
+3. **Won't do** — the non-negotiables, framed as guard rails not failures. Pulled directly from invariants already in `phases-5-6-6b-research.md` (e.g. "won't promote facts with guessed `tenant_node_id`", "won't embed canonical facts", "won't pick a final ancestry storage — ADR-0003 still proposed").
+4. **Morning checks** — exact UI surfaces to inspect (Morning Review panel name, /admin/jobs for the run, `bench-results/` for any ADR bench output, sentinel findings with the matching `__check_key`).
+5. **What unblocks the next sprint** — the trigger event from `docs/adr/benchmarks.md` (e.g. for Phase 5: "first imported tenant tree ≥ 5k nodes unblocks ADR-0003 decision at s5.2").
 
-Dataset: real `tenant_nodes` import + 1k synthetic `canonical_facts` rows joined per node.
+**Phase-specific content** (drafted from existing artefacts — no new claims):
 
-Metrics (all measured against the same dataset, four times — once per option):
-- `subtree_query_p50_ms`, `subtree_query_p95_ms` — "give me every node under X".
-- `rls_check_p95_ms` — single-row `is X in subtree of Y` (the RLS-hot path).
-- `subtree_move_p95_ms` — move a 100-node subtree.
-- `index_bytes`, `column_bytes` — on-disk cost (`pg_table_size`).
-- `migration_back_out_steps` — count of irreversible-without-rebuild operations.
+- **Phase 5 — Entity & Tenant Resolution.** Governed by `retrieval-resolver.ts` (graph, 1k, deterministic→alias FTS→embedding-hint), ADR-0003 (ancestry, lean: `ancestry_ids[]`), ADR-0004 (revocation cascade, lean: hybrid). Won't: cross tenant boundaries, auto-commit fuzzy aliases, choose ancestry storage. Morning checks: /admin/jobs filter `night-agent`, Morning Review "Phase progress" panel.
 
-Decision thresholds:
-- **Lean (`ancestry_ids[]`) holds** if `rls_check_p95_ms < 3ms` AND `subtree_move_p95_ms < 500ms` at 10k nodes.
-- **Switch to `ltree`** if `index_bytes` for `ancestry_ids[]` > 3× the parent_id baseline at 100k nodes.
-- **Switch to materialised path** only if pgvector extension load order forces a no-extension footprint.
+- **Phase 6 — Ingest & Canonicalisation.** Governed by `retrieval-ingest-concierge.ts` (hierarchical-doc, 8k, embedding fallback per ADR-0006), `source-adapter.ts` auto-promote trio (mapping approved + validations pass + no PII without lawful basis + idempotency-derived key), ADR-0005 (bulk conflicts, lean: hybrid heuristic+LLM), ADR-0006 (**accepted** — `gemini-embedding-001@1536` + hnsw). Won't: silently overwrite, embed canonical facts, run hybrid vector+FTS, auto-resolve conflicts without proposing a `conflict_rules` row. Morning checks: ingest run rows, `fact_conflicts` count delta, `bench-results/adr-0006-*.json`.
 
-**ADR-0004 (alias revocation cascade)** — trigger: first revocation in anger OR 50 production-shaped aliases bound to facts (whichever first).
+- **Phase 6b — Ingest Observability.** Governed by `retrieval-validation-agent.ts` (tabular, 2k, `sampleSize ≤ 200`). Won't: bypass the sample cap, mutate the source rows it's sampling. Morning checks: validation-agent panel + `automation_steps` view for per-phase timing.
 
-Dataset: real alias table + the actual fact set bound to those aliases. Stop guessing the blast radius.
+- **Phase 7 — Truth & Governance.** Governed by `retrieval-conflict-triage.ts` (relational, 4k), existing `decision_authorities` + `claims` (W7.1/W7.2), `governance_links` (W7.1.5). Won't: edit authority rules outside git, infer governance links, auto-resolve `truth_conflicts_unresolved`. Morning checks: /governance coverage, `truth_conflicts_unresolved` sentinel.
 
-Metrics:
-- `affected_facts_p95` per revocation in last 30d.
-- `kr_rollups_grey_seconds_p95` (option 2 only) — how long dashboards go grey.
-- `stale_badge_dwell_p95_days` (option 1) — how long a stale binding sits before operator clears it.
-- `compliance_revocation_count_30d` — how often "hard revoke" gets used.
+**Footer**
+- "When this guide is wrong" — instruction to update this file in the same PR as any contract/ADR change, mirrored in `mem://preferences/docs`.
 
-Decision thresholds:
-- **Lean (hybrid) holds** if `compliance_revocation_count_30d ≥ 1` AND `affected_facts_p95 < 200` (i.e. soft flag stays usable for the common case).
-- **Switch to pure soft** if `compliance_revocation_count_30d == 0` over 90 days.
-- **Switch to pure hard re-quarantine** if `stale_badge_dwell_p95_days > 14` (operators ignore soft badges → forcing function needed).
+### 2. Cross-links — three 1-line edits
 
-**ADR-0005 (bulk conflict pattern detection)** — trigger: first re-ingest that drops ≥ 100 rows into `fact_conflicts`.
+- `docs/phases-5-6-6b-research.md` — top-of-file pointer: "Operator-facing overnight expectations: see `docs/phases-overnight-operator-guide.md`."
+- `docs/overnight-recommender.md` — top-of-file pointer to the same.
+- `docs/adr/benchmarks.md` — under "Readiness gates" add: "Operator-facing expectations per phase: see `docs/phases-overnight-operator-guide.md`."
 
-Dataset: that real conflict pile + 30 days of historical conflicts for ground-truth labelling.
+### 3. README + CHANGELOG + memory
 
-Metrics:
-- `heuristic_coverage_pct` — share of conflicts grouped by `(source_mapping_id, fact_type, value_pair_hash)`.
-- `llm_residual_coverage_pct` — share of the *ungrouped tail* the LLM successfully patterns.
-- `llm_tokens_per_conflict_resolved` — cost of LLM patterning at p50/p95.
-- `false_positive_rate` — operator rejects of proposed `conflict_rules` rows.
-- `time_to_clear_pile_minutes_p95` — end-to-end operator time per 100-row pile.
-
-Decision thresholds:
-- **Lean (hybrid) holds** if `heuristic_coverage_pct ≥ 70%` AND `llm_residual_coverage_pct ≥ 50%` at `llm_tokens_per_conflict_resolved.p95 < 5k`.
-- **Switch to heuristic-only** if `heuristic_coverage_pct ≥ 90%` consistently — LLM stops earning its tokens.
-- **Switch to LLM-only** if `heuristic_coverage_pct < 40%` — patterns are mostly semantic.
-
-**ADR-0006 (embedding model + index)** — *accepted*, but the four revisit triggers need live instrumentation, not vibes.
-
-Dataset: live `awip_doc_chunks` + Phase 6 ingest-concierge store once it lands.
-
-Metrics (rolling 30d):
-- `embedding_spend_eur_30d` — sum from `ai_usage_log` filtered on embedding kinds.
-- `vector_row_count_max` — max `count(*)` across embedding tables.
-- `hnsw_query_p95_ms` per store.
-- `re_embed_jobs_30d` — count of `embedding_model_version` mismatches detected.
-
-Revisit-trigger thresholds (already in the ADR; this just locks how we measure them):
-- Re-open if `embedding_spend_eur_30d > 50`.
-- Re-open if `vector_row_count_max > 1_000_000`.
-- Re-open if Gemini embedding API hits Google's deprecation list (manual signal, no metric).
-- Re-open if sovereignty posture flips (manual signal).
-
-### 2. `scripts/adr-bench/` — four thin TS stubs
-
-One file per ADR. Each:
-- Imports `bun`'s test/perf helpers + a shared `writeBenchResult()` from `scripts/adr-bench/_shared.ts`.
-- Defines the input contract (`InputSchema` with Zod) — what dataset path / Postgres URL the runner must supply.
-- Defines the output contract — `{ adr: string; ran_at: string; dataset_hash: string; metrics: Record<string, number> }` written to `bench-results/<adr>-<timestamp>.json`.
-- Body is `throw new Error("not yet runnable — see docs/adr/benchmarks.md § ADR-XXXX for dataset prereqs")`.
-
-Files:
-- `scripts/adr-bench/_shared.ts` — `writeBenchResult()`, dataset-hash helper, JSON shape.
-- `scripts/adr-bench/adr-0003-ancestry.ts`
-- `scripts/adr-bench/adr-0004-revocation.ts`
-- `scripts/adr-bench/adr-0005-bulk-conflicts.ts`
-- `scripts/adr-bench/adr-0006-embedding.ts` (this one will be runnable today — it queries `ai_usage_log` + counts existing `awip_doc_chunks`; the others throw until their tables exist).
-
-The four files are referenced by name from the benchmarks doc so "what do we run?" has a single answer.
-
-### 3. ADR back-pointers — four 1-line edits
-
-Append to each ADR's "Decision" section (or "Revisit trigger" for 0006):
-
-> Benchmark + dataset requirements: see [`docs/adr/benchmarks.md § ADR-000X`](./benchmarks.md#adr-000x).
-
-That's it for the ADRs — no other content changes.
-
-### 4. Docs + memory
-
+- `README.md` — add the new guide under the docs index where the other phase docs live.
 - `CHANGELOG.md` — one `### Added` bullet under `[Unreleased]`.
-- `mem/features/phase-5-6-prep.md` — append a "Benchmarks" section listing the four bench scripts + the doc path.
+- `mem/features/phase-5-6-prep.md` — append a one-line link under the existing "Overnight runner expectations" section.
 
 ## Out of scope
 
-- No new database tables (Phase 5/6 hasn't created the underlying tables yet — premature to add columns).
-- No instrumentation wired into edge functions today.
-- No changes to retrieval contracts, source-adapter contract, or `retrieval-contract.ts`.
-- No changes to existing tests.
-- No dashboard UI for bench results.
-- Not deciding any of the deferred ADRs in this pass — only locking *how* we'll decide.
+- No code, no migrations, no edge functions, no UI.
+- No re-statement of invariants already in `phases-5-6-6b-research.md` beyond what's needed for the "Won't do" list.
+- No new operator workflow — only documents what already happens.
+- Not touching ADR text (already back-pointed via the benchmarks plan).
+- Not touching `mem://features/automation` or any sentinel doc.
 
 ## Verification
 
-- Bench stubs compile under `bun run lint:ratchet` and `bun run typecheck` (they're TS, no `any`).
-- `adr-0006-embedding.ts` runs end-to-end today against the live DB and writes a real result file (proves the harness wiring works).
-- `scripts/check-doc-drift.ts` passes (every benchmarks.md ADR section header matches an existing ADR filename).
+- `bun run lint:ratchet` and `bun run typecheck` unaffected (markdown only).
+- `scripts/check-doc-drift.ts` runs clean (new file referenced from README + CHANGELOG).
+- Manual read-through: every "Governed by" entry matches an actual file in `supabase/functions/_shared/contracts/` or `docs/adr/`.
 
 ## Size
 
-- 1 new doc (~350 lines).
-- 5 new TS files (~30–80 lines each).
-- 4 one-line ADR edits.
-- CHANGELOG + memory bullet.
+- 1 new doc (~250 lines).
+- 3 one-line cross-links.
+- README + CHANGELOG + memory bullet.
 
-~10 files touched, zero runtime change to the platform.
+~6 files touched, zero runtime change.
