@@ -4,6 +4,21 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-21 wave 5 — Phase 5 sprint s5.2)
+- **Resolver scoring + ancestry substrate.** `tenant_nodes.ancestry_ids uuid[]` + GIN index `idx_tenant_nodes_ancestry`; `BEFORE INSERT/UPDATE` trigger `tg_tenant_nodes_set_ancestry` recomputes the root-to-leaf path via recursive CTE (depth cap 32). New `public.descriptor_weights` (tenant-scoped, admin RLS) seeded with defaults (authoritative kinds = 1.0, postcode = 0.9, name/address = 0.7). New `public.v_resolver_health` view rolling up `entity_resolution_events` by confidence band over the last 24h.
+- **`entity-resolve` scoring rewrite.** Match order stays authoritative -> alias_exact -> alias_fts but FTS hits now use weighted scores from `descriptor_weights`; resolver assigns `confidence_band` per candidate (`auto_bind` >=0.85, `conflict` 0.55-0.85, `no_match` <0.55) and emits a `conflict_open` row when two+ candidates land in the conflict band. Ancestry returned directly from the materialised array.
+- **Sentinel check `resolver_low_confidence_rate`** in `sentinel-tick` — medium finding when >20% of resolves in the trailing 24h fall in the `no_match` band over a minimum 20 events.
+- **`e2e/resolver.test.ts`** gained 5 new cases — weighted scoring, ancestry parity, and the three confidence bands.
+- **ADR-0003 bench script** (`scripts/adr-bench/adr-0003-ancestry.ts`) now runs end-to-end: captures `node_count`, `max_depth`, structural `index_bytes` / `column_bytes`, plus latency p50/p95 when nodes exist. Uploads to `adr_bench_results` and renders on `/admin/adr-bench`. First baseline row landed (`node_count=0`, `index_bytes=16384`).
+- **Observability registry.** New rows `table:v_resolver_health` (watched by sentinel) and `table:adr_bench_results:adr-0003` (watched by adr_bench). `edge_fn:entity-resolve` notes bumped to reflect weighted scoring + bands; watcher list now includes `sentinel`.
+
+### Decided
+- **ADR-0003 stays `proposed`** until a real tenant tree of >=5k nodes lands (per `docs/adr/benchmarks.md` trigger). Lean (denormalised `ancestry_ids[]` + GIN) is the *implemented* path; the status flip waits on production-shape data, not a synthetic run. First baseline bench row uploaded today as the structural anchor.
+
+Out of scope this sprint (s5.3): embedding-hint last-resort match (defers to s5.3 once `tenant_node_aliases` carries an embedding store), alias revoke / merge / split lifecycle, per-tenant weight editing UI, `resolve_truth()` wiring for resolver conflicts, Telegram routing for `resolver_low_confidence_rate`.
+
+
+
 ### Added (2026-05-21 wave 4 — Phase 5 sprint s5.1)
 - **Entity & Tenant Resolver substrate** — four new tables: `tenant_nodes`, `tenant_node_aliases` (with generated `normalised` column + active-unique index + FTS index), `entity_resolution_conflicts`, `entity_resolution_events`. Admin-only RLS, realtime on all four, triggers auto-emit `entity_resolution_events` rows on every write.
 - **Edge function `entity-resolve`** wrapped with `withLogger`. Endpoints `/resolve`, `/bind`, `/alias/create`. Match order: authoritative → alias_exact → alias_fts. Resolver never crosses `tenant_id`. Idempotency-Key required on write endpoints.
