@@ -1,13 +1,19 @@
-// Phase 5 s5.1 — Entity & Tenant Resolver (deterministic path).
+// Phase 5 s5.2 — Entity & Tenant Resolver (weighted scoring + ancestry).
 //
 // Endpoints (POST):
 //   /resolve         — input ResolverRetrievalInput → ResolverRetrievalOutput
 //   /bind            — bind a node to a descriptor batch (auto-creates alias)
 //   /alias/create    — operator-approved alias create
 //
-// Match order this sprint: authoritative → alias_exact → alias_fts.
-// embedding_hint lands in s5.2. Resolver NEVER crosses tenant_id.
-// All write endpoints require Idempotency-Key.
+// Scoring (s5.2):
+//   authoritative descriptor          → score = weight (1.0 for canonical IDs).
+//   alias_exact                       → score = weight * 1.0.
+//   alias_fts                         → score = weight * overlap_fraction (max 0.85).
+// Weights come from `descriptor_weights` (per-tenant override → zero-UUID default).
+// Confidence bands: ≥0.85 auto_bind / 0.55–<0.85 conflict / <0.55 no_match.
+// Ancestry is read directly from `tenant_nodes.ancestry_ids` (s5.2 materialised path).
+// embedding_hint is deferred to s5.3 (requires tenant-scoped vector store).
+// Resolver NEVER crosses tenant_id. All write endpoints require Idempotency-Key.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.23.8";
 import { withLogger } from "../_shared/logger.ts";
@@ -55,6 +61,39 @@ function normalise(v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+const DEFAULT_TENANT = "00000000-0000-0000-0000-000000000000";
+const AUTHORITATIVE_KINDS = new Set(["bim_ifc_guid", "rics_id", "os_uprn", "sap_floc"]);
+
+type Kind = typeof RESOLVER_DESCRIPTOR_KINDS[number];
+type WeightMap = Partial<Record<Kind, number>>;
+
+type SbClient = ReturnType<typeof createClient>;
+
+async function loadWeights(sb: SbClient, tenantId: string): Promise<WeightMap> {
+  const out: WeightMap = {};
+  const { data: defaults } = await sb
+    .from("descriptor_weights")
+    .select("kind, weight")
+    .eq("tenant_id", DEFAULT_TENANT);
+  for (const r of (defaults ?? []) as Array<{ kind: Kind; weight: number }>) {
+    out[r.kind] = Number(r.weight);
+  }
+  const { data: overrides } = await sb
+    .from("descriptor_weights")
+    .select("kind, weight")
+    .eq("tenant_id", tenantId);
+  for (const r of (overrides ?? []) as Array<{ kind: Kind; weight: number }>) {
+    out[r.kind] = Number(r.weight);
+  }
+  return out;
+}
+
+function bandFor(score: number): "auto_bind" | "conflict" | "no_match" {
+  if (score >= 0.85) return "auto_bind";
+  if (score >= 0.55) return "conflict";
+  return "no_match";
+}
+
 Deno.serve(
   withLogger("entity-resolve", async (req) => {
     if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -69,7 +108,6 @@ Deno.serve(
     const auth = req.headers.get("authorization") ?? "";
     const isService = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
 
-    // Authn / authz
     let actorId: string | null = null;
     let actorLabel = "system";
     if (!isService) {
@@ -116,18 +154,29 @@ Deno.serve(
         normalised: normalise(d.value),
       }));
 
+      const weights = await loadWeights(sb, p.tenantId);
+      const weightFor = (k: Kind) => weights[k] ?? 0.5;
+
       type Cand = ResolverRetrievalOutput["candidates"][number];
       const byNode = new Map<string, Cand>();
       const addHit = (
         nodeId: string,
         score: number,
-        kind: typeof RESOLVER_DESCRIPTOR_KINDS[number],
+        kind: Kind,
         source: Cand["matchSource"],
       ) => {
         const cur = byNode.get(nodeId);
         if (cur) {
           cur.score = Math.max(cur.score, score);
           if (!cur.matchedDescriptors.includes(kind)) cur.matchedDescriptors.push(kind);
+          // Upgrade source if stronger.
+          const rank: Record<Cand["matchSource"], number> = {
+            authoritative: 4,
+            alias_exact: 3,
+            alias_fts: 2,
+            embedding_hint: 1,
+          };
+          if (rank[source] > rank[cur.matchSource]) cur.matchSource = source;
         } else {
           byNode.set(nodeId, {
             nodeId,
@@ -142,9 +191,7 @@ Deno.serve(
       // (1) Authoritative — external_ids JSON match on tenant_nodes.
       let authoritativeHit = false;
       const authDescs = normalisedDescs.filter(
-        (d) =>
-          d.authoritative === true ||
-          ["bim_ifc_guid", "rics_id", "os_uprn", "sap_floc"].includes(d.kind),
+        (d) => d.authoritative === true || AUTHORITATIVE_KINDS.has(d.kind),
       );
       for (const d of authDescs) {
         const { data } = await sb
@@ -153,8 +200,9 @@ Deno.serve(
           .eq("tenant_id", p.tenantId)
           .contains("external_ids", { [d.kind]: d.value })
           .limit(topK);
-        for (const r of data ?? []) {
-          addHit(r.id, 1.0, d.kind, "authoritative");
+        for (const r of (data ?? []) as Array<{ id: string }>) {
+          // Authoritative kinds get full weight (1.0 by seed).
+          addHit(r.id, weightFor(d.kind as Kind), d.kind as Kind, "authoritative");
           authoritativeHit = true;
         }
       }
@@ -170,12 +218,13 @@ Deno.serve(
             .eq("normalised", d.normalised)
             .is("revoked_at", null)
             .limit(topK);
-          for (const r of data ?? []) {
+          for (const r of (data ?? []) as Array<{ node_id: string; kind: Kind; authoritative: boolean }>) {
+            const w = weightFor(d.kind as Kind);
             if (r.authoritative) {
-              addHit(r.node_id, 1.0, d.kind, "authoritative");
+              addHit(r.node_id, Math.max(w, 0.95), d.kind as Kind, "authoritative");
               authoritativeHit = true;
             } else {
-              addHit(r.node_id, 0.9, d.kind, "alias_exact");
+              addHit(r.node_id, w, d.kind as Kind, "alias_exact");
             }
           }
         }
@@ -194,43 +243,41 @@ Deno.serve(
             .is("revoked_at", null)
             .textSearch("normalised", ftsTerms.join(" | "), { config: "simple" })
             .limit(topK * 2);
-          for (const r of data ?? []) {
-            // Score proportional to descriptor overlap.
+          for (const r of (data ?? []) as Array<{ node_id: string; kind: Kind; normalised: string }>) {
+            // overlap_fraction = matched descriptor first-tokens / total descriptors.
+            const total = Math.max(1, normalisedDescs.length);
             const overlap = normalisedDescs.filter((d) =>
               (r.normalised ?? "").includes(d.normalised.split(" ")[0]),
             ).length;
-            const score = Math.min(0.7, 0.4 + overlap * 0.1);
+            const w = weightFor(r.kind);
+            const score = Math.min(0.85, w * (overlap / total));
             addHit(r.node_id, score, r.kind, "alias_fts");
           }
         }
       }
 
-      // Filter to parent (if requested) — load nodes for ancestry chain
-      const ids = Array.from(byNode.keys()).slice(0, topK);
-      if (ids.length) {
+      // Filter to parent (if requested) via materialised ancestry_ids.
+      const allIds = Array.from(byNode.keys());
+      if (allIds.length) {
         const { data: nodes } = await sb
           .from("tenant_nodes")
-          .select("id, parent_id, tenant_id")
+          .select("id, ancestry_ids")
           .eq("tenant_id", p.tenantId)
-          .in("id", ids);
-        const nodeMap = new Map((nodes ?? []).map((n) => [n.id, n]));
+          .in("id", allIds);
+        const ancestryMap = new Map(
+          ((nodes ?? []) as Array<{ id: string; ancestry_ids: string[] }>).map((n) => [
+            n.id,
+            n.ancestry_ids ?? [],
+          ]),
+        );
         for (const c of byNode.values()) {
-          const chain: string[] = [];
-          let cur: { id: string; parent_id: string | null } | undefined = nodeMap.get(c.nodeId);
-          let guard = 0;
-          while (cur && guard++ < 32) {
-            chain.unshift(cur.id);
-            if (!cur.parent_id) break;
-            // s5.2 will materialise this; for s5.1, one extra fetch per hop.
-            const { data: p2 } = await sb
-              .from("tenant_nodes")
-              .select("id, parent_id")
-              .eq("tenant_id", p.tenantId)
-              .eq("id", cur.parent_id)
-              .maybeSingle();
-            cur = p2 ?? undefined;
+          c.ancestry = ancestryMap.get(c.nodeId) ?? [c.nodeId];
+        }
+        if (p.parentNodeId) {
+          for (const id of allIds) {
+            const anc = ancestryMap.get(id) ?? [];
+            if (!anc.includes(p.parentNodeId)) byNode.delete(id);
           }
-          c.ancestry = chain;
         }
       }
 
@@ -238,6 +285,10 @@ Deno.serve(
         0,
         topK,
       );
+
+      const topScore = candidates[0]?.score ?? 0;
+      const confidenceBand = bandFor(topScore);
+      const conflicting = candidates.filter((c) => bandFor(c.score) === "conflict");
 
       // Emit propose event (best-effort, non-blocking).
       await sb.from("entity_resolution_events").insert({
@@ -249,10 +300,33 @@ Deno.serve(
           descriptor_count: p.descriptors.length,
           candidate_count: candidates.length,
           authoritative_hit: authoritativeHit,
+          confidence_band: confidenceBand,
+          top_score: topScore,
         },
       });
 
-      const out: ResolverRetrievalOutput = { candidates, authoritativeHit };
+      // If two or more candidates land in the conflict band, open a conflict.
+      if (!authoritativeHit && conflicting.length >= 2) {
+        await sb.from("entity_resolution_events").insert({
+          tenant_id: p.tenantId,
+          kind: "conflict_open",
+          actor: actorId,
+          actor_label: actorLabel,
+          payload: {
+            descriptors: normalisedDescs.map((d) => ({ kind: d.kind, value: d.value })),
+            candidate_ids: conflicting.map((c) => c.nodeId),
+            confidence_band: "conflict",
+          },
+        });
+      }
+
+      const out: ResolverRetrievalOutput & {
+        confidenceBand: "auto_bind" | "conflict" | "no_match";
+      } = {
+        candidates,
+        authoritativeHit,
+        confidenceBand,
+      };
       return json(out);
     }
 
@@ -264,7 +338,6 @@ Deno.serve(
       if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
       const a = parsed.data;
 
-      // Idempotency: if any alias exists with this (tenant,kind,normalised) active, return it.
       const norm = normalise(a.value);
       const { data: existing } = await sb
         .from("tenant_node_aliases")
@@ -304,7 +377,6 @@ Deno.serve(
       if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
       const b = parsed.data;
 
-      // Tenant-scoped node existence check.
       const { data: node, error: nodeErr } = await sb
         .from("tenant_nodes")
         .select("id, tenant_id")
@@ -314,7 +386,6 @@ Deno.serve(
       if (nodeErr) return json({ error: nodeErr.message }, 500);
       if (!node) return json({ error: "node_not_found" }, 404);
 
-      // For each descriptor: upsert alias (idempotent via unique index).
       const created: string[] = [];
       for (const d of b.descriptors) {
         const norm = normalise(d.value);
