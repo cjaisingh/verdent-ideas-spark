@@ -12,7 +12,8 @@
 // Weights come from `descriptor_weights` (per-tenant override → zero-UUID default).
 // Confidence bands: ≥0.85 auto_bind / 0.55–<0.85 conflict / <0.55 no_match.
 // Ancestry is read directly from `tenant_nodes.ancestry_ids` (s5.2 materialised path).
-// embedding_hint is deferred to s5.3 (requires tenant-scoped vector store).
+// embedding_hint (s5.3 M3): tenant-scoped pgvector ANN via match_alias_embedding(),
+//   capped at 0.6, skipped when authoritative descriptors hit OR topK already full.
 // Resolver NEVER crosses tenant_id. All write endpoints require Idempotency-Key.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { z } from "https://esm.sh/zod@3.23.8";
