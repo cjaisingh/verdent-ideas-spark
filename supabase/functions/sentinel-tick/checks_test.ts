@@ -216,3 +216,69 @@ Deno.test("budget: previous month's row does not block current month", () => {
   assertEquals(r.length, 1);
   assertEquals(r[0].kind, "budget_projection_80");
 });
+
+import { checkAliasRevokeBurst } from "./checks.ts";
+
+Deno.test("alias_revoke_burst: 11 soft revokes in window → one high finding", () => {
+  const now = new Date("2026-05-21T18:00:00Z");
+  const tenant = "11111111-1111-1111-1111-111111111111";
+  const rows = Array.from({ length: 11 }, (_, i) => ({
+    tenant_id: tenant,
+    kind: "alias_revoke",
+    created_at: new Date(now.getTime() - i * 30_000).toISOString(),
+  }));
+  const r = checkAliasRevokeBurst(now, 15, 10, rows);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].kind, "alias_revoke_burst");
+  assertEquals(r[0].severity, "high");
+  assert(r[0].dedupe_key.startsWith(`alias_revoke_burst:${tenant}:`));
+});
+
+Deno.test("alias_revoke_burst: 3 hard revokes escalate to critical", () => {
+  const now = new Date("2026-05-21T18:00:00Z");
+  const tenant = "22222222-2222-2222-2222-222222222222";
+  const rows = [
+    ...Array.from({ length: 8 }, (_, i) => ({
+      tenant_id: tenant, kind: "alias_revoke",
+      created_at: new Date(now.getTime() - i * 30_000).toISOString(),
+    })),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      tenant_id: tenant, kind: "alias_hard_revoke",
+      created_at: new Date(now.getTime() - i * 30_000).toISOString(),
+    })),
+  ];
+  const r = checkAliasRevokeBurst(now, 15, 10, rows);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].severity, "critical");
+});
+
+Deno.test("alias_revoke_burst: below threshold = no finding; per-tenant grouping", () => {
+  const now = new Date("2026-05-21T18:00:00Z");
+  const t1 = "33333333-3333-3333-3333-333333333333";
+  const t2 = "44444444-4444-4444-4444-444444444444";
+  const rows = [
+    ...Array.from({ length: 5 }, (_, i) => ({
+      tenant_id: t1, kind: "alias_revoke",
+      created_at: new Date(now.getTime() - i * 30_000).toISOString(),
+    })),
+    ...Array.from({ length: 12 }, (_, i) => ({
+      tenant_id: t2, kind: "alias_revoke",
+      created_at: new Date(now.getTime() - i * 30_000).toISOString(),
+    })),
+  ];
+  const r = checkAliasRevokeBurst(now, 15, 10, rows);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].subject_ref.tenant_id, t2);
+});
+
+Deno.test("alias_revoke_burst: events outside window ignored", () => {
+  const now = new Date("2026-05-21T18:00:00Z");
+  const tenant = "55555555-5555-5555-5555-555555555555";
+  const rows = Array.from({ length: 11 }, (_, i) => ({
+    tenant_id: tenant, kind: "alias_revoke",
+    // All older than 15min window
+    created_at: new Date(now.getTime() - (20 + i) * 60_000).toISOString(),
+  }));
+  const r = checkAliasRevokeBurst(now, 15, 10, rows);
+  assertEquals(r.length, 0);
+});
