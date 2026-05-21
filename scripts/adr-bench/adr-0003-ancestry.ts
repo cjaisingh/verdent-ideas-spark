@@ -92,7 +92,7 @@ export async function run(input: Input): Promise<{ result: BenchResult; trips: s
     );
     metrics.index_bytes = Number(
       psqlScalar(
-        `select coalesce(pg_relation_size('public.tenant_nodes_ancestry_ids_idx'),0)::text`,
+        `select coalesce(pg_relation_size('public.idx_tenant_nodes_ancestry'),0)::text`,
       ) || 0,
     );
     // ancestry_ids column bytes ≈ pg_column_size sum across rows.
