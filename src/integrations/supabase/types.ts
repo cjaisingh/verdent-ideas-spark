@@ -6170,18 +6170,63 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_node_alias_embeddings: {
+        Row: {
+          alias_id: string
+          content: string
+          created_at: string
+          embedding: string
+          id: string
+          model: string
+          node_id: string
+          tenant_id: string
+        }
+        Insert: {
+          alias_id: string
+          content: string
+          created_at?: string
+          embedding: string
+          id?: string
+          model?: string
+          node_id: string
+          tenant_id: string
+        }
+        Update: {
+          alias_id?: string
+          content?: string
+          created_at?: string
+          embedding?: string
+          id?: string
+          model?: string
+          node_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_node_alias_embeddings_alias_id_fkey"
+            columns: ["alias_id"]
+            isOneToOne: true
+            referencedRelation: "tenant_node_aliases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_node_aliases: {
         Row: {
           approved_at: string
           approved_by: string | null
           authoritative: boolean
           created_at: string
+          hard_revoked: boolean
           id: string
           kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          merge_group_id: string | null
           node_id: string
           normalised: string | null
+          revoke_reason: string | null
           revoked_at: string | null
           source: string
+          supersedes_alias_id: string | null
           tenant_id: string
           value: string
         }
@@ -6190,12 +6235,16 @@ export type Database = {
           approved_by?: string | null
           authoritative?: boolean
           created_at?: string
+          hard_revoked?: boolean
           id?: string
           kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          merge_group_id?: string | null
           node_id: string
           normalised?: string | null
+          revoke_reason?: string | null
           revoked_at?: string | null
           source?: string
+          supersedes_alias_id?: string | null
           tenant_id: string
           value: string
         }
@@ -6204,12 +6253,16 @@ export type Database = {
           approved_by?: string | null
           authoritative?: boolean
           created_at?: string
+          hard_revoked?: boolean
           id?: string
           kind?: Database["public"]["Enums"]["alias_descriptor_kind"]
+          merge_group_id?: string | null
           node_id?: string
           normalised?: string | null
+          revoke_reason?: string | null
           revoked_at?: string | null
           source?: string
+          supersedes_alias_id?: string | null
           tenant_id?: string
           value?: string
         }
@@ -6219,6 +6272,13 @@ export type Database = {
             columns: ["node_id"]
             isOneToOne: false
             referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_node_aliases_supersedes_alias_id_fkey"
+            columns: ["supersedes_alias_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_node_aliases"
             referencedColumns: ["id"]
           },
         ]
@@ -7136,6 +7196,19 @@ export type Database = {
           },
         ]
       }
+      v_alias_lineage_health: {
+        Row: {
+          active_aliases: number | null
+          hard_revoked: number | null
+          merge_groups: number | null
+          revokes_1h: number | null
+          revokes_24h: number | null
+          soft_revoked: number | null
+          superseded_count: number | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
       v_automation_runs_latest_per_job: {
         Row: {
           created_at: string | null
@@ -7814,6 +7887,10 @@ export type Database = {
         }
         Returns: Json
       }
+      tenant_node_alias_effective: {
+        Args: { _alias_id: string }
+        Returns: string
+      }
       tenant_node_compute_ancestry: {
         Args: { _node_id: string; _parent_id: string }
         Returns: string[]
@@ -7849,6 +7926,9 @@ export type Database = {
         | "conflict_open"
         | "conflict_resolve"
         | "node_upsert"
+        | "alias_merge"
+        | "alias_split"
+        | "alias_hard_revoke"
       notebook_kind: "thought" | "issue" | "research" | "suggestion" | "todo"
       notebook_status: "open" | "in_progress" | "resolved" | "archived"
       okr_creator: "discovery_ai" | "awip" | "human"
@@ -8023,6 +8103,9 @@ export const Constants = {
         "conflict_open",
         "conflict_resolve",
         "node_upsert",
+        "alias_merge",
+        "alias_split",
+        "alias_hard_revoke",
       ],
       notebook_kind: ["thought", "issue", "research", "suggestion", "todo"],
       notebook_status: ["open", "in_progress", "resolved", "archived"],
