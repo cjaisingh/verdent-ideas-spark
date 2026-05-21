@@ -188,6 +188,8 @@ if (import.meta.main) {
   const input = InputSchema.parse({
     pgUrl: process.env.PGURL,
     windowDays: process.env.WINDOW_DAYS ? Number(process.env.WINDOW_DAYS) : undefined,
+    sampleQueries: process.env.SAMPLE_QUERIES ? Number(process.env.SAMPLE_QUERIES) : undefined,
+    topK: process.env.TOP_K ? Number(process.env.TOP_K) : undefined,
   });
   const { result, trips } = await run(input);
   const path = writeBenchResult(result);
