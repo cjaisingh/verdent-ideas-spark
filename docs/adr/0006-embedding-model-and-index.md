@@ -86,3 +86,5 @@ create index if not exists <table>_embedding_idx
 ## Revisit trigger
 
 Re-open this ADR if any of: (a) embedding-only spend exceeds €50/mo on the Lovable AI Gateway, (b) sovereignty posture flips to "embeddings must run on owned infra", (c) any single vector store crosses 1M rows, or (d) Gemini embedding API gets deprecated by Google.
+
+> Measurement harness: see [`docs/adr/benchmarks.md § ADR-0006`](./benchmarks.md#adr-0006--embedding-model--index-revisit-instrumentation) and `scripts/adr-bench/adr-0006-embedding.ts`.
