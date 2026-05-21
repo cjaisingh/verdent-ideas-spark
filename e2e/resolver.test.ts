@@ -317,10 +317,119 @@ describe("entity-resolve — s5.3 alias lifecycle", () => {
 
 
 
-// Remaining s5.3 stubs — promoted in M3 (embedding-hint) and operator/admin role harness.
+// ---------------------------------------------------------------------------
+// s5.3 M3 — embedding-hint branch.
+// Uses the deployed match_alias_embedding() RPC; we seed alias_embeddings
+// directly so the test does not depend on the embedding provider.
+// ---------------------------------------------------------------------------
+describe("entity-resolve — s5.3 M3 embedding-hint", () => {
+  if (!process.env.E2E_AWIP_SERVICE_TOKEN || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    it.skip("requires E2E_AWIP_SERVICE_TOKEN + SUPABASE_SERVICE_ROLE_KEY", () => {});
+    return;
+  }
+
+  const tenant = crypto.randomUUID();
+  const sb = createClient(
+    env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
+  // Deterministic 1536-d vectors: dim 0 = 1, rest 0; and dim 1 = 1, rest 0.
+  const VEC_LEN = 1536;
+  const oneHot = (i: number) => {
+    const v = new Array(VEC_LEN).fill(0);
+    v[i] = 1;
+    return v;
+  };
+
+  let nodeHint = "";
+  let nodeAuth = "";
+  let aliasHintId = "";
+
+  beforeAll(async () => {
+    const { data: a } = await sb.from("tenant_nodes")
+      .insert({ tenant_id: tenant, kind: "site", name: "Hint Target" })
+      .select("id").single();
+    const { data: b } = await sb.from("tenant_nodes")
+      .insert({
+        tenant_id: tenant, kind: "site", name: "Auth Node",
+        external_ids: { os_uprn: `UPRN-HINT-${tenant.slice(0, 8)}` },
+      })
+      .select("id").single();
+    nodeHint = a!.id; nodeAuth = b!.id;
+
+    const { data: alias } = await sb.from("tenant_node_aliases")
+      .insert({ tenant_id: tenant, node_id: nodeHint, kind: "name", value: "Hint Target Alias" })
+      .select("id").single();
+    aliasHintId = alias!.id;
+
+    await sb.from("tenant_node_alias_embeddings").insert({
+      tenant_id: tenant, node_id: nodeHint, alias_id: aliasHintId,
+      content: "Hint Target Alias",
+      embedding: oneHot(0) as unknown as string,
+    });
+  });
+
+  it("embedding_hint_returns_alias_when_no_descriptor_hits", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenant,
+      descriptors: [{ kind: "name", value: "totally unrelated text xyz" }],
+      embeddingHint: { vector: oneHot(0), minSimilarity: 0.5 },
+    });
+    expect(r.status).toBe(200);
+    const cands = (r.body.candidates as Array<{ nodeId: string; matchSource: string; score: number }>) ?? [];
+    const hit = cands.find((c) => c.nodeId === nodeHint);
+    expect(hit).toBeDefined();
+    expect(hit!.matchSource).toBe("embedding_hint");
+    // s5.3 M3 cap: embedding hint score must never exceed 0.6.
+    expect(hit!.score).toBeLessThanOrEqual(0.6);
+  });
+
+  it("embedding_hint_caps_at_0_6 — perfect-similarity hint still ≤ 0.6", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenant,
+      descriptors: [{ kind: "name", value: "no match here xyz" }],
+      embeddingHint: { vector: oneHot(0), minSimilarity: 0.0 },
+    });
+    expect(r.status).toBe(200);
+    const cands = (r.body.candidates as Array<{ score: number }>) ?? [];
+    expect(cands[0]?.score).toBeLessThanOrEqual(0.6);
+  });
+
+  it("embedding_hint_skipped_when_authoritative_hits", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenant,
+      descriptors: [
+        { kind: "os_uprn", value: `UPRN-HINT-${tenant.slice(0, 8)}`, authoritative: true },
+      ],
+      embeddingHint: { vector: oneHot(0), minSimilarity: 0.0 },
+    });
+    expect(r.status).toBe(200);
+    const cands = (r.body.candidates as Array<{ nodeId: string; matchSource: string }>) ?? [];
+    // Only the authoritative node — hint must not have added the hint node.
+    expect(cands.every((c) => c.matchSource === "authoritative")).toBe(true);
+    expect(cands.find((c) => c.nodeId === nodeAuth)).toBeDefined();
+    expect(cands.find((c) => c.nodeId === nodeHint)).toBeUndefined();
+  });
+
+  it("embedding_hint_skipped_when_topk_full", async () => {
+    // descriptor hits fill topK=1; hint must not push extra rows in.
+    const r = await call("/resolve", {
+      tenantId: tenant,
+      descriptors: [{ kind: "name", value: "Hint Target Alias" }],
+      topK: 1,
+      embeddingHint: { vector: oneHot(0), minSimilarity: 0.0 },
+    });
+    expect(r.status).toBe(200);
+    const cands = (r.body.candidates as Array<{ matchSource: string }>) ?? [];
+    expect(cands.length).toBe(1);
+    // alias_exact wins over hint when both target the same node.
+    expect(cands[0].matchSource).toBe("alias_exact");
+  });
+});
+
+// Remaining s5.3 stubs — operator/admin role JWT harness deferred to M4.
 describe("entity-resolve — s5.3 deferred stubs", () => {
   it.todo("alias_hard_revoke_requires_admin_role — needs operator+admin JWT harness");
-  it.todo("embedding_hint_caps_at_0_6 — M3");
-  it.todo("embedding_hint_skipped_when_authoritative_hits — M3");
-  it.todo("embedding_hint_skipped_when_topk_full — M3");
 });
