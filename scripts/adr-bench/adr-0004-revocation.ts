@@ -6,7 +6,9 @@
  * tenant_node_aliases / alias_events / canonical_facts. Picks between
  * soft / hard / hybrid per docs/adr/benchmarks.md § ADR-0004 thresholds.
  *
- * Not runnable until `tenant_node_aliases` exists (Phase 5 s5.3).
+ * s5.3 Milestone 1: table now exists. Bench remains a stub until merge/split
+ * handlers + canonical_facts (Phase 6) provide real numerators. Returns
+ * notRunnable so CI does not record zero-filled rows in adr_bench_results.
  */
 import { z } from "zod";
 import { notRunnable, type BenchResult } from "./_shared.ts";
