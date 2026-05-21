@@ -7,13 +7,20 @@
 // See mem://preferences/retrieval-shapes and docs/phases-5-6-6b-research.md.
 // Status: stub — contract types only. Implementation lands with sprint s6.1.
 
-export type ConflictTriageRetrievalInput = {
-  conflictId: string;
-  /** Pull siblings from the same source_mapping for bulk-pattern detection. */
-  includeSiblings?: boolean;
-  /** Window for sibling pull, in days. */
-  siblingWindowDays?: number;
-};
+import { z } from "https://esm.sh/zod@3.23.8";
+import type { RetrievalContractMeta } from "./retrieval-contract.ts";
+
+export const ConflictTriageRetrievalInputSchema = z
+  .object({
+    conflictId: z.string().uuid("conflictId must be a uuid"),
+    includeSiblings: z.boolean().optional(),
+    siblingWindowDays: z.number().int().min(1).max(365).optional(),
+  })
+  .strict();
+
+export type ConflictTriageRetrievalInput = z.infer<
+  typeof ConflictTriageRetrievalInputSchema
+>;
 
 export type ConflictTriageRetrievalOutput = {
   conflict: {
@@ -48,4 +55,4 @@ export const CONFLICT_TRIAGE_RETRIEVAL_CONTRACT = {
   fallback:
     "If siblings > 200, return the first 200 by recency and set a `truncated=true` flag — the caller must escalate to the bulk-pattern UI rather than asking the LLM to chew through 1000 rows.",
   declaredBy: "docs/agents/contract-checklist.md",
-} as const;
+} as const satisfies RetrievalContractMeta;
