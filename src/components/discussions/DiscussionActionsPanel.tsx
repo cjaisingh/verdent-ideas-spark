@@ -195,7 +195,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         <p className="text-xs text-muted-foreground">No action items yet. Add one or extract from the transcript.</p>
       ) : (
         <div className="space-y-1">
-          {items.map((a) => (
+          {items.filter((a) => !autoOnly || a.source === "plan_footer" || a.source === "session_summary").map((a) => (
             <div key={a.id} className="rounded border p-2 text-xs space-y-1.5">
               <div className="flex items-center gap-2">
                 <button
