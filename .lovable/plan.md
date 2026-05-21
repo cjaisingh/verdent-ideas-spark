@@ -1,34 +1,59 @@
+## Goal
 
-## Doc-drift audit results
+Prep work so tonight's overnight queue (phase-5/6/6b/7) lands on something concrete instead of re-deriving open questions. Everything here is docs + typed contract stubs — no schema changes, no edge functions, no UI.
 
-Ran `scripts/check-doc-drift.ts` at two windows.
+## Scope
 
-**Last 5 commits — 3 real gaps:**
-- 4 migrations (20260520084200 / 084444 / 084700 / 090754) shipped without named CHANGELOG entries
-- 3 pages touched without docs file co-edit: `AdminAiUsage`, `OperatorInbox`, `Postmortems`
+Three foundations that block real implementation:
+1. Retrieval contracts (mandated by `mem://preferences/retrieval-shapes`).
+2. ADR stubs (called out in `docs/phases-5-6-6b-research.md § ADRs to draft this round`).
+3. Source-adapter input contract (mandated by `mem://preferences/contract-first` for any new ingest agent loop).
 
-**Last 20 commits — 11 page-drift errors.** Mostly old; not worth back-filling.
+## Deliverables
 
-**Content check:** CHANGELOG `[Unreleased]` already describes *what* those migrations and pages do (BalanceTrackingPanel, Unified Operator Inbox, Auto-postmortem). The drift script trips on file-touch heuristic, not missing prose. Inbox doc has no mention of Caprica image-blind behaviour — that's a genuine gap.
+### 1. Retrieval contracts — `supabase/functions/_shared/contracts/`
 
-**File size hygiene:** all `mem/features/*.md` within 30-line cap. `docs/operator-inbox.md` at 59 / 200 lines (fine). `mem/index.md` at 77 lines — getting busy but legal.
+One file per agent surface that reads memory in Phase 5/6/6b. Each declares: data shape (prose / hierarchical-doc / tabular / graph / time-series), store, return schema, token budget, freshness window. Following the `night-agent.ts` reference shape.
 
----
+- `retrieval-ingest-concierge.ts` — hierarchical-doc shape for lease PDFs and SFG20; PageIndex-style section retrieval; budget 8k.
+- `retrieval-validation-agent.ts` — tabular shape; direct table query against `staged_records`; no embeddings; budget 2k.
+- `retrieval-resolver.ts` — graph shape over `tenant_nodes` + `tenant_node_aliases`; deterministic descriptors first, alias FTS second, embeddings only as a last-resort hint; budget 1k.
+- `retrieval-conflict-triage.ts` — relational over `fact_conflicts` + `conflict_rules`; recent-N + same-mapping siblings; budget 4k.
 
-## Proposed fixes (small, in-scope)
+Each file: TypeScript module exporting `Input` / `Output` Zod schemas and a `RetrievalContract` const literal so the overnight runner can spot-check shape coverage.
 
-1. **Inspect the 4 unattributed migrations** — read them, confirm they belong to one of the existing `[Unreleased]` bullets, and add a one-line "Migrations:" suffix to the relevant bullet so the heuristic stops complaining.
-2. **`docs/operator-inbox.md`** — add a short "Known gap: image messages" section noting Caprica photo file_ids land in `raw->'message'->'photo'` but are not OCR'd / vision-described, so they currently render as empty rows. Link to the deferred vision-branch work.
-3. **No changes** to AdminAiUsage / Postmortems doc trail — content already covered in CHANGELOG, would be busywork.
-4. **No back-fill** of the older 8 page-drift errors. They're behind us; doc-drift gate only runs on PR diffs against `main`, so they don't block anything.
+### 2. ADR stubs — `docs/adr/`
 
-Skipping: `mem/index.md` entry for "Caprica lane is image-blind" — would be a transient state note, violates `mem://preferences/doc-hygiene`. Keep it in the operator-inbox doc only.
+Four new files following `docs/adr/_template.md`. Status `proposed`, options enumerated, recommendation marked TBD with the trigger ("decide when sprint s5.2 opens" etc.). No commitments — these are scaffolds so overnight runs and operator review have a single place to drop findings.
+
+- `0003-tenant-node-ancestry-storage.md` — path vs ltree vs CTE vs denormalised `ancestry_ids[]`.
+- `0004-alias-revocation-cascade.md` — soft flag vs hard re-quarantine; admin-only approval.
+- `0005-bulk-conflict-pattern-detection.md` — heuristic groupby vs LLM-suggested pattern.
+- `0006-embedding-model-and-index.md` — Gemini `text-embedding-004` vs OpenAI `text-embedding-3-small` vs BGE self-host; hnsw vs ivfflat at expected corpus size; per-source chunk strategy table.
+
+### 3. Source-adapter input contract — `supabase/functions/_shared/contracts/source-adapter.ts`
+
+Typed I/O the Phase 6 `s6.2` sprint will implement against. Captures: `raw_record` envelope, `source_mapping_ref`, declared `pii_fields[]`, `lawful_basis`, idempotency key derivation, and the auto-promote precondition trio (mapping approved + validations pass + no PII without basis). No runtime — pure types + Zod.
+
+### 4. CHANGELOG + memory hookup
+
+- `CHANGELOG.md` `[Unreleased]` — one bullet under **Added** linking the retrieval contracts + ADR stubs + source-adapter contract; explicit "no runtime change" note so doc-drift doesn't trip.
+- `mem://features/phase-5-6-prep.md` — 30-line index entry covering: which contracts exist, which ADRs are stubbed, where decisions still need to land, the overnight-runner expectations. Link from `mem://index.md` under **Memories**.
 
 ## Out of scope
-- The vision branch itself (deferred per your previous turn).
-- Operator Inbox image thumbnail rendering.
-- Lint baseline drain.
 
-If you want, I can also expand `scripts/check-doc-drift.ts` to look inside CHANGELOG `[Unreleased]` for migration filenames, so future "migration without CHANGELOG entry" warnings only fire when the prose is actually missing — but that's a tooling change, separate ticket.
+- Any database migration (no `entity_resolution_conflicts`, no `raw_records`, no `canonical_facts`).
+- Any edge function or cron change.
+- ADR *decisions* — only stubs this round; final answers land per-sprint.
+- Caprica vision branch (still deferred).
+- Phase 7 connector marketplace contract — Phase 7 is queued overnight but the contract surface depends on Phase 6's source-adapter shape; pulled into the next round.
 
-Approve and I'll do (1) + (2) only.
+## Verification
+
+- `bun run lint` clean on the new TS files.
+- `scripts/check-doc-drift.ts` clean for the new commit (CHANGELOG bullet covers all four ADRs + memory file).
+- `scripts/check-okr-links.ts` not affected (no roadmap mutations).
+
+## Estimated size
+
+~9 new files, ~1 CHANGELOG edit, ~1 mem/index.md edit. No migrations. Land in one commit.
