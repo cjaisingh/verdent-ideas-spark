@@ -19,6 +19,8 @@ import { hashDataset, writeBenchResult, uploadBenchResult, type BenchResult } fr
 export const InputSchema = z.object({
   pgUrl: z.string().url().optional(),
   windowDays: z.number().int().min(1).max(90).default(30),
+  sampleQueries: z.number().int().min(0).max(2000).default(200),
+  topK: z.number().int().min(1).max(100).default(10),
 });
 export type Input = z.infer<typeof InputSchema>;
 
