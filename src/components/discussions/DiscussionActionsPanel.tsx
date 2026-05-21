@@ -203,7 +203,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
                 </button>
                 <span className="font-mono text-[10px] text-muted-foreground shrink-0">{jobHandle(a.short_num)}</span>
                 <Badge variant="outline" className="text-[9px]">{a.priority}</Badge>
-                <Badge variant="outline" className="text-[9px]">{a.source}</Badge>
+                <SourceBadge source={a.source} sourceRef={a.source_ref} />
                 {a.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
                 <span className="flex-1 min-w-0 truncate">{a.title}</span>
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => remove(a)} title="Delete">
