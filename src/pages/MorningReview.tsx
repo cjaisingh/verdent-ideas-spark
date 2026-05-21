@@ -48,6 +48,20 @@ const stateBadgeCls: Record<TriageState, string> = {
   skip: "bg-muted text-muted-foreground",
 };
 
+const sourceBadgeCls: Record<string, string> = {
+  plan_footer: "bg-blue-600 text-white",
+  session_summary: "bg-amber-600 text-white",
+  manual: "bg-slate-600 text-white",
+  extracted: "bg-violet-600 text-white",
+};
+const sourceBadgeLabel: Record<string, string> = {
+  plan_footer: "plan",
+  session_summary: "session",
+  manual: "manual",
+  extracted: "extracted",
+};
+
+
 export default function MorningReview() {
   const [review, setReview] = useState<Review | null>(null);
   const [proposedLessons, setProposedLessons] = useState<number>(0);
@@ -267,9 +281,20 @@ export default function MorningReview() {
             {review.top_actions.map((a) => (
               <div key={a.action_id} className="flex items-center justify-between text-sm border-b border-border/40 py-2 last:border-0">
                 <div>
-                  <div className="font-medium">#{a.short_num} {a.title}</div>
+                  <div className="font-medium flex items-center gap-2 flex-wrap">
+                    <span>#{a.short_num} {a.title}</span>
+                    {a.source && (
+                      <Badge
+                        className={cn("text-[10px] px-1.5 py-0", sourceBadgeCls[a.source] ?? "bg-muted")}
+                        title={a.source_ref ?? a.source}
+                      >
+                        {sourceBadgeLabel[a.source] ?? a.source}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">{a.priority} · {a.age_hours}h old</div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="ghost" onClick={() => mirrorAction(`Action: ${a.title}`)}>
                     <ArrowUpRight className="h-3 w-3 mr-1" /> Mirror
