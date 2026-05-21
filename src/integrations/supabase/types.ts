@@ -5846,6 +5846,75 @@ export type Database = {
           },
         ]
       }
+      session_summaries: {
+        Row: {
+          agent: string
+          bootstrap_acknowledged: boolean
+          created_at: string
+          decisions: string[]
+          duration_minutes: number | null
+          edge_fns_touched: string[]
+          ended_at: string
+          files_touched: string[]
+          followups: string[]
+          goal: string | null
+          id: string
+          migrations_applied: string[]
+          open_actions_at_end: number
+          open_actions_at_start: number
+          open_findings_at_end: number
+          open_findings_at_start: number
+          outcome: string
+          session_id: string
+          started_at: string
+          unresolved: string[]
+        }
+        Insert: {
+          agent?: string
+          bootstrap_acknowledged?: boolean
+          created_at?: string
+          decisions?: string[]
+          duration_minutes?: number | null
+          edge_fns_touched?: string[]
+          ended_at?: string
+          files_touched?: string[]
+          followups?: string[]
+          goal?: string | null
+          id?: string
+          migrations_applied?: string[]
+          open_actions_at_end?: number
+          open_actions_at_start?: number
+          open_findings_at_end?: number
+          open_findings_at_start?: number
+          outcome: string
+          session_id: string
+          started_at: string
+          unresolved?: string[]
+        }
+        Update: {
+          agent?: string
+          bootstrap_acknowledged?: boolean
+          created_at?: string
+          decisions?: string[]
+          duration_minutes?: number | null
+          edge_fns_touched?: string[]
+          ended_at?: string
+          files_touched?: string[]
+          followups?: string[]
+          goal?: string | null
+          id?: string
+          migrations_applied?: string[]
+          open_actions_at_end?: number
+          open_actions_at_start?: number
+          open_findings_at_end?: number
+          open_findings_at_start?: number
+          outcome?: string
+          session_id?: string
+          started_at?: string
+          unresolved?: string[]
+        }
+        Relationships: []
+      }
       short_links: {
         Row: {
           created_at: string
