@@ -4,6 +4,10 @@ Source: `notebook_entries` tagged phase-5/phase-6/phase-6b plus contract-level d
 already captured in roadmap tasks. This file consolidates the **locked-in decisions** and
 the **open questions** that still need an operator call before each sprint can close.
 
+> Operator-facing overnight expectations per phase: see [`docs/phases-overnight-operator-guide.md`](./phases-overnight-operator-guide.md).
+
+
+
 ---
 
 ## Phase 5 — Entity & Tenant Resolution

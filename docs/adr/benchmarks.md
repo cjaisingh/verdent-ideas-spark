@@ -15,6 +15,9 @@ Rule: no opinion-driven decisions on these ADRs. If the data isn't here, the dec
 | 0005 bulk conflict detection | First re-ingest dropping ≥ 100 rows into `fact_conflicts` | sprint s6.1 |
 | 0006 embedding (accepted) | Live `ai_usage_log` + at least one populated vector store | runnable today |
 
+Operator-facing expectations per phase: see [`docs/phases-overnight-operator-guide.md`](../phases-overnight-operator-guide.md).
+
+
 ## Where the data comes from
 
 | Source | Used by |
