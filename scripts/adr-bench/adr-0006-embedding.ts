@@ -83,19 +83,19 @@ export async function run(input: Input): Promise<{ result: BenchResult; trips: s
          where c.table_schema = 'public'
            and c.column_name = 'embedding'`,
       );
-      let maxCount = 0;
+      const tableCounts: Array<{ name: string; count: number }> = [];
       for (const t of tables.rows) {
         const safe = t.table_name.replace(/[^a-zA-Z0-9_]/g, "");
         if (!safe) continue;
         sampledIds.push(safe);
         const r = await client.query<{ c: string | null }>(
-          `select count(*)::text as c from public.${safe}`,
+          `select count(*)::text as c from public.${safe} where embedding is not null`,
         );
         const n = Number(r.rows[0]?.c ?? 0);
-        if (n > maxCount) maxCount = n;
+        tableCounts.push({ name: safe, count: n });
       }
-      metrics.vector_row_count_max = maxCount;
-      // hnsw_query_p95_ms left at 0 until we ship the 200-query sampler.
+      metrics.vector_row_count_max = tableCounts.reduce((m, t) => Math.max(m, t.count), 0);
+      metrics.hnsw_query_p95_ms = await sampleHnswP95(client, tableCounts, input.sampleQueries, input.topK);
     } finally {
       await client.end();
     }
