@@ -221,6 +221,20 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         .limit(5000),
     ]));
 
+    // Out-of-scope auto-logger stale watch (W: out_of_scope_stale).
+    const since30d = new Date(now.getTime() - 30 * 24 * 3600_000).toISOString();
+    const { data: oosStaleRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:out_of_scope_stale",
+      request_id: reqId,
+      step_label: "Scan stale auto-logged discussion_actions", phase_kind: "db_scan",
+    }, () => sb
+      .from("discussion_actions")
+      .select("id, short_num, title, source, source_ref, created_at")
+      .in("source", ["plan_footer", "session_summary"])
+      .eq("status", "open")
+      .gte("created_at", since30d)
+      .limit(500));
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
