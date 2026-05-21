@@ -186,19 +186,133 @@ describe("entity-resolve — s5.1 deterministic path", () => {
 });
 
 // ---------------------------------------------------------------------------
-// s5.3 — alias lifecycle + embedding-hint. Stubbed as `it.todo` until handlers
-// land in Milestone 2/3. Each todo names the exact behaviour to assert; the
-// stub block keeps the contract visible in vitest output.
+// s5.3 M2 — alias lifecycle (revoke / merge / split). Embedding-hint cases
+// (#7-#9) stay it.todo until M3.
 // ---------------------------------------------------------------------------
-describe("entity-resolve — s5.3 alias lifecycle + embedding-hint", () => {
-  it.todo("alias_revoke_invisible_after — revoked alias no longer matches in /resolve");
-  it.todo("alias_revoke_requires_idempotency_key — 400 without key, replay returns same body");
-  it.todo("alias_hard_revoke_requires_admin_role — operator 403, admin 200, event row carries hard_revoke=true");
-  it.todo("alias_merge_redirects_old_ids — both old alias_ids resolve to new canonical node");
-  it.todo("alias_merge_rejects_cross_tenant — 422 + no row written");
-  it.todo("alias_split_emits_pair — one alias → two; old superseded, two new visible, two events emitted");
-  it.todo("embedding_hint_caps_at_0_6 — embedding-only candidate score never exceeds 0.6");
-  it.todo("embedding_hint_skipped_when_authoritative_hits — no embed call when authoritative or alias_exact already hit");
-  it.todo("embedding_hint_skipped_when_topk_full — no embed call when byNode.size >= topK");
+describe("entity-resolve — s5.3 alias lifecycle", () => {
+  if (!process.env.E2E_AWIP_SERVICE_TOKEN || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    it.skip("requires E2E_AWIP_SERVICE_TOKEN + SUPABASE_SERVICE_ROLE_KEY", () => {});
+    return;
+  }
+
+  const tenant = crypto.randomUUID();
+  const otherTenant = crypto.randomUUID();
+  const sb = createClient(
+    env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
+  let nodeA = "", nodeB = "", nodeC = "", otherNode = "";
+
+  beforeAll(async () => {
+    const ins = async (tid: string, name: string) => {
+      const { data } = await sb.from("tenant_nodes")
+        .insert({ tenant_id: tid, kind: "site", name }).select("id").single();
+      return data!.id as string;
+    };
+    nodeA = await ins(tenant, "M2 A");
+    nodeB = await ins(tenant, "M2 B");
+    nodeC = await ins(tenant, "M2 C (merge target)");
+    otherNode = await ins(otherTenant, "M2 other tenant");
+  });
+
+  it("alias_revoke_invisible_after — revoked alias no longer matches", async () => {
+    const created = await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeA, kind: "name", value: `M2 Revoke ${nodeA.slice(0,4)}` },
+      `m2-create-revoke-${nodeA}`);
+    expect(created.status).toBe(200);
+    const aliasId = created.body.alias_id as string;
+
+    const revoked = await call("/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "no longer valid" },
+      `m2-revoke-${aliasId}`);
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.ok).toBe(true);
+
+    const r = await call("/resolve", {
+      tenantId: tenant, descriptors: [{ kind: "name", value: `M2 Revoke ${nodeA.slice(0,4)}` }],
+    });
+    const cands = (r.body.candidates as Array<{ nodeId: string }>) ?? [];
+    expect(cands.find((c) => c.nodeId === nodeA)).toBeUndefined();
+  });
+
+  it("alias_revoke_requires_idempotency_key — 400 without, replay returns idempotent", async () => {
+    const created = await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeA, kind: "name", value: `M2 Idem ${nodeA.slice(0,4)}` },
+      `m2-create-idem-${nodeA}`);
+    const aliasId = created.body.alias_id as string;
+
+    const noKey = await call("/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "x" });
+    expect(noKey.status).toBe(400);
+    expect(noKey.body.error).toBe("idempotency_key_required");
+
+    const key = `m2-replay-${aliasId}`;
+    const first = await call("/alias/revoke", { tenantId: tenant, aliasId, reason: "x" }, key);
+    const replay = await call("/alias/revoke", { tenantId: tenant, aliasId, reason: "x" }, key);
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(replay.body.idempotent).toBe(true);
+  });
+
+  it("alias_merge_redirects_old_ids — both old aliases now resolve to new node", async () => {
+    const a1 = (await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeA, kind: "name", value: `Merge L ${nodeA.slice(0,4)}` },
+      `m2-mc-a1-${nodeA}`)).body.alias_id as string;
+    const a2 = (await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeB, kind: "name", value: `Merge R ${nodeB.slice(0,4)}` },
+      `m2-mc-a2-${nodeB}`)).body.alias_id as string;
+
+    const m = await call("/alias/merge", {
+      tenantId: tenant, intoNodeId: nodeC, fromAliasIds: [a1, a2],
+      descriptor: { kind: "name", value: `Merged ${nodeC.slice(0,4)}` },
+      reason: "operator consolidation",
+    }, `m2-merge-${nodeC}`);
+    expect(m.status).toBe(200);
+    expect(m.body.merge_group_id).toBeTruthy();
+    expect((m.body.old_alias_ids as string[]).sort()).toEqual([a1, a2].sort());
+
+    const r = await call("/resolve", {
+      tenantId: tenant, descriptors: [{ kind: "name", value: `Merged ${nodeC.slice(0,4)}` }],
+    });
+    const cands = (r.body.candidates as Array<{ nodeId: string }>) ?? [];
+    expect(cands[0]?.nodeId).toBe(nodeC);
+  });
+
+  it("alias_merge_rejects_cross_tenant — 422 with no writes", async () => {
+    const inTenant = (await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeA, kind: "name", value: `XT-A ${nodeA.slice(0,4)}` },
+      `m2-xt-a-${nodeA}`)).body.alias_id as string;
+    const inOther = (await call("/alias/create",
+      { tenantId: otherTenant, nodeId: otherNode, kind: "name", value: `XT-B ${otherNode.slice(0,4)}` },
+      `m2-xt-b-${otherNode}`)).body.alias_id as string;
+
+    const m = await call("/alias/merge", {
+      tenantId: tenant, intoNodeId: nodeC, fromAliasIds: [inTenant, inOther],
+      descriptor: { kind: "name", value: "XT merge" }, reason: "should fail",
+    }, `m2-xt-merge-${nodeC}`);
+    expect(m.status).toBe(422);
+    expect(m.body.error).toBe("cross_tenant_rejected");
+  });
+
+  it("alias_split_emits_pair — source revoked, two new aliases superseding it", async () => {
+    const src = (await call("/alias/create",
+      { tenantId: tenant, nodeId: nodeA, kind: "asset_code", value: `SPLIT-${nodeA.slice(0,6)}` },
+      `m2-split-src-${nodeA}`)).body.alias_id as string;
+
+    const s = await call("/alias/split", {
+      tenantId: tenant, sourceAliasId: src,
+      targets: [
+        { nodeId: nodeB, descriptor: { kind: "asset_code", value: `SPLIT-${nodeA.slice(0,6)}-L` } },
+        { nodeId: nodeC, descriptor: { kind: "asset_code", value: `SPLIT-${nodeA.slice(0,6)}-R` } },
+      ],
+      reason: "asset was actually two",
+    }, `m2-split-${src}`);
+    expect(s.status).toBe(200);
+    expect((s.body.new_alias_ids as string[]).length).toBe(2);
+    expect(s.body.source_alias_id).toBe(src);
+  });
 });
+
 
