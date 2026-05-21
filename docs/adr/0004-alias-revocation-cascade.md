@@ -19,6 +19,8 @@ Three cascade options:
 
 Current lean: option 3 (hybrid). Soft flag covers the everyday "we got the alias wrong" case; hard revoke is the escape hatch for compliance.
 
+> Benchmark + dataset requirements: see [`docs/adr/benchmarks.md § ADR-0004`](./benchmarks.md#adr-0004--alias-revocation-cascade).
+
 ## Consequences
 
 To be filled in once the decision lands. Whichever option wins, revocation must emit an `okr_node_event` so OKR owners can see why a rollup just changed.
