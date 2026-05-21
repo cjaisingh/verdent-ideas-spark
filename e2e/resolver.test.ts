@@ -316,3 +316,11 @@ describe("entity-resolve — s5.3 alias lifecycle", () => {
 });
 
 
+
+// Remaining s5.3 stubs — promoted in M3 (embedding-hint) and operator/admin role harness.
+describe("entity-resolve — s5.3 deferred stubs", () => {
+  it.todo("alias_hard_revoke_requires_admin_role — needs operator+admin JWT harness");
+  it.todo("embedding_hint_caps_at_0_6 — M3");
+  it.todo("embedding_hint_skipped_when_authoritative_hits — M3");
+  it.todo("embedding_hint_skipped_when_topk_full — M3");
+});
