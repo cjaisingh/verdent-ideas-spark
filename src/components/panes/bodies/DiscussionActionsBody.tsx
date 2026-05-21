@@ -23,6 +23,7 @@ interface ActionRow {
   owner: string | null;
   due_at: string | null;
   source: string;
+  source_ref: string | null;
   created_at: string;
   night_eligible: boolean | null;
   night_override_reason: string | null;
@@ -58,7 +59,7 @@ export function DiscussionActionsBody() {
       const { data } = await supabase
         .from("discussion_actions")
         .select(
-          "id, short_num, title, status, priority, risk, owner, due_at, source, created_at, night_eligible, night_override_reason",
+          "id, short_num, title, status, priority, risk, owner, due_at, source, source_ref, created_at, night_eligible, night_override_reason",
         )
         .in("status", ["open", "in_progress"])
         .order("created_at", { ascending: false })
@@ -150,6 +151,16 @@ export function DiscussionActionsBody() {
                     {r.priority}
                   </span>
                   <span className="text-muted-foreground">#{r.short_num}</span>
+                  {r.source === "plan_footer" && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-amber-500/40 text-amber-600" title={r.source_ref ?? undefined}>
+                      from plan
+                    </span>
+                  )}
+                  {r.source === "session_summary" && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-indigo-500/40 text-indigo-600" title={r.source_ref ?? undefined}>
+                      from session
+                    </span>
+                  )}
                   {r.status === "in_progress" && (
                     <span className="text-[10px] text-tint-discussion">in progress</span>
                   )}

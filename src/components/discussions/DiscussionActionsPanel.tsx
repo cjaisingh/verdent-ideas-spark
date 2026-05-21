@@ -18,10 +18,30 @@ type Action = {
   priority: string;
   owner: string | null;
   source: string;
+  source_ref: string | null;
   promoted_task_id: string | null;
   due_at: string | null;
   created_at: string;
 };
+
+function SourceBadge({ source, sourceRef }: { source: string; sourceRef: string | null }) {
+  if (source === "plan_footer") {
+    return (
+      <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600" title={sourceRef ?? undefined}>
+        from plan
+      </Badge>
+    );
+  }
+  if (source === "session_summary") {
+    return (
+      <Badge variant="outline" className="text-[9px] border-indigo-500/40 text-indigo-600" title={sourceRef ?? undefined}>
+        from session
+      </Badge>
+    );
+  }
+  if (!source || source === "manual") return null;
+  return <Badge variant="outline" className="text-[9px]">{source}</Badge>;
+}
 
 type Proposal = {
   title: string;
@@ -51,11 +71,12 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [extracting, setExtracting] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [autoOnly, setAutoOnly] = useState(false);
 
   const load = async () => {
     const { data } = await supabase
       .from("discussion_actions")
-      .select("id,short_num,title,details,status,priority,owner,source,promoted_task_id,due_at,created_at")
+      .select("id,short_num,title,details,status,priority,owner,source,source_ref,promoted_task_id,due_at,created_at")
       .eq("discussion_id", discussionId)
       .order("created_at", { ascending: true });
     setItems((data ?? []) as Action[]);
@@ -132,6 +153,15 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         <div className="flex items-center gap-2 text-sm font-medium">
           <ListChecks className="h-4 w-4" /> Action items
           {items.length > 0 && <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>}
+          {(() => {
+            const autoCount = items.filter((i) => i.source === "plan_footer" || i.source === "session_summary").length;
+            return autoCount > 0 ? (
+              <label className="flex items-center gap-1 text-[10px] text-muted-foreground font-normal cursor-pointer">
+                <input type="checkbox" className="h-3 w-3" checked={autoOnly} onChange={(e) => setAutoOnly(e.target.checked)} />
+                Auto-logged only ({autoCount})
+              </label>
+            ) : null;
+          })()}
         </div>
         <div className="flex items-center gap-1">
           {proposals.length > 0 && (
@@ -165,7 +195,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         <p className="text-xs text-muted-foreground">No action items yet. Add one or extract from the transcript.</p>
       ) : (
         <div className="space-y-1">
-          {items.map((a) => (
+          {items.filter((a) => !autoOnly || a.source === "plan_footer" || a.source === "session_summary").map((a) => (
             <div key={a.id} className="rounded border p-2 text-xs space-y-1.5">
               <div className="flex items-center gap-2">
                 <button
@@ -182,7 +212,7 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
                 </button>
                 <span className="font-mono text-[10px] text-muted-foreground shrink-0">{jobHandle(a.short_num)}</span>
                 <Badge variant="outline" className="text-[9px]">{a.priority}</Badge>
-                <Badge variant="outline" className="text-[9px]">{a.source}</Badge>
+                <SourceBadge source={a.source} sourceRef={a.source_ref} />
                 {a.promoted_task_id && <Badge variant="secondary" className="text-[9px]">promoted</Badge>}
                 <span className="flex-1 min-w-0 truncate">{a.title}</span>
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => remove(a)} title="Delete">
