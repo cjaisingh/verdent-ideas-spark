@@ -261,6 +261,19 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .select("tenant_id, band, event_count")
       .limit(500));
 
+    // Alias revoke burst (W: alias_revoke_burst). 15-min window.
+    const aliasRevokeCutoff = new Date(now.getTime() - 20 * 60_000).toISOString();
+    const { data: aliasRevokeRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:alias_revoke_events",
+      request_id: reqId,
+      step_label: "Scan recent alias_revoke events (20m)", phase_kind: "db_scan",
+    }, () => sb
+      .from("entity_resolution_events")
+      .select("tenant_id, kind, created_at")
+      .in("kind", ["alias_revoke", "alias_hard_revoke"])
+      .gte("created_at", aliasRevokeCutoff)
+      .limit(2000));
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
