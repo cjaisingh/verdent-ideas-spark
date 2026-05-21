@@ -1250,3 +1250,42 @@ export function checkObservabilityRegistry(
   }
   return out;
 }
+
+// ----- s5.2: resolver low-confidence rate -------------------------------
+export type ResolverHealthRow = {
+  tenant_id: string;
+  band: string;
+  event_count: number;
+};
+
+export function checkResolverLowConfidenceRate(
+  now: Date,
+  rows: ResolverHealthRow[],
+): FindingCandidate[] {
+  const out: FindingCandidate[] = [];
+  const byTenant = new Map<string, { total: number; no_match: number }>();
+  for (const r of rows) {
+    const cur = byTenant.get(r.tenant_id) ?? { total: 0, no_match: 0 };
+    cur.total += Number(r.event_count);
+    if (r.band === "no_match") cur.no_match += Number(r.event_count);
+    byTenant.set(r.tenant_id, cur);
+  }
+  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+  for (const [tenantId, c] of byTenant) {
+    if (c.total < 20) continue;
+    const pct = c.no_match / c.total;
+    if (pct < 0.20) continue;
+    out.push({
+      kind: "resolver_low_confidence_rate",
+      severity: "medium",
+      summary:
+        `Resolver no_match rate ${(pct * 100).toFixed(0)}% over 24h ` +
+        `(${c.no_match}/${c.total}) for tenant ${tenantId.slice(0, 8)}. ` +
+        `Check descriptor weights or alias coverage.`,
+      dedupe_key: `resolver_low_confidence_rate:${tenantId}:${hourBucket}`,
+      subject_ref: { tenant_id: tenantId, no_match: c.no_match, total: c.total },
+      payload: { no_match_pct: pct, fix_url: "/entities" },
+    });
+  }
+  return out;
+}
