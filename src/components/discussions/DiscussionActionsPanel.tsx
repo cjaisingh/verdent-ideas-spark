@@ -153,6 +153,15 @@ export function DiscussionActionsPanel({ discussionId, subjectType, subjectId }:
         <div className="flex items-center gap-2 text-sm font-medium">
           <ListChecks className="h-4 w-4" /> Action items
           {items.length > 0 && <Badge variant="secondary" className="text-[10px]">{items.length}</Badge>}
+          {(() => {
+            const autoCount = items.filter((i) => i.source === "plan_footer" || i.source === "session_summary").length;
+            return autoCount > 0 ? (
+              <label className="flex items-center gap-1 text-[10px] text-muted-foreground font-normal cursor-pointer">
+                <input type="checkbox" className="h-3 w-3" checked={autoOnly} onChange={(e) => setAutoOnly(e.target.checked)} />
+                Auto-logged only ({autoCount})
+              </label>
+            ) : null;
+          })()}
         </div>
         <div className="flex items-center gap-1">
           {proposals.length > 0 && (
