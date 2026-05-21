@@ -43,3 +43,15 @@ Phase 5 sprint s5.1 substrate — first cut of the entity resolver.
 ## Tests
 `e2e/resolver.test.ts` — cross-tenant gate (hard invariant), alias_exact precedence, authoritative short-circuit, revoked invisible, idempotency-key required, weighted scoring, ancestry parity, all three confidence bands.
 
+
+## s5.3 — alias lifecycle (M1+M2, landed 2026-05-21)
+
+**Schema (M1).** `tenant_node_aliases` carries `supersedes_alias_id`, `merge_group_id`, `hard_revoked`, `revoke_reason` (constraint: hard-revoke needs ≥8-char reason). Enum extended with `alias_merge`, `alias_split`, `alias_hard_revoke`. New `tenant_node_alias_embeddings(vector(1536), HNSW cosine, admin RLS, realtime)`. Helper `tenant_node_alias_effective(uuid)` follows supersedes chain. View `v_alias_lineage_health` per tenant.
+
+**Endpoints (M2).** All three require `Idempotency-Key`. Replays short-circuit before mutation (`{ idempotent: true }`). Cross-tenant ops → 422 `cross_tenant_rejected`.
+
+- `/alias/revoke` — soft by default. `hardRevoke=true` is admin-only (`has_role('admin')`); service-token has admin powers. Emits `alias_revoke` or `alias_hard_revoke` with `request_id`, `reason`, `hard_revoke` in payload.
+- `/alias/merge` — N→1. New canonical alias on `intoNodeId` shares `merge_group_id = sha256("merge:" + idem_key)` with every source; sources get `revoked_at`, `revoke_reason`, `supersedes_alias_id = new`. One `alias_merge` event with `old_alias_ids[]` + `new_alias_id` + `into_node_id` in payload.
+- `/alias/split` — 1→N. Source revoked; N new aliases inserted with `supersedes_alias_id = sourceAliasId`. One `alias_split` event with `source_alias_id` + `new_alias_ids[]` + `target_node_ids[]` in payload.
+
+**What still ships in s5.3.** M3: embedding-hint last-resort branch on `/resolve` (cap 0.6, never auto-bind) + `alias_revoke_burst` sentinel (>10/h/tenant medium). M4: `/entities/aliases` admin UI. M5: `adr-0004-revocation` bench + ADR-0004 status flip per `docs/adr/benchmarks.md`. Fact-side cascade (`binding_status`, KR grey-out) defers to Phase 6 §6.x.
