@@ -81,19 +81,46 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
     const phaseTasks = (tasks ?? []).filter((t: any) => t.sprint_id && sprintIds.has(t.sprint_id));
 
     const sample = { phase, sprints: sprints ?? [], tasks: phaseTasks.slice(0, 60) };
-    const systemPrompt =
+    const binding = getPhaseBinding(run.phase_key);
+
+    const baseSystem =
       "You are an observation-only night agent. Given an approved roadmap phase, " +
       "produce a concise next-morning briefing: " +
       "(1) one-paragraph health summary, (2) top 3 risks, (3) top 5 recommended next actions. " +
-      "Return STRICT JSON: {summary:string, risks:string[], recommendations:string[]}. " +
       "Do NOT propose changes to the roadmap itself; the operator decides.";
+
+    const systemPrompt = binding
+      ? [
+          baseSystem,
+          "",
+          `This phase is governed by the ${binding.phaseKey} retrieval contract.`,
+          `Data shape: ${binding.contract.shape}.`,
+          `Store: ${binding.contract.store}.`,
+          `Token budget: ${binding.contract.tokenBudget}.`,
+          `Fallback rule: ${binding.contract.fallback}.`,
+          binding.adrs.length ? `Open ADRs: ${binding.adrs.join(", ")}.` : "No open ADRs.",
+          "Guard rails (must be respected — your output will be rejected if you propose violating any):",
+          ...binding.guardrails.map((g) => `- ${g}`),
+          "",
+          "Return STRICT JSON with EXACTLY these keys:",
+          "  contract_acknowledged: string  // must equal the store or declaredBy value above",
+          "  guardrails_respected:  string[] // non-empty subset of the guard rails verbatim",
+          "  would_violate:         string[] // anything you considered but rejected",
+          "  summary:               string",
+          "  risks:                 string[] (≤10)",
+          "  recommendations:       string[] (≤10)",
+        ].join("\n")
+      : baseSystem +
+        " Return STRICT JSON: {summary:string, risks:string[], recommendations:string[]}.";
+
+    const charBudget = binding ? Math.max(8_000, binding.contract.tokenBudget * 4) : 40_000;
 
     const aiStart = Date.now();
     const aiResp = await recordStep(sb, {
       job: "overnight-phase-runner", step_key: "ai_call:gateway",
       request_id: reqId,
       step_label: `Night plan via ${model}`, phase_kind: "ai_call",
-      detail: { run_id: runId, model, phase_key: run.phase_key },
+      detail: { run_id: runId, model, phase_key: run.phase_key, phase_binding: binding?.phaseKey ?? null },
     }, () => fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
@@ -101,7 +128,7 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
         model,
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: "```json\n" + JSON.stringify(sample).slice(0, 40_000) + "\n```" },
+          { role: "user", content: "```json\n" + JSON.stringify(sample).slice(0, charBudget) + "\n```" },
         ],
         response_format: { type: "json_object" },
       }),
@@ -123,6 +150,10 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
     let parsed: any = {};
     try { parsed = JSON.parse(aiJson?.choices?.[0]?.message?.content ?? "{}"); } catch { parsed = {}; }
 
+    const phaseBindingRef = binding
+      ? { phaseKey: binding.phaseKey, contractStore: binding.contract.store, adrs: binding.adrs }
+      : null;
+
     await sb.from("ai_usage_log").insert({
       job: "overnight-phase-runner",
       model, trigger: "cron",
@@ -131,9 +162,56 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
       total_tokens: usage.total_tokens ?? promptTok + completionTok,
       cost_usd: Number(cost.toFixed(6)),
       price_in_per_mtok: prices.in, price_out_per_mtok: prices.out,
-      request_ref: { run_id: runId, phase_key: run.phase_key, night_mode: isNightUTC() },
+      request_ref: { run_id: runId, phase_key: run.phase_key, night_mode: isNightUTC(), phase_binding: phaseBindingRef },
     });
 
+    // Contract-bound phases: hard-validate the envelope. Failure → auto_blocked
+    // with no retry — the AI ignored a load-bearing contract.
+    if (binding) {
+      const parseRes = OvernightResponseEnvelopeSchema.safeParse(parsed);
+      let reason: string | null = null;
+      if (!parseRes.success) {
+        reason = `envelope schema invalid: ${parseRes.error.issues.map((i) => i.path.join(".") + ":" + i.message).join("; ").slice(0, 300)}`;
+      } else {
+        reason = rejectEnvelope(binding, parseRes.data);
+      }
+      if (reason) {
+        clearInterval(hbTimer);
+        await sb.from("roadmap_phase_overnight_runs").update({
+          status: "auto_blocked",
+          finished_at: new Date().toISOString(),
+          heartbeat_at: null,
+          last_error: `contract envelope rejected: ${reason}`.slice(0, 500),
+          error: `contract envelope rejected: ${reason}`.slice(0, 500),
+          result: { phase_binding: phaseBindingRef, raw: parsed, model, cost_usd: Number(cost.toFixed(6)) },
+        }).eq("id", runId);
+        await dispatchAlert(sb, "overnight-phase-runner-15m", "contract_envelope_rejected",
+          `phase ${run.phase_key} run ${runId} blocked — ${reason}`,
+          { run_id: runId, phase_key: run.phase_key, phase_binding: phaseBindingRef });
+        return { run_id: runId, status: "auto_blocked", reason };
+      }
+      const env = parseRes.data;
+      clearInterval(hbTimer);
+      await sb.from("roadmap_phase_overnight_runs").update({
+        status: "done",
+        finished_at: new Date().toISOString(),
+        heartbeat_at: new Date().toISOString(),
+        result: {
+          summary: env.summary.slice(0, 4000),
+          risks: env.risks.slice(0, 10),
+          recommendations: env.recommendations.slice(0, 10),
+          contract_acknowledged: env.contract_acknowledged,
+          guardrails_respected: env.guardrails_respected,
+          would_violate: env.would_violate,
+          phase_binding: phaseBindingRef,
+          model, cost_usd: Number(cost.toFixed(6)),
+          prompt_tokens: promptTok, completion_tokens: completionTok,
+        },
+      }).eq("id", runId);
+      return { run_id: runId, status: "done", model, cost_usd: Number(cost.toFixed(6)), phase_binding: binding.phaseKey };
+    }
+
+    // Unbound phases (phase-1..4): preserve original behaviour.
     clearInterval(hbTimer);
     await sb.from("roadmap_phase_overnight_runs").update({
       status: "done",
