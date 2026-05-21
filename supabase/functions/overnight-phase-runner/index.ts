@@ -41,7 +41,7 @@ async function heartbeat(sb: ReturnType<typeof createClient>, runId: string) {
     .eq("id", runId).eq("status", "running");
 }
 
-async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
+async function processRun(sb: ReturnType<typeof createClient>, runId: string, reqId: string) {
   const { data: run } = await sb
     .from("roadmap_phase_overnight_runs")
     .select("id, phase_id, phase_key, status, attempts, max_retries")
