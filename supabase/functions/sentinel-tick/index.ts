@@ -383,6 +383,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (resolverHealthRows ?? []) as ResolverHealthRow[],
       )),
+      ...timeCheck("alias_revoke_burst", () => checkAliasRevokeBurst(
+        now, 15, 10,
+        (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
+      )),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
