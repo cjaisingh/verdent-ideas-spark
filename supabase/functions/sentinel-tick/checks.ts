@@ -34,7 +34,9 @@ export type FindingCandidate = {
     | "cron_auth_failures_burst"
     | "inbox_kind_classify_failures"
     | "inbox_source_silent"
-    | "out_of_scope_stale";
+    | "out_of_scope_stale"
+    | "observability_missing_watcher"
+    | "observability_stale_surface";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
