@@ -333,6 +333,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
         (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
       )),
+      ...timeCheck("out_of_scope_stale", () => checkOutOfScopeStale(
+        now,
+        (oosStaleRows ?? []) as { id: string; short_num: number; title: string; source: string; source_ref: string | null; created_at: string }[],
+      )),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
