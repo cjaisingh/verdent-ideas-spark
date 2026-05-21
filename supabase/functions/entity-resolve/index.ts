@@ -143,6 +143,7 @@ Deno.serve(
 
     let actorId: string | null = null;
     let actorLabel = "system";
+    let isAdmin = isService; // service token has admin powers
     if (!isService) {
       if (!auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
       const userClient = createClient(SUPABASE_URL, ANON, {
@@ -162,7 +163,9 @@ Deno.serve(
         _role: "admin",
       });
       if (!isOp && !isAd) return json({ error: "forbidden" }, 403);
+      isAdmin = !!isAd;
     }
+
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
     const url = new URL(req.url);
