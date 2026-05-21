@@ -124,4 +124,63 @@ describe("entity-resolve — s5.1 deterministic path", () => {
     });
     expect(r.status).toBe(400);
   });
+
+  // ---------- s5.2: scoring + ancestry --------------------------------------
+
+  it("s5.2 confidence_band: authoritative hit → auto_bind", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenantA,
+      descriptors: [
+        { kind: "os_uprn", value: `UPRN-${tenantA.slice(0, 8)}`, authoritative: true },
+      ],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.confidenceBand).toBe("auto_bind");
+  });
+
+  it("s5.2 confidence_band: alias_exact 'name' at default weight (0.7) → conflict band", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenantA,
+      descriptors: [{ kind: "name", value: "Acme HQ" }],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.confidenceBand).toBe("conflict");
+    const cands = r.body.candidates as Array<{ score: number }>;
+    expect(cands[0].score).toBeCloseTo(0.7, 1);
+  });
+
+  it("s5.2 confidence_band: no descriptor match → empty + no_match", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenantA,
+      descriptors: [{ kind: "name", value: "Completely Unknown Site XYZ" }],
+    });
+    expect(r.status).toBe(200);
+    expect(r.body.confidenceBand).toBe("no_match");
+    const cands = (r.body.candidates as unknown[]) ?? [];
+    expect(cands.length).toBe(0);
+  });
+
+  it("s5.2 ancestry: materialised ancestry_ids returned (single-node tree includes self)", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenantA,
+      descriptors: [{ kind: "name", value: "Acme HQ" }],
+    });
+    expect(r.status).toBe(200);
+    const cands = r.body.candidates as Array<{ nodeId: string; ancestry: string[] }>;
+    expect(cands[0].ancestry).toEqual([cands[0].nodeId]);
+  });
+
+  it("s5.2 weights: authoritative external_id beats fts on same node", async () => {
+    const r = await call("/resolve", {
+      tenantId: tenantA,
+      descriptors: [
+        { kind: "os_uprn", value: `UPRN-${tenantA.slice(0, 8)}`, authoritative: true },
+        { kind: "name", value: "Acme HQ" },
+      ],
+    });
+    expect(r.status).toBe(200);
+    const top = (r.body.candidates as Array<{ score: number; matchSource: string }>)[0];
+    expect(top.matchSource).toBe("authoritative");
+    expect(top.score).toBe(1.0);
+  });
 });

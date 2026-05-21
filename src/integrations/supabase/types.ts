@@ -2598,6 +2598,33 @@ export type Database = {
         }
         Relationships: []
       }
+      descriptor_weights: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          tenant_id: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          tenant_id: string
+          weight: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["alias_descriptor_kind"]
+          tenant_id?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       discussion_action_events: {
         Row: {
           action_id: string | null
@@ -6198,6 +6225,7 @@ export type Database = {
       }
       tenant_nodes: {
         Row: {
+          ancestry_ids: string[]
           created_at: string
           external_ids: Json
           id: string
@@ -6210,6 +6238,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ancestry_ids?: string[]
           created_at?: string
           external_ids?: Json
           id?: string
@@ -6222,6 +6251,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ancestry_ids?: string[]
           created_at?: string
           external_ids?: Json
           id?: string
@@ -7515,6 +7545,15 @@ export type Database = {
         }
         Relationships: []
       }
+      v_resolver_health: {
+        Row: {
+          band: string | null
+          event_count: number | null
+          last_event_at: string | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
       v_sentinel_check_perf_24h: {
         Row: {
           avg_open_depth: number | null
@@ -7774,6 +7813,10 @@ export type Database = {
           _workstream: string
         }
         Returns: Json
+      }
+      tenant_node_compute_ancestry: {
+        Args: { _node_id: string; _parent_id: string }
+        Returns: string[]
       }
       unlock_workstream: {
         Args: { _reason: string; _workstream: string }
