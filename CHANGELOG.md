@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-21 wave 4 — Phase 5 sprint s5.1)
+- **Entity & Tenant Resolver substrate** — four new tables: `tenant_nodes`, `tenant_node_aliases` (with generated `normalised` column + active-unique index + FTS index), `entity_resolution_conflicts`, `entity_resolution_events`. Admin-only RLS, realtime on all four, triggers auto-emit `entity_resolution_events` rows on every write.
+- **Edge function `entity-resolve`** wrapped with `withLogger`. Endpoints `/resolve`, `/bind`, `/alias/create`. Match order: authoritative → alias_exact → alias_fts. Resolver never crosses `tenant_id`. Idempotency-Key required on write endpoints.
+- **`/entities` page** (sidebar Knowledge group) — read-only resolver probe.
+- **`observability_registry`** row for `edge_fn:entity-resolve` so the missing-watcher sentinel covers it from day one.
+- **`e2e/resolver.test.ts`** — cross-tenant gate test is the hard invariant guard; covers alias_exact precedence, authoritative short-circuit, revoked-alias invisibility, and idempotency-key requirement.
+- **Memory:** `mem/features/entity-resolver.md` records invariants, tables, endpoints, and what is deliberately deferred to s5.2/s5.3.
+
+Out of scope this sprint (lands in s5.2/s5.3): `ancestry_ids[]` materialisation (ADR-0003), per-tenant `descriptor_weights`, embedding_hint, conflict approve/reject UI, alias revoke + merge/split.
+
+
+
 ### Measured (2026-05-21)
 - **ADR-0006 baseline bench** — first real run of `scripts/adr-bench/adr-0006-embedding.ts`. Result: `embedding_spend_usd_30d=0`, `vector_row_count_max=0`, `hnsw_query_p95_ms=0`, `re_embed_jobs_30d=0`. Status: **green** — pre-Phase-6 baseline; no `public.*` table carries an `embedding` column yet, so vector metrics are structurally `0` (not "no data"). Result uploaded to `adr_bench_results` and surfaced on `/admin/adr-bench`. Numbers pasted into ADR-0006 Consequences as the first data point.
 
