@@ -19,6 +19,7 @@ Operating instructions for AI agents (Lovable, Claude Code, Cursor, Codex) worki
 - Speak about the backend as "Lovable Cloud", not Supabase, when addressing the user.
 - Before adding a new autonomous surface (cron, edge function, LLM loop), declare a typed input contract in `supabase/functions/_shared/contracts/<name>.ts` — see [`docs/agents/contract-checklist.md`](./docs/agents/contract-checklist.md) and the `night-agent.ts` reference.
 - Don't introduce new `any`. `bun run lint:ratchet` fails the build; files outside `.lint-baselines/no-explicit-any.json` are `error`. See [`docs/lint-policy.md`](./docs/lint-policy.md).
+- Every plan with an "Out of scope" footer MUST be POSTed to `plan-footer-ingest` before claiming done. Every session ends with a POST to `session-summary-log` (include `out_of_scope: string[]` for anything deferred mid-flight). See [`docs/session-lifecycle.md`](./docs/session-lifecycle.md).
 
 ## Agent skills
 
