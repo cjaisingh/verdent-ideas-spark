@@ -57,6 +57,39 @@ const AliasCreateBody = z.object({
   authoritative: z.boolean().optional(),
 });
 
+// s5.3 M2 — alias lifecycle
+const AliasRevokeBody = z.object({
+  tenantId: z.string().uuid(),
+  aliasId: z.string().uuid(),
+  reason: z.string().min(1).max(500),
+  hardRevoke: z.boolean().optional().default(false),
+}).strict();
+
+const LifecycleDescriptor = z.object({
+  kind: z.enum(RESOLVER_DESCRIPTOR_KINDS),
+  value: z.string().min(1),
+  authoritative: z.boolean().optional(),
+});
+
+const AliasMergeBody = z.object({
+  tenantId: z.string().uuid(),
+  intoNodeId: z.string().uuid(),
+  fromAliasIds: z.array(z.string().uuid()).min(2).max(50),
+  descriptor: LifecycleDescriptor,
+  reason: z.string().min(1).max(500),
+}).strict();
+
+const AliasSplitBody = z.object({
+  tenantId: z.string().uuid(),
+  sourceAliasId: z.string().uuid(),
+  targets: z.array(z.object({
+    nodeId: z.string().uuid(),
+    descriptor: LifecycleDescriptor,
+  })).min(2).max(20),
+  reason: z.string().min(1).max(500),
+}).strict();
+
+
 function normalise(v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -110,6 +143,7 @@ Deno.serve(
 
     let actorId: string | null = null;
     let actorLabel = "system";
+    let isAdmin = isService; // service token has admin powers
     if (!isService) {
       if (!auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
       const userClient = createClient(SUPABASE_URL, ANON, {
@@ -129,7 +163,9 @@ Deno.serve(
         _role: "admin",
       });
       if (!isOp && !isAd) return json({ error: "forbidden" }, 403);
+      isAdmin = !!isAd;
     }
+
 
     const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
     const url = new URL(req.url);
@@ -433,6 +469,264 @@ Deno.serve(
       return json({ ok: true, created_alias_ids: created });
     }
 
+    // ----- /alias/revoke (s5.3 M2) --------------------------------------
+    if (path === "/alias/revoke") {
+      const idem = req.headers.get("idempotency-key");
+      if (!idem) return json({ error: "idempotency_key_required" }, 400);
+      const parsed = AliasRevokeBody.safeParse(body);
+      if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
+      const a = parsed.data;
+      if (a.hardRevoke && !isAdmin) return json({ error: "admin_required" }, 403);
+      if (a.hardRevoke && a.reason.length < 8) {
+        return json({ error: "hard_revoke_reason_too_short" }, 400);
+      }
+
+      const { data: row, error: rowErr } = await sb
+        .from("tenant_node_aliases")
+        .select("id, tenant_id, node_id, revoked_at, hard_revoked")
+        .eq("id", a.aliasId)
+        .maybeSingle();
+      if (rowErr) return json({ error: rowErr.message }, 500);
+      if (!row) return json({ error: "alias_not_found" }, 404);
+      if (row.tenant_id !== a.tenantId) return json({ error: "cross_tenant_rejected" }, 422);
+      if (row.revoked_at) {
+        return json({ ok: true, alias_id: a.aliasId, idempotent: true });
+      }
+
+      const { error: updErr } = await sb
+        .from("tenant_node_aliases")
+        .update({
+          revoked_at: new Date().toISOString(),
+          hard_revoked: a.hardRevoke,
+          revoke_reason: a.reason,
+        })
+        .eq("id", a.aliasId);
+      if (updErr) return json({ error: updErr.message }, 500);
+
+      await sb.from("entity_resolution_events").insert({
+        tenant_id: a.tenantId,
+        node_id: row.node_id,
+        alias_id: a.aliasId,
+        kind: a.hardRevoke ? "alias_hard_revoke" : "alias_revoke",
+        actor: actorId,
+        actor_label: actorLabel,
+        request_id: idem,
+        payload: { reason: a.reason, hard_revoke: a.hardRevoke },
+      });
+
+      return json({ ok: true, alias_id: a.aliasId, hard_revoked: a.hardRevoke });
+    }
+
+    // ----- /alias/merge (s5.3 M2) ---------------------------------------
+    if (path === "/alias/merge") {
+      const idem = req.headers.get("idempotency-key");
+      if (!idem) return json({ error: "idempotency_key_required" }, 400);
+      const parsed = AliasMergeBody.safeParse(body);
+      if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
+      const m = parsed.data;
+
+      // Target node must live in tenant.
+      const { data: target } = await sb
+        .from("tenant_nodes")
+        .select("id")
+        .eq("tenant_id", m.tenantId)
+        .eq("id", m.intoNodeId)
+        .maybeSingle();
+      if (!target) return json({ error: "into_node_not_found" }, 404);
+
+      // Source aliases must all be in same tenant.
+      const { data: sources, error: srcErr } = await sb
+        .from("tenant_node_aliases")
+        .select("id, tenant_id, node_id, revoked_at, merge_group_id")
+        .in("id", m.fromAliasIds);
+      if (srcErr) return json({ error: srcErr.message }, 500);
+      if (!sources || sources.length !== m.fromAliasIds.length) {
+        return json({ error: "alias_not_found" }, 404);
+      }
+      if (sources.some((s) => s.tenant_id !== m.tenantId)) {
+        return json({ error: "cross_tenant_rejected" }, 422);
+      }
+
+      // Idempotency: derive merge_group_id from idem key.
+      const enc = new TextEncoder().encode(`merge:${idem}`);
+      const hash = await crypto.subtle.digest("SHA-256", enc);
+      const bytes = new Uint8Array(hash).slice(0, 16);
+      // Force RFC4122 v4-ish bits to keep uuid validators happy.
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      const mergeGroupId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+
+      const { data: existing } = await sb
+        .from("tenant_node_aliases")
+        .select("id, node_id")
+        .eq("tenant_id", m.tenantId)
+        .eq("merge_group_id", mergeGroupId)
+        .is("revoked_at", null)
+        .maybeSingle();
+      if (existing) {
+        return json({
+          ok: true,
+          merge_group_id: mergeGroupId,
+          new_alias_id: existing.id,
+          idempotent: true,
+        });
+      }
+
+      // Insert the new canonical alias on intoNodeId.
+      const { data: newAlias, error: insErr } = await sb
+        .from("tenant_node_aliases")
+        .insert({
+          tenant_id: m.tenantId,
+          node_id: m.intoNodeId,
+          kind: m.descriptor.kind,
+          value: m.descriptor.value,
+          source: isService ? "service" : "operator",
+          authoritative: m.descriptor.authoritative ?? false,
+          approved_by: actorId,
+          merge_group_id: mergeGroupId,
+        })
+        .select("id")
+        .single();
+      if (insErr) return json({ error: insErr.message }, 500);
+
+      // Revoke + supersede each source alias.
+      const now = new Date().toISOString();
+      for (const s of sources) {
+        if (s.revoked_at) continue;
+        await sb
+          .from("tenant_node_aliases")
+          .update({
+            revoked_at: now,
+            revoke_reason: m.reason,
+            supersedes_alias_id: newAlias.id,
+            merge_group_id: mergeGroupId,
+          })
+          .eq("id", s.id);
+      }
+
+      await sb.from("entity_resolution_events").insert({
+        tenant_id: m.tenantId,
+        node_id: m.intoNodeId,
+        alias_id: newAlias.id,
+        kind: "alias_merge",
+        actor: actorId,
+        actor_label: actorLabel,
+        request_id: idem,
+        payload: {
+          reason: m.reason,
+          merge_group_id: mergeGroupId,
+          old_alias_ids: m.fromAliasIds,
+          new_alias_id: newAlias.id,
+          into_node_id: m.intoNodeId,
+        },
+      });
+
+      return json({
+        ok: true,
+        merge_group_id: mergeGroupId,
+        new_alias_id: newAlias.id,
+        old_alias_ids: m.fromAliasIds,
+      });
+    }
+
+    // ----- /alias/split (s5.3 M2) ---------------------------------------
+    if (path === "/alias/split") {
+      const idem = req.headers.get("idempotency-key");
+      if (!idem) return json({ error: "idempotency_key_required" }, 400);
+      const parsed = AliasSplitBody.safeParse(body);
+      if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
+      const s = parsed.data;
+
+      const { data: src, error: srcErr } = await sb
+        .from("tenant_node_aliases")
+        .select("id, tenant_id, node_id, revoked_at")
+        .eq("id", s.sourceAliasId)
+        .maybeSingle();
+      if (srcErr) return json({ error: srcErr.message }, 500);
+      if (!src) return json({ error: "alias_not_found" }, 404);
+      if (src.tenant_id !== s.tenantId) return json({ error: "cross_tenant_rejected" }, 422);
+
+      // Idempotency: if children already exist with supersedes pointing at the source via this idem key,
+      // return them.
+      const { data: existing } = await sb
+        .from("tenant_node_aliases")
+        .select("id, node_id")
+        .eq("tenant_id", s.tenantId)
+        .eq("supersedes_alias_id", s.sourceAliasId);
+      if (existing && existing.length >= s.targets.length) {
+        return json({
+          ok: true,
+          source_alias_id: s.sourceAliasId,
+          new_alias_ids: existing.map((r) => r.id),
+          idempotent: true,
+        });
+      }
+
+      // Verify every target node is in the tenant.
+      const targetNodeIds = s.targets.map((t) => t.nodeId);
+      const { data: nodes } = await sb
+        .from("tenant_nodes")
+        .select("id")
+        .eq("tenant_id", s.tenantId)
+        .in("id", targetNodeIds);
+      if (!nodes || nodes.length !== new Set(targetNodeIds).size) {
+        return json({ error: "target_node_not_found" }, 404);
+      }
+
+      // Revoke source (if not already).
+      if (!src.revoked_at) {
+        await sb
+          .from("tenant_node_aliases")
+          .update({ revoked_at: new Date().toISOString(), revoke_reason: s.reason })
+          .eq("id", s.sourceAliasId);
+      }
+
+      // Insert one new alias per target.
+      const newAliasIds: string[] = [];
+      for (const t of s.targets) {
+        const { data: ins, error: insErr } = await sb
+          .from("tenant_node_aliases")
+          .insert({
+            tenant_id: s.tenantId,
+            node_id: t.nodeId,
+            kind: t.descriptor.kind,
+            value: t.descriptor.value,
+            source: isService ? "service" : "operator",
+            authoritative: t.descriptor.authoritative ?? false,
+            approved_by: actorId,
+            supersedes_alias_id: s.sourceAliasId,
+          })
+          .select("id")
+          .single();
+        if (insErr) return json({ error: insErr.message }, 500);
+        newAliasIds.push(ins.id);
+      }
+
+      await sb.from("entity_resolution_events").insert({
+        tenant_id: s.tenantId,
+        node_id: src.node_id,
+        alias_id: s.sourceAliasId,
+        kind: "alias_split",
+        actor: actorId,
+        actor_label: actorLabel,
+        request_id: idem,
+        payload: {
+          reason: s.reason,
+          source_alias_id: s.sourceAliasId,
+          new_alias_ids: newAliasIds,
+          target_node_ids: targetNodeIds,
+        },
+      });
+
+      return json({
+        ok: true,
+        source_alias_id: s.sourceAliasId,
+        new_alias_ids: newAliasIds,
+      });
+    }
+
     return json({ error: "not_found", path }, 404);
+
   }),
 );

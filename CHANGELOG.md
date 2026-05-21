@@ -4,6 +4,20 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-21 wave 6 — Phase 5 sprint s5.3, Milestones 1+2)
+- **Alias lifecycle substrate (M1).** Lineage columns on `tenant_node_aliases`: `supersedes_alias_id`, `merge_group_id`, `hard_revoked`, `revoke_reason` (+ check constraint: hard-revoke requires ≥8-char reason). Enum `entity_resolution_event_kind` extended with `alias_merge`, `alias_split`, `alias_hard_revoke`. New `public.tenant_node_alias_embeddings(vector(1536))` table (HNSW cosine, admin RLS, realtime) for last-resort embedding-hint resolution in M3. Helper `tenant_node_alias_effective(uuid)` follows the supersedes chain (depth cap 32). View `public.v_alias_lineage_health` rolls active/soft/hard/superseded counts + 24h/1h revoke rate per tenant.
+- **Lifecycle handlers (M2).** `entity-resolve` gains `/alias/revoke`, `/alias/merge`, `/alias/split`. All require `Idempotency-Key`. Soft revoke is operator-allowed; `hardRevoke=true` is admin-only and emits `alias_hard_revoke`. Merge collapses N source aliases into one canonical alias on `intoNodeId` with a shared `merge_group_id` (sha256 of idem key); each source is revoked with `supersedes_alias_id` pointing at the new alias. Split revokes one source alias and emits N new aliases each with `supersedes_alias_id = sourceAliasId`. Every endpoint refuses cross-tenant ops with 422 `cross_tenant_rejected` and emits exactly one `entity_resolution_events` row carrying `request_id`, `reason`, and the lineage payload. Replays of the same idem key short-circuit before mutation and return `{ idempotent: true }`.
+- **`e2e/resolver.test.ts`** — 5 stubs promoted to real cases (revoke + replay + merge + cross-tenant merge + split); 4 stubs remain `it.todo` (hard-revoke admin harness + 3 embedding-hint cases) and roll to M3/M4.
+
+### Decided (2026-05-21)
+- **ADR-0004 stays `proposed`** through M2. Status flip waits on M5 bench + one real `alias_hard_revoke` event (per `docs/adr/benchmarks.md` threshold). Hybrid soft+hard lean is locked in code: soft revoke keeps OKR rollups live; hard revoke is admin-only with a reason gate at both code and DB level.
+
+Out of scope (s5.3 M2): embedding-hint branch on `/resolve` (M3), `alias_revoke_burst` sentinel (M3), admin UI for revoke/merge/split (M4), bench script + ADR-0004 flip (M5), fact-side cascade (Phase 6).
+
+
+
+
+
 ### Added (2026-05-21 wave 5 — Phase 5 sprint s5.2)
 - **Resolver scoring + ancestry substrate.** `tenant_nodes.ancestry_ids uuid[]` + GIN index `idx_tenant_nodes_ancestry`; `BEFORE INSERT/UPDATE` trigger `tg_tenant_nodes_set_ancestry` recomputes the root-to-leaf path via recursive CTE (depth cap 32). New `public.descriptor_weights` (tenant-scoped, admin RLS) seeded with defaults (authoritative kinds = 1.0, postcode = 0.9, name/address = 0.7). New `public.v_resolver_health` view rolling up `entity_resolution_events` by confidence band over the last 24h.
 - **`entity-resolve` scoring rewrite.** Match order stays authoritative -> alias_exact -> alias_fts but FTS hits now use weighted scores from `descriptor_weights`; resolver assigns `confidence_band` per candidate (`auto_bind` >=0.85, `conflict` 0.55-0.85, `no_match` <0.55) and emits a `conflict_open` row when two+ candidates land in the conflict band. Ancestry returned directly from the materialised array.
