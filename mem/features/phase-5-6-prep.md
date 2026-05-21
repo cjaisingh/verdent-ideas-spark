@@ -12,12 +12,16 @@ Scaffolding only — no runtime, no schema. Lets the overnight phase runner
 ## Retrieval contracts (`supabase/functions/_shared/contracts/`)
 
 One per agent surface, each declares shape + store + token budget per
-`mem://preferences/retrieval-shapes`.
+`mem://preferences/retrieval-shapes`. All four close with
+`as const satisfies RetrievalContractMeta` (shared `retrieval-contract.ts`)
+and expose a Zod `InputSchema` — the `Input` type is `z.infer<...>` so type
+and schema cannot drift. Locked by `retrieval_contracts_test.ts` (18 tests:
+sanity ×4, distinct-shape, valid ×4, reject ×9).
 
-- `retrieval-ingest-concierge.ts` — **hierarchical-doc**, 8k budget; lease PDFs, SFG20.
-- `retrieval-validation-agent.ts` — **tabular**, 2k budget; direct SQL over `staged_records`.
-- `retrieval-resolver.ts` — **graph**, 1k budget; deterministic → alias FTS → embedding hint.
-- `retrieval-conflict-triage.ts` — **relational**, 4k budget; same-mapping siblings + `conflict_rules`.
+- `retrieval-ingest-concierge.ts` — **hierarchical-doc**, 8k budget; lease PDFs, SFG20. Schema requires `sourceRef.rawRecordId` OR `sourceRef.url`, non-empty `query`, `siblingFanout` 0–10.
+- `retrieval-validation-agent.ts` — **tabular**, 2k budget; direct SQL over `staged_records`. Schema caps `sampleSize` at 200 (matches documented fallback).
+- `retrieval-resolver.ts` — **graph**, 1k budget; deterministic → alias FTS → embedding hint. Schema requires uuid `tenantId`, non-empty `descriptors`, enum-checked `kind`.
+- `retrieval-conflict-triage.ts` — **relational**, 4k budget; same-mapping siblings + `conflict_rules`. Schema requires uuid `conflictId`, `siblingWindowDays` 1–365.
 
 ## Source-adapter contract
 

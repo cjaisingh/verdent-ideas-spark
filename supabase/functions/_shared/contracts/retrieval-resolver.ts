@@ -7,30 +7,41 @@
 // See mem://preferences/retrieval-shapes and docs/phases-5-6-6b-research.md.
 // Status: stub — contract types only. Implementation lands with sprint s5.1.
 
-export type ResolverDescriptor = {
-  kind:
-    | "asset_code"
-    | "name"
-    | "address"
-    | "postcode"
-    | "bim_ifc_guid"
-    | "rics_id"
-    | "os_uprn"
-    | "sap_floc"
-    | "other";
-  value: string;
-  /** Authoritative-namespace descriptors short-circuit fuzzy match. */
-  authoritative?: boolean;
-};
+import { z } from "https://esm.sh/zod@3.23.8";
+import type { RetrievalContractMeta } from "./retrieval-contract.ts";
 
-export type ResolverRetrievalInput = {
-  tenantId: string;
-  descriptors: ResolverDescriptor[];
-  /** Optional parent hint — narrows search to subtree. */
-  parentNodeId?: string;
-  /** Max candidates returned for operator review when ambiguous. */
-  topK?: number;
-};
+export const RESOLVER_DESCRIPTOR_KINDS = [
+  "asset_code",
+  "name",
+  "address",
+  "postcode",
+  "bim_ifc_guid",
+  "rics_id",
+  "os_uprn",
+  "sap_floc",
+  "other",
+] as const;
+
+export const ResolverDescriptorSchema = z
+  .object({
+    kind: z.enum(RESOLVER_DESCRIPTOR_KINDS),
+    value: z.string().min(1, "descriptor value must be non-empty"),
+    authoritative: z.boolean().optional(),
+  })
+  .strict();
+
+export type ResolverDescriptor = z.infer<typeof ResolverDescriptorSchema>;
+
+export const ResolverRetrievalInputSchema = z
+  .object({
+    tenantId: z.string().uuid("tenantId must be a uuid"),
+    descriptors: z.array(ResolverDescriptorSchema).min(1, "descriptors must be non-empty"),
+    parentNodeId: z.string().uuid().optional(),
+    topK: z.number().int().min(1).max(50).optional(),
+  })
+  .strict();
+
+export type ResolverRetrievalInput = z.infer<typeof ResolverRetrievalInputSchema>;
 
 export type ResolverRetrievalOutput = {
   candidates: Array<{
@@ -50,8 +61,15 @@ export const RESOLVER_RETRIEVAL_CONTRACT = {
   primaryKey: "tenant_node.id (tenant-scoped)",
   tokenBudget: 1000,
   freshnessWindow: "live (aliases mutate on every approval)",
-  matchOrder: ["authoritative", "alias_exact", "alias_fts", "embedding_hint"] as const,
   fallback:
     "Never cross tenant_id. If zero candidates, return empty — propose-new-node is a separate operator flow, not a resolver fallback.",
   declaredBy: "docs/agents/contract-checklist.md",
-} as const;
+} as const satisfies RetrievalContractMeta;
+
+// Note: matchOrder lives outside the meta type since it is contract-specific.
+export const RESOLVER_MATCH_ORDER = [
+  "authoritative",
+  "alias_exact",
+  "alias_fts",
+  "embedding_hint",
+] as const;
