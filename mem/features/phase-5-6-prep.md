@@ -41,3 +41,22 @@ hard invariants. Every Phase 6 connector implements this shape.
 Phase 5/6/6b/7 are queued via `roadmap_phases.run_overnight=true`. Runs
 should reference these contracts + ADRs rather than re-deriving shape
 decisions; findings drop into the matching ADR's Consequences section.
+
+## Benchmarks
+
+Decision data is collected through `scripts/adr-bench/`, driven by
+`docs/adr/benchmarks.md` (thresholds + dataset requirements per ADR).
+Results land in `bench-results/<adr>-<ts>.json` (gitignored), shape
+`{adr, ran_at, dataset_hash, metrics}` via `_shared.ts`.
+
+- `adr-0003-ancestry.ts` — throws until `tenant_nodes` exists (s5.2).
+- `adr-0004-revocation.ts` — throws until `tenant_node_aliases` exists (s5.3).
+- `adr-0005-bulk-conflicts.ts` — throws until `fact_conflicts` exists (s6.1).
+- `adr-0006-embedding.ts` — runnable today; queries `ai_usage_log` + every
+  `public.*` table with an `embedding` column; flags revisit if spend > €50/30d
+  or any store > 1M rows. Falls back to a zero-filled result without `PGURL`.
+
+Rule: a bench result alone does not flip an ADR — paste the numbers into
+the ADR's Consequences, set `status: accepted`, add a CHANGELOG `### Decided`
+bullet, then update this file.
+
