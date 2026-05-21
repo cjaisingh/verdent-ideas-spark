@@ -217,7 +217,10 @@ export function aggregate(input: AggregatorInput): AggregatorOutput {
       title: a.title,
       priority: a.priority,
       age_hours: Math.round((nowMs - +new Date(a.created_at)) / 3_600_000),
+      source: a.source ?? null,
+      source_ref: a.source_ref ?? null,
     }));
+
 
   // Revisit (deferred items due) --------------------------------------
   const todayIso = input.now.toISOString().slice(0, 10);
