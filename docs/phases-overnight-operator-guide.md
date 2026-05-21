@@ -145,3 +145,35 @@ All overnight runs use `google/gemini-2.5-flash-lite` (22:00–06:00 UTC model p
 If a contract in `supabase/functions/_shared/contracts/` or an ADR in `docs/adr/` changes, **update this file in the same PR**. The contract is the law; this guide is the operator-facing reading of the law. They must agree.
 
 Drift is a `discussion_action` (medium risk) — open one against the contract/ADR that changed, citing the section of this guide that needs the update.
+
+---
+
+## How the runner enforces this
+
+`supabase/functions/overnight-phase-runner/index.ts` is the only mover. For
+each queued `roadmap_phase_overnight_runs` row whose `phase_key` is one of
+`phase-5`, `phase-6`, `phase-6b`, `phase-7` it:
+
+1. Looks up the binding in
+   [`_shared/contracts/phase-contract-map.ts`](../supabase/functions/_shared/contracts/phase-contract-map.ts)
+   — contract identity (shape, store, token budget, fallback), open ADRs, and
+   the verbatim guard-rail strings from each phase's "Won't do" list above.
+2. Injects all of that into the system prompt and caps the user payload at
+   `contract.tokenBudget * 4` characters.
+3. Requires the AI to return
+   [`OvernightResponseEnvelopeSchema`](../supabase/functions/_shared/contracts/overnight-envelope.ts)
+   — `contract_acknowledged`, `guardrails_respected`, `would_violate`, plus
+   summary/risks/recommendations.
+4. Cross-checks `contract_acknowledged` against `contract.store` or
+   `contract.declaredBy`, and that every `guardrails_respected` entry is a
+   verbatim member of the binding's guard rails (`rejectEnvelope`).
+5. On any envelope failure → `status='auto_blocked'` with no retry and a
+   `contract_envelope_rejected` alert. On success, stamps
+   `phase_binding: { phaseKey, contractStore, adrs }` onto the run `result`
+   and onto `ai_usage_log.request_ref` so per-contract spend is queryable.
+
+Phase keys not in the map (phase-1..4) flow through with the original
+unstructured `{summary, risks, recommendations}` behaviour — backward-compat.
+
+**Drift rule:** changing a `retrieval-*.ts` contract OR a "Won't do" line above
+requires updating `phase-contract-map.ts` in the same PR.

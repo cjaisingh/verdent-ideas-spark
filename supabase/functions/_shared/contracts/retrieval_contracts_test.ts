@@ -44,6 +44,15 @@ import {
   type ConflictTriageRetrievalInput,
 } from "./retrieval-conflict-triage.ts";
 
+import {
+  PHASE_CONTRACTS,
+  getPhaseBinding,
+  rejectEnvelope,
+  type PhaseKey,
+} from "./phase-contract-map.ts";
+
+import { OvernightResponseEnvelopeSchema } from "./overnight-envelope.ts";
+
 const UUID_A = "11111111-1111-4111-8111-111111111111";
 const UUID_B = "22222222-2222-4222-8222-222222222222";
 const UUID_C = "33333333-3333-4333-8333-333333333333";
@@ -207,4 +216,69 @@ Deno.test("conflict_triage: rejects non-uuid conflictId", () => {
       conflictId: "nope",
     })
   );
+});
+
+// ---- Phase → contract mapping --------------------------------------------
+Deno.test("phase-contract-map: keys are exactly phase-5/6/6b/7", () => {
+  const expected: PhaseKey[] = ["phase-5", "phase-6", "phase-6b", "phase-7"];
+  assertEquals(new Set(Object.keys(PHASE_CONTRACTS)), new Set(expected));
+});
+
+Deno.test("phase-contract-map: every binding points to a known contract const", () => {
+  const knownStores = new Set(ALL_CONTRACTS.map(([, c]) => c.store));
+  for (const key of Object.keys(PHASE_CONTRACTS) as PhaseKey[]) {
+    const binding = PHASE_CONTRACTS[key];
+    assert(knownStores.has(binding.contract.store), `${key} binding contract not in ALL_CONTRACTS`);
+    assert(binding.guardrails.length > 0, `${key} must declare ≥1 guardrail`);
+  }
+});
+
+Deno.test("phase-contract-map: getPhaseBinding returns null for unknown key", () => {
+  assertEquals(getPhaseBinding("phase-1"), null);
+  assertEquals(getPhaseBinding(null), null);
+  assertEquals(getPhaseBinding(""), null);
+});
+
+Deno.test("rejectEnvelope: accepts contract_acknowledged === store with known guardrail", () => {
+  const b = PHASE_CONTRACTS["phase-5"];
+  const reason = rejectEnvelope(b, {
+    contract_acknowledged: b.contract.store,
+    guardrails_respected: [b.guardrails[0]],
+  });
+  assertEquals(reason, null);
+});
+
+Deno.test("rejectEnvelope: rejects unknown guardrail entry", () => {
+  const b = PHASE_CONTRACTS["phase-5"];
+  const reason = rejectEnvelope(b, {
+    contract_acknowledged: b.contract.declaredBy,
+    guardrails_respected: ["made up rail"],
+  });
+  assert(reason && reason.includes("guardrails_respected"));
+});
+
+Deno.test("rejectEnvelope: rejects mismatched contract_acknowledged", () => {
+  const b = PHASE_CONTRACTS["phase-6"];
+  const reason = rejectEnvelope(b, {
+    contract_acknowledged: "some other store",
+    guardrails_respected: [b.guardrails[0]],
+  });
+  assert(reason && reason.includes("contract_acknowledged"));
+});
+
+Deno.test("OvernightResponseEnvelope: rejects missing contract_acknowledged", () => {
+  const res = OvernightResponseEnvelopeSchema.safeParse({
+    guardrails_respected: ["x"],
+    summary: "ok",
+  });
+  assertEquals(res.success, false);
+});
+
+Deno.test("OvernightResponseEnvelope: parses a minimal valid envelope", () => {
+  const res = OvernightResponseEnvelopeSchema.safeParse({
+    contract_acknowledged: "anything",
+    guardrails_respected: ["one"],
+    summary: "looks ok",
+  });
+  assertEquals(res.success, true);
 });
