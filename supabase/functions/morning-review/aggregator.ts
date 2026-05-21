@@ -101,7 +101,10 @@ export type TopAction = {
   title: string;
   priority: string;
   age_hours: number;
+  source: string | null;
+  source_ref: string | null;
 };
+
 
 export type RevisitItem = {
   id: string;
