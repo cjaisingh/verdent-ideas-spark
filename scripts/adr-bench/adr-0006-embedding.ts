@@ -51,6 +51,71 @@ async function connect(pgUrl: string | undefined): Promise<PgClient | null> {
   }
 }
 
+/**
+ * Pick the p-th percentile (0–100) using nearest-rank on a sorted copy.
+ */
+export function percentile(samples: ReadonlyArray<number>, p: number): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const rank = Math.ceil((p / 100) * sorted.length);
+  return sorted[Math.min(sorted.length, Math.max(1, rank)) - 1];
+}
+
+/**
+ * HNSW (or whatever ANN index is attached to `embedding`) latency sampler.
+ *
+ * Strategy: for each table with ≥ MIN_ROWS embedding rows, pick a quota of
+ * random `ctid`s proportional to its share of total rows (min 1, capped at
+ * `totalQueries`). For each ctid we run a CTE that pulls the query vector
+ * server-side — so we never serialise pgvector across the wire — and time
+ * the `<->` top-K lookup with `performance.now()`. Returns p95(ms) across
+ * all samples; 0 when nothing is sampleable.
+ */
+async function sampleHnswP95(
+  client: PgClient,
+  tables: ReadonlyArray<{ name: string; count: number }>,
+  totalQueries: number,
+  topK: number,
+): Promise<number> {
+  const MIN_ROWS = 20;
+  const eligible = tables.filter((t) => t.count >= MIN_ROWS);
+  if (eligible.length === 0 || totalQueries <= 0) return 0;
+  const totalRows = eligible.reduce((s, t) => s + t.count, 0);
+
+  const timings: number[] = [];
+  for (const t of eligible) {
+    const quota = Math.max(1, Math.round((t.count / totalRows) * totalQueries));
+    const sample = await client.query<{ ctid: string }>(
+      `select ctid::text as ctid
+         from public.${t.name}
+        where embedding is not null
+        order by random()
+        limit ${quota}`,
+    );
+    for (const row of sample.rows) {
+      const start = performance.now();
+      try {
+        await client.query(
+          `with q as (
+             select embedding from public.${t.name} where ctid = '${row.ctid.replace(/'/g, "")}'::tid
+           )
+           select 1
+             from public.${t.name} t, q
+            where t.embedding is not null
+            order by t.embedding <-> q.embedding
+            limit ${topK}`,
+        );
+        timings.push(performance.now() - start);
+      } catch {
+        // Skip failed query (e.g. dimension mismatch); don't pollute timings.
+      }
+    }
+  }
+  return Math.round(percentile(timings, 95) * 100) / 100;
+}
+
+
+
 export async function run(input: Input): Promise<{ result: BenchResult; trips: string[] }> {
   const ranAt = new Date().toISOString();
   const client = await connect(input.pgUrl);
