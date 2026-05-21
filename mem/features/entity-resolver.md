@@ -27,12 +27,19 @@ Phase 5 sprint s5.1 substrate — first cut of the entity resolver.
 ## UI
 `/entities` (sidebar Knowledge group) — read-only probe form: tenant UUID + JSON descriptors → candidates list with score, matchSource, ancestry.
 
-## Out of scope this sprint (lands in s5.2/s5.3)
-- ancestry materialisation (`ancestry_ids[]`) — currently walks parent_id chain per candidate
-- per-tenant scoring weights (`descriptor_weights` table)
-- embedding_hint last-resort match
-- conflict approve/reject UI + `resolve_truth()` wiring
-- alias revoke + merge/split flows
+## s5.2 (landed 2026-05-21)
+- `tenant_nodes.ancestry_ids uuid[]` + GIN `idx_tenant_nodes_ancestry`; `BEFORE` trigger `tg_tenant_nodes_set_ancestry` keeps it via recursive CTE (depth cap 32). Resolver returns ancestry from the array, no parent_id walk.
+- `descriptor_weights` (tenant-scoped, admin RLS) drives FTS scoring; seeds: authoritative kinds = 1.0, postcode = 0.9, name/address = 0.7.
+- Confidence bands: `auto_bind` >=0.85, `conflict` 0.55-0.85, `no_match` <0.55. `conflict` band emits `conflict_open` event.
+- `v_resolver_health` view + `resolver_low_confidence_rate` sentinel check (>20% no_match over 24h, min 20 events).
+- ADR-0003 stays `proposed`: implemented lean, but status flip blocked until a real tenant tree (>=5k nodes) lands per `docs/adr/benchmarks.md`. Baseline bench row in `adr_bench_results`.
+
+## Out of scope (lands in s5.3)
+- embedding_hint last-resort match (needs alias-embedding store)
+- alias revoke + merge/split lifecycle (ADR-0004 flip)
+- per-tenant `descriptor_weights` editing UI
+- `resolve_truth()` wiring for resolver conflicts
 
 ## Tests
-`e2e/resolver.test.ts` — alias_exact wins, cross-tenant gate, authoritative short-circuit, revoked invisible, idempotency-key required.
+`e2e/resolver.test.ts` — cross-tenant gate (hard invariant), alias_exact precedence, authoritative short-circuit, revoked invisible, idempotency-key required, weighted scoring, ancestry parity, all three confidence bands.
+
