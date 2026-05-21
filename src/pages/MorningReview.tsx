@@ -48,6 +48,20 @@ const stateBadgeCls: Record<TriageState, string> = {
   skip: "bg-muted text-muted-foreground",
 };
 
+const sourceBadgeCls: Record<string, string> = {
+  plan_footer: "bg-blue-600 text-white",
+  session_summary: "bg-amber-600 text-white",
+  manual: "bg-slate-600 text-white",
+  extracted: "bg-violet-600 text-white",
+};
+const sourceBadgeLabel: Record<string, string> = {
+  plan_footer: "plan",
+  session_summary: "session",
+  manual: "manual",
+  extracted: "extracted",
+};
+
+
 export default function MorningReview() {
   const [review, setReview] = useState<Review | null>(null);
   const [proposedLessons, setProposedLessons] = useState<number>(0);
