@@ -1,0 +1,1 @@
+UPDATE public.roadmap_phase_overnight_runs SET status='queued', attempts=0, last_error=NULL, heartbeat_at=NULL, started_at=NULL, finished_at=NULL WHERE scheduled_for=CURRENT_DATE AND status='auto_blocked';

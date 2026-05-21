@@ -41,7 +41,7 @@ async function heartbeat(sb: ReturnType<typeof createClient>, runId: string) {
     .eq("id", runId).eq("status", "running");
 }
 
-async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
+async function processRun(sb: ReturnType<typeof createClient>, runId: string, reqId: string) {
   const { data: run } = await sb
     .from("roadmap_phase_overnight_runs")
     .select("id, phase_id, phase_key, status, attempts, max_retries")
@@ -103,8 +103,8 @@ async function processRun(sb: ReturnType<typeof createClient>, runId: string) {
           ...binding.guardrails.map((g) => `- ${g}`),
           "",
           "Return STRICT JSON with EXACTLY these keys:",
-          "  contract_acknowledged: string  // must equal the store or declaredBy value above",
-          "  guardrails_respected:  string[] // non-empty subset of the guard rails verbatim",
+          `  contract_acknowledged: string  // MUST be exactly "${binding.contract.store}" (or "${binding.contract.declaredBy}")`,
+          `  guardrails_respected:  string[] // non-empty subset, each entry copied VERBATIM from the guard rails listed above`,
           "  would_violate:         string[] // anything you considered but rejected",
           "  summary:               string",
           "  risks:                 string[] (≤10)",
@@ -326,7 +326,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
 
   const results = [];
   for (const id of runIds) {
-    results.push(await processRun(sb, id));
+    results.push(await processRun(sb, id, reqId));
   }
   const failed = results.filter((r: any) => r.status === "failed").length;
   await recordRun(
