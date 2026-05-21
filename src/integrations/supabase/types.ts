@@ -2874,6 +2874,84 @@ export type Database = {
         }
         Relationships: []
       }
+      entity_resolution_conflicts: {
+        Row: {
+          candidates: Json
+          descriptors: Json
+          id: string
+          opened_at: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: Database["public"]["Enums"]["entity_conflict_status"]
+          tenant_id: string
+        }
+        Insert: {
+          candidates?: Json
+          descriptors: Json
+          id?: string
+          opened_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["entity_conflict_status"]
+          tenant_id: string
+        }
+        Update: {
+          candidates?: Json
+          descriptors?: Json
+          id?: string
+          opened_at?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: Database["public"]["Enums"]["entity_conflict_status"]
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      entity_resolution_events: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          alias_id: string | null
+          conflict_id: string | null
+          id: string
+          kind: Database["public"]["Enums"]["entity_resolution_event_kind"]
+          node_id: string | null
+          occurred_at: string
+          payload: Json
+          request_id: string | null
+          tenant_id: string | null
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          alias_id?: string | null
+          conflict_id?: string | null
+          id?: string
+          kind: Database["public"]["Enums"]["entity_resolution_event_kind"]
+          node_id?: string | null
+          occurred_at?: string
+          payload?: Json
+          request_id?: string | null
+          tenant_id?: string | null
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          alias_id?: string | null
+          conflict_id?: string | null
+          id?: string
+          kind?: Database["public"]["Enums"]["entity_resolution_event_kind"]
+          node_id?: string | null
+          occurred_at?: string
+          payload?: Json
+          request_id?: string | null
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
       frontend_error_logs: {
         Row: {
           colno: number | null
@@ -6065,6 +6143,113 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_node_aliases: {
+        Row: {
+          approved_at: string
+          approved_by: string | null
+          authoritative: boolean
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          node_id: string
+          normalised: string | null
+          revoked_at: string | null
+          source: string
+          tenant_id: string
+          value: string
+        }
+        Insert: {
+          approved_at?: string
+          approved_by?: string | null
+          authoritative?: boolean
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          node_id: string
+          normalised?: string | null
+          revoked_at?: string | null
+          source?: string
+          tenant_id: string
+          value: string
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string | null
+          authoritative?: boolean
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["alias_descriptor_kind"]
+          node_id?: string
+          normalised?: string | null
+          revoked_at?: string | null
+          source?: string
+          tenant_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_node_aliases_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_nodes: {
+        Row: {
+          created_at: string
+          external_ids: Json
+          id: string
+          kind: string
+          name: string
+          parent_id: string | null
+          status: Database["public"]["Enums"]["tenant_node_status"]
+          superseded_by: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          external_ids?: Json
+          id?: string
+          kind: string
+          name: string
+          parent_id?: string | null
+          status?: Database["public"]["Enums"]["tenant_node_status"]
+          superseded_by?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          external_ids?: Json
+          id?: string
+          kind?: string
+          name?: string
+          parent_id?: string | null
+          status?: Database["public"]["Enums"]["tenant_node_status"]
+          superseded_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_nodes_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_nodes_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           created_at: string
@@ -7512,6 +7697,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      normalise_alias: { Args: { _v: string }; Returns: string }
       purge_all_rows: { Args: { _table: string }; Returns: number }
       purge_console_captures: { Args: never; Returns: number }
       purge_expired_rows: {
@@ -7599,8 +7785,27 @@ export type Database = {
       }
     }
     Enums: {
+      alias_descriptor_kind:
+        | "asset_code"
+        | "name"
+        | "address"
+        | "postcode"
+        | "bim_ifc_guid"
+        | "rics_id"
+        | "os_uprn"
+        | "sap_floc"
+        | "other"
       app_role: "operator" | "admin"
       capability_status: "available" | "planned" | "experimental" | "deprecated"
+      entity_conflict_status: "open" | "resolved" | "dismissed"
+      entity_resolution_event_kind:
+        | "propose"
+        | "bind"
+        | "alias_create"
+        | "alias_revoke"
+        | "conflict_open"
+        | "conflict_resolve"
+        | "node_upsert"
       notebook_kind: "thought" | "issue" | "research" | "suggestion" | "todo"
       notebook_status: "open" | "in_progress" | "resolved" | "archived"
       okr_creator: "discovery_ai" | "awip" | "human"
@@ -7616,6 +7821,7 @@ export type Database = {
         | "review"
         | "done"
         | "wont_do"
+      tenant_node_status: "active" | "merged" | "split" | "retired"
       work_category:
         | "plan"
         | "build"
@@ -7752,8 +7958,29 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      alias_descriptor_kind: [
+        "asset_code",
+        "name",
+        "address",
+        "postcode",
+        "bim_ifc_guid",
+        "rics_id",
+        "os_uprn",
+        "sap_floc",
+        "other",
+      ],
       app_role: ["operator", "admin"],
       capability_status: ["available", "planned", "experimental", "deprecated"],
+      entity_conflict_status: ["open", "resolved", "dismissed"],
+      entity_resolution_event_kind: [
+        "propose",
+        "bind",
+        "alias_create",
+        "alias_revoke",
+        "conflict_open",
+        "conflict_resolve",
+        "node_upsert",
+      ],
       notebook_kind: ["thought", "issue", "research", "suggestion", "todo"],
       notebook_status: ["open", "in_progress", "resolved", "archived"],
       okr_creator: ["discovery_ai", "awip", "human"],
@@ -7770,6 +7997,7 @@ export const Constants = {
         "done",
         "wont_do",
       ],
+      tenant_node_status: ["active", "merged", "split", "retired"],
       work_category: [
         "plan",
         "build",
