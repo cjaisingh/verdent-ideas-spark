@@ -69,30 +69,32 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
   const startedAt = body.started_at ?? new Date().toISOString();
   const endedAt = body.ended_at ?? new Date().toISOString();
 
+  const row: Record<string, unknown> = {
+    session_id: body.session_id,
+    agent: body.agent ?? "lovable",
+    started_at: startedAt,
+    ended_at: endedAt,
+    outcome: body.outcome ?? "",
+    bootstrap_acknowledged: body.bootstrap_acknowledged ?? false,
+  };
+  if (body.goal !== undefined) row.goal = body.goal;
+  if (body.files_touched) row.files_touched = body.files_touched;
+  if (body.migrations_applied) row.migrations_applied = body.migrations_applied;
+  if (body.edge_fns_touched) row.edge_fns_touched = body.edge_fns_touched;
+  if (body.open_findings_at_start !== undefined) row.open_findings_at_start = body.open_findings_at_start;
+  if (body.open_actions_at_start !== undefined) row.open_actions_at_start = body.open_actions_at_start;
+  if (body.open_findings_at_end !== undefined) row.open_findings_at_end = body.open_findings_at_end;
+  if (body.open_actions_at_end !== undefined) row.open_actions_at_end = body.open_actions_at_end;
+  if (body.decisions !== undefined) row.decisions = body.decisions;
+  if (body.followups !== undefined) row.followups = body.followups;
+  if (body.unresolved !== undefined) row.unresolved = body.unresolved;
+
   const { data: summary, error: insErr } = await sb
     .from("session_summaries")
-    .insert({
-      session_id: body.session_id,
-      agent: body.agent ?? "lovable",
-      started_at: startedAt,
-      ended_at: endedAt,
-      goal: body.goal ?? null,
-      outcome: body.outcome ?? null,
-      files_touched: body.files_touched ?? [],
-      migrations_applied: body.migrations_applied ?? [],
-      edge_fns_touched: body.edge_fns_touched ?? [],
-      open_findings_at_start: body.open_findings_at_start ?? null,
-      open_actions_at_start: body.open_actions_at_start ?? null,
-
-      open_findings_at_end: body.open_findings_at_end ?? null,
-      open_actions_at_end: body.open_actions_at_end ?? null,
-      decisions: body.decisions ?? null,
-      followups: body.followups ?? null,
-      unresolved: body.unresolved ?? null,
-      bootstrap_acknowledged: body.bootstrap_acknowledged ?? false,
-    })
+    .insert(row)
     .select("id")
     .single();
+
   if (insErr) return json({ error: "insert_failed", detail: insErr.message }, 500);
 
   let oos = { parsed_count: 0, created: [] as Array<{ id: string; title: string }>, skipped: [] as string[] };
