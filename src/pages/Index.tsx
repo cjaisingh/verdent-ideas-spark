@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-type EventRow = { kind: string; created_at: string; id: string };
+type EventRow = { event_type: string; created_at: string; id: string };
 
 const Index = () => {
   const [authed, setAuthed] = useState(false);
@@ -20,7 +20,7 @@ const Index = () => {
 
       const { data: ev } = await supabase
         .from("capability_events")
-        .select("id, kind, created_at")
+        .select("id, event_type, created_at")
         .order("created_at", { ascending: false })
         .limit(1);
       if (ev && ev[0]) setLastEvent(ev[0] as EventRow);
@@ -49,7 +49,7 @@ const Index = () => {
   const maxBucket = Math.max(1, ...hourlyBuckets);
   const totalPerHour = hourlyBuckets.length ? Math.round(hourlyBuckets.reduce((a, b) => a + b, 0) / 12) : 0;
   const eventLabel = lastEvent
-    ? `${lastEvent.kind.toUpperCase()}_${lastEvent.id.replace(/-/g, "").slice(0, 8).toUpperCase()}…${lastEvent.id.replace(/-/g, "").slice(-3).toUpperCase()}`
+    ? `${lastEvent.event_type.toUpperCase()}_${lastEvent.id.replace(/-/g, "").slice(0, 8).toUpperCase()}…${lastEvent.id.replace(/-/g, "").slice(-3).toUpperCase()}`
     : "AWAITING_SUBSTRATE_SYNC";
   const timeLabel = now.toISOString().slice(11, 19) + "." + String(now.getMilliseconds()).padStart(3, "0").slice(0, 2);
 
