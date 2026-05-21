@@ -23,6 +23,7 @@ interface ActionRow {
   owner: string | null;
   due_at: string | null;
   source: string;
+  source_ref: string | null;
   created_at: string;
   night_eligible: boolean | null;
   night_override_reason: string | null;
