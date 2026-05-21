@@ -349,6 +349,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (oosStaleRows ?? []) as { id: string; short_num: number; title: string; source: string; source_ref: string | null; created_at: string }[],
       )),
+      ...timeCheck("observability_registry", () => checkObservabilityRegistry(
+        now,
+        (obsStatusRows ?? []) as ObservabilityStatusRow[],
+      )),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
