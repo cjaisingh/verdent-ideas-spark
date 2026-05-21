@@ -57,6 +57,39 @@ const AliasCreateBody = z.object({
   authoritative: z.boolean().optional(),
 });
 
+// s5.3 M2 — alias lifecycle
+const AliasRevokeBody = z.object({
+  tenantId: z.string().uuid(),
+  aliasId: z.string().uuid(),
+  reason: z.string().min(1).max(500),
+  hardRevoke: z.boolean().optional().default(false),
+}).strict();
+
+const LifecycleDescriptor = z.object({
+  kind: z.enum(RESOLVER_DESCRIPTOR_KINDS),
+  value: z.string().min(1),
+  authoritative: z.boolean().optional(),
+});
+
+const AliasMergeBody = z.object({
+  tenantId: z.string().uuid(),
+  intoNodeId: z.string().uuid(),
+  fromAliasIds: z.array(z.string().uuid()).min(2).max(50),
+  descriptor: LifecycleDescriptor,
+  reason: z.string().min(1).max(500),
+}).strict();
+
+const AliasSplitBody = z.object({
+  tenantId: z.string().uuid(),
+  sourceAliasId: z.string().uuid(),
+  targets: z.array(z.object({
+    nodeId: z.string().uuid(),
+    descriptor: LifecycleDescriptor,
+  })).min(2).max(20),
+  reason: z.string().min(1).max(500),
+}).strict();
+
+
 function normalise(v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, " ");
 }
