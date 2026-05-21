@@ -22,13 +22,17 @@ const json = (b: unknown, s = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+type Origin = "core" | "companion" | "rork";
 type Body = {
   plan_id?: string;
   plan_markdown?: string;
   /** Optional pre-extracted items — bypasses parsing. */
   items?: string[];
   default_priority?: "low" | "med" | "high";
+  /** Origin project for the plan; defaults to "core". Stamps source_ref as plan:<origin>:<id>. */
+  origin?: Origin;
 };
+
 
 Deno.serve(withLogger("plan-footer-ingest", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
