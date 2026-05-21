@@ -43,7 +43,7 @@ Legend:
 | `runbooks` | Runbooks page | `Runbooks.tsx` UI write | keep — low-traffic | Operator-curated |
 | `session_summaries` | Session lifecycle | `session-summary-log` (this PR) | keep — populator-blocked | Endpoint just shipped — will populate as sessions end |
 | `short_links` | Short link service | `src/lib/short-link.ts` | keep — populator-blocked | Generated on demand |
-| **`telegram_send_log`** | **Observability gate (this PR)** | **NO WRITER** | **wire-up — CRITICAL** | Migration `20260521084921` created the table; `telegram-send/index.ts` was NEVER updated to insert. Sentinel checks `telegram_send_failures_burst` / `telegram_outbound_silent` will read empty data forever until this is fixed |
+| **`telegram_send_log`** | **Observability gate** | `telegram-send/index.ts` (wired 2026-05-21) | **fixed — wire-up** | Writer now inserts on every send (success/failed/error) with `caller`, `http_status`, `payload_hash`. Sentinels `telegram_send_failures_burst` + `telegram_outbound_silent` now have real input. |
 | `test_runs` | CI test runs | `record-test-run` edge fn | keep — populator-blocked | Hits from CI; depends on workflow wiring |
 | `tool_policy_recommendations` | Tool policy | `ToolPolicyPanel.tsx` | keep — populator-blocked | Operator generates on demand |
 | `voice_config` | Voice setup | `/voice-setup` UI | keep — low-traffic | Single-row settings |
