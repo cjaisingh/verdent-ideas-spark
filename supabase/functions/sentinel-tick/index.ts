@@ -15,7 +15,9 @@ import {
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
   checkOutOfScopeStale,
   checkObservabilityRegistry,
+  checkResolverLowConfidenceRate,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
+  type ResolverHealthRow,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
 
@@ -248,6 +250,16 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .in("status", ["missing-watcher", "stale"])
       .limit(500));
 
+    // Resolver health (W: resolver_low_confidence_rate).
+    const { data: resolverHealthRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:resolver_health",
+      request_id: reqId,
+      step_label: "Scan v_resolver_health bands", phase_kind: "db_scan",
+    }, () => sb
+      .from("v_resolver_health")
+      .select("tenant_id, band, event_count")
+      .limit(500));
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
@@ -352,6 +364,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       ...timeCheck("observability_registry", () => checkObservabilityRegistry(
         now,
         (obsStatusRows ?? []) as ObservabilityStatusRow[],
+      )),
+      ...timeCheck("resolver_low_confidence_rate", () => checkResolverLowConfidenceRate(
+        now,
+        (resolverHealthRows ?? []) as ResolverHealthRow[],
       )),
     ]);
 
