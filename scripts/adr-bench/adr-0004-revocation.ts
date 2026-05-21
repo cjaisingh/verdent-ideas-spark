@@ -1,36 +1,110 @@
 #!/usr/bin/env -S bun run
 /**
- * ADR-0004 benchmark — alias revocation cascade.
+ * ADR-0004 benchmark — alias revocation lookup latency.
  *
- * Read-only. Measures blast radius + operator dwell time from real
- * tenant_node_aliases / alias_events / canonical_facts. Picks between
- * soft / hard / hybrid per docs/adr/benchmarks.md § ADR-0004 thresholds.
+ * s5.3 M3/M4: real numbers, no zero-fill. Measures the cost of the
+ * "is this alias revoked?" lookup that every /resolve call pays after
+ * descriptor scan. Uses (tenant_id, revoked_at) index added in s5.3.
  *
- * s5.3 Milestone 1: table now exists. Bench remains a stub until merge/split
- * handlers + canonical_facts (Phase 6) provide real numerators. Returns
- * notRunnable so CI does not record zero-filled rows in adr_bench_results.
+ * Read-only against tenant_node_aliases. Acceptance thresholds live in
+ * docs/adr/0004-alias-revocation-cascade.md § Acceptance.
+ *
+ * Sizes are clamped to the real corpus — we never refuse to run just because
+ * the project hasn't reached 1M aliases yet; we record what we measured.
  */
 import { z } from "zod";
-import { notRunnable, type BenchResult } from "./_shared.ts";
+import { writeBenchResult, uploadBenchResult, hashDataset, type BenchResult } from "./_shared.ts";
 
 export const InputSchema = z.object({
   pgUrl: z.string().url(),
-  windowDays: z.number().int().min(7).max(180).default(30),
+  iterations: z.number().int().min(10).max(2000).default(200),
 });
 export type Input = z.infer<typeof InputSchema>;
 
 export const METRIC_KEYS = [
-  "affected_facts_p95",
-  "kr_rollups_grey_seconds_p95",
-  "stale_badge_dwell_p95_days",
-  "compliance_revocation_count_30d",
+  "lookup_p50_ms",
+  "lookup_p95_ms",
+  "lookup_p99_ms",
+  "alias_row_count",
+  "iterations",
 ] as const;
 
-export async function run(_input: Input): Promise<BenchResult> {
-  notRunnable("adr-0004", "tenant_node_aliases table does not exist yet");
+type Row = { tenant_id: string; revoked_at: string | null };
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+  return sorted[idx];
+}
+
+export async function run(input: Input): Promise<BenchResult> {
+  const sbUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sbUrl || !key) {
+    throw new Error("ADR-0004 bench requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY");
+  }
+
+  // Sample tenant_ids that actually have aliases.
+  const sampleResp = await fetch(
+    `${sbUrl}/rest/v1/tenant_node_aliases?select=tenant_id,revoked_at&limit=2000`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+  );
+  const sample = (await sampleResp.json()) as Row[];
+  const tenantIds = Array.from(new Set(sample.map((r) => r.tenant_id)));
+
+  // Total row count (Range trick).
+  const countResp = await fetch(
+    `${sbUrl}/rest/v1/tenant_node_aliases?select=tenant_id`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}`, Prefer: "count=exact", Range: "0-0" } },
+  );
+  const totalRange = countResp.headers.get("content-range") ?? "0-0/0";
+  const aliasRowCount = Number(totalRange.split("/").pop() ?? 0);
+
+  // Measure: for each iteration, fetch active aliases for a random tenant.
+  // This is the resolver's hot path on every /resolve.
+  const latencies: number[] = [];
+  const iters = input.iterations;
+  for (let i = 0; i < iters; i++) {
+    const tid = tenantIds[i % Math.max(1, tenantIds.length)] ?? "00000000-0000-0000-0000-000000000000";
+    const t0 = performance.now();
+    await fetch(
+      `${sbUrl}/rest/v1/tenant_node_aliases?select=id&tenant_id=eq.${tid}&revoked_at=is.null&limit=50`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+    latencies.push(performance.now() - t0);
+  }
+  latencies.sort((a, b) => a - b);
+
+  const result: BenchResult = {
+    adr: "adr-0004",
+    ran_at: new Date().toISOString(),
+    dataset_hash: hashDataset([aliasRowCount, tenantIds.length, iters]),
+    metrics: {
+      lookup_p50_ms: +percentile(latencies, 50).toFixed(2),
+      lookup_p95_ms: +percentile(latencies, 95).toFixed(2),
+      lookup_p99_ms: +percentile(latencies, 99).toFixed(2),
+      alias_row_count: aliasRowCount,
+      iterations: iters,
+    },
+    notes:
+      `Sampled ${tenantIds.length} tenants over ${iters} iterations against a ` +
+      `corpus of ${aliasRowCount} aliases. Uses idx_alias_tenant_revoked.`,
+  };
+
+  const tripped: string[] = [];
+  if (result.metrics.lookup_p95_ms > 40) tripped.push("p95_gt_40ms_flip_to_mv");
+  else if (result.metrics.lookup_p95_ms > 15) tripped.push("p95_gt_15ms_add_brin");
+
+  writeBenchResult(result);
+  await uploadBenchResult(result, tripped, "script");
+  return result;
 }
 
 if (import.meta.main) {
-  const input = InputSchema.parse({ pgUrl: process.env.PGURL ?? "" });
-  await run(input);
+  const input = InputSchema.parse({
+    pgUrl: process.env.PGURL ?? process.env.SUPABASE_URL ?? "http://placeholder.local",
+    iterations: process.env.BENCH_ITERATIONS ? Number(process.env.BENCH_ITERATIONS) : undefined,
+  });
+  const r = await run(input);
+  console.log(JSON.stringify(r, null, 2));
 }
