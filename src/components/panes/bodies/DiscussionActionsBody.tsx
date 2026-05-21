@@ -59,7 +59,7 @@ export function DiscussionActionsBody() {
       const { data } = await supabase
         .from("discussion_actions")
         .select(
-          "id, short_num, title, status, priority, risk, owner, due_at, source, created_at, night_eligible, night_override_reason",
+          "id, short_num, title, status, priority, risk, owner, due_at, source, source_ref, created_at, night_eligible, night_override_reason",
         )
         .in("status", ["open", "in_progress"])
         .order("created_at", { ascending: false })
