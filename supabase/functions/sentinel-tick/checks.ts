@@ -33,7 +33,8 @@ export type FindingCandidate = {
     | "secrets_health_stale"
     | "cron_auth_failures_burst"
     | "inbox_kind_classify_failures"
-    | "inbox_source_silent";
+    | "inbox_source_silent"
+    | "out_of_scope_stale";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -1111,6 +1112,62 @@ export function checkInboxSourceSilent(
       dedupe_key: `inbox_source_silent:${key}:${dayBucket}`,
       subject_ref: { source_id: s.id, chat_id: key },
       payload: { label: s.label, chat_id: key },
+    });
+  }
+  return out;
+}
+
+// ---------------- out_of_scope_stale ----------------
+// Any discussion_action auto-logged from a plan footer or session summary
+// that has been status='open' for >14 days. Forces operator to either close
+// with reason or promote — prevents the auto-log channel from turning into
+// a black hole.
+export type OutOfScopeStaleRow = {
+  id: string;
+  short_num: number;
+  title: string;
+  source: string;
+  source_ref: string | null;
+  created_at: string;
+};
+
+export function checkOutOfScopeStale(
+  now: Date,
+  rows: OutOfScopeStaleRow[],
+): FindingCandidate[] {
+  const cutoff = now.getTime() - 14 * 24 * 60 * 60_000;
+  const stale = rows.filter((r) => new Date(r.created_at).getTime() < cutoff);
+  if (!stale.length) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
+  // One finding per (source, source_ref) so a noisy plan doesn't fan out into
+  // dozens of identical findings.
+  const grouped = new Map<string, OutOfScopeStaleRow[]>();
+  for (const r of stale) {
+    const key = `${r.source}|${r.source_ref ?? "_"}`;
+    const arr = grouped.get(key) ?? [];
+    arr.push(r);
+    grouped.set(key, arr);
+  }
+  const out: FindingCandidate[] = [];
+  for (const [key, items] of grouped) {
+    const sample = items[0];
+    out.push({
+      kind: "out_of_scope_stale",
+      severity: "medium",
+      summary:
+        `${items.length} auto-logged ${sample.source} action(s) open >14 days` +
+        (sample.source_ref ? ` (ref ${sample.source_ref})` : "") +
+        `. Triage or close with reason.`,
+      dedupe_key: `out_of_scope_stale:${key}:${dayBucket}`,
+      subject_ref: { source: sample.source, source_ref: sample.source_ref, count: items.length },
+      payload: {
+        action_ids: items.map((i) => i.id),
+        short_nums: items.map((i) => i.short_num),
+        oldest_created_at: items.reduce(
+          (m, i) => (m < i.created_at ? m : i.created_at),
+          items[0].created_at,
+        ),
+      },
     });
   }
   return out;

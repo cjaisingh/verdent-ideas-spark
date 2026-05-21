@@ -1,41 +1,94 @@
-## Why I didn't see the alerts
+## Goal
 
-I have no live channel to Telegram or `alert_log`. I only see what's in the prompt window when you message me. Last turn I declared "all 4 phase runs done" based on my own `curl` calls (which carried the service token explicitly). I never re-checked whether the **cron-driven** invocations succeeded after that. They didn't — and that's what Caprica has been yelling about. I'll stop claiming "done" off manual curls alone.
+When a plan we ship to the user lists "out of scope" items in its footer, those items should automatically land as `discussion_actions` rows so nothing falls on the floor. Today they're prose only — no DB evidence, no triage, no Morning Review presence.
 
-## What's actually wrong
+## Approach
 
-Pulled from `alert_log` (last hour):
+Capture out-of-scope items at two points:
 
-1. **"Run night agent now" is not an error.** HTTP 200, body `{"skipped":true,"reason":"outside_window"}`. It's 07:50 UTC, window is 22:00–06:00. The toast just dumps the JSON so it looks scary. No force/override path exists on the button.
+1. **At plan-create time** — parse the plan body for an "Out of scope" / "Not in scope" / "Deferred" section and emit one `discussion_action` per bullet.
+2. **At session-end time** — the `session-summary-log` endpoint already records outcomes; extend it to accept an `out_of_scope[]` array and fan-out the same way.
 
-2. **`overnight-phase-runner-15m` cron → 401, every 15 min.** Messages alternate between `missing x-service-token header` and `service token mismatch`. The token in `app_secrets.AWIP_SERVICE_TOKEN` (72 chars, updated 2026-05-19) is not the value pg_cron is sending in the header, or not the value the edge runtime env has. Same root cause hitting `night-agent-close`.
+Both routes go through one shared writer so the contract is consistent.
 
-3. **`contract_envelope_rejected` for phase-5/6/6b/7.** The model is returning `contract_acknowledged: "phase-5"` (the phase key) instead of the binding's `declaredBy` or `store` string. My prompt tweak last turn wasn't enough — runner rejects, alert fires. One run (`phase-5 50c46…2653c`) also came back with the envelope fields entirely missing (`Required`).
+## Steps
 
-4. **Rolled-up alert:** `cron_auth_failures_burst` (10 in 1h across 2 jobs) — symptom of #2, not separate.
+### 1. Migration — minimal schema additions
 
-## Plan
+- Add `discussion_actions.source_kind` (text, nullable) — values: `plan_footer`, `session_summary`, `manual`, `morning_review`, etc. Default `manual` for back-compat.
+- Add `discussion_actions.source_ref` (text, nullable) — e.g. `plan:<plan_id>` or `session:<session_id>`.
+- Add partial unique index on `(source_kind, source_ref, title)` where `source_kind in ('plan_footer','session_summary')` — idempotency so re-parsing the same plan doesn't duplicate.
+- Register the new writer in `observability_registry` (per the contract gate shipped earlier).
 
-### A. Stop the toast-as-error illusion (small)
-`src/components/night/NightBacklogTable.tsx` — when response JSON has `skipped: true`, render an info-tone toast `"Night agent skipped — outside window (22:00–06:00 UTC)"` instead of dumping raw JSON. Add a `Force run` secondary button that POSTs `{ force: true }` so the operator has a deliberate override.
+### 2. Shared writer — `_shared/out-of-scope.ts`
 
-### B. Honour `force: true` in `night-agent/open`
-`supabase/functions/night-agent/open.ts` — if body has `force === true` and caller has operator JWT, bypass the window/blackout gates (still respects `enabled`). Log it as `night_observations.kind = 'forced_open'`.
+One function:
 
-### C. Realign service token (no code, ops step inside this plan)
-Run `secrets-health-check?sync=env-to-db` then re-deploy `overnight-phase-runner` + `night-agent` so edge runtime picks up the env value. Verify by reading `alert_log` 15 min later — `auth_failed` count for `overnight-phase-runner-15m` should be 0. Do **not** declare success until that read confirms it.
+```ts
+recordOutOfScope({
+  items: string[],
+  source_kind: 'plan_footer' | 'session_summary',
+  source_ref: string,
+  default_risk?: 'low' | 'medium' | 'high',
+  workstream?: string,
+}) → { created: string[], skipped: string[] }
+```
 
-### D. Fix the contract envelope prompt
-`supabase/functions/overnight-phase-runner/index.ts` — the system prompt currently says "use the value above for `contract_acknowledged`". Replace with a literal interpolation block that shows the model the **exact** string it must echo, plus a JSON schema fragment, plus one worked example per phase. Also: if the AI returns the phase key (common failure), accept it on a single retry where we re-prompt with an even stricter "ONLY this string: `<value>`" instruction before giving up.
+- Inserts each item as a `discussion_action` with `status='open'`, `risk=default_risk ?? 'medium'`, `night_eligible=false` (operator decides), `source_kind`, `source_ref`.
+- ON CONFLICT DO NOTHING via the partial unique index.
+- Returns IDs so callers can echo them back to the operator.
 
-### E. Verification (mandatory before I say "done")
-- `select count(*) from alert_log where created_at > now() - interval '20 min' and reason in ('auth_failed','contract_envelope_rejected')` → must be 0
-- Tonight's 22:00 UTC cron tick — read `roadmap_phase_overnight_runs` for `dated_for = 2026-05-22`, all 4 must reach `status='done'` without operator intervention
-- Operator UI: click "Run agent now" outside window → friendly skipped toast; click "Force run" → opens a shift row
+### 3. New edge function — `plan-footer-ingest`
 
-## Technical notes
+- POST `{ plan_id, plan_markdown }` — operator JWT or `x-awip-service-token`.
+- Regex parses sections matching `^#{1,3}\s*(out\s*of\s*scope|not\s*in\s*scope|deferred|won't\s*do)\s*$` (case-insensitive) until next heading or EOF. Pulls `- ` / `* ` / numbered bullets.
+- Calls `recordOutOfScope` with `source_kind='plan_footer'`, `source_ref='plan:<plan_id>'`.
+- Returns `{ created, skipped, parsed_count }`.
+- Wrapped with `withLogger`, declares `// @observability: plan_footer_ingest_failures`.
 
-- `app_secrets` table has columns `key, value, updated_at` (not `name`).
-- The runner's envelope check lives in `supabase/functions/_shared/contracts/phase-contract-map.ts → rejectEnvelope`. The bindings expect either `declaredBy` (e.g. `"awip.phase5.resolver"`) or `store` (e.g. `"public.canonical_tenant_resolutions"`). Returning the bare phase key like `"phase-5"` is rejected by design — fix is in the prompt, not the check.
-- Force-run path must remain operator-JWT-gated; service token alone shouldn't be enough to bypass the window (that's what cron uses and we don't want cron firing outside the window).
-- No DB migration required.
+### 4. Extend `session-summary-log`
+
+- Accept new optional field `out_of_scope: string[]`.
+- After writing the summary row, call `recordOutOfScope` with `source_kind='session_summary'`, `source_ref='session:<summary_id>'`.
+- Include the created action IDs in the response so the session-end checklist can show them.
+
+### 5. UI surfaces (read-only, no new pages)
+
+- `/morning-review` Discussion Actions panel already lists open actions — add a small `source_kind` badge ("from plan footer" / "from session end") so the operator can see where each came from.
+- `session_summaries` detail view (existing) — show the linked out-of-scope action IDs as chips.
+
+### 6. Sentinel check — `out_of_scope_stale`
+
+- New check in `sentinel-tick`: if any `discussion_action` with `source_kind in ('plan_footer','session_summary')` is `status='open'` for >14 days → `medium` finding, grouped by `source_ref`. Forces the operator to either action or explicitly close gaps.
+
+### 7. Docs + memory
+
+- New: `docs/out-of-scope-autolog.md` — the contract, regex, idempotency rules, sentinel cadence.
+- Update `docs/session-lifecycle.md` — session-end checklist now includes "list out-of-scope items".
+- Update `AGENTS.md` working agreements — "Every plan with an out-of-scope footer MUST be POSTed to `plan-footer-ingest` before claiming done."
+- Update `CHANGELOG.md`.
+- Add `mem://features/out-of-scope-autolog` and reference it from `mem://index.md`.
+
+### 8. Tests
+
+- `supabase/functions/plan-footer-ingest/test.ts` — three fixtures:
+  - Plan with H2 "Out of scope" + 3 bullets → 3 actions created.
+  - Same plan re-posted → 0 created, 3 skipped.
+  - Plan with no out-of-scope section → 0 created, no error.
+- Unit test for the regex covering the four heading variants.
+- Sentinel check test with a 15-day-old `plan_footer` action → asserts finding fires.
+
+## Out of scope (for this PR)
+
+- Auto-parsing plans already shipped historically — only new plans from this point forward.
+- Editing UI for out-of-scope items inside the plan card.
+- Cross-project (Companion / Rork) ingestion paths.
+
+## Definition of done
+
+- Migration applied, `rls:verify` green.
+- `plan-footer-ingest` returns expected `{ created, skipped, parsed_count }` for all three fixtures.
+- Posting a real plan creates rows visible at `/morning-review` with the new badge.
+- `session-summary-log` smoke test creates linked actions.
+- Sentinel check appears in registry and the test passes.
+- Docs + CHANGELOG + memory updated.

@@ -13,6 +13,7 @@ import {
   checkTelegramWebhookSilent, checkApprovalsStale,
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
+  checkOutOfScopeStale,
   SENTINEL_CADENCES, type FindingCandidate,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
@@ -221,6 +222,20 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         .limit(5000),
     ]));
 
+    // Out-of-scope auto-logger stale watch (W: out_of_scope_stale).
+    const since30d = new Date(now.getTime() - 30 * 24 * 3600_000).toISOString();
+    const { data: oosStaleRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:out_of_scope_stale",
+      request_id: reqId,
+      step_label: "Scan stale auto-logged discussion_actions", phase_kind: "db_scan",
+    }, () => sb
+      .from("discussion_actions")
+      .select("id, short_num, title, source, source_ref, created_at")
+      .in("source", ["plan_footer", "session_summary"])
+      .eq("status", "open")
+      .gte("created_at", since30d)
+      .limit(500));
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
@@ -317,6 +332,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (inboxSourcesRes.data ?? []) as { id: string; label: string | null; chat_id: number | string }[],
         (inboxRecentRes.data ?? []) as { chat_id: number | string | null }[],
+      )),
+      ...timeCheck("out_of_scope_stale", () => checkOutOfScopeStale(
+        now,
+        (oosStaleRows ?? []) as { id: string; short_num: number; title: string; source: string; source_ref: string | null; created_at: string }[],
       )),
     ]);
 
