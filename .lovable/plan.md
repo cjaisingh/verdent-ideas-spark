@@ -1,59 +1,54 @@
-## Goal
+## Where we are
 
-Prep work so tonight's overnight queue (phase-5/6/6b/7) lands on something concrete instead of re-deriving open questions. Everything here is docs + typed contract stubs — no schema changes, no edge functions, no UI.
+Just landed Phase 5/6/6b/7 prep scaffolding (retrieval contracts, source-adapter contract, ADR-0003..0006 stubs). Overnight runner now has shaped slots to fill.
 
-## Scope
+Open board is thin:
 
-Three foundations that block real implementation:
-1. Retrieval contracts (mandated by `mem://preferences/retrieval-shapes`).
-2. ADR stubs (called out in `docs/phases-5-6-6b-research.md § ADRs to draft this round`).
-3. Source-adapter input contract (mandated by `mem://preferences/contract-first` for any new ingest agent loop).
+| Action | Status | Notes |
+|---|---|---|
+| `ee7937ce` Replace ~480 `no-explicit-any` | in_progress | low/low, night-eligible |
+| `ff5743f8` Disable CodeQL + dismiss 28 alerts | open | low/low, night-eligible |
 
-## Deliverables
+Overnight queue (`run_overnight=true`): Phase 5, 6, 6b, 7 — all `planned`, waiting on the scaffolding we just shipped + an ADR-0006 decision before s6.2 can move.
 
-### 1. Retrieval contracts — `supabase/functions/_shared/contracts/`
+## Four candidates
 
-One file per agent surface that reads memory in Phase 5/6/6b. Each declares: data shape (prose / hierarchical-doc / tabular / graph / time-series), store, return schema, token budget, freshness window. Following the `night-agent.ts` reference shape.
+### A. Close CodeQL action (`ff5743f8`)
+Disable GitHub default CodeQL setup, bulk-dismiss the 28 alerts with reason, log capability_event. ~20 min. Clears one of two open actions; no runtime risk.
 
-- `retrieval-ingest-concierge.ts` — hierarchical-doc shape for lease PDFs and SFG20; PageIndex-style section retrieval; budget 8k.
-- `retrieval-validation-agent.ts` — tabular shape; direct table query against `staged_records`; no embeddings; budget 2k.
-- `retrieval-resolver.ts` — graph shape over `tenant_nodes` + `tenant_node_aliases`; deterministic descriptors first, alias FTS second, embeddings only as a last-resort hint; budget 1k.
-- `retrieval-conflict-triage.ts` — relational over `fact_conflicts` + `conflict_rules`; recent-N + same-mapping siblings; budget 4k.
+### B. Drain `no-explicit-any` baseline (`ee7937ce`)
+Run codemod-any-enqueue on a batched slice (e.g. 30–50 files), review the drafts, land the cleanest. Shrinks the 517-site budget. Mechanical, night-friendly — but better as overnight work than blocking foreground attention.
 
-Each file: TypeScript module exporting `Input` / `Output` Zod schemas and a `RetrievalContract` const literal so the overnight runner can spot-check shape coverage.
+### C. Caprica vision branch
+Wire photo `file_id` → Gemini 2.5 Flash vision → caption → route as text in `telegram-webhook`. Closes the documented inbox gap. Touches one edge fn + one helper. ~45 min including tests.
 
-### 2. ADR stubs — `docs/adr/`
+### D. Decide ADR-0006 (embedding model + index)
+Promote `docs/adr/0006-embedding-model-and-index.md` from `proposed` → `accepted` with the lean (`gemini-embedding-001` @ 1536d + hnsw). This is the single decision that unblocks Phase 6 s6.2 (`canonical_facts` + ingest concierge embeddings). No code yet — just the ADR body, a CHANGELOG line, and a pgvector readiness note.
 
-Four new files following `docs/adr/_template.md`. Status `proposed`, options enumerated, recommendation marked TBD with the trigger ("decide when sprint s5.2 opens" etc.). No commitments — these are scaffolds so overnight runs and operator review have a single place to drop findings.
+Without D, Phase 6 overnight runs will keep re-deriving the same question.
 
-- `0003-tenant-node-ancestry-storage.md` — path vs ltree vs CTE vs denormalised `ancestry_ids[]`.
-- `0004-alias-revocation-cascade.md` — soft flag vs hard re-quarantine; admin-only approval.
-- `0005-bulk-conflict-pattern-detection.md` — heuristic groupby vs LLM-suggested pattern.
-- `0006-embedding-model-and-index.md` — Gemini `text-embedding-004` vs OpenAI `text-embedding-3-small` vs BGE self-host; hnsw vs ivfflat at expected corpus size; per-source chunk strategy table.
+## Recommendation
 
-### 3. Source-adapter input contract — `supabase/functions/_shared/contracts/source-adapter.ts`
+**D, then A** in this session:
+1. Fill out ADR-0006 — chosen option, rationale, consequences, rollout (extension enable + index choice at corpus thresholds), and the trigger to revisit (cost/quality at 100k chunks). Update `mem://features/phase-5-6-prep.md` lean → accepted.
+2. Close CodeQL action (`ff5743f8`) — disable default setup via API or doc the manual step, bulk-dismiss with reason, emit capability_event, mark action `done`.
 
-Typed I/O the Phase 6 `s6.2` sprint will implement against. Captures: `raw_record` envelope, `source_mapping_ref`, declared `pii_fields[]`, `lawful_basis`, idempotency key derivation, and the auto-promote precondition trio (mapping approved + validations pass + no PII without basis). No runtime — pure types + Zod.
-
-### 4. CHANGELOG + memory hookup
-
-- `CHANGELOG.md` `[Unreleased]` — one bullet under **Added** linking the retrieval contracts + ADR stubs + source-adapter contract; explicit "no runtime change" note so doc-drift doesn't trip.
-- `mem://features/phase-5-6-prep.md` — 30-line index entry covering: which contracts exist, which ADRs are stubbed, where decisions still need to land, the overnight-runner expectations. Link from `mem://index.md` under **Memories**.
+B (any-baseline drain) is queued for overnight via the existing codemod path. C (Caprica vision) stays deferred unless you want it tonight.
 
 ## Out of scope
 
-- Any database migration (no `entity_resolution_conflicts`, no `raw_records`, no `canonical_facts`).
-- Any edge function or cron change.
-- ADR *decisions* — only stubs this round; final answers land per-sprint.
-- Caprica vision branch (still deferred).
-- Phase 7 connector marketplace contract — Phase 7 is queued overnight but the contract surface depends on Phase 6's source-adapter shape; pulled into the next round.
+- Any Phase 5/6 migrations (`canonical_facts`, `raw_records`, vector indexes) — wait for ADR acceptance to land first.
+- Phase 7 connector contract — depends on Phase 6 source-adapter shape stabilising.
+- Touching the any-baseline foreground.
 
 ## Verification
 
-- `bun run lint` clean on the new TS files.
-- `scripts/check-doc-drift.ts` clean for the new commit (CHANGELOG bullet covers all four ADRs + memory file).
-- `scripts/check-okr-links.ts` not affected (no roadmap mutations).
+- ADR-0006: `scripts/check-doc-drift.ts` clean (CHANGELOG bullet covers it).
+- CodeQL close: GitHub UI shows default CodeQL disabled + 0 open alerts; `discussion_actions` row flips to `done` with capability_event row.
 
-## Estimated size
+## Size
 
-~9 new files, ~1 CHANGELOG edit, ~1 mem/index.md edit. No migrations. Land in one commit.
+ADR-0006 fill: ~1 file edit, ~1 CHANGELOG line, ~1 mem update.
+CodeQL close: ~0 repo files (GitHub API call + DB update via migration or `awip-api`).
+
+Pick D+A, or override with A/B/C only.
