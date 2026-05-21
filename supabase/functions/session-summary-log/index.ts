@@ -68,10 +68,15 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
 
   const startedAt = body.started_at ?? new Date().toISOString();
   const endedAt = body.ended_at ?? new Date().toISOString();
-  const duration = Math.max(
-    0,
-    Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000),
-  );
+
+  const { data: summary, error: insErr } = await sb
+    .from("session_summaries")
+    .insert({
+      session_id: body.session_id,
+      agent: body.agent ?? "lovable",
+      started_at: startedAt,
+      ended_at: endedAt,
+
 
   const { data: summary, error: insErr } = await sb
     .from("session_summaries")
