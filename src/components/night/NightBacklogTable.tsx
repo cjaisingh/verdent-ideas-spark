@@ -191,7 +191,7 @@ const NightBacklogTable = () => {
     return out.sort((x, y) => +new Date(y.queuedAt) - +new Date(x.queuedAt));
   }, [audits, phases, proposals]);
 
-  const runNow = async () => {
+  const triggerNightAgent = async (force: boolean) => {
     setRunning(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -203,13 +203,38 @@ const NightBacklogTable = () => {
           Authorization: `Bearer ${session?.access_token ?? ""}`,
           apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
-        body: "{}",
+        body: JSON.stringify(force ? { force: true } : {}),
       });
       const text = await resp.text();
+      let parsed: any = null;
+      try { parsed = JSON.parse(text); } catch { /* keep raw */ }
+
+      if (resp.ok && parsed?.skipped === true) {
+        const reason = String(parsed.reason ?? "skipped");
+        const friendly =
+          reason === "outside_window"
+            ? `Outside the night window (${parsed.window ?? "22:00–06:00"} ${parsed.tz ?? "UTC"}). Use Force run to override.`
+            : reason === "night_agent_disabled"
+              ? "Night agent is disabled in settings."
+              : reason === "blackout_date"
+                ? `Today is a blackout date (${parsed.date ?? ""}).`
+                : `Skipped: ${reason}`;
+        toast({ title: "Night agent skipped", description: friendly });
+        return;
+      }
+      if (resp.ok) {
+        const audited = parsed?.audited ?? 0;
+        const proposals = parsed?.proposals ?? 0;
+        toast({
+          title: force ? "Night agent forced (200)" : "Night agent triggered (200)",
+          description: `Shift opened · ${audited} audited · ${proposals} proposals`,
+        });
+        return;
+      }
       toast({
-        title: resp.ok ? `Night agent triggered (${resp.status})` : `Trigger failed (${resp.status})`,
+        title: `Trigger failed (${resp.status})`,
         description: text.slice(0, 240),
-        variant: resp.ok ? "default" : "destructive",
+        variant: "destructive",
       });
     } catch (e) {
       toast({
@@ -221,6 +246,10 @@ const NightBacklogTable = () => {
       setRunning(false);
     }
   };
+
+  const runNow = () => triggerNightAgent(false);
+  const forceRun = () => triggerNightAgent(true);
+
 
   const totalCount = items.length;
 
@@ -243,10 +272,22 @@ const NightBacklogTable = () => {
             )}
           </div>
         </div>
-        <Button size="sm" variant="outline" onClick={runNow} disabled={running}>
-          <Play className="h-3 w-3 mr-1.5" />
-          {running ? "Triggering…" : "Run night agent now"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={runNow} disabled={running}>
+            <Play className="h-3 w-3 mr-1.5" />
+            {running ? "Triggering…" : "Run night agent now"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={forceRun}
+            disabled={running}
+            title="Bypass window/blackout gates (operator override)"
+          >
+            Force run
+          </Button>
+        </div>
+
       </header>
 
       {(agentDisabled || blackout) && (
