@@ -76,16 +76,6 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
       agent: body.agent ?? "lovable",
       started_at: startedAt,
       ended_at: endedAt,
-
-
-  const { data: summary, error: insErr } = await sb
-    .from("session_summaries")
-    .insert({
-      session_id: body.session_id,
-      agent: body.agent ?? "lovable",
-      started_at: startedAt,
-      ended_at: endedAt,
-      duration_minutes: duration,
       goal: body.goal ?? null,
       outcome: body.outcome ?? null,
       files_touched: body.files_touched ?? [],
@@ -93,6 +83,7 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
       edge_fns_touched: body.edge_fns_touched ?? [],
       open_findings_at_start: body.open_findings_at_start ?? null,
       open_actions_at_start: body.open_actions_at_start ?? null,
+
       open_findings_at_end: body.open_findings_at_end ?? null,
       open_actions_at_end: body.open_actions_at_end ?? null,
       decisions: body.decisions ?? null,
