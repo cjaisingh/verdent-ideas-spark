@@ -46,6 +46,14 @@ Operator-facing per-phase behaviour, guard rails, and morning checks live in
 [`docs/phases-overnight-operator-guide.md`](../../docs/phases-overnight-operator-guide.md) —
 keep it in sync with any contract or ADR change in the same PR.
 
+**Runner integration:** `overnight-phase-runner` consumes the contracts via
+`supabase/functions/_shared/contracts/phase-contract-map.ts` (binds each phase
+key to its `RETRIEVAL_*_CONTRACT` + ADR list + guard rails) and validates the
+AI response against `overnight-envelope.ts`. A failed envelope or unknown
+guard-rail entry → `status='auto_blocked'` + `contract_envelope_rejected`
+alert (no retry). `phase_binding` lands on the run `result` and
+`ai_usage_log.request_ref`.
+
 ## Benchmarks
 
 Decision data is collected through `scripts/adr-bench/`, driven by
