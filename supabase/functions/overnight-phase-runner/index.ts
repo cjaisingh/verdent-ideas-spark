@@ -326,7 +326,7 @@ Deno.serve(withLogger("overnight-phase-runner", async (req, ctx) => {
 
   const results = [];
   for (const id of runIds) {
-    results.push(await processRun(sb, id));
+    results.push(await processRun(sb, id, reqId));
   }
   const failed = results.filter((r: any) => r.status === "failed").length;
   await recordRun(
