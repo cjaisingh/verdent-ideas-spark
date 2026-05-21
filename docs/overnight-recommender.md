@@ -2,6 +2,9 @@
 
 A nightly suggester that flags roadmap phases worth running overnight. **Observation only** — operator clicks to queue. No auto-queueing. No AI calls.
 
+> Per-phase overnight behaviour + morning checks: see [`docs/phases-overnight-operator-guide.md`](./phases-overnight-operator-guide.md).
+
+
 ## Cadence
 
 Cron job `scheduled-overnight-recommender` runs daily at **21:30 UTC**, 25 minutes before `overnight-prequeue` (21:55 UTC).
