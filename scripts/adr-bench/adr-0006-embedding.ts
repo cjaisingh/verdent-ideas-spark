@@ -49,7 +49,7 @@ async function connect(pgUrl: string | undefined): Promise<PgClient | null> {
   }
 }
 
-export async function run(input: Input): Promise<BenchResult> {
+export async function run(input: Input): Promise<{ result: BenchResult; trips: string[] }> {
   const ranAt = new Date().toISOString();
   const client = await connect(input.pgUrl);
   const metrics: Record<string, number> = Object.fromEntries(
