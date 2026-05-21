@@ -18,10 +18,30 @@ type Action = {
   priority: string;
   owner: string | null;
   source: string;
+  source_ref: string | null;
   promoted_task_id: string | null;
   due_at: string | null;
   created_at: string;
 };
+
+function SourceBadge({ source, sourceRef }: { source: string; sourceRef: string | null }) {
+  if (source === "plan_footer") {
+    return (
+      <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-600" title={sourceRef ?? undefined}>
+        from plan
+      </Badge>
+    );
+  }
+  if (source === "session_summary") {
+    return (
+      <Badge variant="outline" className="text-[9px] border-indigo-500/40 text-indigo-600" title={sourceRef ?? undefined}>
+        from session
+      </Badge>
+    );
+  }
+  if (!source || source === "manual") return null;
+  return <Badge variant="outline" className="text-[9px]">{source}</Badge>;
+}
 
 type Proposal = {
   title: string;
