@@ -1,0 +1,1 @@
+UPDATE public.roadmap_phase_overnight_runs SET status='queued', attempts=0, last_error=NULL, heartbeat_at=NULL, started_at=NULL, finished_at=NULL WHERE id='50c46f75-08af-48ab-909d-d1489de2653c';
