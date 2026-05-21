@@ -19,6 +19,8 @@ Three detection strategies:
 
 Current lean: option 3 (hybrid). Heuristic handles the bulk of mechanical drift; LLM earns its token cost on the long tail.
 
+> Benchmark + dataset requirements: see [`docs/adr/benchmarks.md § ADR-0005`](./benchmarks.md#adr-0005--bulk-conflict-pattern-detection).
+
 ## Consequences
 
 To be filled in once the decision lands. Any algorithm we ship must propose a `conflict_rules` row rather than mutating facts directly — the "never silent overwrite" invariant holds at every layer.

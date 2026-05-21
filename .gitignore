@@ -29,3 +29,4 @@ reports/
 
 playwright-report/
 test-results/
+bench-results/

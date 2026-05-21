@@ -20,6 +20,8 @@ Four storage options:
 
 Current lean: option 4 (denormalised `ancestry_ids[]` on facts) because RLS is on every read path and moves are rare. Validate against import sample first.
 
+> Benchmark + dataset requirements: see [`docs/adr/benchmarks.md § ADR-0003`](./benchmarks.md#adr-0003--tenant-node-ancestry-storage).
+
 ## Consequences
 
 To be filled in once the decision lands. Reversal cost varies by option — note explicitly which other ADRs (resolver scoring 0005, embedding store 0006) lock in once this one does.
