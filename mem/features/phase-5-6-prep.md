@@ -42,6 +42,10 @@ Phase 5/6/6b/7 are queued via `roadmap_phases.run_overnight=true`. Runs
 should reference these contracts + ADRs rather than re-deriving shape
 decisions; findings drop into the matching ADR's Consequences section.
 
+Operator-facing per-phase behaviour, guard rails, and morning checks live in
+[`docs/phases-overnight-operator-guide.md`](../../docs/phases-overnight-operator-guide.md) —
+keep it in sync with any contract or ADR change in the same PR.
+
 ## Benchmarks
 
 Decision data is collected through `scripts/adr-bench/`, driven by
