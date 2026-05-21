@@ -14,7 +14,8 @@ import {
   checkSecretsHealthStale, checkCronAuthFailuresBurst,
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
   checkOutOfScopeStale,
-  SENTINEL_CADENCES, type FindingCandidate,
+  checkObservabilityRegistry,
+  SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
 
