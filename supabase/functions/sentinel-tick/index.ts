@@ -16,8 +16,9 @@ import {
   checkOutOfScopeStale,
   checkObservabilityRegistry,
   checkResolverLowConfidenceRate,
+  checkAliasRevokeBurst,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
-  type ResolverHealthRow,
+  type ResolverHealthRow, type AliasRevokeEventRow,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
 
