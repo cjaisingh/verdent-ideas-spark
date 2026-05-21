@@ -14,7 +14,7 @@
  * emits a zero-filled result so the harness stays exercised.
  */
 import { z } from "zod";
-import { hashDataset, writeBenchResult, type BenchResult } from "./_shared.ts";
+import { hashDataset, writeBenchResult, uploadBenchResult, type BenchResult } from "./_shared.ts";
 
 export const InputSchema = z.object({
   pgUrl: z.string().url().optional(),
