@@ -425,6 +425,24 @@ Deno.serve(
       }
 
 
+      const winner = candidates[0];
+      // Per-call audit row (s5.2 t5). Best-effort — never block /resolve.
+      await sb.from("resolver_decisions").insert({
+        request_id: reqId,
+        tenant_id: p.tenantId,
+        descriptors: normalisedDescs.map((d) => ({ kind: d.kind, value: d.value })),
+        candidate_count: candidates.length,
+        winning_node_id: winner?.nodeId ?? null,
+        match_source: winner?.matchSource ?? null,
+        score: winner ? Number(winner.score.toFixed(4)) : null,
+        confidence_band: confidenceBand,
+        authoritative_hit: authoritativeHit,
+        embedding_hint_used: embeddingHintUsed,
+        latency_ms: Date.now() - t0,
+        actor: actorId,
+        actor_label: actorLabel,
+      });
+
       const out: ResolverRetrievalOutput & {
         confidenceBand: "auto_bind" | "conflict" | "no_match";
       } = {
