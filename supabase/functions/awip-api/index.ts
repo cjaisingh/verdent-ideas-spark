@@ -23,6 +23,9 @@ import {
   type ProposalRow as PaProposalRow,
   type ShiftRow as PaShiftRow,
 } from "./promotion_audit.ts";
+import { validateRegisterInput } from "../_shared/contracts/module-register.ts";
+import { validateHeartbeatInput } from "../_shared/contracts/module-heartbeat.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
