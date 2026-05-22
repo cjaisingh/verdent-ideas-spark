@@ -115,24 +115,6 @@ export default function EntitiesAliases() {
     setRevokeErr(null);
     try {
       const idem = `ui-revoke-${revokeTarget.id}-${Date.now()}`;
-      const { data, error } = await supabase.functions.invoke("entity-resolve", {
-        body: {
-          tenantId: revokeTarget.tenant_id,
-          aliasId: revokeTarget.id,
-          reason: revokeReason,
-          hardRevoke: revokeMode === "hard",
-        },
-        headers: {
-          "idempotency-key": idem,
-          // entity-resolve reads the path off the request URL; this endpoint
-          // is keyed off the body so we pass the path-suffixed function name.
-        },
-      });
-      // entity-resolve uses sub-paths; the invoke helper hits the root. We
-      // must call /alias/revoke explicitly via fetch.
-      if (error || data) {
-        // fall through — invoke result is unused; we redo via direct fetch.
-      }
       const sess = (await supabase.auth.getSession()).data.session;
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/entity-resolve/alias/revoke`;
       const res = await fetch(url, {
