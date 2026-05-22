@@ -151,6 +151,7 @@ const App = () => (
             <Route path="/ontology" element={<Ontology />} />
             <Route path="/governance" element={<Governance />} />
             <Route path="/entities" element={<Entities />} />
+            <Route path="/entities/aliases" element={<EntitiesAliases />} />
             <Route path="/sovereignty" element={<Sovereignty />} />
             <Route path="/status" element={<Status />} />
             <Route path="/connections" element={<Connections />} />
