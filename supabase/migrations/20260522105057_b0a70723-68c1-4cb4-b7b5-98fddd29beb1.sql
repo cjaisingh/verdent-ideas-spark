@@ -1,0 +1,1 @@
+grant execute on function public.observability_cron_last_seen() to anon;
