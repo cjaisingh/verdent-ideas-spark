@@ -4,6 +4,12 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — Phase 5 s5.1/s5.2 finishing)
+- **authoritative_id_systems** — global registry (7 seeds: bim_ifc_guid, rics_id, os_uprn, sap_floc, duns, stripe_customer, internal) with per-system `match_rules` jsonb. Admin-only write, operator read; closes s5.1 open question #2.
+- **resolver_decisions** — append-only audit log written by `entity-resolve /resolve` on every call (request_id, descriptors, winning_node_id, match_source, score, confidence_band, authoritative_hit, embedding_hint_used, latency_ms, actor). Operator read, service-role write, realtime + observability_registry entry. Closes s5.2 t5.
+
+
+
 ### Added (2026-05-22 — 10-task sequential plan)
 - **T1 (action triage).** Migration `20260522084854` cancelled 4 exact-title and 3 cross-project near-duplicate `discussion_actions`; reassigned 7 in-flight rows to `in_progress`.
 - **T2 (observability sweep).** Migration `20260522085026` resolved 9 stale `observability_registry` surfaces with `resolution_kind='detector_wrong'`; opened follow-up to fix the `scheduled-X` → `automation_runs.job` mapping in the detector.
