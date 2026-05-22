@@ -4,6 +4,11 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Changed (2026-05-22 — freshness loose ends closed)
+- **Dropped `session-bootstrap` row** from `observability_registry`. No caller in codebase; lifecycle is enforced via `plan-footer-ingest` + `session-summary-log` (both independently observable). Stale-surface count drops from 3 → 2; the two remaining (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`) auto-clear on next firing. Runbook §3.3 updated.
+- **Resolved `telegram_webhook_silent` (high)**. Live `getWebhookInfo` confirmed webhook URL set, 0 pending, no `last_error`. Silence is genuine (no inbound DMs in window), not a broken webhook. Auto-recovery cron (`telegram-webhook-reregister`) continues firing every 15 min as designed.
+- Closed discussion_actions #76ea89d9 (session-bootstrap writer fix — now N/A) and #deef6cba (detector fix — superseded by C1).
+
 ### Added (2026-05-22 — observability freshness runbook)
 - **`docs/runbooks/observability-freshness.md`** — operator runbook covering the session-lifecycle contract (`plan-footer-ingest` / `session-summary-log`), the detector's data sources per `surface_kind` (cron = `cron.job_run_details` ∪ `automation_runs.job`; edge_fn = `edge_request_logs`; table = hard-listed only), the `stale_multiplier` threshold model, and how to interpret each of the 3 remaining legitimate stale signals (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`, `session-bootstrap`).
 

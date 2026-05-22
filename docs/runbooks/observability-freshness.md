@@ -75,12 +75,9 @@ After the 2026-05-22 C1 detector fix auto-resolved 11 false positives, three row
 - Expected to be `ok` between Jan/Apr/Jul/Oct 1 firings; `stale` outside that window means a quarter boundary was missed.
 - Action: trigger `quarterly-review-open` manually; it's idempotent (one `discussion_action` per quarter), so a duplicate kick is safe.
 
-### 3.3 `session-bootstrap` (edge_fn)
+### 3.3 ~~`session-bootstrap`~~ — removed 2026-05-22
 
-- Cadence 1 440 min (24 h); multiplier 3 ⇒ alerts after 72 h of silence.
-- This surface is hit by the agent on every session start; `stale` means **no Lovable/Claude/Cursor session has acknowledged bootstrap for 3 days**.
-- It is *not* a backend failure — it's a signal that human-driven sessions stopped, or that the agent is skipping the bootstrap call.
-- Action: confirm via session-lifecycle checklist that future sessions POST to `session-summary-log`. The dashboard at `/admin/freshness-dashboard` shows the 14-day timeline of `session-bootstrap` requests for a quick visual.
+The registry row was dropped: no caller existed in the codebase, and the session lifecycle is already enforced via `plan-footer-ingest` and `session-summary-log` (both observable). If a real `session-bootstrap` endpoint ever gets built, re-insert with `withLogger` and a real cadence; until then, treat its absence as correct.
 
 ---
 
