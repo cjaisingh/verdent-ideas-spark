@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — configurable stale threshold)
+- **`observability_registry.stale_multiplier`** (numeric, default 3, check > 0). View `v_observability_registry_status` now flags `stale` at `expected_cadence_minutes × stale_multiplier` per row instead of a hardcoded ×3. Seeded `scheduled-deep-audit-monthly` and `scheduled-quarterly-review-open` to **1.25** (~37d / ~135d) — they previously needed ~90d / ~270d of silence to alert. Default remains 3 for everything else. No sentinel code change; the existing `observability_stale_surface` check (severity `medium`) reads `status` from the view.
+
+
 ### Fixed (2026-05-22 — observability detector C1)
 - **`v_observability_registry_status` cron freshness** now sourced from `cron.job_run_details` (via `public.observability_cron_last_seen()` SECURITY DEFINER) unioned with `automation_runs.job`, instead of `automation_runs.job` alone. Closes the long-standing noise where `scheduled-*` crons were always flagged stale because `automation_runs.job` carries the function name, not the cron schedule name. After deploy `sentinel-tick` auto-resolved 11 false `observability_stale_surface` findings; the 3 remaining (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`, `session-bootstrap`) are legitimate.
 - **Table-surface support** in the same view: `resolver_decisions` is hard-listed; unknown table surfaces resolve to `unknown` rather than `stale` (prevents future-noise for `adr_bench_results:*`, `v_resolver_health`, `entity_resolution_events_alias_revoke` — they need bespoke watchers).
