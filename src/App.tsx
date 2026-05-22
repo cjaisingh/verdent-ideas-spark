@@ -72,6 +72,7 @@ import SentinelPerf from "./pages/SentinelPerf";
 import AdminVideos from "./pages/AdminVideos";
 import AdminSecretsHealth from "./pages/AdminSecretsHealth";
 import AdminObservabilityRegistry from "./pages/AdminObservabilityRegistry";
+import AdminFreshnessDashboard from "./pages/AdminFreshnessDashboard";
 import OperatorInbox from "./pages/OperatorInbox";
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
@@ -163,6 +164,7 @@ const App = () => (
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />
             <Route path="/admin/observability-registry" element={<AdminObservabilityRegistry />} />
+            <Route path="/admin/freshness-dashboard" element={<AdminFreshnessDashboard />} />
             <Route path="/operator-inbox" element={<OperatorInbox />} />
             <Route path="/postmortems" element={<Postmortems />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
