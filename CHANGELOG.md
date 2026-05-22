@@ -4,6 +4,11 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — generalised table-surface watcher)
+- **`table_surface_probes`** (operator-only RLS) + **`public.table_surface_last_seen(text)`** SECURITY DEFINER resolver. Replaces the hard-coded `resolver_decisions`-only CASE arm in `v_observability_registry_status` so any `surface_kind='table'` row resolves via a probe row (`table_name`, `freshness_column`, optional `filter_expr`). Identifier validation against `information_schema` blocks injection via probe config. Seeded 4 probes (`resolver_decisions`, `adr_bench_results:adr-0003`, `entity_resolution_events_alias_revoke`, `v_resolver_health`). Closes discussion_actions #af78e390 + #37b8065d. 3 prior `unknown` table surfaces resolved: `v_resolver_health` → `ok`, the other two correctly report `stale` (no seeded rows yet — legitimate signal, not detector noise).
+
+
+
 ### Changed (2026-05-22 — freshness loose ends closed)
 - **Dropped `session-bootstrap` row** from `observability_registry`. No caller in codebase; lifecycle is enforced via `plan-footer-ingest` + `session-summary-log` (both independently observable). Stale-surface count drops from 3 → 2; the two remaining (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`) auto-clear on next firing. Runbook §3.3 updated.
 - **Resolved `telegram_webhook_silent` (high)**. Live `getWebhookInfo` confirmed webhook URL set, 0 pending, no `last_error`. Silence is genuine (no inbound DMs in window), not a broken webhook. Auto-recovery cron (`telegram-webhook-reregister`) continues firing every 15 min as designed.
