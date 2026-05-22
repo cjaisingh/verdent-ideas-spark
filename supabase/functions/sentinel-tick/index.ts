@@ -422,6 +422,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now, 15, 10,
         (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
       )),
+      ...timeCheck("module_silent_24h", () => checkModuleSilent24h(
+        now,
+        (moduleLivenessRows ?? []) as ModuleLivenessRow[],
+      )),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
