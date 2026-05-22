@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — edge-fn unknown sweep)
+- **`observability_registry.expected_silent`** boolean (default false). The freshness view treats absence of activity on `expected_silent=true` surfaces as `ok` rather than `unknown` (designed-silent demand-driven surface). Flagged 7 demand-driven edge fns (`companion-cloud-chat`, `entity-resolve`, `gemini-tts`, `plan-footer-ingest`, `session-summary-log`, `telegram-send`, `telegram-webhook`) and the `out_of_scope_stale` agent surface. Set `expected_cadence_minutes=15` on `sentinel-tick` (was null). `unknown` surface count drops from 9 → 0; only 4 `stale` rows remain — all legitimate (2 long-cadence crons, 2 table surfaces awaiting seeded rows).
+
 ### Added (2026-05-22 — generalised table-surface watcher)
 - **`table_surface_probes`** (operator-only RLS) + **`public.table_surface_last_seen(text)`** SECURITY DEFINER resolver. Replaces the hard-coded `resolver_decisions`-only CASE arm in `v_observability_registry_status` so any `surface_kind='table'` row resolves via a probe row (`table_name`, `freshness_column`, optional `filter_expr`). Identifier validation against `information_schema` blocks injection via probe config. Seeded 4 probes (`resolver_decisions`, `adr_bench_results:adr-0003`, `entity_resolution_events_alias_revoke`, `v_resolver_health`). Closes discussion_actions #af78e390 + #37b8065d. 3 prior `unknown` table surfaces resolved: `v_resolver_health` → `ok`, the other two correctly report `stale` (no seeded rows yet — legitimate signal, not detector noise).
 
