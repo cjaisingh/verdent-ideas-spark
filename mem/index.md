@@ -81,3 +81,4 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [ISO 42001 gap analysis](docs/iso42001-gap-analysis.md) — AIMS view of current AI surfaces, clauses 4–10 + Annex A, prioritised gap log; sibling to docs/iso27001-controls.md
 - [AI model policy](mem://features/ai-policy) — single chokepoint `pickModel()`: night-window flash-lite coercion + TTS bypass + contract-first new loops + budget-alert demotion
 
+- [Module contracts](mem://features/module-contracts) — per-module hashed tokens, `module_heartbeats`, idempotent `/capabilities/register`, granular `status_changed`/`version_bumped`/`deprecated`/`owning_module_changed` events, `/modules/heartbeat`, `module_silent_24h` sentinel
