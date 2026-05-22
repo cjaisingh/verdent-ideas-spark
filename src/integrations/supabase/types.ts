@@ -3599,6 +3599,72 @@ export type Database = {
         }
         Relationships: []
       }
+      module_heartbeats: {
+        Row: {
+          capability_ids: string[]
+          created_at: string
+          id: string
+          owning_module: string
+          payload: Json
+          sender: string | null
+          version: string | null
+        }
+        Insert: {
+          capability_ids?: string[]
+          created_at?: string
+          id?: string
+          owning_module: string
+          payload?: Json
+          sender?: string | null
+          version?: string | null
+        }
+        Update: {
+          capability_ids?: string[]
+          created_at?: string
+          id?: string
+          owning_module?: string
+          payload?: Json
+          sender?: string | null
+          version?: string | null
+        }
+        Relationships: []
+      }
+      module_service_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string
+          last_used_at: string | null
+          owning_module: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label: string
+          last_used_at?: string | null
+          owning_module: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string
+          last_used_at?: string | null
+          owning_module?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: []
+      }
       morning_review_discussion_messages: {
         Row: {
           body: string
@@ -7995,6 +8061,14 @@ export type Database = {
       reclaim_stale_night_jobs: {
         Args: { _stale_minutes?: number }
         Returns: Json
+      }
+      resolve_module_token: {
+        Args: { _hash: string }
+        Returns: {
+          label: string
+          owning_module: string
+          token_id: string
+        }[]
       }
       resolve_truth: {
         Args: { _entity: string; _entity_id: string; _field?: string }
