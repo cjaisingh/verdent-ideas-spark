@@ -61,6 +61,7 @@ import Reviews from "./pages/Reviews";
 import Ontology from "./pages/Ontology";
 import Governance from "./pages/Governance";
 import Entities from "./pages/Entities";
+import EntitiesAliases from "./pages/EntitiesAliases";
 import Sovereignty from "./pages/Sovereignty";
 import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
@@ -150,6 +151,7 @@ const App = () => (
             <Route path="/ontology" element={<Ontology />} />
             <Route path="/governance" element={<Governance />} />
             <Route path="/entities" element={<Entities />} />
+            <Route path="/entities/aliases" element={<EntitiesAliases />} />
             <Route path="/sovereignty" element={<Sovereignty />} />
             <Route path="/status" element={<Status />} />
             <Route path="/connections" element={<Connections />} />

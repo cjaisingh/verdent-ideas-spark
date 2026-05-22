@@ -42,3 +42,9 @@ Bench JSON lands in `bench-results/adr-0004-<timestamp>.json` and uploads to `pu
 
 - **M3** — embedding-hint branch on `/resolve` (cap 0.6, skipped when authoritative descriptor hits or topK full); `alias_revoke_burst` sentinel check (>10 in 15min/tenant → high; ≥3 hard → critical); `idx_alias_tenant_revoked` index added.
 - **M4** — admin-role JWT harness for `alias_hard_revoke_requires_admin_role` test; first acceptance bench run; ADR-0004 Consequences section finalised and `mem://features/entity-resolver` updated with the chosen branch.
+
+### M4 status (2026-05-22)
+
+- **Admin JWT harness:** shipped. `e2e/resolver.test.ts > entity-resolve — s5.3 M4 hard-revoke admin gating` exercises three users (anon, operator-only, operator+admin) against `/alias/revoke?hardRevoke=true`. Requires `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` secrets; tests skip individually when fixture absent.
+- **Operator admin surface:** `/entities/aliases` ships an operator-only list + revoke / hard-revoke / merge / split form, calling `entity-resolve` only (no direct table writes).
+- **Acceptance bench:** **deferred** — current `tenant_node_aliases` corpus = 0 rows. Bench would record only network-round-trip latency. Status stays **proposed**; flip to **accepted** when corpus ≥ 1 000 aliases (sentinel `alias_corpus_ready` to be added under chat-first when relevant). Until then, the decision tree above is *contingent*; no row is annotated as matched.

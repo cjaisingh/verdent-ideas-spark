@@ -10,6 +10,11 @@ const OPERATOR_PASSWORD = process.env.E2E_OPERATOR_PASSWORD;
 // admin-only tables/RPCs reject non-admin operators. If absent, those tests skip.
 const OPERATOR_ONLY_EMAIL = process.env.E2E_OPERATOR_ONLY_EMAIL;
 const OPERATOR_ONLY_PASSWORD = process.env.E2E_OPERATOR_ONLY_PASSWORD;
+// Optional: a user with BOTH operator AND admin role. Used to verify admin-only
+// JWT paths (hard-revoke, etc) succeed. Service token would also work but does
+// not exercise the user_roles → has_role() lookup we want covered.
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 
 export const env = {
   SUPABASE_URL: SUPABASE_URL!,
@@ -20,6 +25,9 @@ export const env = {
   OPERATOR_ONLY_EMAIL: OPERATOR_ONLY_EMAIL ?? "",
   OPERATOR_ONLY_PASSWORD: OPERATOR_ONLY_PASSWORD ?? "",
   HAS_OPERATOR_ONLY: Boolean(OPERATOR_ONLY_EMAIL && OPERATOR_ONLY_PASSWORD),
+  ADMIN_EMAIL: ADMIN_EMAIL ?? "",
+  ADMIN_PASSWORD: ADMIN_PASSWORD ?? "",
+  HAS_ADMIN: Boolean(ADMIN_EMAIL && ADMIN_PASSWORD),
   FN_URL: `${SUPABASE_URL}/functions/v1/awip-api`,
 };
 
@@ -68,6 +76,24 @@ export async function operatorOnlyClient() {
     password: env.OPERATOR_ONLY_PASSWORD,
   });
   if (error) throw new Error(`Operator-only sign-in failed: ${error.message}`);
+  return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
+}
+
+/**
+ * Admin user (operator + admin role). Used for hard-revoke and other admin-only
+ * paths that must exercise the user_roles → has_role() lookup, not the service
+ * token shortcut. Skips when env not provided.
+ */
+export async function adminClient() {
+  if (!env.HAS_ADMIN) {
+    throw new Error("E2E_ADMIN_EMAIL/PASSWORD not configured");
+  }
+  const c = anonClient();
+  const { data, error } = await c.auth.signInWithPassword({
+    email: env.ADMIN_EMAIL,
+    password: env.ADMIN_PASSWORD,
+  });
+  if (error) throw new Error(`Admin sign-in failed: ${error.message}`);
   return { client: c, accessToken: data.session!.access_token, userId: data.user!.id };
 }
 

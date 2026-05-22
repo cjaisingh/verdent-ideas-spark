@@ -429,7 +429,157 @@ describe("entity-resolve — s5.3 M3 embedding-hint", () => {
   });
 });
 
-// Remaining s5.3 stubs — operator/admin role JWT harness deferred to M4.
-describe("entity-resolve — s5.3 deferred stubs", () => {
-  it.todo("alias_hard_revoke_requires_admin_role — needs operator+admin JWT harness");
+// ---------------------------------------------------------------------------
+// s5.3 M4 — operator/admin JWT harness for hard-revoke.
+//
+// Three-way fixture: anonClient (none), operatorOnlyClient (operator only),
+// adminClient (operator + admin). Service token bypasses has_role() so cannot
+// substitute for the admin JWT case.
+// ---------------------------------------------------------------------------
+describe("entity-resolve — s5.3 M4 hard-revoke admin gating", () => {
+  if (
+    !process.env.E2E_AWIP_SERVICE_TOKEN ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    it.skip("requires E2E_AWIP_SERVICE_TOKEN + SUPABASE_SERVICE_ROLE_KEY", () => {});
+    return;
+  }
+
+  // Need both JWT users to exercise the admin gate properly.
+  const { operatorOnlyClient, adminClient, env: helpEnv } = require("./helpers") as typeof import("./helpers");
+
+  const sb = createClient(
+    env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
+  const tenant = crypto.randomUUID();
+  let nodeId = "";
+
+  beforeAll(async () => {
+    const { data } = await sb
+      .from("tenant_nodes")
+      .insert({ tenant_id: tenant, kind: "site", name: "M4 hard-revoke target" })
+      .select("id")
+      .single();
+    nodeId = data!.id as string;
+  });
+
+  async function jwtCall(path: string, body: unknown, token: string, idem?: string) {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      apikey: env.SUPABASE_ANON_KEY,
+      authorization: `Bearer ${token}`,
+    };
+    if (idem) headers["idempotency-key"] = idem;
+    const res = await fetch(`${RESOLVE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const txt = await res.text();
+    let j: unknown = null;
+    try { j = txt ? JSON.parse(txt) : null; } catch { j = txt; }
+    return { status: res.status, body: j as Record<string, unknown> };
+  }
+
+  it("alias_hard_revoke_requires_admin_role — operator-only JWT → 403", async () => {
+    if (!helpEnv.HAS_OPERATOR_ONLY) {
+      console.warn("skipping: E2E_OPERATOR_ONLY_EMAIL/PASSWORD missing");
+      return;
+    }
+    const created = await call(
+      "/alias/create",
+      { tenantId: tenant, nodeId, kind: "name", value: `M4 op-only ${nodeId.slice(0, 4)}` },
+      `m4-op-only-create-${nodeId}`,
+    );
+    expect(created.status).toBe(200);
+    const aliasId = created.body.alias_id as string;
+
+    const op = await operatorOnlyClient();
+    const r = await jwtCall(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "compliance test", hardRevoke: true },
+      op.accessToken,
+      `m4-op-only-hard-${aliasId}`,
+    );
+    expect(r.status).toBe(403);
+    expect(r.body.error).toBe("admin_required");
+  });
+
+  it("alias_hard_revoke_admin_success — admin JWT → 200 + alias_hard_revoke event", async () => {
+    if (!helpEnv.HAS_ADMIN) {
+      console.warn("skipping: E2E_ADMIN_EMAIL/PASSWORD missing");
+      return;
+    }
+    const created = await call(
+      "/alias/create",
+      { tenantId: tenant, nodeId, kind: "name", value: `M4 admin ${nodeId.slice(0, 4)}` },
+      `m4-admin-create-${nodeId}`,
+    );
+    const aliasId = created.body.alias_id as string;
+
+    const adm = await adminClient();
+    const r = await jwtCall(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "compliance test ≥8 chars", hardRevoke: true },
+      adm.accessToken,
+      `m4-admin-hard-${aliasId}`,
+    );
+    expect(r.status).toBe(200);
+    expect(r.body.hard_revoked).toBe(true);
+
+    const { data: events } = await sb
+      .from("entity_resolution_events")
+      .select("kind, payload")
+      .eq("alias_id", aliasId)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    const hardRow = (events ?? []).find((e) => e.kind === "alias_hard_revoke");
+    expect(hardRow).toBeTruthy();
+  });
+
+  it("alias_hard_revoke_reason_too_short — 400 even for admin", async () => {
+    if (!helpEnv.HAS_ADMIN) return;
+    const created = await call(
+      "/alias/create",
+      { tenantId: tenant, nodeId, kind: "name", value: `M4 short ${nodeId.slice(0, 4)}` },
+      `m4-short-create-${nodeId}`,
+    );
+    const aliasId = created.body.alias_id as string;
+    const adm = await adminClient();
+    const r = await jwtCall(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "abc", hardRevoke: true },
+      adm.accessToken,
+      `m4-short-${aliasId}`,
+    );
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("hard_revoke_reason_too_short");
+  });
+
+  it("cross_tenant_revoke_returns_422 — alias from tenant B, request tenant A", async () => {
+    const tenantB = crypto.randomUUID();
+    const { data: otherNodeRow } = await sb
+      .from("tenant_nodes")
+      .insert({ tenant_id: tenantB, kind: "site", name: "M4 cross-tenant" })
+      .select("id")
+      .single();
+    const created = await call(
+      "/alias/create",
+      { tenantId: tenantB, nodeId: otherNodeRow!.id, kind: "name", value: `M4 cross ${otherNodeRow!.id.slice(0, 4)}` },
+      `m4-cross-create-${otherNodeRow!.id}`,
+    );
+    const aliasId = created.body.alias_id as string;
+
+    // Service-token caller; tenant mismatch must still 422.
+    const r = await call(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "wrong tenant" },
+      `m4-cross-revoke-${aliasId}`,
+    );
+    expect(r.status).toBe(422);
+    expect(r.body.error).toBe("cross_tenant_rejected");
+  });
 });
