@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — 10-task sequential plan)
+- **T1 (action triage).** Migration `20260522084854` cancelled 4 exact-title and 3 cross-project near-duplicate `discussion_actions`; reassigned 7 in-flight rows to `in_progress`.
+- **T2 (observability sweep).** Migration `20260522085026` resolved 9 stale `observability_registry` surfaces with `resolution_kind='detector_wrong'`; opened follow-up to fix the `scheduled-X` → `automation_runs.job` mapping in the detector.
+- **T3 (sidebar).** `AppSidebar` now exposes `/entities/aliases` directly under Knowledge → "Aliases (admin)".
+- **T4 (service-path resolver).** New SECURITY DEFINER function `public.resolve_truth_service(entity, entity_id, field)` (service-role only) + new edge fn `claims-resolve-tie` that picks operator-JWT vs service-token path — unblocks cross-project tie-break resolution that `claims-ingest` currently skips for service callers.
+- **T5.** Verified already shipped — `e2e/resolver.test.ts › s5.3 M4 hard-revoke admin gating` (4 tests) covers anon, operator-only 403, admin 200, reason-too-short 400, cross-tenant 422.
+- **T6 (ADR-0004 fixture).** Seeded 1,100 fixture aliases across 5 deterministic tenants (`value LIKE 'adr-0004-bench/%'`, `source='fixture'`); ADR-0004 acceptance bench can now produce real p50/p95/p99. New idempotent re-seed: `scripts/seed-alias-fixture.ts`.
+- **T9 (e2e provisioning).** New `scripts/provision-e2e-fixtures.ts` — idempotent create-or-grant for operator / operator-only / admin fixture users; auto-confirms email so CI doesn't need a mailbox; skips quietly when a fixture env pair is unset.
+- **T10 (governance UX).** `ClaimsPanel` active-claims list now has an inline "Override" button on every non-winner claim — pre-fills the file-claim form with source=operator, the claim's value, `supersedes_id`, confidence 1.0, and an "Operator override of {source} claim" note; scrolls focus to the form.
+
+Out of scope (carry-forward): **T7** (cron-sweep-stalled fn — materially covered by existing `cron_silence` check + `SENTINEL_CADENCES` map in `sentinel-tick/checks.ts:221`; defer the standalone fn). **T8** (no-explicit-any 30-file slice — 517 baseline, requires hours of real type work on `AutomationPanel.tsx` etc., own session). Also still out: W7.3 confidence decay, W7.4, ADR-0003/0005, Phase 6, Linear mirroring, Telegram beyond `alias_revoke_burst`, AIMS oversight-matrix.
+
 ### Added (2026-05-22 — 10-lane sequential sweep)
 - **Lane 1 (verify-only).** Confirmed `alert_settings.operator_telegram_chat_id` is set and `sentinel-tick` already routes `high`/`critical` findings through `dispatchAlert` → Telegram. No code change required for `alias_revoke_burst` routing.
 - **Lane 2.** New `mem/features/ai-policy.md` documenting the `pickModel()` chokepoint: night-window cheap-model coercion, TTS bypass, contract-first requirement for new loops, budget-alert demotion. Linked from `mem/index.md`.

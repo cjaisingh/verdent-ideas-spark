@@ -203,15 +203,41 @@ export function ClaimsPanel() {
               <div className="space-y-1">
                 <div className="text-xs uppercase text-muted-foreground">Active claims</div>
                 <ul className="space-y-1">
-                  {resolved.claims.map((c) => (
-                    <li key={c.id} className="text-xs flex items-center gap-2 font-mono">
-                      <Badge variant="outline">{c.source}</Badge>
-                      <span>prec {c.precedence}</span>
-                      <span>conf {c.confidence}</span>
-                      <span>score {Number(c.score).toFixed(2)}</span>
-                      <span className="text-muted-foreground truncate">{JSON.stringify(c.value)}</span>
-                    </li>
-                  ))}
+                  {resolved.claims.map((c) => {
+                    const isWinner = resolved.winner
+                      && resolved.winner.source === c.source
+                      && JSON.stringify(resolved.winner.value) === JSON.stringify(c.value);
+                    return (
+                      <li key={c.id} className="text-xs flex items-center gap-2 font-mono">
+                        <Badge variant="outline">{c.source}</Badge>
+                        <span>prec {c.precedence}</span>
+                        <span>conf {c.confidence}</span>
+                        <span>score {Number(c.score).toFixed(2)}</span>
+                        <span className="text-muted-foreground truncate flex-1">{JSON.stringify(c.value)}</span>
+                        {!isWinner && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs"
+                            onClick={() => {
+                              setSource("operator");
+                              setValueText(JSON.stringify(c.value, null, 2));
+                              setSupersedesId(c.id);
+                              setConfidence(1);
+                              setNote(`Operator override of ${c.source} claim ${c.id.slice(0, 8)}`);
+                              setTimeout(
+                                () => cardRef.current?.querySelector("textarea")?.scrollIntoView({ behavior: "smooth", block: "center" }),
+                                30,
+                              );
+                              toast.info("Pre-filled override claim — review and submit");
+                            }}
+                          >
+                            Override
+                          </Button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
