@@ -4,6 +4,16 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — ready-for-domains: contract hardening)
+- **`module_service_tokens`** (hashed sha256, per-`owning_module` scope) + **`module_heartbeats`** table. `awip-api.authorize()` now resolves per-module tokens via `resolve_module_token()` and returns `owning_module` scope alongside the actor.
+- **`POST /capabilities/register`** rewritten: typed contract (`_shared/contracts/module-register.ts`), mandatory `Idempotency-Key` (header or body), scope-check (token's `owning_module` must match payload), and emits granular events on diff — `status_changed`, `version_bumped`, `owning_module_changed`, `deprecated` — alongside `registered` on first sight.
+- **`POST /modules/heartbeat`** new route + typed contract (`_shared/contracts/module-heartbeat.ts`). Writes to `module_heartbeats`; scope-checked the same way.
+- **`module-promote.ts`** contract added (promote endpoint already existed; contract names inputs/outputs for future event types).
+- **Sentinel:** new `module_silent_24h` check (medium, dedupe per `owning_module`) — fires when a module with ≥1 registered capability has no heartbeat in 24h. New DB scan joins `capabilities` + `module_heartbeats`.
+- **Realtime + observability:** `capability_events` and `module_heartbeats` added to `supabase_realtime` publication; both watchers (`module_silent_24h`, `module_register_idempotency_replay_burst`) registered in `observability_registry`.
+
+
+
 ### Added (2026-05-22 — edge-fn unknown sweep)
 - **`observability_registry.expected_silent`** boolean (default false). The freshness view treats absence of activity on `expected_silent=true` surfaces as `ok` rather than `unknown` (designed-silent demand-driven surface). Flagged 7 demand-driven edge fns (`companion-cloud-chat`, `entity-resolve`, `gemini-tts`, `plan-footer-ingest`, `session-summary-log`, `telegram-send`, `telegram-webhook`) and the `out_of_scope_stale` agent surface. Set `expected_cadence_minutes=15` on `sentinel-tick` (was null). `unknown` surface count drops from 9 → 0; only 4 `stale` rows remain — all legitimate (2 long-cadence crons, 2 table surfaces awaiting seeded rows).
 

@@ -23,6 +23,9 @@ import {
   type ProposalRow as PaProposalRow,
   type ShiftRow as PaShiftRow,
 } from "./promotion_audit.ts";
+import { validateRegisterInput } from "../_shared/contracts/module-register.ts";
+import { validateHeartbeatInput } from "../_shared/contracts/module-heartbeat.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,12 +76,34 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-// Auth: require either a valid operator JWT OR the AWIP_SERVICE_TOKEN header (for cross-project calls).
-async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; error?: string }> {
+// Auth: operator JWT, legacy global service token, OR a per-module hashed token.
+// Per-module tokens carry an owning_module scope that gates writes against payload.owning_module.
+async function sha256Hex(s: string): Promise<string> {
+  const buf = new TextEncoder().encode(s);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; owning_module?: string | null; error?: string }> {
   const serviceToken = Deno.env.get("AWIP_SERVICE_TOKEN");
   const provided = req.headers.get("x-awip-service-token");
-  if (serviceToken && provided && provided === serviceToken) {
-    return { ok: true, actor: "service:discovery_ai" };
+  if (provided) {
+    // 1) Legacy global token (Discovery AI + cron). Unscoped.
+    if (serviceToken && provided === serviceToken) {
+      return { ok: true, actor: "service:discovery_ai", owning_module: null };
+    }
+    // 2) Per-module hashed token lookup.
+    try {
+      const hash = await sha256Hex(provided);
+      const { data } = await supabase.rpc("resolve_module_token", { _hash: hash });
+      const row = Array.isArray(data) && data.length > 0 ? data[0] as { owning_module: string; label: string; token_id: string } : null;
+      if (row) {
+        // best-effort last-used touch (don't block)
+        supabase.from("module_service_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.token_id).then(() => {}, () => {});
+        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module };
+      }
+    } catch (_e) { /* fall through */ }
+    return { ok: false, actor: "", error: "invalid service token" };
   }
   const auth = req.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return { ok: false, actor: "", error: "missing auth" };
@@ -91,8 +116,9 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
     .eq("user_id", data.user.id);
   const isOp = roles?.some((r) => r.role === "operator" || r.role === "admin");
   if (!isOp) return { ok: false, actor: "", error: "not operator" };
-  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id };
+  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null };
 }
+
 
 // ---------- agent scope enforcement ----------
 const RISK_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
@@ -613,30 +639,117 @@ async function ackCapabilityWarnings(req: Request, capId: string, actor: string,
   return json(result);
 }
 
-async function registerCapability(req: Request, actor: string) {
-  const body = await req.json();
-  const required = ["id", "name", "status"];
-  for (const k of required) if (!body[k]) return json({ error: `missing ${k}` }, 400);
-  const { error } = await supabase.from("capabilities").upsert({
+async function registerCapability(req: Request, actor: string, tokenScope: string | null | undefined) {
+  const idemKey = req.headers.get("idempotency-key");
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let bodyJson: unknown;
+  try { bodyJson = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const parsed = validateRegisterInput(bodyJson);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const body = parsed.value;
+
+  // Scope check: per-module token may only write its own module. Legacy global token (tokenScope=null) is unrestricted.
+  if (tokenScope && tokenScope !== body.owning_module) {
+    return json({ error: `token scope '${tokenScope}' cannot register for '${body.owning_module}'` }, 403);
+  }
+
+  // Idempotency on header OR body.idempotency_key (header wins).
+  const effectiveKey = idemKey ?? (body.idempotency_key || null);
+  const bodyHash = await hashBody(raw);
+  if (effectiveKey) {
+    const conflict = await checkIdempotencyConflict("capability_register", effectiveKey, bodyHash);
+    if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+    if (conflict.cached) {
+      const { __body_hash, ...rest } = conflict.cached as Record<string, unknown>;
+      return json({ ...rest, idempotent_replay: true });
+    }
+  }
+
+  // Snapshot current row (if any) to diff for event types.
+  const { data: prev } = await supabase
+    .from("capabilities")
+    .select("id,status,version,owning_module")
+    .eq("id", body.id)
+    .maybeSingle();
+
+  const { error: upErr } = await supabase.from("capabilities").upsert({
     id: body.id,
     name: body.name,
     description: body.description ?? null,
     status: body.status,
-    version: body.version ?? "0.1.0",
+    version: body.version,
     inputs_required: body.inputs_required ?? [],
     outputs_provided: body.outputs_provided ?? [],
-    owning_module: body.owning_module ?? null,
+    owning_module: body.owning_module,
     updated_at: new Date().toISOString(),
   });
-  if (error) return json({ error: error.message }, 500);
-  await supabase.from("capability_events").insert({
-    capability_id: body.id,
-    event_type: "registered",
-    payload: redact(body),
-    actor,
-  });
-  return json({ ok: true, id: body.id });
+  if (upErr) return json({ error: upErr.message }, 500);
+
+  // Emit one event per dimension that actually changed, plus the existing 'registered' on first sight.
+  const events: Array<Record<string, unknown>> = [];
+  if (!prev) {
+    events.push({ capability_id: body.id, event_type: "registered", actor, payload: redact(body) });
+  } else {
+    if (prev.status !== body.status) {
+      events.push({
+        capability_id: body.id, event_type: "status_changed", actor,
+        payload: redact({ from: prev.status, to: body.status, source: "register" }),
+      });
+      if (body.status === "deprecated") {
+        events.push({ capability_id: body.id, event_type: "deprecated", actor, payload: redact({ from: prev.status }) });
+      }
+    }
+    if (prev.version !== body.version) {
+      events.push({
+        capability_id: body.id, event_type: "version_bumped", actor,
+        payload: redact({ from: prev.version, to: body.version }),
+      });
+    }
+    if ((prev.owning_module ?? null) !== body.owning_module) {
+      events.push({
+        capability_id: body.id, event_type: "owning_module_changed", actor,
+        payload: redact({ from: prev.owning_module, to: body.owning_module }),
+      });
+    }
+  }
+  if (events.length > 0) {
+    await supabase.from("capability_events").insert(events);
+  }
+
+  const result = { ok: true, id: body.id, events_emitted: events.map((e) => e.event_type) };
+  if (effectiveKey) await storeIdempotency("capability_register", effectiveKey, null, result, bodyHash);
+  return json(result);
 }
+
+async function moduleHeartbeat(req: Request, actor: string, tokenScope: string | null | undefined) {
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let bodyJson: unknown;
+  try { bodyJson = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const parsed = validateHeartbeatInput(bodyJson);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const body = parsed.value;
+
+  if (tokenScope && tokenScope !== body.owning_module) {
+    return json({ error: `token scope '${tokenScope}' cannot heartbeat for '${body.owning_module}'` }, 403);
+  }
+
+  const { data, error } = await supabase
+    .from("module_heartbeats")
+    .insert({
+      owning_module: body.owning_module,
+      version: body.version ?? null,
+      capability_ids: body.capability_ids ?? [],
+      sender: actor,
+      payload: redact(body.payload ?? {}),
+    })
+    .select("id, created_at")
+    .single();
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, id: data.id, created_at: data.created_at });
+}
+
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
@@ -1798,7 +1911,9 @@ Deno.serve(withLogger("awip-api", async (req) => {
       const transcriptAnalyzeMatch = path.match(/^\/transcripts\/([0-9a-f-]+)\/analyze$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
-      else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
+      else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor, auth.owning_module);
+      else if (req.method === "POST" && path === "/modules/heartbeat") response = await moduleHeartbeat(req, auth.actor, auth.owning_module);
+
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);

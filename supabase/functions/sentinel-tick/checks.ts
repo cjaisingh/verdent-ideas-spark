@@ -38,7 +38,9 @@ export type FindingCandidate = {
     | "observability_missing_watcher"
     | "observability_stale_surface"
     | "resolver_low_confidence_rate"
-    | "alias_revoke_burst";
+    | "alias_revoke_burst"
+    | "module_silent_24h"
+    | "module_register_idempotency_replay_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -1342,3 +1344,43 @@ export function checkAliasRevokeBurst(
   }
   return out;
 }
+
+// --- module_silent_24h ---
+// Input: one row per (owning_module, last_heartbeat_at) for modules that have ≥1 registered capability.
+// Fires medium if last heartbeat older than 24h, suppressed if module has no capabilities.
+export type ModuleLivenessRow = {
+  owning_module: string;
+  cap_count: number;
+  last_heartbeat_at: string | null;
+};
+
+export function checkModuleSilent24h(now: Date, rows: ModuleLivenessRow[]): FindingCandidate[] {
+  const out: FindingCandidate[] = [];
+  const cutoff = now.getTime() - 24 * 60 * 60 * 1000;
+  for (const r of rows) {
+    if (!r.owning_module || r.cap_count < 1) continue;
+    const lastMs = r.last_heartbeat_at ? new Date(r.last_heartbeat_at).getTime() : 0;
+    if (lastMs >= cutoff) continue;
+    const ageH = r.last_heartbeat_at
+      ? Math.round((now.getTime() - lastMs) / 3_600_000)
+      : null;
+    out.push({
+      kind: "module_silent_24h",
+      severity: "medium",
+      summary: r.last_heartbeat_at
+        ? `Module '${r.owning_module}' has not sent a heartbeat in ${ageH}h (${r.cap_count} capabilities registered).`
+        : `Module '${r.owning_module}' has never sent a heartbeat (${r.cap_count} capabilities registered).`,
+      dedupe_key: `module_silent_24h:${r.owning_module}`,
+      subject_ref: { owning_module: r.owning_module },
+      payload: {
+        owning_module: r.owning_module,
+        cap_count: r.cap_count,
+        last_heartbeat_at: r.last_heartbeat_at,
+        age_hours: ageH,
+        fix_url: "/capabilities",
+      },
+    });
+  }
+  return out;
+}
+
