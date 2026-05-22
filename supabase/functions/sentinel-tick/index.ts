@@ -278,6 +278,40 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
+    // Module liveness: one row per owning_module with cap count + last heartbeat.
+    // Single query joins capabilities (grouped) with the latest heartbeat per module.
+    const { data: moduleLivenessRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:module_liveness",
+      request_id: reqId,
+      step_label: "Scan modules with registered capabilities + last heartbeat", phase_kind: "db_scan",
+    }, async () => {
+      const { data: caps } = await sb.from("capabilities").select("owning_module").not("owning_module", "is", null);
+      const counts = new Map<string, number>();
+      for (const c of (caps ?? []) as { owning_module: string | null }[]) {
+        if (!c.owning_module) continue;
+        counts.set(c.owning_module, (counts.get(c.owning_module) ?? 0) + 1);
+      }
+      const modules = Array.from(counts.keys());
+      const lastSeen = new Map<string, string>();
+      if (modules.length > 0) {
+        const { data: hbs } = await sb
+          .from("module_heartbeats")
+          .select("owning_module, created_at")
+          .in("owning_module", modules)
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        for (const h of (hbs ?? []) as { owning_module: string; created_at: string }[]) {
+          if (!lastSeen.has(h.owning_module)) lastSeen.set(h.owning_module, h.created_at);
+        }
+      }
+      const rows: ModuleLivenessRow[] = modules.map((m) => ({
+        owning_module: m,
+        cap_count: counts.get(m) ?? 0,
+        last_heartbeat_at: lastSeen.get(m) ?? null,
+      }));
+      return { data: rows, error: null };
+    });
+
     // Cron-silence needs ONE row per job (the most recent). Using the same
     // 5000-row runs sample crowded out low-frequency jobs (e.g. weekly
     // lessons-synthesize) and produced false-positive cron_silence findings.
