@@ -59,3 +59,8 @@ Phase 5 sprint s5.1 substrate — first cut of the entity resolver.
 **M4 (landed 2026-05-22).** Admin-JWT e2e harness (`adminClient()` in `e2e/helpers.ts`, env `E2E_ADMIN_EMAIL/PASSWORD`); four `it.todo` promoted in `e2e/resolver.test.ts` covering operator-only 403, admin 200 + `alias_hard_revoke` event, reason-too-short 400, cross-tenant 422. Operator UI at `/entities/aliases` (revoke/hard-revoke/merge/split via `entity-resolve` only; hard-revoke gated by `has_role('admin')` probe). ADR-0004 status stays **proposed** — `tenant_node_aliases` corpus = 0 so bench would measure network jitter only; flip to **accepted** scheduled when corpus ≥ 1 000 rows.
 
 **Phase 6.** Fact-side cascade (`binding_status`, KR grey-out).
+
+## Finishing (landed 2026-05-22)
+- **authoritative_id_systems** — global 7-seed registry (bim_ifc_guid, rics_id, os_uprn, sap_floc, duns, stripe_customer, internal) with per-system `match_rules`. Operator read, admin write. No per-tenant trust override (open question #2 closed: defer until a tenant actually refuses a system).
+- **resolver_decisions** — `entity-resolve /resolve` writes one row per call (request_id, descriptors, winning_node_id, match_source, score, confidence_band, authoritative_hit, embedding_hint_used, latency_ms, actor). Operator read, service-role write. Indexed on `(tenant_id, created_at desc)` + `(confidence_band, created_at desc)`. Registered in `observability_registry` (table_inserts watcher, 1440-min floor).
+
