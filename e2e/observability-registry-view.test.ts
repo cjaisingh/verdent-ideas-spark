@@ -32,7 +32,7 @@ describe("v_observability_registry_status — detector view", () => {
   // or with real registry rows.
   const tag = `e2e-${crypto.randomUUID().slice(0, 8)}`;
   const fixtures = {
-    cronViaCronSchema: "sentinel-tick", // real pg_cron job, asserts the cron_cron branch
+    cronViaCronSchema: "ci-status-sync-30m", // real pg_cron job, asserts the cron_cron branch
     cronViaAutomation: `${tag}-cron-from-automation`,
     edgeFn: `${tag}-edge-fn`,
     tableKnown: "resolver_decisions", // only hard-listed table today
