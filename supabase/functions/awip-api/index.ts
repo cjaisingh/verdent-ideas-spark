@@ -639,30 +639,117 @@ async function ackCapabilityWarnings(req: Request, capId: string, actor: string,
   return json(result);
 }
 
-async function registerCapability(req: Request, actor: string) {
-  const body = await req.json();
-  const required = ["id", "name", "status"];
-  for (const k of required) if (!body[k]) return json({ error: `missing ${k}` }, 400);
-  const { error } = await supabase.from("capabilities").upsert({
+async function registerCapability(req: Request, actor: string, tokenScope: string | null | undefined) {
+  const idemKey = req.headers.get("idempotency-key");
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let bodyJson: unknown;
+  try { bodyJson = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const parsed = validateRegisterInput(bodyJson);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const body = parsed.value;
+
+  // Scope check: per-module token may only write its own module. Legacy global token (tokenScope=null) is unrestricted.
+  if (tokenScope && tokenScope !== body.owning_module) {
+    return json({ error: `token scope '${tokenScope}' cannot register for '${body.owning_module}'` }, 403);
+  }
+
+  // Idempotency on header OR body.idempotency_key (header wins).
+  const effectiveKey = idemKey ?? (body.idempotency_key || null);
+  const bodyHash = await hashBody(raw);
+  if (effectiveKey) {
+    const conflict = await checkIdempotencyConflict("capability_register", effectiveKey, bodyHash);
+    if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
+    if (conflict.cached) {
+      const { __body_hash, ...rest } = conflict.cached as Record<string, unknown>;
+      return json({ ...rest, idempotent_replay: true });
+    }
+  }
+
+  // Snapshot current row (if any) to diff for event types.
+  const { data: prev } = await supabase
+    .from("capabilities")
+    .select("id,status,version,owning_module")
+    .eq("id", body.id)
+    .maybeSingle();
+
+  const { error: upErr } = await supabase.from("capabilities").upsert({
     id: body.id,
     name: body.name,
     description: body.description ?? null,
     status: body.status,
-    version: body.version ?? "0.1.0",
+    version: body.version,
     inputs_required: body.inputs_required ?? [],
     outputs_provided: body.outputs_provided ?? [],
-    owning_module: body.owning_module ?? null,
+    owning_module: body.owning_module,
     updated_at: new Date().toISOString(),
   });
-  if (error) return json({ error: error.message }, 500);
-  await supabase.from("capability_events").insert({
-    capability_id: body.id,
-    event_type: "registered",
-    payload: redact(body),
-    actor,
-  });
-  return json({ ok: true, id: body.id });
+  if (upErr) return json({ error: upErr.message }, 500);
+
+  // Emit one event per dimension that actually changed, plus the existing 'registered' on first sight.
+  const events: Array<Record<string, unknown>> = [];
+  if (!prev) {
+    events.push({ capability_id: body.id, event_type: "registered", actor, payload: redact(body) });
+  } else {
+    if (prev.status !== body.status) {
+      events.push({
+        capability_id: body.id, event_type: "status_changed", actor,
+        payload: redact({ from: prev.status, to: body.status, source: "register" }),
+      });
+      if (body.status === "deprecated") {
+        events.push({ capability_id: body.id, event_type: "deprecated", actor, payload: redact({ from: prev.status }) });
+      }
+    }
+    if (prev.version !== body.version) {
+      events.push({
+        capability_id: body.id, event_type: "version_bumped", actor,
+        payload: redact({ from: prev.version, to: body.version }),
+      });
+    }
+    if ((prev.owning_module ?? null) !== body.owning_module) {
+      events.push({
+        capability_id: body.id, event_type: "owning_module_changed", actor,
+        payload: redact({ from: prev.owning_module, to: body.owning_module }),
+      });
+    }
+  }
+  if (events.length > 0) {
+    await supabase.from("capability_events").insert(events);
+  }
+
+  const result = { ok: true, id: body.id, events_emitted: events.map((e) => e.event_type) };
+  if (effectiveKey) await storeIdempotency("capability_register", effectiveKey, null, result, bodyHash);
+  return json(result);
 }
+
+async function moduleHeartbeat(req: Request, actor: string, tokenScope: string | null | undefined) {
+  const raw = await req.text();
+  if (raw.length === 0) return json({ error: "empty body" }, 400);
+  let bodyJson: unknown;
+  try { bodyJson = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  const parsed = validateHeartbeatInput(bodyJson);
+  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const body = parsed.value;
+
+  if (tokenScope && tokenScope !== body.owning_module) {
+    return json({ error: `token scope '${tokenScope}' cannot heartbeat for '${body.owning_module}'` }, 403);
+  }
+
+  const { data, error } = await supabase
+    .from("module_heartbeats")
+    .insert({
+      owning_module: body.owning_module,
+      version: body.version ?? null,
+      capability_ids: body.capability_ids ?? [],
+      sender: actor,
+      payload: redact(body.payload ?? {}),
+    })
+    .select("id, created_at")
+    .single();
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, id: data.id, created_at: data.created_at });
+}
+
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
