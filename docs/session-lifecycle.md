@@ -45,3 +45,7 @@ The `out_of_scope_stale` sentinel (medium) fires when an auto-logged row stays `
 - [`supabase/functions/session-summary-log/index.ts`](../supabase/functions/session-summary-log/index.ts)
 - [`mem://features/out-of-scope-autolog`](../mem/features/out-of-scope-autolog.md)
 - [`mem://preferences/verify-completion`](../mem/preferences/verify-completion.md)
+
+## Related
+
+- [`docs/runbooks/observability-freshness.md`](./runbooks/observability-freshness.md) — how `session-bootstrap` ties into the freshness detector and how to read the three legitimate stale signals.
