@@ -3999,6 +3999,7 @@ export type Database = {
           id: string
           notes: string | null
           owner: string | null
+          stale_multiplier: number
           surface_id: string
           surface_kind: string
           updated_at: string
@@ -4012,6 +4013,7 @@ export type Database = {
           id?: string
           notes?: string | null
           owner?: string | null
+          stale_multiplier?: number
           surface_id: string
           surface_kind: string
           updated_at?: string
@@ -4025,6 +4027,7 @@ export type Database = {
           id?: string
           notes?: string | null
           owner?: string | null
+          stale_multiplier?: number
           surface_id?: string
           surface_kind?: string
           updated_at?: string
@@ -7635,6 +7638,7 @@ export type Database = {
           id: string | null
           last_seen_at: string | null
           owner: string | null
+          stale_multiplier: number | null
           status: string | null
           surface_id: string | null
           surface_kind: string | null
