@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — observability freshness runbook)
+- **`docs/runbooks/observability-freshness.md`** — operator runbook covering the session-lifecycle contract (`plan-footer-ingest` / `session-summary-log`), the detector's data sources per `surface_kind` (cron = `cron.job_run_details` ∪ `automation_runs.job`; edge_fn = `edge_request_logs`; table = hard-listed only), the `stale_multiplier` threshold model, and how to interpret each of the 3 remaining legitimate stale signals (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`, `session-bootstrap`).
+
 ### Added (2026-05-22 — configurable stale threshold)
 - **`observability_registry.stale_multiplier`** (numeric, default 3, check > 0). View `v_observability_registry_status` now flags `stale` at `expected_cadence_minutes × stale_multiplier` per row instead of a hardcoded ×3. Seeded `scheduled-deep-audit-monthly` and `scheduled-quarterly-review-open` to **1.25** (~37d / ~135d) — they previously needed ~90d / ~270d of silence to alert. Default remains 3 for everything else. No sentinel code change; the existing `observability_stale_surface` check (severity `medium`) reads `status` from the view.
 
