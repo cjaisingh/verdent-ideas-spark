@@ -890,6 +890,39 @@ export type Database = {
         }
         Relationships: []
       }
+      authoritative_id_systems: {
+        Row: {
+          active: boolean
+          alias_kind: string
+          created_at: string
+          description: string | null
+          id: string
+          label: string
+          match_rules: Json
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          alias_kind: string
+          created_at?: string
+          description?: string | null
+          id: string
+          label: string
+          match_rules?: Json
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          alias_kind?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          label?: string
+          match_rules?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       automation_runs: {
         Row: {
           created_at: string
@@ -4765,6 +4798,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      resolver_decisions: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          authoritative_hit: boolean
+          candidate_count: number
+          confidence_band: string
+          created_at: string
+          descriptors: Json
+          embedding_hint_used: boolean
+          id: string
+          latency_ms: number | null
+          match_source: string | null
+          request_id: string | null
+          score: number | null
+          tenant_id: string
+          winning_node_id: string | null
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          authoritative_hit?: boolean
+          candidate_count?: number
+          confidence_band: string
+          created_at?: string
+          descriptors: Json
+          embedding_hint_used?: boolean
+          id?: string
+          latency_ms?: number | null
+          match_source?: string | null
+          request_id?: string | null
+          score?: number | null
+          tenant_id: string
+          winning_node_id?: string | null
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          authoritative_hit?: boolean
+          candidate_count?: number
+          confidence_band?: string
+          created_at?: string
+          descriptors?: Json
+          embedding_hint_used?: boolean
+          id?: string
+          latency_ms?: number | null
+          match_source?: string | null
+          request_id?: string | null
+          score?: number | null
+          tenant_id?: string
+          winning_node_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resolver_decisions_winning_node_id_fkey"
+            columns: ["winning_node_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       retention_settings: {
         Row: {
