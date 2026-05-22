@@ -17,8 +17,9 @@ import {
   checkObservabilityRegistry,
   checkResolverLowConfidenceRate,
   checkAliasRevokeBurst,
+  checkModuleSilent24h,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
-  type ResolverHealthRow, type AliasRevokeEventRow,
+  type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
 } from "./checks.ts";
 import { recordStep } from "../_shared/steps.ts";
 
