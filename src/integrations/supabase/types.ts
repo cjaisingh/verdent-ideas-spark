@@ -3996,6 +3996,7 @@ export type Database = {
           declared_in: string | null
           domain_silence_window_hours: number | null
           expected_cadence_minutes: number | null
+          expected_silent: boolean
           id: string
           notes: string | null
           owner: string | null
@@ -4010,6 +4011,7 @@ export type Database = {
           declared_in?: string | null
           domain_silence_window_hours?: number | null
           expected_cadence_minutes?: number | null
+          expected_silent?: boolean
           id?: string
           notes?: string | null
           owner?: string | null
@@ -4024,6 +4026,7 @@ export type Database = {
           declared_in?: string | null
           domain_silence_window_hours?: number | null
           expected_cadence_minutes?: number | null
+          expected_silent?: boolean
           id?: string
           notes?: string | null
           owner?: string | null
@@ -7665,6 +7668,7 @@ export type Database = {
         Row: {
           declared_in: string | null
           expected_cadence_minutes: number | null
+          expected_silent: boolean | null
           id: string | null
           last_seen_at: string | null
           owner: string | null
