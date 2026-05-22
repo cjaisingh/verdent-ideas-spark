@@ -61,6 +61,7 @@ import Reviews from "./pages/Reviews";
 import Ontology from "./pages/Ontology";
 import Governance from "./pages/Governance";
 import Entities from "./pages/Entities";
+import EntitiesAliases from "./pages/EntitiesAliases";
 import Sovereignty from "./pages/Sovereignty";
 import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
