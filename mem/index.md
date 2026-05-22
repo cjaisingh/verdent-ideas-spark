@@ -79,3 +79,5 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [ADR bench history](mem://features/adr-bench-history) — /admin/adr-bench + adr_bench_results table + uploadBenchResult() in scripts/adr-bench/_shared.ts; status pill in src/lib/adr-bench-thresholds.ts mirrors docs/adr/benchmarks.md thresholds
 - [Entity resolver (Phase 5 s5.1)](mem://features/entity-resolver) — tenant_nodes/aliases/conflicts/events + entity-resolve edge fn; authoritative→alias_exact→alias_fts; cross-tenant gate test; ancestry/weights/embedding_hint deferred to s5.2
 - [ISO 42001 gap analysis](docs/iso42001-gap-analysis.md) — AIMS view of current AI surfaces, clauses 4–10 + Annex A, prioritised gap log; sibling to docs/iso27001-controls.md
+- [AI model policy](mem://features/ai-policy) — single chokepoint `pickModel()`: night-window flash-lite coercion + TTS bypass + contract-first new loops + budget-alert demotion
+
