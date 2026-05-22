@@ -14,9 +14,7 @@
 // + lets us seed automation_runs which has FORCE DENY for clients).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createClient } from "@supabase/supabase-js";
-import { env, requireEnv } from "./helpers";
-
-beforeAll(() => requireEnv());
+import { env } from "./helpers";
 
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
