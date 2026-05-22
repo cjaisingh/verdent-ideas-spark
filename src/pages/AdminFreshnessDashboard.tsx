@@ -190,35 +190,35 @@ export default function AdminFreshnessDashboard() {
         <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Unknown</div><div className="text-2xl font-semibold text-muted-foreground">{summary.unknown}</div></CardContent></Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>session-bootstrap freshness</CardTitle>
-          <CardDescription>
-            edge_fn surface. Current status: {bootstrapRow ? statusBadge(bootstrapRow.status) : "—"}{" "}
-            {bootstrapRow?.last_seen_at
-              ? `· last seen ${new Date(bootstrapRow.last_seen_at).toISOString().slice(0, 16).replace("T", " ")}Z`
-              : "· never seen in window"}
-            {bootstrapRow && (
-              <> · threshold {bootstrapRow.expected_cadence_minutes}m × {bootstrapRow.stale_multiplier}</>
+      {bootstrapRow && (
+        <Card>
+          <CardHeader>
+            <CardTitle>session-bootstrap freshness</CardTitle>
+            <CardDescription>
+              edge_fn surface. Current status: {statusBadge(bootstrapRow.status)}{" "}
+              {bootstrapRow.last_seen_at
+                ? `· last seen ${new Date(bootstrapRow.last_seen_at).toISOString().slice(0, 16).replace("T", " ")}Z`
+                : "· never seen in window"}
+              {" "}· threshold {bootstrapRow.expected_cadence_minutes}m × {bootstrapRow.stale_multiplier}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-48 w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={bootstrapSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="requests" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
             )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <Skeleton className="h-48 w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={bootstrapSeries}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="requests" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
