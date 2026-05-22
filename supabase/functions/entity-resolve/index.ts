@@ -377,7 +377,11 @@ Deno.serve(
         },
       });
 
-      // If two or more candidates land in the conflict band, open a conflict.
+      // If two or more candidates land in the conflict band, open a conflict
+      // AND insert one `claims` row per conflicting candidate so the operator's
+      // /governance ClaimsPanel + resolve_truth() see something to arbitrate.
+      // (resolve_truth itself is operator-gated SECURITY DEFINER, so we don't
+      //  call it from this service-role context — see Lane 5 runbook.)
       if (!authoritativeHit && conflicting.length >= 2) {
         await sb.from("entity_resolution_events").insert({
           tenant_id: p.tenantId,
@@ -390,7 +394,34 @@ Deno.serve(
             confidence_band: "conflict",
           },
         });
+
+        // Fan each conflicting candidate into a `claims` row keyed on
+        // tenant_nodes.<node_id>.identity so resolve_truth can rank them.
+        const claimRows = conflicting.map((c) => ({
+          entity: "tenant_node",
+          entity_id: c.nodeId,
+          field: "identity",
+          source: "ai",
+          value: {
+            descriptors: normalisedDescs.map((d) => ({ kind: d.kind, value: d.value })),
+            score: c.score,
+          },
+          confidence: Math.max(0, Math.min(1, c.score)),
+          evidence_ref: {
+            via: "entity-resolve",
+            candidate_count: conflicting.length,
+            top_score: topScore,
+          },
+          claimed_by: actorId,
+          claimed_by_label: actorLabel,
+          note: "auto-opened by entity-resolve conflict band",
+        }));
+        const { error: claimErr } = await sb.from("claims").insert(claimRows);
+        if (claimErr) {
+          console.warn("entity-resolve claims insert failed", claimErr.message);
+        }
       }
+
 
       const out: ResolverRetrievalOutput & {
         confidenceBand: "auto_bind" | "conflict" | "no_match";
