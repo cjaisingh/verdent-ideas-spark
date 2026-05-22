@@ -4,9 +4,22 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22 — 10-lane sequential sweep)
+- **Lane 1 (verify-only).** Confirmed `alert_settings.operator_telegram_chat_id` is set and `sentinel-tick` already routes `high`/`critical` findings through `dispatchAlert` → Telegram. No code change required for `alias_revoke_burst` routing.
+- **Lane 2.** New `mem/features/ai-policy.md` documenting the `pickModel()` chokepoint: night-window cheap-model coercion, TTS bypass, contract-first requirement for new loops, budget-alert demotion. Linked from `mem/index.md`.
+- **Lane 3.** New `docs/human-oversight.md` enumerating every operator-approval surface (Night Agent, overnight phases, capability promotion, tenant changes, alias revocation, decision authority, claim conflicts, lessons, budget) plus the operator-only RLS pattern.
+- **Lane 4.** New `scripts/bootstrap-admin.ts` — idempotent first-operator seed using `auth.admin.listUsers` + `user_roles` insert; refuses to invent users and surfaces 23505 unique violations as a no-op.
+- **Lane 5 (narrowed).** `entity-resolve` `/resolve` now inserts one `claims` row per conflicting candidate (`source='ai'`, `entity='tenant_node'`, `field='identity'`, `confidence=score`) on the `conflict_open` branch so the operator's `/governance` ClaimsPanel + `resolve_truth()` have something to arbitrate. Service-side `resolve_truth()` call deliberately skipped — the function is SECURITY DEFINER with an `auth.uid()` role check that fails for service-role callers; arbitration stays operator-driven.
+- **Lane 8.** Reviewed `scripts/adr-bench/adr-0004-revocation.ts`; already records p50/p95/p99 + alias count + trips thresholds at 15ms / 40ms. No polish required this session.
+- **Lane 9.** New `docs/runbooks/lane-deliverables-2026-05-22.md` — per-lane file list, verify command, rollback.
+- **Lane 10.** New `scripts/persona-coverage.ts` — drift check between `docs/agents/team/*.md`, `AGENTS.md`, and `mem/preferences/verify-completion.md`. Stable JSON output schema; exit 0 on `ok`, 1 on `drift`. Safe for CI.
+
+Out of scope (carry-forward to next session): Lane 6 (`no-explicit-any` baseline shrink — frozen at 517, cleanup deferred); Lane 7 (`cron-sweep-stalled` edge fn — sandbox cannot query `cron` schema); calling `resolve_truth()` from service context; ADR-0003 ancestry flip; W7.3 / W7.4; `/admin/adr-bench` historical backfill; Linear/issue mirroring.
+
 ### Added (2026-05-22)
 - **ISO 42001 gap-analysis stub** (`docs/iso42001-gap-analysis.md`) — AIMS view of current AI surfaces, clause 4–10 status, Annex A mapping, prioritised gap log. Sibling to `docs/iso27001-controls.md`.
 - **Phase 5 s5.3 Milestone 4 — resolver close-out.** (a) Admin-JWT e2e harness: `e2e/helpers.ts` now exposes `adminClient()` (E2E_ADMIN_EMAIL/PASSWORD); `e2e/resolver.test.ts` promotes the `it.todo` into four cases — operator-only JWT 403, admin JWT 200 + `alias_hard_revoke` event, reason-too-short 400, cross-tenant 422. (b) Operator UI: `/entities/aliases` page lists active + revoked aliases for a tenant, with soft-revoke / hard-revoke / merge / split dialogs that call `entity-resolve` only (no direct table writes); hard-revoke button auto-disables for non-admins via `has_role` probe. (c) ADR-0004 acceptance bench **deferred** to first ≥1 000-alias corpus — ADR stays `proposed` with explicit M4-status note; current `tenant_node_aliases` count = 0 rows so bench would measure network jitter only.
+
 
 ### Added (2026-05-21 wave 7 — Phase 5 sprint s5.3, Milestone 3)
 - **Embedding-hint branch on `/resolve`.** `ResolverRetrievalInputSchema` gains optional `embeddingHint: { vector, model?, minSimilarity? }`. When present, after descriptor scans, the resolver calls `match_alias_embedding(tenant, query, min_sim, top_k)` — a tenant-scoped pgvector ANN over `tenant_node_alias_embeddings` (cosine, HNSW). Hint scores are **capped at 0.6** so embeddings never auto-bind on their own; they land in the conflict band by design. The branch is **skipped** when any authoritative descriptor already hit OR when `topK` is already full. `entity_resolution_events.propose.payload` now carries `embedding_hint_used` + `embedding_hint_candidates_added`.
