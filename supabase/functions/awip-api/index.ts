@@ -76,12 +76,34 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
 );
 
-// Auth: require either a valid operator JWT OR the AWIP_SERVICE_TOKEN header (for cross-project calls).
-async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; error?: string }> {
+// Auth: operator JWT, legacy global service token, OR a per-module hashed token.
+// Per-module tokens carry an owning_module scope that gates writes against payload.owning_module.
+async function sha256Hex(s: string): Promise<string> {
+  const buf = new TextEncoder().encode(s);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; owning_module?: string | null; error?: string }> {
   const serviceToken = Deno.env.get("AWIP_SERVICE_TOKEN");
   const provided = req.headers.get("x-awip-service-token");
-  if (serviceToken && provided && provided === serviceToken) {
-    return { ok: true, actor: "service:discovery_ai" };
+  if (provided) {
+    // 1) Legacy global token (Discovery AI + cron). Unscoped.
+    if (serviceToken && provided === serviceToken) {
+      return { ok: true, actor: "service:discovery_ai", owning_module: null };
+    }
+    // 2) Per-module hashed token lookup.
+    try {
+      const hash = await sha256Hex(provided);
+      const { data } = await supabase.rpc("resolve_module_token", { _hash: hash });
+      const row = Array.isArray(data) && data.length > 0 ? data[0] as { owning_module: string; label: string; token_id: string } : null;
+      if (row) {
+        // best-effort last-used touch (don't block)
+        supabase.from("module_service_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.token_id).then(() => {}, () => {});
+        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module };
+      }
+    } catch (_e) { /* fall through */ }
+    return { ok: false, actor: "", error: "invalid service token" };
   }
   const auth = req.headers.get("Authorization");
   if (!auth?.startsWith("Bearer ")) return { ok: false, actor: "", error: "missing auth" };
@@ -94,8 +116,9 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
     .eq("user_id", data.user.id);
   const isOp = roles?.some((r) => r.role === "operator" || r.role === "admin");
   if (!isOp) return { ok: false, actor: "", error: "not operator" };
-  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id };
+  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null };
 }
+
 
 // ---------- agent scope enforcement ----------
 const RISK_RANK: Record<string, number> = { low: 1, medium: 2, high: 3 };
