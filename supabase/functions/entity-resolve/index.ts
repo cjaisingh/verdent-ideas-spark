@@ -181,10 +181,12 @@ Deno.serve(
 
     // ----- /resolve ------------------------------------------------------
     if (path === "/resolve" || path === "/" || path === "") {
+      const t0 = Date.now();
       const parsed = ResolverRetrievalInputSchema.safeParse(body);
       if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
       const p = parsed.data;
       const topK = p.topK ?? 10;
+      const reqId = req.headers.get("idempotency-key") ?? req.headers.get("x-request-id");
 
       const normalisedDescs = p.descriptors.map((d) => ({
         ...d,
