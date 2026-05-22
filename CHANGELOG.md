@@ -4,9 +4,17 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-05-22 — observability detector C1)
+- **`v_observability_registry_status` cron freshness** now sourced from `cron.job_run_details` (via `public.observability_cron_last_seen()` SECURITY DEFINER) unioned with `automation_runs.job`, instead of `automation_runs.job` alone. Closes the long-standing noise where `scheduled-*` crons were always flagged stale because `automation_runs.job` carries the function name, not the cron schedule name. After deploy `sentinel-tick` auto-resolved 11 false `observability_stale_surface` findings; the 3 remaining (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`, `session-bootstrap`) are legitimate.
+- **Table-surface support** in the same view: `resolver_decisions` is hard-listed; unknown table surfaces resolve to `unknown` rather than `stale` (prevents future-noise for `adr_bench_results:*`, `v_resolver_health`, `entity_resolution_events_alias_revoke` — they need bespoke watchers).
+
+### Added (2026-05-22 — resolver analytics C2)
+- **`v_resolver_decisions`** — per-tenant per-day view over `resolver_decisions`: `total`, `auto_bind_rate`, `conflict_rate`, `no_match_rate`, `embedding_hint_rate`, `p50_latency_ms`, `p95_latency_ms`, `top_match_source`. Reads only; powers future band/latency dashboards without touching the audit log.
+
 ### Added (2026-05-22 — Phase 5 s5.1/s5.2 finishing)
 - **authoritative_id_systems** — global registry (7 seeds: bim_ifc_guid, rics_id, os_uprn, sap_floc, duns, stripe_customer, internal) with per-system `match_rules` jsonb. Admin-only write, operator read; closes s5.1 open question #2.
 - **resolver_decisions** — append-only audit log written by `entity-resolve /resolve` on every call (request_id, descriptors, winning_node_id, match_source, score, confidence_band, authoritative_hit, embedding_hint_used, latency_ms, actor). Operator read, service-role write, realtime + observability_registry entry. Closes s5.2 t5.
+
 
 
 

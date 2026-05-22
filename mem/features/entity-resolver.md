@@ -63,4 +63,6 @@ Phase 5 sprint s5.1 substrate — first cut of the entity resolver.
 ## Finishing (landed 2026-05-22)
 - **authoritative_id_systems** — global 7-seed registry (bim_ifc_guid, rics_id, os_uprn, sap_floc, duns, stripe_customer, internal) with per-system `match_rules`. Operator read, admin write. No per-tenant trust override (open question #2 closed: defer until a tenant actually refuses a system).
 - **resolver_decisions** — `entity-resolve /resolve` writes one row per call (request_id, descriptors, winning_node_id, match_source, score, confidence_band, authoritative_hit, embedding_hint_used, latency_ms, actor). Operator read, service-role write. Indexed on `(tenant_id, created_at desc)` + `(confidence_band, created_at desc)`. Registered in `observability_registry` (table_inserts watcher, 1440-min floor).
+- **v_resolver_decisions** — per-tenant per-day analytics view over `resolver_decisions`: total, auto_bind_rate, conflict_rate, no_match_rate, embedding_hint_rate, p50/p95 latency_ms, top match_source. Read-only.
+
 
