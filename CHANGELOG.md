@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-22)
+- **ISO 42001 gap-analysis stub** (`docs/iso42001-gap-analysis.md`) — AIMS view of current AI surfaces, clause 4–10 status, Annex A mapping, prioritised gap log. Sibling to `docs/iso27001-controls.md`.
+
 ### Added (2026-05-21 wave 7 — Phase 5 sprint s5.3, Milestone 3)
 - **Embedding-hint branch on `/resolve`.** `ResolverRetrievalInputSchema` gains optional `embeddingHint: { vector, model?, minSimilarity? }`. When present, after descriptor scans, the resolver calls `match_alias_embedding(tenant, query, min_sim, top_k)` — a tenant-scoped pgvector ANN over `tenant_node_alias_embeddings` (cosine, HNSW). Hint scores are **capped at 0.6** so embeddings never auto-bind on their own; they land in the conflict band by design. The branch is **skipped** when any authoritative descriptor already hit OR when `topK` is already full. `entity_resolution_events.propose.payload` now carries `embedding_hint_used` + `embedding_hint_candidates_added`.
 - **Sentinel `alias_revoke_burst`.** New check in `sentinel-tick`: >10 `alias_revoke`+`alias_hard_revoke` events for one tenant in 15min → `high`; ≥3 hard revokes in the same window → `critical`. Dedupe bucketed per 15-min window so an ongoing burst surfaces once. Registered in `observability_registry` (`table:entity_resolution_events_alias_revoke`).

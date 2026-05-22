@@ -2,6 +2,8 @@
 
 Tracks which AWIP automations and tables provide evidence for ISO/IEC 27001:2022 Annex A controls. Not a certification claim — internal mapping for audit prep.
 
+Sibling AIMS view: [`iso42001-gap-analysis.md`](./iso42001-gap-analysis.md) (ISO/IEC 42001 gap analysis against current AI surfaces).
+
 | Annex A control | AWIP coverage | Evidence |
 |---|---|---|
 | **A.5.1** Policies for information security | `mem://` rules + `docs/security.md` | repo |
