@@ -1911,7 +1911,9 @@ Deno.serve(withLogger("awip-api", async (req) => {
       const transcriptAnalyzeMatch = path.match(/^\/transcripts\/([0-9a-f-]+)\/analyze$/i);
 
       if (req.method === "GET" && path === "/capabilities") response = await listCapabilities(url);
-      else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor);
+      else if (req.method === "POST" && path === "/capabilities/register") response = await registerCapability(req, auth.actor, auth.owning_module);
+      else if (req.method === "POST" && path === "/modules/heartbeat") response = await moduleHeartbeat(req, auth.actor, auth.owning_module);
+
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
