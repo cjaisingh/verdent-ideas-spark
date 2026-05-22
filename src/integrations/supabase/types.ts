@@ -7713,6 +7713,21 @@ export type Database = {
         }
         Relationships: []
       }
+      v_resolver_decisions: {
+        Row: {
+          auto_bind_rate: number | null
+          conflict_rate: number | null
+          day: string | null
+          embedding_hint_rate: number | null
+          no_match_rate: number | null
+          p50_latency_ms: number | null
+          p95_latency_ms: number | null
+          tenant_id: string | null
+          top_match_source: string | null
+          total: number | null
+        }
+        Relationships: []
+      }
       v_resolver_health: {
         Row: {
           band: string | null
@@ -7919,6 +7934,13 @@ export type Database = {
         }[]
       }
       normalise_alias: { Args: { _v: string }; Returns: string }
+      observability_cron_last_seen: {
+        Args: never
+        Returns: {
+          jobname: string
+          last_seen_at: string
+        }[]
+      }
       purge_all_rows: { Args: { _table: string }; Returns: number }
       purge_console_captures: { Args: never; Returns: number }
       purge_expired_rows: {
