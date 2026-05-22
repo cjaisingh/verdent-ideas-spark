@@ -1,0 +1,1 @@
+grant execute on function public.table_surface_last_seen(text) to anon;
