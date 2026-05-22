@@ -6196,6 +6196,36 @@ export type Database = {
         }
         Relationships: []
       }
+      table_surface_probes: {
+        Row: {
+          created_at: string
+          filter_expr: string | null
+          freshness_column: string
+          notes: string | null
+          surface_id: string
+          table_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          filter_expr?: string | null
+          freshness_column?: string
+          notes?: string | null
+          surface_id: string
+          table_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          filter_expr?: string | null
+          freshness_column?: string
+          notes?: string | null
+          surface_id?: string
+          table_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       telegram_gateway_logs: {
         Row: {
           attempt: number
@@ -8025,6 +8055,10 @@ export type Database = {
           _workstream: string
         }
         Returns: Json
+      }
+      table_surface_last_seen: {
+        Args: { _surface_id: string }
+        Returns: string
       }
       tenant_node_alias_effective: {
         Args: { _alias_id: string }
