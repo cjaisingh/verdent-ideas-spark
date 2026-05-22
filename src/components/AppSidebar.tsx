@@ -93,6 +93,7 @@ const knowledgeItems: NavItem[] = [
   { url: "/ontology", title: "Ontology", icon: BookOpen },
   { url: "/governance", title: "Governance", icon: BookOpen },
   { url: "/entities", title: "Entities (resolver)", icon: BookOpen },
+  { url: "/entities/aliases", title: "Aliases (admin)", icon: BookOpen },
   { url: "/sovereignty", title: "Sovereignty FAQ", icon: ShieldCheck },
   { url: "/admin/lessons", title: "Lessons Loop (weekly)", icon: GraduationCap },
 ];
