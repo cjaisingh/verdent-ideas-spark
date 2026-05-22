@@ -1,67 +1,100 @@
 
-# Plan — ISO 42001 gap-analysis stub
+# Plan — Phase 5 s5.3 Milestone 4 (resolver close-out)
 
-Create one new doc, link it from the two places that govern compliance posture. No code, no schema, no marketing.
+## Goal
+Close Phase 5 sprint s5.3 by promoting the last `it.todo` (hard-revoke admin gating), executing the first real ADR-0004 acceptance bench and flipping the ADR from `proposed` → `accepted` with the matched branch, and shipping an operator-only `/entities/aliases` admin UI for revoke / merge / split that goes through existing `entity-resolve` endpoints.
 
-## Deliverable
+## Non-goals
+- Fact-side cascade mechanics (`canonical_facts.binding_status`, staged re-quarantine, KR grey-out) — Phase 6.
+- Telegram routing for `alias_revoke_burst` — owed chat-first checklist first, separate task.
+- Per-tenant descriptor-weight editing UI — Phase 6 onboarding.
+- `resolve_truth()` wiring for resolver `conflict_open` events — W7.2 task already open.
+- Bulk-conflict patterns (ADR-0005) — separate ADR bench, separate sprint.
 
-**`docs/iso42001-gap-analysis.md`** (~150 lines, under the 200-line doc cap).
+## Blast radius & Core rule / ADR / FM-AI cited
+- **Tables touched (read-only / no schema):** `tenant_node_aliases`, `tenant_nodes`, `entity_resolution_events`, `adr_bench_results`. **No new migration.**
+- **Edge fn:** `entity-resolve` — no behaviour change in M4; only e2e tests against existing endpoints (`/aliases/revoke`, `/aliases/merge`, `/aliases/split`).
+- **Surfaces:** new operator-only page `/entities/aliases`; sidebar entry under "Entities".
+- **CI:** `e2e/resolver.test.ts` last `it.todo` promoted; needs `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` secrets in GH Actions.
+- **Core rule defused:** `CONTEXT.md` rule #3 ("operator > AI on every entity, gated by `user_roles` + `has_role()`") — we're proving the admin-only path actually enforces 403 against operator-only JWTs.
+- **ADR:** `docs/adr/0004-alias-revocation-cascade.md` § Acceptance — locks in the in-table vs BRIN vs MV branch based on measured p95.
+- **FM-AI failure mode:** *unverified gating* (admin-only endpoints that nobody ever tested with a non-admin JWT, e.g. the entire pre-W7 surface). M4 closes the gap for the resolver's most destructive endpoint.
 
-Structure mirrors `docs/iso27001-controls.md` so the two can be read side-by-side:
+## Alternatives considered
 
-1. **Header & scope** — Internal gap analysis only. Not a certification claim. AIMS = AI Management System per ISO/IEC 42001:2023. Cross-links to `docs/sovereignty.md`, `docs/iso27001-controls.md`, `docs/security.md`.
-2. **Current AI surface inventory** — table of every AI-touching surface in Core today, with model policy, egress, logging table:
-   - Companion (`companion-cloud-chat`) — Lovable AI Gateway, `ai_usage_log`
-   - Copilot (`/copilot` + Deepgram STT)
-   - Gemini TTS (`gemini-tts`) — bypasses night-cheap policy
-   - Night Agent (`night-agent-*`) — forced to `gemini-2.5-flash-lite` 22:00–06:00 UTC via `pickModel()`
-   - Overnight phase runner, overnight recommender
-   - Morning review, lessons-loop, deep-audit (weekly/monthly)
-   - Sentinel tick (LLM-assisted checks)
-   - Code review (`scheduled-code-review`)
-   - QA validate, app walkthrough
-   - AWIP reviews pull (RAG fan-out)
-   - HeyGen video generation
-   - Telegram bot LLM routing
-   - Entity resolver embedding-hint (s5.3 M3)
-3. **Clause-by-clause gap table** — ISO/IEC 42001 clauses 4–10 mapped to current AWIP evidence and gap status (`covered` / `partial` / `gap`):
-   - Cl.4 Context — partial (`docs/why-awip.md`, no formal AI scope statement)
-   - Cl.5 Leadership & AI policy — gap (no signed AI policy doc)
-   - Cl.6 Planning (AI risk + impact assessment) — gap (no AIIA template)
-   - Cl.7 Support (resources, competence, awareness) — partial (`docs/development.md`)
-   - Cl.8 Operation (AI system lifecycle, third-party) — partial (`pickModel()`, `tool_policy_rules`, sub-processor list)
-   - Cl.9 Performance evaluation (monitoring, internal audit) — partial (`ai_usage_log`, sentinel, deep-audit, budget-alerts)
-   - Cl.10 Improvement (nonconformity, corrective action) — partial (`lessons` table, post-mortems)
-4. **Annex A control mapping** — selected controls relevant to AWIP today:
-   - A.2 AI policy · A.3 Internal org / roles · A.4 Resources (data, tooling, system) · A.5 Impact assessment · A.6 AI system lifecycle · A.7 Data for AI systems · A.8 Information for interested parties · A.9 Use of AI systems · A.10 Third-party relationships
-   - Each row: AWIP coverage + evidence path + gap flag.
-5. **Gap log (prioritised)** — explicit list of what's missing to make a defensible AIMS claim. Top items:
-   - No written AI policy
-   - No AI Impact Assessment (AIIA) template or per-surface AIIA
-   - No documented human-oversight matrix per surface (operator-in-the-loop vs autonomous)
-   - No third-party AI provider DPA/AIA review (Gemini, OpenAI, Deepgram, HeyGen)
-   - No data-quality / training-data statement (we don't train, but must say so)
-   - No incident classification specific to AI (`sentinel_findings` is generic)
-   - No periodic AI-system review cadence beyond `deep-audit`
-6. **Out of scope** — certification, AIIA implementation, AI policy drafting, in-region AI workstream (deferred — see `docs/sovereignty.md` Tier 3), customer-facing AI claims.
-7. **How to keep this honest** — same rules as `docs/sovereignty.md`: any new AI surface must update the §2 inventory in the same change.
+1. **(Chosen) Three-user e2e fixture (anon / operator-only / operator+admin) + bench-then-ADR-flip + minimal admin UI.** One sprint, exercises real JWT→`has_role()` path, gives the ADR its decision data and unblocks Phase 6 fact-cascade with an actual operator surface to revoke from.
+2. **Service-token shortcut for the success path** — use `x-awip-service-token` for the 200 branch, `operatorOnlyClient` for the 403 branch. Cheaper (no third user) but doesn't exercise the operator-JWT → `user_roles.admin` lookup at all, which is precisely the bug surface we're trying to cover. **Rejected.**
+3. **Defer admin UI to Phase 6** — only ship the e2e + bench. Leaves the operator unable to revoke without `curl`, which means hard-revoke stays untested in anger and the ADR's `compliance_revocation_count_30d` trigger never fires. **Rejected** — pay the UI cost now (it's small: a table + 3 dialogs over existing endpoints).
+4. **Materialised-view flip pre-emptively** instead of measuring. Premature; ADR explicitly demands measured trigger. **Rejected.**
 
-## Wiring
+## Contract (existing endpoints, no new agent loop)
+No new edge function. M4 reuses:
+- `POST /aliases/revoke { aliasId, hardRevoke?: boolean, reason: string }` → 403 `admin_required` when `hardRevoke && !isAdmin`; 400 `hard_revoke_reason_too_short` when `reason.length < 8`; emits `alias_revoke` or `alias_hard_revoke` event.
+- `POST /aliases/merge`, `POST /aliases/split` — already operator-gated, surfaced in UI as-is.
 
-- **`docs/iso27001-controls.md`** — add one line under header linking to the new 42001 doc as a sibling AIMS view.
-- **`mem/index.md`** — add one-line entry under `## Memories` pointing to the new doc (reference, not memory file — no separate `mem/` entry needed; doc cap and one-line index entry is enough per `mem/preferences/doc-hygiene.md`).
-- **`CHANGELOG.md`** — single line: `Added ISO 42001 gap-analysis stub (docs/iso42001-gap-analysis.md).`
+Contract file `supabase/functions/_shared/contracts/retrieval-resolver.ts` already covers all three. No new contract needed.
 
-## Out of scope for this plan
+## Persona sign-off (`docs/agents/team/`)
+- **`compliance-auditor`** — "is there a `qa_check_events` / `entity_resolution_events` row for every state flip in this code path?" → yes, `entity-resolve` already emits `alias_revoke` / `alias_hard_revoke` events; UI uses the same endpoints, no new write path.
+- **`event-engineer`** — "does every UI action go through the edge fn (not a direct table write)?" → yes, the admin page calls `supabase.functions.invoke('entity-resolve', ...)` only; no direct `from('tenant_node_aliases').update()`.
+- **`tenant-manager`** — "can an operator from tenant A revoke an alias of tenant B from the UI?" → no; resolver already enforces tenant scoping on `aliasId` lookup; e2e adds `cross_tenant_revoke_returns_422` test.
+- **`sentinel`** — "will the bench run produce a row in `adr_bench_results` so future drift is detectable?" → yes, `_shared.ts → uploadBenchResult()` already wired.
+- **`control-plane-operator`** — "no routing logic in Core" → admin UI is a thin form; no scheduling, no fan-out.
 
-- Drafting the AI policy itself (Cl.5 gap).
-- Building an AIIA template or running one per surface.
-- Any code, migration, edge function, RLS change.
-- Updating `mem/preferences/sovereignty-posture.md` — sovereignty tier unchanged.
-- Marketing or `/trust` page changes.
+## Gap checklist
+- [x] Idempotency — revoke/merge/split already idempotent via aliasId + `revoked_at IS NOT NULL` short-circuit.
+- [x] `*_events` emission — covered by existing handler.
+- [x] RLS + `has_role()` — endpoint enforces `isAdmin = has_role(user_id, 'admin')`; e2e proves it.
+- [x] Realtime — `entity_resolution_events` already in `supabase_realtime` publication; UI subscribes for the activity feed.
+- [x] `observability_registry` — `alias_revoke_burst` already registered (M3).
+- [x] `withLogger` — `entity-resolve` already wrapped.
+- [ ] No new `any` — UI types from `supabase/types.ts` only; lint ratchet must not regress.
+- [x] Mem rule — update `mem/features/entity-resolver.md` (add M4 line: admin-UI + bench result + ADR status).
+- [x] CHANGELOG — one entry per the three deliverables.
+- [x] Doc updates — `docs/adr/0004-alias-revocation-cascade.md` status flip + chosen-branch row; `docs/iso42001-gap-analysis.md` §1 row for resolver gains an `oversight: operator-approve` note (deferred to AIMS lane if scope tight — see Out of scope).
 
-## Validation
+## Test plan
 
-- `wc -l docs/iso42001-gap-analysis.md` ≤ 200.
-- New doc renders; cross-links resolve.
-- No CI gates touched (pure doc add).
+| Behaviour | Test | Pass criterion |
+|---|---|---|
+| Admin JWT can hard-revoke | `e2e/resolver.test.ts > alias_hard_revoke_requires_admin_role` (promoted from `it.todo`) | adminClient → 200 + event row with `kind='alias_hard_revoke'`; operatorOnlyClient → 403 `admin_required` |
+| Reason length enforced | same test, second case | `reason.length=4` → 400 `hard_revoke_reason_too_short` |
+| Cross-tenant block | new `e2e/resolver.test.ts > cross_tenant_revoke_returns_422` | operator from tenant A trying to revoke tenant B's alias → 422 |
+| Soft revoke idempotent | new `e2e/resolver.test.ts > soft_revoke_idempotent` | second call returns 200 with `already_revoked: true`, no second event row |
+| Bench writes row | bench script smoke-check in `scripts/adr-bench/adr-0004-revocation.ts` | last row in `adr_bench_results` for `adr_key='ADR-0004'` matches the in-process measurement; `tripped_triggers` non-null |
+| Admin UI gates on role | `e2e-playwright/entities-aliases.spec.ts` (new) | operator-only login → /entities/aliases shows "Admin required" banner, revoke button disabled |
+
+`tdd` discipline: write the four new `e2e/resolver.test.ts` cases (currently `it.todo` or absent) before touching `entity-resolve`. UI Playwright test before the page. ADR-0004 bench script already exists — only adds a `--write-decision` flag that updates the ADR markdown's status line.
+
+## Validation gates
+
+Run after each milestone slice; **all** must be green before "ready":
+
+```
+bun run lint:ratchet                       # no new no-explicit-any sites
+bun run typecheck                          # tsc --noEmit
+bun run logger:coverage                    # withLogger wrap check
+bunx vitest run e2e/resolver.test.ts       # 4 new cases pass
+bunx vitest run e2e/security-definer-gating.test.ts  # ensure has_role path unbroken
+bun run adr-bench:0004                     # writes adr_bench_results row + JSON in bench-results/
+bunx playwright test e2e-playwright/entities-aliases.spec.ts
+bun run docs:check-drift                   # ADR status flip reflected
+```
+
+Manual ops gate:
+- ADR-0004 file: `Status: accepted` and the chosen-branch row in §Acceptance has a `✓ matched` annotation.
+- Latest `adr_bench_results` row for `ADR-0004` visible on `/admin/adr-bench`.
+- `/entities/aliases` accessible to operator+admin in preview; revoke / hard-revoke / merge / split round-trip OK and creates events visible on `/admin/entity-resolution`.
+
+`diagnose` skill if the bench p95 sits in the `15–40ms` band: do not flip to MV — add the BRIN index in the same migration and re-bench before deciding.
+
+## Out of scope (footer — feeds `plan-footer-ingest`)
+
+- Telegram routing for `alias_revoke_burst` — owed chat-first checklist; separate task.
+- Fact-side cascade (`canonical_facts.binding_status`, staged re-quarantine, KR grey-out) — Phase 6.
+- `resolve_truth()` wiring for resolver `conflict_open` events — W7.2 task already open.
+- Per-tenant descriptor-weight editing UI — Phase 6 onboarding.
+- Bulk-conflict pattern detection (ADR-0005) — separate sprint.
+- AIMS oversight-matrix column on `docs/iso42001-gap-analysis.md` §1 — AIMS lane (gap #2 from yesterday's stub), not resolver work.
+- ADR-0003 ancestry flip — gated on real ≥5k-node tenant tree, not on this sprint.
+- E2E admin-fixture provisioning automation — for now operator manually creates `E2E_ADMIN_*` GH secret; bootstrap-admin script deferred.
