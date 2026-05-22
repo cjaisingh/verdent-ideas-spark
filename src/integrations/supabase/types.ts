@@ -7845,6 +7845,10 @@ export type Database = {
         Args: { _entity: string; _entity_id: string; _field?: string }
         Returns: Json
       }
+      resolve_truth_service: {
+        Args: { _entity: string; _entity_id: string; _field?: string }
+        Returns: Json
+      }
       retention_stats: {
         Args: never
         Returns: {
