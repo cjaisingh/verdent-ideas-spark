@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+- Phase 5 opened (`roadmap_phases.status = active`).
+- `docs/phase-5-open-questions.md` — 10 questions blocking `s5.1/t1`; mirrored as comments on the `phase-5/s5.1/open-questions` task and visible on `/roadmap`.
+
 ### Added (2026-05-23 — `session-summary-log` `tasks_done[]` → `roadmap_work_log` fan-out)
 - **`session-summary-log` now accepts `tasks_done[]`** — either bare task_id strings or `{ task_id, summary?, issues?, fixes?, tokens_in?, tokens_out?, tokens_total?, duration_ms?, model?, model_provider? }` objects. Each entry upserts an idempotent `roadmap_work_log` row (`source='session_summary'`, `author=body.agent`) keyed on the new unique index `roadmap_work_log_session_task_uniq (session_id, task_id)`. Response carries `work_log: { attempted, inserted, skipped, errors }`. Re-POSTing the same session is a safe no-op (smoke-test: 2nd call → `inserted=0, skipped=1`). Restores per-task AI attribution that had silently gone to zero (1 row ever in `roadmap_work_log`, 0 in the last 7d) — unblocks the Credits/Usage proxy line, `scheduled-code-review`, `daily-plan`, and stabilises the Phase 2 `work_log_recent` QA probe.
 - **`roadmap_work_log.session_id uuid`** column + `idx_roadmap_work_log_session` partial index for fast per-session lookup. NULL `session_id` is treated as distinct in btree, so existing/manual rows are unaffected.
