@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-05-23 — Phase 2 QA `work_log_recent` probe)
+- **`qa-validate` `work_log_recent` probe** now ORs `roadmap_work_log` with `session_summaries` instead of counting `roadmap_work_log` alone. After the session-lifecycle contract landed, every AI session writes a summary via `session-summary-log` and per-task `roadmap_work_log` inserts dropped to zero, so the probe was failing on a healthy system (Phase 2 gate stuck amber with `qa_failed=1` despite `phase_status=done`). Probe note now reads `N session trail entries in the last 7 days (work_log=X, session_summaries=Y)`. Phase 2 gate flipped to `all_ok=true` on the next run.
+
+
 ### Added (2026-05-23 — design system §12 brand layer, opt-in)
 - **`docs/design-system.md` §12**: documents the AWIP brand v2 spec as an opt-in layer on top of the canonical §§1–11. Includes tint rename → alias table (current seven retained as canonical; v2 names are aliases only, no migration), two type scales (operator canonical / marketing opt-in), two button-height tokens (`button-dense` canonical / `button-touch` for mobile + marketing), and an HSL reference map.
 - **`--brand-primary` (Operational Blue `#2D7FF9`)** and **`--tint-insight` (Gold `#F5B942`)** added to `src/index.css` (light + dark) and `tailwind.config.ts` as `brand-primary` / `tint-insight` classes. Additive only — no existing token, component, or screenshot changes. Current design remains the default.
