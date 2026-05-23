@@ -6,8 +6,17 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ### Added
 - Phase 5 opened (`roadmap_phases.status = active`).
-- `docs/phase-5-open-questions.md` — 10 open questions **locked** as decisions (mirrored on `phase-5/s5.1/open-questions`, task marked `done`). Drivers: tenant_node = recursive single table with `kind` enum; DAG graph (tree + memberships) with ancestry storage TBD via ADR-0003; UUID-canonical identity with external ids as aliases; day-one aliases = email_domain/display_name/lei/ch_number/free_text; deterministic-only scoring v1; both isolation invariants (`tenant_node_id` + service-token tenant pinning); async conflict resolution via `entity_resolution_conflicts`; soft-flag revocation default (ADR-0004 hybrid); operator-only merge/split with `risk=critical`; retrieval-shape declaration punted to new task `s6.1/t0`.
-- `roadmap_tasks` row `phase-6/s6.1/t0 — Retrieval-shape declaration` (`research`, `order=0`).
+- `docs/phase-5-open-questions.md` — 10 open questions **locked** as decisions (see prior entry). Driver answers mirrored on `phase-5/s5.1/open-questions`.
+- New task `phase-6/s6.1/t0 — Retrieval-shape declaration` (`research`, `order=0`).
+- 3 `decision_authorities` seeds: `tenant_node.identity`, `tenant_node.merge`, `tenant_node.split` — all operator-exclusive.
+- `observability_registry` entry for `tenant_node_events` (stale_surface watcher, 7d cadence).
+- `docs/ontology.md` — new entity **#12 Tenant node** documenting the existing Phase 5 schema.
+
+### Audit (2026-05-23, t1 reconciliation)
+- **Discovery: Phase 5 schema was silently pre-built.** During `s5.1/t1` implementation, found that `tenant_nodes`, `tenant_node_aliases`, `tenant_node_alias_embeddings`, `tenant_node_events`, `tenant_node_memberships`, `tenants`, `entity_resolution_conflicts` all already exist in the database with richer shape than the planned strawman. ADR-0003 (ancestry storage = `ancestry_ids uuid[]` via `tg_tenant_nodes_set_ancestry`) and ADR-0004 (alias revocation = hybrid with `hard_revoked` + `revoke_reason`) are both already live in code.
+- **Roadmap reconciliation:** marked `done` on `s5.1/t1`, `s5.1/t2`, `s5.1/t4`, `s5.1/t6`, `s5.2/t3`, `s5.3/t2`. Each carries an `AUDIT 2026-05-23` decision comment.
+- **Still genuinely missing:** `s5.1/t3 resolve_entity()` function (verified absent in `pg_proc`), `s5.1/t5` cross-tenant isolation test suite, the s5.2 scorer (`t1`/`t2`/`t5`), s5.2/t4 universal RLS predicate helper, and the s5.3 alias-approval/bulk-resolve/merge-split UX.
+- **Root cause:** mirrors the `roadmap_work_log` gap flagged earlier in this session — schema landed via migrations without corresponding `roadmap_tasks.status` updates. The `session-summary-log` `tasks_done[]` fan-out shipped today should prevent the next batch from drifting the same way.
 
 ### Added (2026-05-23 — `session-summary-log` `tasks_done[]` → `roadmap_work_log` fan-out)
 - **`session-summary-log` now accepts `tasks_done[]`** — either bare task_id strings or `{ task_id, summary?, issues?, fixes?, tokens_in?, tokens_out?, tokens_total?, duration_ms?, model?, model_provider? }` objects. Each entry upserts an idempotent `roadmap_work_log` row (`source='session_summary'`, `author=body.agent`) keyed on the new unique index `roadmap_work_log_session_task_uniq (session_id, task_id)`. Response carries `work_log: { attempted, inserted, skipped, errors }`. Re-POSTing the same session is a safe no-op (smoke-test: 2nd call → `inserted=0, skipped=1`). Restores per-task AI attribution that had silently gone to zero (1 row ever in `roadmap_work_log`, 0 in the last 7d) — unblocks the Credits/Usage proxy line, `scheduled-code-review`, `daily-plan`, and stabilises the Phase 2 `work_log_recent` QA probe.
