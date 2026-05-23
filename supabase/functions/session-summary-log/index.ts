@@ -21,6 +21,21 @@ const json = (b: unknown, s = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
+type WorkLogTask =
+  | string
+  | {
+      task_id: string;
+      summary?: string;
+      issues?: string;
+      fixes?: string;
+      tokens_in?: number;
+      tokens_out?: number;
+      tokens_total?: number;
+      duration_ms?: number;
+      model?: string;
+      model_provider?: string;
+    };
+
 type Body = {
   session_id: string;
   agent?: string;
@@ -40,7 +55,14 @@ type Body = {
   unresolved?: unknown;
   bootstrap_acknowledged?: boolean;
   out_of_scope?: string[];
+  /**
+   * Per-task work-log fan-out. Each entry creates an idempotent
+   * `roadmap_work_log` row keyed on (session_id, task_id).
+   * Accepts plain task_id strings for the simple case.
+   */
+  tasks_done?: WorkLogTask[];
 };
+
 
 Deno.serve(withLogger("session-summary-log", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
