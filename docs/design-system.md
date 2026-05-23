@@ -256,3 +256,76 @@ Three concrete deltas vs current pages:
 3. The table is bare, not wrapped in a `<Card>` it doesn't need.
 
 Use this shape when refactoring Roadmap, Admin, and Control Plane next.
+
+---
+
+## 12. AWIP brand layer (v2 spec — opt-in)
+
+The brand doc (`AWIP_Implementation_Design_System_v2.docx`) is **principles +
+brand reference**, not a replacement for §§1–11. The current operator design is
+the **default**; nothing below changes existing tokens, classes, or screenshots.
+Apply v2 piece by piece, behind explicit opt-in.
+
+### 12.1 Brand identity
+
+| Role | Value | Token (opt-in) | Where |
+|---|---|---|---|
+| Background (dark surfaces) | `#071426` Deep Midnight | (existing `--background` in `.dark`) | Operator chrome |
+| Primary action | `#2D7FF9` Operational Blue | `--brand-primary` | Marketing CTAs, future operator primary |
+| Insight accent | `#F5B942` Gold | `--tint-insight` | Intelligence highlights, sparingly |
+| Body type | IBM Plex Sans | n/a yet | Marketing first, operator later |
+
+Gold is **never** a primary action. Blue is the CTA; gold marks insight.
+
+### 12.2 Tint rename — alias only, no migration
+
+v2 proposes renamed tints. We **keep the current seven canonical** and add
+aliases. Both names resolve to the same HSL until/unless a deliberate rename
+PR lands.
+
+| v2 name | Maps to (canonical) | Notes |
+|---|---|---|
+| `tint-alert` | `tint-risk` | rename only |
+| `tint-review` | `tint-approval` | rename only |
+| `tint-action` | `tint-capability` | semantic shift; review before adopting |
+| `tint-focus` | `tint-discussion` | semantic shift; review before adopting |
+| `tint-insight` | **new** (`#F5B942`) | no existing token; added as opt-in |
+| `tint-event` | `tint-event` | retained as-is |
+| `tint-night` | `tint-night` | retained as-is |
+| `tint-okr` | `tint-okr` | **retained** — v2 dropped it; we keep it (load-bearing) |
+
+No file should rename `tint-approval → tint-review` etc. without a dedicated
+migration PR + visual-regression sweep. New code may use `tint-insight` freely.
+
+### 12.3 Two type scales
+
+| Scale | Where | H1 | Body | Status |
+|---|---|---|---|---|
+| **operator** (canonical) | `/jobs`, `/morning-review`, `/admin/*`, all consoles | `text-xl font-semibold` | `text-sm` | Default — do not change |
+| **marketing** (v2) | `/`, `/auth`, future landing, printable reports | `text-4xl/5xl` IBM Plex Sans | `text-base` | Opt-in per route |
+
+Never apply the marketing scale to an operator page — information density breaks.
+
+### 12.4 Button heights
+
+| Token | Height | Where |
+|---|---|---|
+| `button-dense` (canonical) | `h-7` / `h-8` | Operator toolbars, tables — current default |
+| `button-touch` (v2) | 44px | Mobile companion, marketing CTAs only |
+
+### 12.5 HSL token map (reference)
+
+Hex from the v2 doc, converted to HSL for `index.css`. Only `--brand-primary`
+and `--tint-insight` are added in this PR — the rest are reference values for a
+future migration, not applied.
+
+```
+--background (dark)   222 70% 9%    /* #071426  — matches existing tone */
+--brand-primary       216 94% 58%   /* #2D7FF9  — added, opt-in */
+--tint-insight        40  90% 61%   /* #F5B942  — added, opt-in */
+--tint-capability v2  158 70% 50%   /* #31C48D  — reference only */
+--tint-approval v2    38  92% 50%   /* #F59E0B  — reference only */
+--tint-risk v2        0   85% 60%   /* #EF4444  — reference only */
+--tint-discussion v2  216 94% 58%   /* #2D7FF9  — reference only */
+```
+

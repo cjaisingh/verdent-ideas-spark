@@ -86,6 +86,16 @@ export default {
             DEFAULT: "hsl(var(--tint-okr))",
             foreground: "hsl(var(--tint-okr-foreground))",
           },
+          insight: {
+            DEFAULT: "hsl(var(--tint-insight))",
+            foreground: "hsl(var(--tint-insight-foreground))",
+          },
+        },
+        brand: {
+          primary: {
+            DEFAULT: "hsl(var(--brand-primary))",
+            foreground: "hsl(var(--brand-primary-foreground))",
+          },
         },
       },
       borderRadius: {
