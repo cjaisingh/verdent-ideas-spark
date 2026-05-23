@@ -26,6 +26,8 @@ Before claiming done:
    - `files_touched`, `migrations_applied`, `edge_fns_touched`
    - `out_of_scope: string[]` — anything deferred during the session
    - `decisions`, `followups`, `unresolved`
+   - **`tasks_done`** (optional) — `Array<string | { task_id, summary?, issues?, fixes?, tokens_in?, tokens_out?, tokens_total?, duration_ms?, model?, model_provider? }>`. Each entry fans out to an idempotent `roadmap_work_log` row keyed on `(session_id, task_id)` with `source='session_summary'`. Powers Credits/Usage proxy, `scheduled-code-review`, `daily-plan`, and the `work_log_recent` QA probe. Re-POSTing the same session is a safe no-op (response shows `inserted` vs `skipped`).
+
 4. Update `CHANGELOG.md` if a durable rule, schema, or surface changed.
 5. Update `mem/index.md` if a new rule needs to ride along on every future session.
 
