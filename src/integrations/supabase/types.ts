@@ -5874,6 +5874,7 @@ export type Database = {
           request_meta: Json
           response_meta: Json
           response_preview: string | null
+          session_id: string | null
           source: string
           started_at: string
           summary: string | null
@@ -5896,6 +5897,7 @@ export type Database = {
           request_meta?: Json
           response_meta?: Json
           response_preview?: string | null
+          session_id?: string | null
           source?: string
           started_at: string
           summary?: string | null
@@ -5918,6 +5920,7 @@ export type Database = {
           request_meta?: Json
           response_meta?: Json
           response_preview?: string | null
+          session_id?: string | null
           source?: string
           started_at?: string
           summary?: string | null

@@ -4,8 +4,17 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-23 — `session-summary-log` `tasks_done[]` → `roadmap_work_log` fan-out)
+- **`session-summary-log` now accepts `tasks_done[]`** — either bare task_id strings or `{ task_id, summary?, issues?, fixes?, tokens_in?, tokens_out?, tokens_total?, duration_ms?, model?, model_provider? }` objects. Each entry upserts an idempotent `roadmap_work_log` row (`source='session_summary'`, `author=body.agent`) keyed on the new unique index `roadmap_work_log_session_task_uniq (session_id, task_id)`. Response carries `work_log: { attempted, inserted, skipped, errors }`. Re-POSTing the same session is a safe no-op (smoke-test: 2nd call → `inserted=0, skipped=1`). Restores per-task AI attribution that had silently gone to zero (1 row ever in `roadmap_work_log`, 0 in the last 7d) — unblocks the Credits/Usage proxy line, `scheduled-code-review`, `daily-plan`, and stabilises the Phase 2 `work_log_recent` QA probe.
+- **`roadmap_work_log.session_id uuid`** column + `idx_roadmap_work_log_session` partial index for fast per-session lookup. NULL `session_id` is treated as distinct in btree, so existing/manual rows are unaffected.
+- Docs: `docs/session-lifecycle.md` § Session end updated with the new `tasks_done` contract. New memory: `mem://features/work-log-fanout`.
+
 ### Fixed (2026-05-23 — Phase 2 QA `work_log_recent` probe)
 - **`qa-validate` `work_log_recent` probe** now ORs `roadmap_work_log` with `session_summaries` instead of counting `roadmap_work_log` alone. After the session-lifecycle contract landed, every AI session writes a summary via `session-summary-log` and per-task `roadmap_work_log` inserts dropped to zero, so the probe was failing on a healthy system (Phase 2 gate stuck amber with `qa_failed=1` despite `phase_status=done`). Probe note now reads `N session trail entries in the last 7 days (work_log=X, session_summaries=Y)`. Phase 2 gate flipped to `all_ok=true` on the next run.
+
+### Added (2026-05-23 — design system §12 brand layer, opt-in)
+- **`docs/design-system.md` §12**: documents the AWIP brand v2 spec as an opt-in layer on top of the canonical §§1–11. Includes tint rename → alias table (current seven retained as canonical; v2 names are aliases only, no migration), two type scales (operator canonical / marketing opt-in), two button-height tokens (`button-dense` canonical / `button-touch` for mobile + marketing), and an HSL reference map.
+
 
 
 ### Added (2026-05-23 — design system §12 brand layer, opt-in)

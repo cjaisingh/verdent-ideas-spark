@@ -82,3 +82,5 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 - [AI model policy](mem://features/ai-policy) — single chokepoint `pickModel()`: night-window flash-lite coercion + TTS bypass + contract-first new loops + budget-alert demotion
 
 - [Module contracts](mem://features/module-contracts) — per-module hashed tokens, `module_heartbeats`, idempotent `/capabilities/register`, granular `status_changed`/`version_bumped`/`deprecated`/`owning_module_changed` events, `/modules/heartbeat`, `module_silent_24h` sentinel
+- [Work-log fan-out](mem://features/work-log-fanout) — session-summary-log accepts `tasks_done[]` → idempotent roadmap_work_log rows on (session_id, task_id); restores per-task AI attribution for Credits/Usage + scheduled-code-review + daily-plan + work_log_recent QA probe
+
