@@ -4,6 +4,14 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-23 — module contract smoke + /admin/modules)
+- **`/admin/modules`** operator surface: live list of every distinct `owning_module` from `capabilities`, with capability count, last heartbeat, age, and a freshness chip (`fresh` <24h / `stale` <72h / `silent` ≥72h / `no heartbeat`). Mirror of the `module_silent_24h` sentinel check.
+- **Observability registry:** registered `edge_fn/awip-api` (12h cadence, contract surface incl. `/modules/heartbeat`) and `table/module_heartbeats` (24h cadence, watched by `module_silent_24h`). Both `declared_in: mem://features/module-contracts`.
+- **Triage:** marked the 3 phase-5 table surfaces (`v_resolver_health`, `adr_bench_results:adr-0003`, `entity_resolution_events_alias_revoke`) and the 2 long-cadence crons (`scheduled-deep-audit-monthly`, `scheduled-quarterly-review-open`) as `expected_silent=true` until first activation; removed their `table_surface_probes` rows so the freshness view honours the silence. Resolved 5 stale `observability_stale_surface` findings.
+- **Verified end-to-end** (Tasks 1-4): `/capabilities/register` idempotency (replay, 409 on body-hash mismatch, 403 on cross-module token), granular events (`registered`, `status_changed`, `version_bumped`, `deprecated`), `/modules/heartbeat` writes + `module_silent_24h` fires per-module after redeploy.
+
+
+
 ### Added (2026-05-22 — ready-for-domains: contract hardening)
 - **`module_service_tokens`** (hashed sha256, per-`owning_module` scope) + **`module_heartbeats`** table. `awip-api.authorize()` now resolves per-module tokens via `resolve_module_token()` and returns `owning_module` scope alongside the actor.
 - **`POST /capabilities/register`** rewritten: typed contract (`_shared/contracts/module-register.ts`), mandatory `Idempotency-Key` (header or body), scope-check (token's `owning_module` must match payload), and emits granular events on diff — `status_changed`, `version_bumped`, `owning_module_changed`, `deprecated` — alongside `registered` on first sight.

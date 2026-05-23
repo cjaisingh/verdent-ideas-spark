@@ -54,9 +54,30 @@ await fetch(`${AWIP_CORE_URL}/functions/v1/awip-api/capabilities/register`, {
 
 Required secrets in the module project:
 - `AWIP_CORE_URL` — `https://<core-project-ref>.supabase.co`
-- `AWIP_SERVICE_TOKEN` — same value as in Core
+- `AWIP_SERVICE_TOKEN` — **per-module** hashed token from `module_service_tokens` (scope must equal `owning_module`). The legacy global `AWIP_SERVICE_TOKEN` still works for Discovery AI + cron but new modules MUST use a scoped token, otherwise `/capabilities/register` returns **403** when `payload.owning_module` ≠ token scope. See `mem://features/module-contracts`.
 
-### 4. Verify the event landed
+### 4. Send a heartbeat at least every 24h
+
+Every module that owns capabilities is expected to call `POST /modules/heartbeat` at least once per 24h, otherwise the `module_silent_24h` sentinel finding opens (medium, one per `owning_module`). Surface: `/admin/modules`.
+
+```ts
+await fetch(`${AWIP_CORE_URL}/functions/v1/awip-api/modules/heartbeat`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "x-awip-service-token": Deno.env.get("AWIP_SERVICE_TOKEN")!,
+  },
+  body: JSON.stringify({
+    owning_module: "occupancy_module",
+    version: "0.1.0",
+    capability_ids: ["desk_utilisation_measurement"],
+  }),
+});
+```
+
+
+
+### 5. Verify the event landed
 
 After registration, confirm a `capability_events` row exists for this capability with the expected `event_type` (`registered`, `status_changed`, `version_bumped`, …). The Control Plane's live feed should show it within a second.
 
@@ -66,7 +87,7 @@ where capability_id = 'desk_utilisation_measurement'
 order by created_at desc limit 5;
 ```
 
-### 5. Update the manifest doc
+### 6. Update the manifest doc
 
 Edit `docs/modules.md` — add the capability to the owning module's table with its current status. Bump `CHANGELOG.md` if the change is operator-visible.
 
