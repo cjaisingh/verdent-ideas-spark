@@ -77,7 +77,7 @@ await fetch(`${AWIP_CORE_URL}/functions/v1/awip-api/modules/heartbeat`, {
 
 
 
-### 4. Verify the event landed
+### 5. Verify the event landed
 
 After registration, confirm a `capability_events` row exists for this capability with the expected `event_type` (`registered`, `status_changed`, `version_bumped`, …). The Control Plane's live feed should show it within a second.
 
@@ -87,7 +87,7 @@ where capability_id = 'desk_utilisation_measurement'
 order by created_at desc limit 5;
 ```
 
-### 5. Update the manifest doc
+### 6. Update the manifest doc
 
 Edit `docs/modules.md` — add the capability to the owning module's table with its current status. Bump `CHANGELOG.md` if the change is operator-visible.
 
