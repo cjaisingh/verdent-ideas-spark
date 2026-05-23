@@ -132,6 +132,12 @@ All colors MUST be HSL.
     --tint-risk-foreground: 0 50% 12%;
     --tint-okr: 199 89% 65%;
     --tint-okr-foreground: 199 50% 10%;
+
+    /* Brand layer (v2, opt-in) — dark-mode variants. */
+    --brand-primary: 216 94% 65%;
+    --brand-primary-foreground: 216 50% 10%;
+    --tint-insight: 40 95% 65%;
+    --tint-insight-foreground: 40 60% 10%;
   }
 }
 
