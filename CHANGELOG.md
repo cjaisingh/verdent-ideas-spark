@@ -4,6 +4,12 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-23 — design system §12 brand layer, opt-in)
+- **`docs/design-system.md` §12**: documents the AWIP brand v2 spec as an opt-in layer on top of the canonical §§1–11. Includes tint rename → alias table (current seven retained as canonical; v2 names are aliases only, no migration), two type scales (operator canonical / marketing opt-in), two button-height tokens (`button-dense` canonical / `button-touch` for mobile + marketing), and an HSL reference map.
+- **`--brand-primary` (Operational Blue `#2D7FF9`)** and **`--tint-insight` (Gold `#F5B942`)** added to `src/index.css` (light + dark) and `tailwind.config.ts` as `brand-primary` / `tint-insight` classes. Additive only — no existing token, component, or screenshot changes. Current design remains the default.
+
+
+
 ### Added (2026-05-23 — module contract smoke + /admin/modules)
 - **`/admin/modules`** operator surface: live list of every distinct `owning_module` from `capabilities`, with capability count, last heartbeat, age, and a freshness chip (`fresh` <24h / `stale` <72h / `silent` ≥72h / `no heartbeat`). Mirror of the `module_silent_24h` sentinel check.
 - **Observability registry:** registered `edge_fn/awip-api` (12h cadence, contract surface incl. `/modules/heartbeat`) and `table/module_heartbeats` (24h cadence, watched by `module_silent_24h`). Both `declared_in: mem://features/module-contracts`.
