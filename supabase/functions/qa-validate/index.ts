@@ -19,11 +19,24 @@ const PROBES: Record<string, Probe> = {
     const { count } = await sb.from("api_call_logs").select("id", { count: "exact", head: true }).gte("created_at", since);
     return { status: (count ?? 0) > 0 ? "pass" : "unknown", note: `${count ?? 0} API call logs in the last 7 days` };
   },
-  // Phase 2: AI sessions leave a trail
+  // Phase 2: AI sessions leave a trail.
+  // Passes if EITHER roadmap_work_log (per-task turn log) OR session_summaries
+  // (end-of-session recap from session-summary-log) has activity in the last 7d.
+  // session_summaries became the de-facto session trail after the session-lifecycle
+  // contract landed; keeping roadmap_work_log in the OR so per-task logging still counts.
   "work_log_recent": async (sb) => {
     const since = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-    const { count } = await sb.from("roadmap_work_log").select("id", { count: "exact", head: true }).gte("created_at", since);
-    return { status: (count ?? 0) > 0 ? "pass" : "fail", note: `${count ?? 0} work-log entries in the last 7 days` };
+    const [wl, ss] = await Promise.all([
+      sb.from("roadmap_work_log").select("id", { count: "exact", head: true }).gte("created_at", since),
+      sb.from("session_summaries").select("id", { count: "exact", head: true }).gte("created_at", since),
+    ]);
+    const wlCount = wl.count ?? 0;
+    const ssCount = ss.count ?? 0;
+    const total = wlCount + ssCount;
+    return {
+      status: total > 0 ? "pass" : "fail",
+      note: `${total} session trail entries in the last 7 days (work_log=${wlCount}, session_summaries=${ssCount})`,
+    };
   },
   // Phase 2: every phase has a summary visible
   "all_phases_have_summary": async (sb) => {
