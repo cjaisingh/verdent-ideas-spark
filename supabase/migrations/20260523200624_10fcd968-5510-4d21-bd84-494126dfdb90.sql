@@ -1,0 +1,1 @@
+UPDATE public.roadmap_phases SET status='active', updated_at=now() WHERE key='phase-5' AND status='planned';
