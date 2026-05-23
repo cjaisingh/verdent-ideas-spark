@@ -6483,6 +6483,92 @@ export type Database = {
           },
         ]
       }
+      tenant_node_events: {
+        Row: {
+          actor: string
+          after: Json | null
+          before: Json | null
+          correlation_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          parent_event_id: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          actor?: string
+          after?: Json | null
+          before?: Json | null
+          correlation_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          parent_event_id?: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          actor?: string
+          after?: Json | null
+          before?: Json | null
+          correlation_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          parent_event_id?: string | null
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_node_events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_node_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_node_memberships: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+          relation: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+          relation?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+          relation?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_node_memberships_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_node_memberships_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_nodes: {
         Row: {
           ancestry_ids: string[]
@@ -8198,6 +8284,7 @@ export type Database = {
         | "review"
         | "done"
         | "wont_do"
+      tenant_node_kind: "org" | "team" | "project" | "individual"
       tenant_node_status: "active" | "merged" | "split" | "retired"
       work_category:
         | "plan"
@@ -8377,6 +8464,7 @@ export const Constants = {
         "done",
         "wont_do",
       ],
+      tenant_node_kind: ["org", "team", "project", "individual"],
       tenant_node_status: ["active", "merged", "split", "retired"],
       work_category: [
         "plan",

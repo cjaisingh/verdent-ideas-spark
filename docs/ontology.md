@@ -158,6 +158,23 @@ A scheduled, structured aggregation of evidence into a narrative document.
 
 ---
 
+## 12. Tenant node
+
+A recursive identity record for any addressable unit in the tenancy graph (organisation, team, project, or individual). Phase 5 foundation.
+
+- **Ownership** — operator. Canonical identity is the operator-issued UUID; external references (email domain, LEI, Companies House, Stripe id, HubSpot id, free text) live as aliases in `tenant_node_aliases` with `kind` + `confidence`.
+- **Lifecycle** — `pending → active → archived` (reversible: `archived → restored`); merge/split is operator-only and recorded as `discussion_actions` with `risk='critical'` (Night Agent hard-blocked).
+- **Mutation rules** — operator-only at all access paths. Cross-tenant resolution requires an operator JWT; service-token callers are pinned to one tenant via the universal RLS predicate (Q6 invariant).
+- **Authority source** — `public.tenant_nodes` (primary), `public.tenant_node_memberships` (DAG join for shared/delegated cross-org links), `public.tenant_node_aliases` (operator-approved aliases with hybrid soft/`hard_revoked` revocation per ADR-0004), `public.tenant_node_alias_embeddings` (semantic match support), `public.tenants` (top-level authoritative id registry).
+- **Audit** — `public.tenant_node_events` (insert-only; written by `emit_tenant_node_event` trigger on `tenant_nodes` and `emit_tenant_alias_event` on `tenant_node_aliases`).
+- **Authority arbitration** — three `decision_authorities` rules seeded operator-exclusive: `tenant_node.identity`, `tenant_node.merge`, `tenant_node.split`.
+- **Ancestry storage** — `ancestry_ids uuid[]` column maintained by `tg_tenant_nodes_set_ancestry` trigger (ADR-0003 winner). DAG cross-edges via `tenant_node_memberships` are walked at query time, not materialised into `ancestry_ids`.
+- **Relationships** — referenced by every multi-tenant table via `tenant_node_id`; aliases reference back via `node_id`; future canonical facts (Phase 6) attach via the same FK.
+
+---
+
+
+
 ## Layer assignment (preview of W1.2)
 
 | Layer | Tables (representative) |
@@ -173,3 +190,4 @@ A scheduled, structured aggregation of evidence into a narrative document.
 ## Change log
 
 - **2026-05-11** — Initial ontology lockdown (W1.1).
+- **2026-05-23** — Entity #12 **Tenant node** added (Phase 5 foundation); documents pre-existing `tenant_nodes` + alias/membership/event tables, ADR-0003 (`ancestry_ids[]`) and ADR-0004 (hybrid revocation) winners, and 3 operator-exclusive `decision_authorities` seeds.
