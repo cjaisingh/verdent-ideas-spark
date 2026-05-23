@@ -190,3 +190,4 @@ A recursive identity record for any addressable unit in the tenancy graph (organ
 ## Change log
 
 - **2026-05-11** — Initial ontology lockdown (W1.1).
+- **2026-05-23** — Entity #12 **Tenant node** added (Phase 5 foundation); documents pre-existing `tenant_nodes` + alias/membership/event tables, ADR-0003 (`ancestry_ids[]`) and ADR-0004 (hybrid revocation) winners, and 3 operator-exclusive `decision_authorities` seeds.
