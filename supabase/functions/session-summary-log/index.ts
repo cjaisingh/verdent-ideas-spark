@@ -132,5 +132,49 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
     }
   }
 
-  return json({ summary_id: summary.id, out_of_scope: oos });
+  // Per-task work-log fan-out. Idempotent on (session_id, task_id) via the
+  // partial unique index added by the 2026-05-23 migration. We use UPSERT
+  // with ignoreDuplicates so re-POSTing the same session is a no-op.
+  let workLog = { attempted: 0, inserted: 0, skipped: 0, errors: [] as string[] };
+  if (body.tasks_done?.length) {
+    const rows = body.tasks_done
+      .map((t) => (typeof t === "string" ? { task_id: t } : t))
+      .filter((t) => t && typeof t.task_id === "string" && t.task_id.length > 0)
+      .map((t) => ({
+        session_id: body.session_id,
+        task_id: t.task_id,
+        started_at: startedAt,
+        ended_at: endedAt,
+        duration_ms:
+          typeof t.duration_ms === "number"
+            ? Math.round(t.duration_ms)
+            : Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime()),
+        tokens_in: typeof t.tokens_in === "number" ? Math.round(t.tokens_in) : null,
+        tokens_out: typeof t.tokens_out === "number" ? Math.round(t.tokens_out) : null,
+        tokens_total: typeof t.tokens_total === "number" ? Math.round(t.tokens_total) : null,
+        model: t.model ?? null,
+        model_provider: t.model_provider ?? null,
+        summary: t.summary ?? body.outcome ?? null,
+        issues: t.issues ?? null,
+        fixes: t.fixes ?? null,
+        author: body.agent ?? "lovable",
+        source: "session_summary",
+      }));
+    workLog.attempted = rows.length;
+    if (rows.length > 0) {
+      const { data: ins, error: wlErr } = await sb
+        .from("roadmap_work_log")
+        .upsert(rows, { onConflict: "session_id,task_id", ignoreDuplicates: true })
+        .select("id");
+      if (wlErr) {
+        workLog.errors.push(wlErr.message);
+      } else {
+        workLog.inserted = ins?.length ?? 0;
+        workLog.skipped = rows.length - workLog.inserted;
+      }
+    }
+  }
+
+  return json({ summary_id: summary.id, out_of_scope: oos, work_log: workLog });
 }));
+
