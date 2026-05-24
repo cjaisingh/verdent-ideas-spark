@@ -25,3 +25,16 @@ Until that traffic exists, this ADR stays `proposed` and Part 2 is **vocabulary 
 - Cheap: zero code, zero migration, one file.
 - Explicit non-decision: we are *not* committing to a scoring schema or weights — those belong in the follow-up ADR with real data to calibrate against.
 - Cross-refs `docs/adr/0007-awip-as-moe.md` § Decision (point 3 = verifiers) and `mem://features/awip-as-moe`.
+
+## Promotion criteria
+
+This ADR moves from `proposed` → `accepted` (and a follow-up ADR is opened to specify the verifier contract) only when **all** of the following are true:
+
+1. **Capability traffic exists.** At least one registered module is writing to `capability_events` continuously for ≥30 days (verified via `select count(*) from capability_events where created_at > now() - interval '30 days' group by capability_id having count(*) > 0` returning ≥1 row).
+2. **At least one expert-feedback source is wired.** One of: operator up/down-vote UI on a capability surface, an AWIP Review finding tagged `capability_*`, a sentinel kind with prefix `capability_`, or a post-hoc audit row referencing a capability id.
+3. **A test fixture exists.** A vitest or Deno fixture under `e2e/` or `supabase/functions/_shared/contracts/` that seeds ≥1 positive and ≥1 negative expert-feedback signal and asserts the deterministic gate's behaviour is unchanged in their absence.
+4. **No deterministic gate is bypassed.** The follow-up ADR must show the verifier score as an **additive** filter applied *after* every deterministic gate has passed — never as a substitute.
+
+Until **all four** are demonstrable, this ADR remains `proposed` and the vocabulary stays load-bearing only.
+
+A `proposed` ADR with no eligible traffic for ≥180 days from acceptance of ADR-0007 should be reviewed for `superseded` or `withdrawn` status rather than left dangling.

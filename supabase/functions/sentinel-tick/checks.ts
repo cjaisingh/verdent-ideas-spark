@@ -39,6 +39,7 @@ export type FindingCandidate = {
     | "observability_stale_surface"
     | "resolver_low_confidence_rate"
     | "alias_revoke_burst"
+    | "alias_corpus_ready"
     | "module_silent_24h"
     | "module_register_idempotency_replay_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";

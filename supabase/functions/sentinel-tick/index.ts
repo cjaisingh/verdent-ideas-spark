@@ -422,6 +422,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now, 15, 10,
         (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
       )),
+      ...timeCheck("alias_corpus_ready", () => checkAliasCorpusReady(aliasCorpusCount)),
       ...timeCheck("module_silent_24h", () => checkModuleSilent24h(
         now,
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],
