@@ -58,6 +58,7 @@ export default function Trust() {
       <header className="border-b border-border">
         <div className="container mx-auto max-w-5xl px-6 py-6 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <img src="/awip-icon.png" alt="" aria-hidden="true" className="h-6 w-6 rounded-sm" />
             <span className="font-semibold text-foreground">AWIP Core</span>
             <span className="text-muted-foreground">/ trust</span>
           </Link>
