@@ -59,10 +59,7 @@ Read-only audit of every function under `supabase/functions/` (excluding `_share
   - `automation-auth-monitor`
   - `copilot-voice`
   - `roadmap-phase-signoff`
-- **3 missing `withLogger` wrapper** — should be added in a follow-up:
-  - `companion-cloud-chat`
-  - `companion-context`
-  - `gemini-tts`
+- **3 missing `withLogger` wrapper** — ~~should be added in a follow-up~~ **resolved 2026-05-24**: re-verified with `bun run scripts/check-logger-coverage.ts` → 72/72 wrapped. The three functions (`companion-cloud-chat`, `companion-context`, `gemini-tts`) were wrapped earlier and the sweep entry was stale.
 
 ## Caveats
 
@@ -72,6 +69,6 @@ Read-only audit of every function under `supabase/functions/` (excluding `_share
 
 ## Recommended follow-up
 
-1. Operator confirms or kills `automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`.
-2. Wrap the three logger-missing functions; the `logger-validation.yml` CI gate should already be flagging these.
+1. Operator confirms or kills `automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff` — see [`edge-function-zombie-triage-2026-05-24.md`](./edge-function-zombie-triage-2026-05-24.md).
+2. ~~Wrap the three logger-missing functions~~ — done; sweep entry was stale.
 3. Re-run this sweep at the next quarterly review (per `docs/quarterly-review.md` § 4).
