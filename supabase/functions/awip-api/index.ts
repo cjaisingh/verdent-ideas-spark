@@ -166,13 +166,13 @@ async function resolveActiveScope(req: Request, userId?: string): Promise<Scope 
     if (prof) {
       narrowedCaps = prof.narrowed_capability_ids ?? [];
       narrowedTables = prof.narrowed_tables ?? [];
-      narrowedRisk = (prof.narrowed_max_risk ?? "high") as any;
+      narrowedRisk = (prof.narrowed_max_risk ?? "high") as "low" | "medium" | "high";
     }
   }
   const intersect = (a: string[], b: string[]) =>
     a.length === 0 ? b : b.length === 0 ? a : a.filter((x) => b.includes(x));
   const minRisk = (a: string, b: string): "low" | "medium" | "high" =>
-    (RISK_RANK[a] <= RISK_RANK[b] ? a : b) as any;
+    (RISK_RANK[a] <= RISK_RANK[b] ? a : b) as "low" | "medium" | "high";
 
   return {
     agent_id: agentRow.id,
@@ -357,7 +357,7 @@ async function checkIdempotencyConflict(scope: string, key: string | null, bodyH
     .eq("key", key)
     .maybeSingle();
   if (!data) return { conflict: false as const };
-  const stored = (data.response as any)?.__body_hash;
+  const stored = (data.response as { __body_hash?: string } | null)?.__body_hash;
   if (stored && stored !== bodyHash) return { conflict: true as const };
   return { conflict: false as const, cached: data.response };
 }
@@ -496,7 +496,7 @@ async function getPromotionStatusOne(capId: string, userId?: string) {
   const status = evaluateOne(
     cap as CapabilityRow,
     eventsRes.data ?? [],
-    (approvalsRes.data ?? []) as any,
+    (approvalsRes.data ?? []) as Array<{ id: string; status: string; capability_id: string | null }>,
     qaRes.data ?? [],
     okrSet,
     (connRes.data ?? []).length,
@@ -761,7 +761,7 @@ async function ingestOkrTree(req: Request, actor: string) {
   const conflict = await checkIdempotencyConflict("okr_ingest", idemKey, bodyHash);
   if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
   if (conflict.cached) {
-    const { __body_hash, ...rest } = conflict.cached as any;
+    const { __body_hash: _h, ...rest } = conflict.cached as Record<string, unknown>;
     return json(rest);
   }
 
@@ -997,26 +997,26 @@ async function ingestEvents(req: Request, actor: string) {
   const conflict = await checkIdempotencyConflict("events_ingest", idemKey, bodyHash);
   if (conflict.conflict) return json({ error: "idempotency-key already used with a different body" }, 409);
   if (conflict.cached) {
-    const { __body_hash, ...rest } = conflict.cached as any;
+    const { __body_hash: _h, ...rest } = conflict.cached as Record<string, unknown>;
     return json(rest);
   }
 
   const events = Array.isArray(body?.events) ? body.events : null;
   if (!events || events.length === 0) return json({ error: "events[] required" }, 400);
 
-  const rows = events.map((e: any) => ({
+  const rows = (events as Array<Record<string, unknown>>).map((e) => ({
     capability_id: String(e.capability_id ?? ""),
     event_type: String(e.event_type ?? ""),
-    payload: redact(e.payload ?? {}),
+    payload: redact((e.payload as Record<string, unknown>) ?? {}),
     actor,
   }));
-  if (rows.some((r: any) => !r.capability_id || !r.event_type)) {
+  if (rows.some((r) => !r.capability_id || !r.event_type)) {
     return json({ error: "each event needs capability_id and event_type" }, 400);
   }
 
   const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
   if (error) return json({ error: error.message }, 500);
-  const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d: any) => d.id) };
+  const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d) => d.id) };
   await storeIdempotency("events_ingest", idemKey, null, response, bodyHash);
   return json(response);
 }
@@ -1036,11 +1036,11 @@ async function getRecentEvents(url: URL) {
   if (c.error) return json({ error: c.error.message }, 500);
 
   const merged = [
-    ...(o.data ?? []).map((e: any) => ({
+    ...(o.data ?? []).map((e) => ({
       id: e.id, source: "okr", ref: e.okr_node_id, tenant_id: e.tenant_id,
       event_type: e.event_type, payload: e.payload, actor: e.actor, created_at: e.created_at,
     })),
-    ...(c.data ?? []).map((e: any) => ({
+    ...(c.data ?? []).map((e) => ({
       id: e.id, source: "capability", ref: e.capability_id, tenant_id: null,
       event_type: e.event_type, payload: e.payload, actor: e.actor, created_at: e.created_at,
     })),
@@ -1061,23 +1061,26 @@ async function getCapabilityDemand(actor: string) {
   if (nodesRes.error) return json({ error: nodesRes.error.message }, 500);
   if (tenantsRes.error) return json({ error: tenantsRes.error.message }, 500);
 
-  const nodeById = new Map((nodesRes.data ?? []).map((n: any) => [n.id, n]));
+  type NodeRow = { id: string; tenant_id: string; status: string };
+  type MeasRow = { okr_node_id: string; required_capabilities: string[] | null };
+  type CapRow = { id: string; name: string; status: string; owning_module: string | null };
+  const nodeById = new Map((nodesRes.data ?? []).map((n) => [n.id, n as NodeRow]));
   type Agg = { tenants: Set<string>; krs: Set<string>; active_krs: Set<string> };
   const agg = new Map<string, Agg>();
 
-  for (const m of measRes.data ?? []) {
-    const node = nodeById.get((m as any).okr_node_id);
+  for (const m of (measRes.data ?? []) as MeasRow[]) {
+    const node = nodeById.get(m.okr_node_id);
     if (!node) continue;
-    for (const capId of ((m as any).required_capabilities ?? []) as string[]) {
+    for (const capId of (m.required_capabilities ?? []) as string[]) {
       let a = agg.get(capId);
       if (!a) { a = { tenants: new Set(), krs: new Set(), active_krs: new Set() }; agg.set(capId, a); }
-      a.tenants.add((node as any).tenant_id);
-      a.krs.add((m as any).okr_node_id);
-      if ((node as any).status !== "superseded") a.active_krs.add((m as any).okr_node_id);
+      a.tenants.add(node.tenant_id);
+      a.krs.add(m.okr_node_id);
+      if (node.status !== "superseded") a.active_krs.add(m.okr_node_id);
     }
   }
 
-  const rowFor = (c: any, a?: Agg) => ({
+  const rowFor = (c: CapRow, a?: Agg) => ({
     id: c.id,
     name: c.name,
     status: c.status,
@@ -1088,7 +1091,7 @@ async function getCapabilityDemand(actor: string) {
     active_kr_count: a?.active_krs.size ?? 0,
   });
 
-  const demand = (capsRes.data ?? []).map((c: any) => rowFor(c, agg.get(c.id)));
+  const demand = ((capsRes.data ?? []) as CapRow[]).map((c) => rowFor(c, agg.get(c.id)));
 
   for (const [capId, a] of agg) {
     if (!demand.find((d) => d.id === capId)) {
@@ -1118,7 +1121,7 @@ async function getCapabilityDemand(actor: string) {
         .eq("event_type", "resolution_warning")
         .in("capability_id", candidates.map((d) => d.id))
         .gt("created_at", tenMinAgo);
-      const skip = new Set((recent ?? []).map((r: any) => r.capability_id));
+      const skip = new Set((recent ?? []).map((r) => r.capability_id));
       const toInsert = candidates
         .filter((d) => !skip.has(d.id))
         .map((d) => ({
@@ -1151,10 +1154,10 @@ async function getCapabilityDetail(capId: string) {
     .from("okr_measurements")
     .select("okr_node_id, metric_name, target, unit, cadence, required_capabilities");
   if (mErr) return json({ error: mErr.message }, 500);
-  const matching = (meas ?? []).filter((m: any) =>
+  const matching = (meas ?? []).filter((m) =>
     (m.required_capabilities ?? []).includes(capId)
   );
-  const nodeIds = [...new Set(matching.map((m: any) => m.okr_node_id))];
+  const nodeIds = [...new Set(matching.map((m) => m.okr_node_id))];
 
   if (nodeIds.length === 0) {
     return json({
@@ -1170,23 +1173,23 @@ async function getCapabilityDetail(capId: string) {
     .in("id", nodeIds);
   if (nErr) return json({ error: nErr.message }, 500);
 
-  const tenantIds = [...new Set((nodes ?? []).map((n: any) => n.tenant_id))];
+  const tenantIds = [...new Set((nodes ?? []).map((n) => n.tenant_id))];
   const { data: tenants } = await supabase
     .from("tenants")
     .select("id, slug, name")
     .in("id", tenantIds);
-  const tenantById = new Map((tenants ?? []).map((t: any) => [t.id, t]));
+  const tenantById = new Map((tenants ?? []).map((t) => [t.id, t]));
 
-  const measByNode = new Map(matching.map((m: any) => [m.okr_node_id, m]));
+  const measByNode = new Map(matching.map((m) => [m.okr_node_id, m]));
 
   // Parent objective lookup
-  const parentIds = [...new Set((nodes ?? []).map((n: any) => n.parent_id).filter(Boolean))];
+  const parentIds = [...new Set((nodes ?? []).map((n) => n.parent_id).filter(Boolean))];
   const { data: parents } = parentIds.length
     ? await supabase.from("okr_nodes").select("id, title").in("id", parentIds)
-    : { data: [] as any[] };
-  const parentById = new Map((parents ?? []).map((p: any) => [p.id, p]));
+    : { data: [] as Array<{ id: string; title: string }> };
+  const parentById = new Map((parents ?? []).map((p) => [p.id, p]));
 
-  const krs = (nodes ?? []).map((n: any) => ({
+  const krs = (nodes ?? []).map((n) => ({
     id: n.id,
     title: n.title,
     status: n.status,
@@ -1551,7 +1554,7 @@ async function startOnboarding(req: Request, actor: string, userId?: string) {
       checklist: emptyChecklist(),
       status: "pending",
       notes: scopeVerdict && !scopeVerdict.ok
-        ? `Scope verdict: ${scopeVerdict.violations.map((v: any) => v.reason).join(" ")}`
+        ? `Scope verdict: ${scopeVerdict.violations.map((v: { reason: string }) => v.reason).join(" ")}`
         : null,
     })
     .select("*")
@@ -1824,9 +1827,9 @@ async function analyzeTranscript(id: string) {
 
   const { data: lessons } = await supabase
     .from("copilot_lessons").select("lesson, scope").eq("active", true);
-  const lessonBlock = (lessons ?? []).map((l: any) => `- [${l.scope}] ${l.lesson}`).join("\n") || "(none)";
+  const lessonBlock = (lessons ?? []).map((l) => `- [${l.scope}] ${l.lesson}`).join("\n") || "(none)";
 
-  const transcriptText = turns.map((t: any) =>
+  const transcriptText = turns.map((t) =>
     `[${t.ord}] ${t.role.toUpperCase()}${t.latency_ms ? ` (${t.latency_ms}ms)` : ""}: ${t.content}`
   ).join("\n");
 
@@ -1861,7 +1864,7 @@ ${lessonBlock}`;
   }
   const aiBody = await aiRes.json();
   await logAiCall(supabase, { job: "awip-api:analyze-transcript", model: ANALYSIS_MODEL, trigger: "user", startedAt: aiStart, response: aiRes, json: aiBody, request_ref: { transcript_id: id } });
-  let analysis: any = {};
+  let analysis: Record<string, unknown> = {};
   try { analysis = JSON.parse(aiBody.choices?.[0]?.message?.content ?? "{}"); } catch {}
 
   await supabase.from("copilot_transcripts").update({
