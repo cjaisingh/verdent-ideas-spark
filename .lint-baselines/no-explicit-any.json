@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-05-20T02:28:28.622Z",
+  "generatedAt": "2026-05-24T00:00:00.000Z",
   "rule": "@typescript-eslint/no-explicit-any",
-  "total": 517,
+  "total": 482,
   "files": {
     "e2e-playwright/admin-lessons.spec.ts": 5,
     "e2e/coverage.test.ts": 6,
@@ -81,7 +81,7 @@
     "supabase/functions/_shared/alerts_dispatch_log_test.ts": 5,
     "supabase/functions/_shared/classifyInboxKind.ts": 2,
     "supabase/functions/ai-jobs-claim/index.ts": 1,
-    "supabase/functions/awip-api/index.ts": 48,
+    "supabase/functions/awip-api/index.ts": 13,
     "supabase/functions/awip-companion-context/index.ts": 37,
     "supabase/functions/awip-rag/index.ts": 2,
     "supabase/functions/companion-extract-actions/index.ts": 4,

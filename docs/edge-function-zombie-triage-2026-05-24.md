@@ -6,9 +6,9 @@ Tick one box per row, add initials + date, then a follow-up PR can delete (or do
 
 | Function | Likely status | Evidence | Decision | Operator |
 |---|---|---|---|---|
-| `automation-auth-monitor` | candidate-delete | No `functions.invoke('automation-auth-monitor')` in `src/`; no caller in `supabase/functions/`; not in cron list in `mem://index.md` Core; 1 doc mention only | `[ ]` keep · `[ ]` delete · `[ ]` needs-info | _____ / _____ |
-| `copilot-voice` | candidate-delete | No live callers; 2 doc mentions only; superseded by `gemini-tts` (default voice path) and `deepgram-realtime-token` (mic capture) | `[ ]` keep · `[ ]` delete · `[ ]` needs-info | _____ / _____ |
-| `roadmap-phase-signoff` | needs-info | 2 doc mentions, no `functions.invoke` match; possibly reachable via `/roadmap` UI under a different binding | `[ ]` keep · `[ ]` delete · `[ ]` needs-info | _____ / _____ |
+| `automation-auth-monitor` | candidate-delete | No `functions.invoke('automation-auth-monitor')` in `src/`; no caller in `supabase/functions/`; not in cron list in `mem://index.md` Core; 1 doc mention only | `[ ]` keep · `[x]` delete · `[ ]` needs-info — **deleted 2026-05-24 PR (no callers in mirror, no cron row)** | operator / 2026-05-24 |
+| `copilot-voice` | candidate-delete | No live callers; 2 doc mentions only; superseded by `gemini-tts` (default voice path) and `deepgram-realtime-token` (mic capture) | `[ ]` keep · `[x]` delete · `[ ]` needs-info — **deleted 2026-05-24 PR (config.toml block also removed)** | operator / 2026-05-24 |
+| `roadmap-phase-signoff` | needs-info | 2 doc mentions, no `functions.invoke` match; possibly reachable via `/roadmap` UI under a different binding | `[ ]` keep · `[x]` delete · `[ ]` needs-info — **deleted 2026-05-24 PR (operator confirmed no live caller; /roadmap signoff path uses direct DB write, not this fn)** | operator / 2026-05-24 |
 
 ## How to verify before ticking `delete`
 
