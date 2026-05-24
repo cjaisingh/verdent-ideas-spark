@@ -1,68 +1,36 @@
 ---
-name: Entity resolver (Phase 5 s5.1)
-description: tenant_nodes/aliases/conflicts/events + entity-resolve edge fn for tenant-scoped entity resolution
+name: Entity resolver
+description: Phase 5 deterministic resolver (resolve_entity + resolve_entity_logged) with descriptor weights + decisions log + summary view
 type: feature
 ---
-Phase 5 sprint s5.1 substrate — first cut of the entity resolver.
 
-## Hard invariants
-- Resolver never crosses `tenant_id` — every query carries it; e2e cross-tenant gate test enforces this.
-- Aliases are explicit + operator-approved + revocable (`revoked_at`). Unique on `(tenant_id, kind, normalised) where revoked_at is null`.
-- Authoritative IDs (`bim_ifc_guid`, `rics_id`, `os_uprn`, `sap_floc`, or any descriptor with `authoritative:true`) short-circuit and force `authoritativeHit=true`. Caller MUST auto-bind.
-- Every write on `tenant_nodes` / `tenant_node_aliases` emits an `entity_resolution_events` row (trigger).
+## Core
+
+Single chokepoint for tenant-scoped entity resolution. Pure SQL — no LLM.
+
+- **`public.resolve_entity(_tenant_id uuid, _descriptors jsonb) → jsonb`** — `STABLE`, `SECURITY DEFINER`. Two-pass exact match on `tenant_node_aliases`:
+  1. Authoritative pass: only descriptors with `resolver_descriptor_weights.weight >= 0.95` (`asset_code`, `bim_ifc_guid`, `os_uprn`, `rics_id`, `sap_floc`).
+  2. Any-exact pass: any non-revoked alias match.
+  Returns `{ winner_node_id, strategy, confidence, candidate_count, matched_kind?, authoritative_hit }`. Strategies: `exact_authoritative` / `exact_alias` / `no_match` / `no_descriptors`.
+- **`public.resolve_entity_logged(_tenant_id, _descriptors, _request_id?, _actor_label?)`** — call this from edge fns / agents. Wraps `resolve_entity`, inserts into the existing `resolver_decisions` table (request_id, latency_ms, descriptors, winner, score, confidence_band, authoritative_hit, actor_label), and emits `tenant_node_events('resolve')` on a winner.
+- **`confidence_band`** mapping: `>=0.95 → high`, `>=0.75 → medium`, `>0 → low`, else `none`.
 
 ## Tables
-- `public.tenant_nodes` (parent_id, kind, name, external_ids jsonb, status enum, superseded_by) — admin-only RLS, realtime.
-- `public.tenant_node_aliases` (kind enum, value, generated `normalised`, source, authoritative, approved_by/at, revoked_at) — admin-only RLS, realtime, FTS index on `normalised`.
-- `public.entity_resolution_conflicts` (descriptors, candidates, status enum, resolved_by/at) — admin writes, operator reads.
-- `public.entity_resolution_events` (kind enum: propose/bind/alias_create/alias_revoke/conflict_open/conflict_resolve/node_upsert, payload, actor, request_id) — service-role writes only.
 
-## Edge fn `entity-resolve` (POST)
-- `/resolve` — `ResolverRetrievalInputSchema` → `ResolverRetrievalOutput`. Match order: authoritative → alias_exact → alias_fts. embedding_hint is s5.2.
-- `/bind` — bulk descriptor → node bind, Idempotency-Key required, emits `bind` event.
-- `/alias/create` — single alias, Idempotency-Key required, idempotent on `(tenant_id, kind, normalised)`.
-- Auth: operator JWT (operator/admin role) OR `x-service-token`.
-- Logger: wrapped with `withLogger("entity-resolve")`. Registered in `observability_registry`.
+- `resolver_descriptor_weights (kind, weight, min_confidence, notes)` — operator-only, seeded with 9 alias_descriptor_kind values.
+- `resolver_decisions` — existing table; logged wrapper writes here.
+- `v_resolver_decisions_summary` — 7-day band rates, p50/p95 latency, top descriptor kinds.
 
-## UI
-`/entities` (sidebar Knowledge group) — read-only probe form: tenant UUID + JSON descriptors → candidates list with score, matchSource, ancestry.
+## Sentinel
 
-## s5.2 (landed 2026-05-21)
-- `tenant_nodes.ancestry_ids uuid[]` + GIN `idx_tenant_nodes_ancestry`; `BEFORE` trigger `tg_tenant_nodes_set_ancestry` keeps it via recursive CTE (depth cap 32). Resolver returns ancestry from the array, no parent_id walk.
-- `descriptor_weights` (tenant-scoped, admin RLS) drives FTS scoring; seeds: authoritative kinds = 1.0, postcode = 0.9, name/address = 0.7.
-- Confidence bands: `auto_bind` >=0.85, `conflict` 0.55-0.85, `no_match` <0.55. `conflict` band emits `conflict_open` event.
-- `v_resolver_health` view + `resolver_low_confidence_rate` sentinel check (>20% no_match over 24h, min 20 events).
-- ADR-0003 stays `proposed`: implemented lean, but status flip blocked until a real tenant tree (>=5k nodes) lands per `docs/adr/benchmarks.md`. Baseline bench row in `adr_bench_results`.
-
-## Out of scope (lands in s5.3)
-- embedding_hint last-resort match (needs alias-embedding store)
-- alias revoke + merge/split lifecycle (ADR-0004 flip)
-- per-tenant `descriptor_weights` editing UI
-- `resolve_truth()` wiring for resolver conflicts
+`resolver_decisions` is registered in `observability_registry` (1440-min cadence, `observability_stale_surface` watcher). The existing observability sentinel fires `medium` if writes stop for 24h once any tenant is live. No bespoke `resolver_decision_silence` kind.
 
 ## Tests
-`e2e/resolver.test.ts` — cross-tenant gate (hard invariant), alias_exact precedence, authoritative short-circuit, revoked invisible, idempotency-key required, weighted scoring, ancestry parity, all three confidence bands.
 
+- `e2e/tenant-resolve-isolation.test.ts` — DB-level cross-tenant gate on `resolve_entity()`.
+- `e2e/resolver.test.ts` — edge-fn level (entity-resolve), including alias merge/revoke cross-tenant rejections.
 
-## s5.3 — alias lifecycle (M1+M2, landed 2026-05-21)
+## Out of scope (deferred)
 
-**Schema (M1).** `tenant_node_aliases` carries `supersedes_alias_id`, `merge_group_id`, `hard_revoked`, `revoke_reason` (constraint: hard-revoke needs ≥8-char reason). Enum extended with `alias_merge`, `alias_split`, `alias_hard_revoke`. New `tenant_node_alias_embeddings(vector(1536), HNSW cosine, admin RLS, realtime)`. Helper `tenant_node_alias_effective(uuid)` follows supersedes chain. View `v_alias_lineage_health` per tenant.
-
-**Endpoints (M2).** All three require `Idempotency-Key`. Replays short-circuit before mutation (`{ idempotent: true }`). Cross-tenant ops → 422 `cross_tenant_rejected`.
-
-- `/alias/revoke` — soft by default. `hardRevoke=true` is admin-only (`has_role('admin')`); service-token has admin powers. Emits `alias_revoke` or `alias_hard_revoke` with `request_id`, `reason`, `hard_revoke` in payload.
-- `/alias/merge` — N→1. New canonical alias on `intoNodeId` shares `merge_group_id = sha256("merge:" + idem_key)` with every source; sources get `revoked_at`, `revoke_reason`, `supersedes_alias_id = new`. One `alias_merge` event with `old_alias_ids[]` + `new_alias_id` + `into_node_id` in payload.
-- `/alias/split` — 1→N. Source revoked; N new aliases inserted with `supersedes_alias_id = sourceAliasId`. One `alias_split` event with `source_alias_id` + `new_alias_ids[]` + `target_node_ids[]` in payload.
-
-**What still ships in s5.3.** M3 landed 2026-05-21: embedding-hint branch on `/resolve` via `match_alias_embedding(tenant, vector(1536), min_sim, top_k)` — cap 0.6, never auto-binds, skipped when authoritative hits or topK full; `entity_resolution_events.propose.payload` carries `embedding_hint_used` + `embedding_hint_candidates_added`. `idx_alias_tenant_revoked` index on `(tenant_id, revoked_at)` for resolver hot path. Sentinel `alias_revoke_burst` (>10 soft+hard / 15min / tenant → high; ≥3 hard → critical; per-15min dedupe bucket). `adr-0004-revocation` bench is now real: measures lookup p50/p95/p99 against live corpus, uploads to `adr_bench_results` with `tripped_triggers` keyed off the acceptance table in ADR-0004.
-
-**M4 (landed 2026-05-22).** Admin-JWT e2e harness (`adminClient()` in `e2e/helpers.ts`, env `E2E_ADMIN_EMAIL/PASSWORD`); four `it.todo` promoted in `e2e/resolver.test.ts` covering operator-only 403, admin 200 + `alias_hard_revoke` event, reason-too-short 400, cross-tenant 422. Operator UI at `/entities/aliases` (revoke/hard-revoke/merge/split via `entity-resolve` only; hard-revoke gated by `has_role('admin')` probe). ADR-0004 status stays **proposed** — `tenant_node_aliases` corpus = 0 so bench would measure network jitter only; flip to **accepted** scheduled when corpus ≥ 1 000 rows.
-
-**Phase 6.** Fact-side cascade (`binding_status`, KR grey-out).
-
-## Finishing (landed 2026-05-22)
-- **authoritative_id_systems** — global 7-seed registry (bim_ifc_guid, rics_id, os_uprn, sap_floc, duns, stripe_customer, internal) with per-system `match_rules`. Operator read, admin write. No per-tenant trust override (open question #2 closed: defer until a tenant actually refuses a system).
-- **resolver_decisions** — `entity-resolve /resolve` writes one row per call (request_id, descriptors, winning_node_id, match_source, score, confidence_band, authoritative_hit, embedding_hint_used, latency_ms, actor). Operator read, service-role write. Indexed on `(tenant_id, created_at desc)` + `(confidence_band, created_at desc)`. Registered in `observability_registry` (table_inserts watcher, 1440-min floor).
-- **v_resolver_decisions** — per-tenant per-day analytics view over `resolver_decisions`: total, auto_bind_rate, conflict_rate, no_match_rate, embedding_hint_rate, p50/p95 latency_ms, top match_source. Read-only.
-
-
+- True scoring with weighted combination of multiple descriptors (Phase 5 s5.2 corpus tuning).
+- `/governance` UI card for `v_resolver_decisions_summary` — defer until live tenant data exists.
