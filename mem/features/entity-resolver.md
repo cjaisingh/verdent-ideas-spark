@@ -28,9 +28,18 @@ Single chokepoint for tenant-scoped entity resolution. Pure SQL — no LLM.
 ## Tests
 
 - `e2e/tenant-resolve-isolation.test.ts` — DB-level cross-tenant gate on `resolve_entity()`.
-- `e2e/resolver.test.ts` — edge-fn level (entity-resolve), including alias merge/revoke cross-tenant rejections.
+- `e2e/resolver.test.ts` — edge-fn level (entity-resolve); covers s5.1 deterministic path, s5.2 ancestry/scoring, s5.3 M2 lifecycle, M3 embedding hint, and M4 hard-revoke admin gating + `soft_revoke_idempotent` + cross-tenant 422.
+- `e2e-playwright/entities-aliases.spec.ts` — operator UI smoke for `/entities/aliases`: page renders, admin-required banner appears for non-admin, Merge/Split disabled until tenant id entered.
+
+## s5.3 M4 close-out (2026-05-24)
+
+- Admin-gated `/entities/aliases` operator surface — all writes go through `entity-resolve`; never direct table writes.
+- `scripts/adr-bench/adr-0004-revocation.ts --write-decision` patches ADR-0004 with a `Bench decision` block (chosen branch, p95, dataset hash). Status flip to `accepted` is gated on `alias_row_count >= 1000`; current corpus = 0 so the bench writes the block but ADR stays `proposed`.
 
 ## Out of scope (deferred)
 
 - True scoring with weighted combination of multiple descriptors (Phase 5 s5.2 corpus tuning).
 - `/governance` UI card for `v_resolver_decisions_summary` — defer until live tenant data exists.
+- Fact-side cascade (`canonical_facts.binding_status`, staged re-quarantine, KR grey-out) — Phase 6.
+- `resolve_truth()` wiring for resolver `conflict_open` events — W7.2 task already open.
+- Telegram routing for `alias_revoke_burst` — owed chat-first checklist, separate task.
