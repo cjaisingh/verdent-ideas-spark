@@ -4933,6 +4933,30 @@ export type Database = {
           },
         ]
       }
+      resolver_descriptor_weights: {
+        Row: {
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          min_confidence: number
+          notes: string | null
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          kind: Database["public"]["Enums"]["alias_descriptor_kind"]
+          min_confidence?: number
+          notes?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          kind?: Database["public"]["Enums"]["alias_descriptor_kind"]
+          min_confidence?: number
+          notes?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: []
+      }
       retention_settings: {
         Row: {
           description: string | null
@@ -8149,6 +8173,19 @@ export type Database = {
       }
       reclaim_stale_night_jobs: {
         Args: { _stale_minutes?: number }
+        Returns: Json
+      }
+      resolve_entity: {
+        Args: { _descriptors: Json; _tenant_id: string }
+        Returns: Json
+      }
+      resolve_entity_logged: {
+        Args: {
+          _actor_label?: string
+          _descriptors: Json
+          _request_id?: string
+          _tenant_id: string
+        }
         Returns: Json
       }
       resolve_module_token: {
