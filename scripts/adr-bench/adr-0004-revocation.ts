@@ -94,18 +94,82 @@ export async function run(input: Input): Promise<BenchResult> {
   };
 
   const tripped: string[] = [];
-  if (result.metrics.lookup_p95_ms > 40) tripped.push("p95_gt_40ms_flip_to_mv");
-  else if (result.metrics.lookup_p95_ms > 15) tripped.push("p95_gt_15ms_add_brin");
+  let branch: "in_table" | "add_brin" | "flip_to_mv" = "in_table";
+  if (result.metrics.lookup_p95_ms > 40) {
+    tripped.push("p95_gt_40ms_flip_to_mv");
+    branch = "flip_to_mv";
+  } else if (result.metrics.lookup_p95_ms > 15) {
+    tripped.push("p95_gt_15ms_add_brin");
+    branch = "add_brin";
+  }
 
   writeBenchResult(result);
   await uploadBenchResult(result, tripped, "script");
+
+  if (input.writeDecision) {
+    writeAdrDecision({
+      branch,
+      metrics: result.metrics,
+      tripped,
+      ranAt: result.ran_at,
+      datasetHash: result.dataset_hash,
+    });
+  }
   return result;
+}
+
+interface AdrDecisionInput {
+  branch: "in_table" | "add_brin" | "flip_to_mv";
+  metrics: BenchResult["metrics"];
+  tripped: ReadonlyArray<string>;
+  ranAt: string;
+  datasetHash: string;
+}
+
+/**
+ * Patch `docs/adr/0004-alias-revocation-cascade.md` in place:
+ *   - Flips `Status: proposed` → `Status: accepted` ONLY when corpus is
+ *     meaningful (>= 1000 aliases). Below that the bench is contingent
+ *     per the M4 status note; we still write an annotation but never flip.
+ *   - Appends a "Bench decision" block under §Acceptance recording branch,
+ *     p95, dataset hash, and the timestamp.
+ *
+ * Idempotent: the block is keyed by `<!-- adr-0004-write-decision -->` and
+ * replaced on subsequent runs.
+ */
+function writeAdrDecision(d: AdrDecisionInput): void {
+  const path = "docs/adr/0004-alias-revocation-cascade.md";
+  const raw = readFileSync(path, "utf8");
+
+  const meaningfulCorpus = d.metrics.alias_row_count >= 1000;
+  const next = meaningfulCorpus
+    ? raw.replace(/^- \*\*Status:\*\* proposed$/m, "- **Status:** accepted")
+    : raw;
+
+  const block = [
+    "<!-- adr-0004-write-decision -->",
+    "### Bench decision (`--write-decision`)",
+    "",
+    `- **Ran at:** ${d.ranAt}`,
+    `- **Dataset hash:** \`${d.datasetHash}\` (alias_row_count=${d.metrics.alias_row_count}, iterations=${d.metrics.iterations})`,
+    `- **p50 / p95 / p99 (ms):** ${d.metrics.lookup_p50_ms} / ${d.metrics.lookup_p95_ms} / ${d.metrics.lookup_p99_ms}`,
+    `- **Chosen branch:** \`${d.branch}\` ${d.tripped.length ? `(tripped: ${d.tripped.join(", ")})` : "(no thresholds tripped)"}`,
+    `- **Status flip:** ${meaningfulCorpus ? "yes — corpus ≥ 1000" : "no — corpus < 1000, decision remains contingent"}`,
+    "<!-- /adr-0004-write-decision -->",
+    "",
+  ].join("\n");
+
+  const blockRe = /<!-- adr-0004-write-decision -->[\s\S]*?<!-- \/adr-0004-write-decision -->\n?/;
+  const withBlock = blockRe.test(next) ? next.replace(blockRe, block) : `${next.trimEnd()}\n\n${block}`;
+
+  writeFileSync(path, withBlock);
 }
 
 if (import.meta.main) {
   const input = InputSchema.parse({
     pgUrl: process.env.PGURL ?? process.env.SUPABASE_URL ?? "http://placeholder.local",
     iterations: process.env.BENCH_ITERATIONS ? Number(process.env.BENCH_ITERATIONS) : undefined,
+    writeDecision: process.argv.includes("--write-decision"),
   });
   const r = await run(input);
   console.log(JSON.stringify(r, null, 2));
