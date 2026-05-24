@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import icon from "@/assets/awip-icon.png";
 
 const Auth = () => {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -39,9 +40,12 @@ const Auth = () => {
   return (
     <main className="min-h-screen flex items-center justify-center bg-background px-6">
       <form onSubmit={submit} className="w-full max-w-sm space-y-5 border border-border rounded-lg p-6">
-        <div>
-          <h1 className="text-2xl font-semibold">AWIP Core</h1>
-          <p className="text-sm text-muted-foreground">Operator console</p>
+        <div className="flex items-center gap-3">
+          <img src={icon} alt="AWIP" className="h-10 w-10 rounded" />
+          <div>
+            <h1 className="text-2xl font-semibold">AWIP Core</h1>
+            <p className="text-sm text-muted-foreground">Operator console</p>
+          </div>
         </div>
         <div className="space-y-2">
           <Label>Email</Label>

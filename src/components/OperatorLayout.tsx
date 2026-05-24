@@ -281,12 +281,13 @@ const OperatorLayout = () => {
                     to={tenantsPath}
                     aria-current={isOnTenants ? "page" : undefined}
                     aria-label={tenantsAria}
-                    className={`inline-flex h-8 shrink-0 items-center rounded px-2 font-semibold text-sm leading-none transition-colors ${
+                    className={`inline-flex h-8 shrink-0 items-center gap-2 rounded px-2 font-semibold text-sm leading-none transition-colors ${
                       isOnTenants
                         ? "bg-primary/10 text-primary ring-1 ring-inset ring-primary/30"
                         : "text-foreground hover:text-primary"
                     }`}
                   >
+                    <img src="/awip-icon.png" alt="" aria-hidden="true" className="h-5 w-5 rounded-sm" />
                     {brand}
                   </Link>
                 </TooltipTrigger>
