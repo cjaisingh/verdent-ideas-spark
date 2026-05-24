@@ -7945,6 +7945,21 @@ export type Database = {
         }
         Relationships: []
       }
+      v_resolver_decisions_summary: {
+        Row: {
+          band_high: number | null
+          band_low: number | null
+          band_medium: number | null
+          band_none: number | null
+          computed_at: string | null
+          hits: number | null
+          p50_latency_ms: number | null
+          p95_latency_ms: number | null
+          top_descriptor_kinds: Json | null
+          total: number | null
+        }
+        Relationships: []
+      }
       v_resolver_health: {
         Row: {
           band: string | null
