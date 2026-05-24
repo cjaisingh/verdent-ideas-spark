@@ -7932,15 +7932,15 @@ export type Database = {
       }
       v_resolver_decisions: {
         Row: {
-          band_high: number | null
-          band_low: number | null
-          band_medium: number | null
-          band_none: number | null
-          computed_at: string | null
-          hits: number | null
+          auto_bind_rate: number | null
+          conflict_rate: number | null
+          day: string | null
+          embedding_hint_rate: number | null
+          no_match_rate: number | null
           p50_latency_ms: number | null
           p95_latency_ms: number | null
-          top_descriptor_kinds: Json | null
+          tenant_id: string | null
+          top_match_source: string | null
           total: number | null
         }
         Relationships: []
