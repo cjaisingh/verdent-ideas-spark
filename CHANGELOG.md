@@ -4,6 +4,20 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — token-lean batch #2: zombie deletes + lint-ratchet + ADR-0008 stub)
+- **`docs/adr/0008-expert-feedback-as-verifier.md`** (status `proposed`) — vocabulary-only stub for Part 2 of ADR-0007. Defines "expert-feedback verifier" as an *additive* capability-promotion signal (operator votes, AWIP Reviews, sentinel findings, post-hoc audits). Build trigger: ≥1 module producing real capability traffic AND ≥1 expert-feedback source wired into `capability_events`. No code, no schema, no scoring weights — those belong in the follow-up ADR with real data to calibrate against.
+
+### Removed (2026-05-24 — zombie edge fn deletes per triage doc)
+- **`supabase/functions/automation-auth-monitor/`** — operator ticked `delete` on `docs/edge-function-zombie-triage-2026-05-24.md`. No callers in mirror, no cron row.
+- **`supabase/functions/copilot-voice/`** — operator ticked `delete`; superseded by `gemini-tts` + `deepgram-realtime-token`. Removed `[functions.copilot-voice]` block from `supabase/config.toml`.
+- **`supabase/functions/roadmap-phase-signoff/`** — operator ticked `delete`; `/roadmap` signoff path uses direct DB write, not this fn.
+- Deployed fns removed via `supabase--delete_edge_functions`. Triage doc updated with tick + initial + date.
+
+### Changed (2026-05-24 — lint-ratchet pass #1 on awip-api/index.ts)
+- **`supabase/functions/awip-api/index.ts`** — removed 35 `any` sites via inferred-callback drops (`.map((x: any) =>` → `.map((x) =>` where Supabase select is typed), typed `as` casts (replaced `as any` with concrete union/Record shapes), and one local type extraction in `getCapabilityDemand` (NodeRow/MeasRow/CapRow). No behaviour change; all sites are read-only or follow existing redaction/json paths. Baseline `.lint-baselines/no-explicit-any.json` lowered: awip-api 48 → 13, total 517 → 482. 13 remaining `any` are all `let body: any` (11 sites) + `let agentRow` + `Map<string, any[]>` + `events: any[]` param — left for a follow-up pass that adds typed request contracts under `_shared/contracts/awip-api.ts`. Tracks discussion_action #20.
+
+
+
 ### Added (2026-05-24 — token-lean batch #1: docs hygiene)
 - **`docs/why-awip.md`** — new § "How the substrate scales (ADR-0007)" cross-links the MoE stance into the founding-why doc, closing the deferred back-link from yesterday's ADR-0007 PR.
 - **`docs/edge-function-zombie-triage-2026-05-24.md`** (new) — operator-decision matrix for the 3 candidate-delete edge fns (`automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`). Tick + initial + PR.
