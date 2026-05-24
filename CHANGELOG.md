@@ -4,6 +4,15 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — batch A+D: M4 inbox close-out + AIMS/ADR docs)
+- **`alias_corpus_ready` sentinel check** — fires once (severity `info`, dedupe `alias_corpus_ready`) when `tenant_node_aliases` ≥ 1000. Auto-nudges the ADR-0004 bench instead of relying on manual polling. Wired in `supabase/functions/sentinel-tick/{checks.ts,index.ts}`, covered by 4 Deno tests in `checks_test.ts`. Corpus is **1100** today; the next tick will surface the finding.
+- **`discussion_actions.blocked_reason`** column (nullable text + partial index on `status='blocked'`). Surfaces *why* a row is blocked on /morning-review and /operator-inbox without forcing a row open.
+- **6 ADR-bench discussion_actions reclassified** `open → blocked` with explanatory `blocked_reason`. Removes stale noise from the operator inbox; reasons distinguish "table already exists, re-evaluate" from "waiting on ADR bench run".
+- **`docs/adr/0008-expert-feedback-as-verifier.md`** — appended a `## Promotion criteria` section locking the four conditions (capability traffic, expert-feedback source, test fixture, no deterministic-gate bypass) required before this ADR moves `proposed → accepted`. Includes a 180-day staleness clause.
+- **`docs/iso42001-gap-analysis.md` §4 gap #2** — marked closed. §1 already carries an `Oversight` column for all 17 AI surfaces; new surfaces must include it.
+- **`docs/adr/0004-alias-revocation-cascade.md` § Acceptance** — documents the `alias_corpus_ready` auto-unblock wiring.
+- **`mem/features/entity-resolver.md`** — updated M4 close-out block with the corpus-gate sentinel.
+
 ### Added (2026-05-24 — Phase 5 s5.3 M4 close-out)
 - **`e2e/resolver.test.ts`** — new `soft_revoke_idempotent` case: distinct idempotency keys, second call hits the `revoked_at IS NOT NULL` short-circuit, returns `idempotent: true` with zero new `entity_resolution_events` rows. The other three M4 cases (`alias_hard_revoke_requires_admin_role`, `alias_hard_revoke_admin_success`, `alias_hard_revoke_reason_too_short`, `cross_tenant_revoke_returns_422`) were already in place and verified.
 - **`e2e-playwright/entities-aliases.spec.ts`** (new) — operator UI smoke: page renders, admin-required banner shows for non-admin, Merge/Split buttons gated until tenant id entered.
