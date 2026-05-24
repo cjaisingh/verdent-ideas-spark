@@ -12,12 +12,14 @@
  * Sizes are clamped to the real corpus — we never refuse to run just because
  * the project hasn't reached 1M aliases yet; we record what we measured.
  */
+import { readFileSync, writeFileSync } from "node:fs";
 import { z } from "zod";
 import { writeBenchResult, uploadBenchResult, hashDataset, type BenchResult } from "./_shared.ts";
 
 export const InputSchema = z.object({
   pgUrl: z.string().url(),
   iterations: z.number().int().min(10).max(2000).default(200),
+  writeDecision: z.boolean().default(false),
 });
 export type Input = z.infer<typeof InputSchema>;
 
