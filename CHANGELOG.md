@@ -4,6 +4,23 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — Phase 5 resolver core + module heartbeat unblock)
+- **`resolve_entity(tenant_id, descriptors jsonb)`** — deterministic two-pass exact-match resolver against `tenant_node_aliases` (authoritative-first pass on `weight>=0.95` descriptors, then any exact alias match). `STABLE`, `SECURITY DEFINER`, granted to `authenticated`. Closes `phase-5/s5.1/t3`.
+- **`resolve_entity_logged()`** wrapper — calls `resolve_entity`, writes a row into the existing `resolver_decisions` table (request_id, latency_ms, confidence_band derived from confidence: >=0.95 high, >=0.75 medium, >0 low, else none), and emits a `tenant_node_events('resolve')` row on a winner.
+- **`resolver_descriptor_weights`** (Phase 5 s5.2/t1+t2) — operator-only table seeded with 9 descriptor kinds (`asset_code`/`bim_ifc_guid`/`os_uprn` = 1.00, `rics_id`/`sap_floc` = 0.95, `address`/`postcode`/`name`/`other` = lower). Closes `phase-5/s5.2/t1` and `s5.2/t2`.
+- **`v_resolver_decisions_summary`** view (security invoker) — 7-day band rates, p50/p95 latency, top descriptor kinds.
+- **`observability_registry`** entry for `resolver_decisions` (1440-min cadence, `observability_stale_surface` watcher) — auto-covers `s5.2/t5` decision-silence sentinel via the existing observability path. No bespoke `resolver_decision_silence` finding kind needed.
+- **`e2e/tenant-resolve-isolation.test.ts`** — direct DB-level cross-tenant isolation tests for `resolve_entity()` (complements the existing edge-fn tests in `e2e/resolver.test.ts`). Closes `phase-5/s5.1/t5`.
+- **`scripts/new-module.ts`** scaffold CLI — writes a typed contract under `_shared/contracts/<slug>.ts` and prints register-capability curl + heartbeat SQL. Idempotent; `--dry-run` supported. Stops `module_silent_24h` recurrence at source.
+
+### Fixed (2026-05-24 — module silence backlog)
+- Heart-beated the 6 declared-but-silent modules (`okr`, `awip_core`, `connector_hub`, `control_plane`, `occupancy_module`, `discovery_ai`) via one `module_heartbeat` capability_event each. Resolved all 6 open `module_silent_24h` findings. Closed parent action `3b372152`.
+
+### Changed (2026-05-24 — chat-first batch: Telegram routing)
+- **`alert_settings.dedupe_minutes`: 60 → 360** per operator chat-first decision: route at `high+` only, target operator DM, 6-hour silencing per (job, reason). No new routing code needed — existing `dispatchAlert` path at `sentinel-tick:459` already fires for any `high`/`critical` finding, which now covers `module_silent_24h`/`observability_stale_surface`/catch-all whenever they escalate. Closed actions `aaf32bbe`, `4e4febd6`, `77ee5ef0`.
+
+
+
 ### Added
 - Phase 5 opened (`roadmap_phases.status = active`).
 - `docs/phase-5-open-questions.md` — 10 open questions **locked** as decisions (see prior entry). Driver answers mirrored on `phase-5/s5.1/open-questions`.
