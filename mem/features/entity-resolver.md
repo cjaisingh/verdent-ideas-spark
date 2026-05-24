@@ -31,10 +31,11 @@ Single chokepoint for tenant-scoped entity resolution. Pure SQL — no LLM.
 - `e2e/resolver.test.ts` — edge-fn level (entity-resolve); covers s5.1 deterministic path, s5.2 ancestry/scoring, s5.3 M2 lifecycle, M3 embedding hint, and M4 hard-revoke admin gating + `soft_revoke_idempotent` + cross-tenant 422.
 - `e2e-playwright/entities-aliases.spec.ts` — operator UI smoke for `/entities/aliases`: page renders, admin-required banner appears for non-admin, Merge/Split disabled until tenant id entered.
 
-## s5.3 M4 close-out (2026-05-24)
+## s5.3 M4 close-out (2026-05-24, batch A+D)
 
 - Admin-gated `/entities/aliases` operator surface — all writes go through `entity-resolve`; never direct table writes.
-- `scripts/adr-bench/adr-0004-revocation.ts --write-decision` patches ADR-0004 with a `Bench decision` block (chosen branch, p95, dataset hash). Status flip to `accepted` is gated on `alias_row_count >= 1000`; current corpus = 0 so the bench writes the block but ADR stays `proposed`.
+- `scripts/adr-bench/adr-0004-revocation.ts --write-decision` patches ADR-0004 with a `Bench decision` block. Status flip to `accepted` is gated on `alias_row_count >= 1000`.
+- **`alias_corpus_ready` sentinel check** (kind, severity `info`, dedupe key `alias_corpus_ready`) fires once when `tenant_node_aliases` count crosses 1000. Corpus is **1100** as of 2026-05-24 — the next `sentinel-tick` run will surface this finding on /admin/sentinel-findings, auto-nudging the ADR-0004 bench. Source: `checkAliasCorpusReady()` in `supabase/functions/sentinel-tick/checks.ts`.
 
 ## Out of scope (deferred)
 

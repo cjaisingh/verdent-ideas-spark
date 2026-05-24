@@ -65,7 +65,7 @@ Annex A of ISO/IEC 42001 enumerates AIMS controls. Only controls relevant to AWI
 In order of effort-to-value for a future AIMS claim:
 
 1. **AI policy doc** (Cl.5, A.2) — one page, signed. Cheap, unblocks everything else.
-2. **Human-oversight matrix per surface** (A.9) — extend §1 table with `oversight: autonomous | operator-in-loop | operator-approve`. Mostly documentation of existing reality (Night Agent autonomous within `night_eligible=true`; everything else operator-in-loop).
+2. ~~**Human-oversight matrix per surface** (A.9)~~ — **closed 2026-05-24.** §1 already carries an `Oversight` column for all 17 surfaces (values: `operator-approve`, `operator-review`, `system-auto`, `sentinel-watch`). Any new AI surface must add a row with an `Oversight` value in the same PR.
 3. **AIIA template + per-surface assessment** (Cl.6, A.5) — short template under `docs/aiia/`; one assessment per row in §1.
 4. **Third-party AI DPA / AIA review** (A.10) — Gemini, OpenAI, Deepgram, HeyGen. Cross-check against `docs/legal/sub-processor-list.md`.
 5. **No-training statement** (A.7) — explicit doc that AWIP does not train models on operator data and that gateway providers are configured `data_use=opt_out` where the provider exposes it.
