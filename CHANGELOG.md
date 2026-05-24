@@ -4,6 +4,12 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — token-lean batch #1: docs hygiene)
+- **`docs/why-awip.md`** — new § "How the substrate scales (ADR-0007)" cross-links the MoE stance into the founding-why doc, closing the deferred back-link from yesterday's ADR-0007 PR.
+- **`docs/edge-function-zombie-triage-2026-05-24.md`** (new) — operator-decision matrix for the 3 candidate-delete edge fns (`automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`). Tick + initial + PR.
+- **`docs/edge-function-sweep-2026-05-10.md`** — corrected stale "3 missing withLogger" entry (verified 72/72 wrapped via `bun run scripts/check-logger-coverage.ts`); follow-up item #1 now points at the zombie-triage doc.
+- **`mem/features/awip-as-moe.md`** — added back-link to `docs/why-awip.md` section.
+
 ### Added (2026-05-24 — ADR-0007)
 - **`docs/adr/0007-awip-as-moe.md`** (status `proposed`) — names the Mixture-of-Experts pattern AWIP's substrate already supports: capability manifest = router (lives in Control Plane/modules, never Core), tenant_node ancestry = hierarchical skim (downstream of Phase 5 resolver), per-capability deterministic verifiers = *additive* promotion gate. No code, no schema, no event streams. Build trigger for any of the three: ≥1 module producing real capability traffic. Part 2 (expert-feedback as verifier signal) deliberately held back as a standalone follow-up ADR. Indexed in `docs/master-plan.md` Decisions; rule captured in `mem://features/awip-as-moe`.
 

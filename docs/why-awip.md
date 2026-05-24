@@ -61,3 +61,7 @@ If a feature would make AWIP feel more like paperwork and less like a colleague,
 - **For agents working in Core:** when a request feels architecturally off, check it against the four killers. Does this change make one of them less likely, or more?
 
 The full set of non-negotiable engineering rules lives in [`CONTEXT.md`](../CONTEXT.md). This doc is the layer above them: the reason those rules exist in the first place.
+
+## How the substrate scales (ADR-0007)
+
+The four killers stay defused only if the substrate stays cheap as capability count grows. [`ADR-0007 — AWIP as MoE`](./adr/0007-awip-as-moe.md) names the pattern we already have the substrate for: the capability manifest is the Mixture-of-Experts **router** (lives in Control Plane / modules — never Core), `tenant_node` ancestry is the hierarchical **skim**, and per-capability deterministic **verifiers** are additive to existing promotion gates. No new tables, no new event streams; it is vocabulary for what `capabilities`, `tenant_nodes`, and `capability_promotion` are already shaped to support. Build trigger: ≥1 module producing real capability traffic. Part 2 (expert-feedback as verifier signal) is held back as a standalone follow-up ADR until that traffic exists.
