@@ -8017,6 +8017,7 @@ export type Database = {
         Returns: string
       }
       auto_purge_if_enabled: { Args: never; Returns: number }
+      auto_reject_stale_lessons: { Args: { _days?: number }; Returns: number }
       awip_rag_search: {
         Args: { _limit?: number; _q: string }
         Returns: {

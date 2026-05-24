@@ -8,25 +8,27 @@ Scope: every AI-touching surface in AWIP Core today. Excludes the Rork iPhone Co
 
 Single source of truth for "what AI runs in AWIP". Any new AI surface must add a row in the same change.
 
-| Surface | Entry point | Model policy | Egress | Logging |
-|---|---|---|---|---|
-| Companion (browser + Rork) | `companion-cloud-chat` | Lovable AI Gateway, night-cheap via `pickModel()` | Gemini / OpenAI | `ai_usage_log`, `companion_messages` |
-| Copilot voice | `/copilot` + Deepgram STT | Gateway + Deepgram | Gemini / OpenAI / Deepgram | `ai_usage_log`, `voice_*` |
-| Gemini TTS | `gemini-tts` | Bypasses night-cheap (TTS-only) | Google | `ai_usage_log` |
-| Night Agent | `night-agent-open` / `night-agent-close` | Forced `gemini-2.5-flash-lite` 22:00–06:00 UTC | Google | `night_shifts`, `ai_usage_log` |
-| Overnight phase runner | `overnight-phase-runner-15m`, `overnight-prequeue` | Night-cheap | Gemini | `roadmap_phase_overnight_runs` |
-| Overnight recommender | `scheduled-overnight-recommender` | SQL-only, no LLM | — | `discussion_actions` |
-| Morning Review | `scheduled-morning-review` | Gateway | Gemini / OpenAI | `morning_reviews`, `ai_usage_log` |
-| Lessons Loop | `scheduled-lessons-daily/weekly` | Gateway | Gemini / OpenAI | `lessons`, `ai_usage_log` |
-| Deep Audit | `scheduled-deep-audit-weekly/monthly` | Gateway | Gemini / OpenAI | `audit_runs`, `ai_usage_log` |
-| Sentinel tick | `scheduled-sentinel-tick` | SQL + light LLM | Gemini | `sentinel_findings` |
-| Code review | `scheduled-code-review` | Gateway | Gemini / OpenAI | `code_review_runs` |
-| QA validate | `qa-validate` | Gateway | Gemini | `qa_check_events` |
-| App walkthrough | `scheduled-app-walkthrough` | Gateway | Gemini | `sentinel_findings` |
-| AWIP reviews pull | `scheduled-awip-reviews-pull` | RAG only | GitHub | `awip_reviews`, `sentinel_findings` |
-| HeyGen videos | `/admin/videos` | HeyGen | HeyGen US | `heygen_videos` |
-| Telegram routing | `telegram-webhook`, `operator-inbox-classify` | Gateway | Gemini | `inbox_items`, `telegram_gateway_logs` |
-| Entity resolver embedding-hint | `entity-resolve` `/resolve` | pgvector + Gemini embeddings | Google (embeddings only) | `entity_resolution_events` |
+| Surface | Entry point | Model policy | Egress | Logging | Oversight |
+|---|---|---|---|---|---|
+| Companion (browser + Rork) | `companion-cloud-chat` | Lovable AI Gateway, night-cheap via `pickModel()` | Gemini / OpenAI | `ai_usage_log`, `companion_messages` | operator-review |
+| Copilot voice | `/copilot` + Deepgram STT | Gateway + Deepgram | Gemini / OpenAI / Deepgram | `ai_usage_log`, `voice_*` | operator-review |
+| Gemini TTS | `gemini-tts` | Bypasses night-cheap (TTS-only) | Google | `ai_usage_log` | system-auto |
+| Night Agent | `night-agent-open` / `night-agent-close` | Forced `gemini-2.5-flash-lite` 22:00–06:00 UTC | Google | `night_shifts`, `ai_usage_log` | operator-approve (morning) |
+| Overnight phase runner | `overnight-phase-runner-15m`, `overnight-prequeue` | Night-cheap | Gemini | `roadmap_phase_overnight_runs` | operator-approve (morning) |
+| Overnight recommender | `scheduled-overnight-recommender` | SQL-only, no LLM | — | `discussion_actions` | operator-approve |
+| Morning Review | `scheduled-morning-review` | Gateway | Gemini / OpenAI | `morning_reviews`, `ai_usage_log` | operator-review |
+| Lessons Loop | `scheduled-lessons-daily/weekly` | Gateway | Gemini / OpenAI | `lessons`, `ai_usage_log` | operator-approve |
+| Deep Audit | `scheduled-deep-audit-weekly/monthly` | Gateway | Gemini / OpenAI | `audit_runs`, `ai_usage_log` | operator-review |
+| Sentinel tick | `scheduled-sentinel-tick` | SQL + light LLM | Gemini | `sentinel_findings` | sentinel-watch |
+| Code review | `scheduled-code-review` | Gateway | Gemini / OpenAI | `code_review_runs` | operator-review |
+| QA validate | `qa-validate` | Gateway | Gemini | `qa_check_events` | operator-approve |
+| App walkthrough | `scheduled-app-walkthrough` | Gateway | Gemini | `sentinel_findings` | sentinel-watch |
+| AWIP reviews pull | `scheduled-awip-reviews-pull` | RAG only | GitHub | `awip_reviews`, `sentinel_findings` | operator-review |
+| HeyGen videos | `/admin/videos` | HeyGen | HeyGen US | `heygen_videos` | operator-approve |
+| Telegram routing | `telegram-webhook`, `operator-inbox-classify` | Gateway | Gemini | `inbox_items`, `telegram_gateway_logs` | operator-review |
+| Entity resolver embedding-hint | `entity-resolve` `/resolve` | pgvector + Gemini embeddings | Google (embeddings only) | `entity_resolution_events` | operator-approve (high-conf auto-binds excluded) |
+
+Oversight values: `operator-approve` (human gate before effect), `operator-review` (visible after the fact in Morning Review or Inbox), `system-auto` (no human in the loop by design), `sentinel-watch` (anomaly-driven nudges only).
 
 All surfaces route through `_shared/model-policy.ts → pickModel()` except where noted. All write to `ai_usage_log` (cost + tokens) per [credits & usage](./credits-usage.md).
 
