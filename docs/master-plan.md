@@ -65,6 +65,7 @@ See `docs/modules.md` for current module boundaries and `docs/architecture.md` f
 ADRs live in `docs/adr/`. Notable:
 - ADR-0001 — Capability registry contract
 - ADR-0002 — Service token & idempotency
+- ADR-0007 — AWIP-as-MoE (router + skim + verifiers; intent, not build)
 
 ## Working agreements
 

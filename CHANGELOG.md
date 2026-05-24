@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — ADR-0007)
+- **`docs/adr/0007-awip-as-moe.md`** (status `proposed`) — names the Mixture-of-Experts pattern AWIP's substrate already supports: capability manifest = router (lives in Control Plane/modules, never Core), tenant_node ancestry = hierarchical skim (downstream of Phase 5 resolver), per-capability deterministic verifiers = *additive* promotion gate. No code, no schema, no event streams. Build trigger for any of the three: ≥1 module producing real capability traffic. Part 2 (expert-feedback as verifier signal) deliberately held back as a standalone follow-up ADR. Indexed in `docs/master-plan.md` Decisions; rule captured in `mem://features/awip-as-moe`.
+
+
 ### Added (2026-05-24 — token-lean close-out batch)
 - **`auto_module_heartbeat_from_event` trigger** on `public.capability_events` — every capability event auto-inserts a `module_heartbeats` row for its `owning_module` (sender `auto:capability_events`). Permanently kills the recurring `module_silent_24h` finding for any module that has live capability events. Seeded one bootstrap heartbeat each for `occupancy_module`, `connector_hub`, `control_plane`, `awip_core`, `discovery_ai`, `okr`; the 6 open findings auto-resolved.
 - **`auto_reject_stale_lessons(_days int default 30)`** — SQL function that closes `proposed` lessons with no `lesson_events` activity in N days, writing an `auto_rejected` event with reason. Ready to be invoked from `lessons-synthesize`; wiring is the only follow-up.
