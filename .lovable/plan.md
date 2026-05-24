@@ -1,100 +1,97 @@
-
-# Plan — Phase 5 s5.3 Milestone 4 (resolver close-out)
+# Plan — Batch A + Batch D (M4 close-out debt + AIMS/ADR docs)
 
 ## Goal
-Close Phase 5 sprint s5.3 by promoting the last `it.todo` (hard-revoke admin gating), executing the first real ADR-0004 acceptance bench and flipping the ADR from `proposed` → `accepted` with the matched branch, and shipping an operator-only `/entities/aliases` admin UI for revoke / merge / split that goes through existing `entity-resolve` endpoints.
+Close the 3 pieces of M4 test/inbox debt (promote 2 remaining resolver `it.todo`s, add `alias_corpus_ready` sentinel check to auto-unblock the ADR-0004 bench, reclassify 6 blocked ADR-bench discussion_actions) **and** ship the two docs-only items (ISO-42001 §1 oversight column, ADR-0008 promotion criteria) in one review pass.
 
 ## Non-goals
-- Fact-side cascade mechanics (`canonical_facts.binding_status`, staged re-quarantine, KR grey-out) — Phase 6.
-- Telegram routing for `alias_revoke_burst` — owed chat-first checklist first, separate task.
-- Per-tenant descriptor-weight editing UI — Phase 6 onboarding.
-- `resolve_truth()` wiring for resolver `conflict_open` events — W7.2 task already open.
-- Bulk-conflict patterns (ADR-0005) — separate ADR bench, separate sprint.
+- Running the ADR-0004 bench itself — gated on `alias_corpus_ready=true`; will fire automatically when the corpus crosses 1000.
+- Telegram routing for `alias_revoke_burst` — Batch B (owes a chat-first round).
+- `resolve_truth()` wiring for resolver `conflict_open` — Batch C (W7.2 work).
+- Any behaviour change in `entity-resolve` — gating already in place from M4; we are only proving it with tests.
 
 ## Blast radius & Core rule / ADR / FM-AI cited
-- **Tables touched (read-only / no schema):** `tenant_node_aliases`, `tenant_nodes`, `entity_resolution_events`, `adr_bench_results`. **No new migration.**
-- **Edge fn:** `entity-resolve` — no behaviour change in M4; only e2e tests against existing endpoints (`/aliases/revoke`, `/aliases/merge`, `/aliases/split`).
-- **Surfaces:** new operator-only page `/entities/aliases`; sidebar entry under "Entities".
-- **CI:** `e2e/resolver.test.ts` last `it.todo` promoted; needs `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` secrets in GH Actions.
-- **Core rule defused:** `CONTEXT.md` rule #3 ("operator > AI on every entity, gated by `user_roles` + `has_role()`") — we're proving the admin-only path actually enforces 403 against operator-only JWTs.
-- **ADR:** `docs/adr/0004-alias-revocation-cascade.md` § Acceptance — locks in the in-table vs BRIN vs MV branch based on measured p95.
-- **FM-AI failure mode:** *unverified gating* (admin-only endpoints that nobody ever tested with a non-admin JWT, e.g. the entire pre-W7 surface). M4 closes the gap for the resolver's most destructive endpoint.
+- **Tables touched (schema):** `discussion_actions` — add nullable `blocked_reason text`. No new tables.
+- **Tables touched (data only):** 6 `discussion_actions` rows reclassified `open → blocked` via `supabase--insert` UPDATE.
+- **Edge fns:** `sentinel-tick` — add one new check function `alias_corpus_ready` (no contract needed; it's a SQL-only count + insert into `sentinel_findings`). No new edge function.
+- **Tests:** `e2e/resolver.test.ts` — 2 cases promoted from `it.todo`.
+- **Docs:** `docs/iso42001-gap-analysis.md` (§1 table — add `oversight` column for 4 Phase 5 surfaces), `docs/adr/0008-expert-feedback-as-verifier.md` (append `## Promotion criteria`).
+- **Surfaces:** /morning-review inbox loses 6 noisy rows; /admin/sentinel-findings may show a new `info`-level `alias_corpus_ready` finding when threshold crosses.
+- **Core rule defused:** CONTEXT.md rule #3 (operator > AI gating via `user_roles` + `has_role()`) — promoted tests prove `hardRevoke && !isAdmin → 403`; rule #5 (every plan ends with auditable artefacts) — ISO-42001 oversight column makes the AIMS gate machine-readable.
+- **ADR:** `docs/adr/0004-alias-revocation-cascade.md` — `alias_corpus_ready` is the missing prerequisite for the §Acceptance bench trigger. `docs/adr/0008-expert-feedback-as-verifier.md` — promotion criteria section locks the gate before any module starts producing capability traffic.
+- **FM-AI failure mode:** *unverified gating* (M4 left 2 admin/tenant gates only `it.todo`) and *unbenched ADRs sitting in `proposed` indefinitely* (no automated nudge when the corpus is finally ready).
 
 ## Alternatives considered
 
-1. **(Chosen) Three-user e2e fixture (anon / operator-only / operator+admin) + bench-then-ADR-flip + minimal admin UI.** One sprint, exercises real JWT→`has_role()` path, gives the ADR its decision data and unblocks Phase 6 fact-cascade with an actual operator surface to revoke from.
-2. **Service-token shortcut for the success path** — use `x-awip-service-token` for the 200 branch, `operatorOnlyClient` for the 403 branch. Cheaper (no third user) but doesn't exercise the operator-JWT → `user_roles.admin` lookup at all, which is precisely the bug surface we're trying to cover. **Rejected.**
-3. **Defer admin UI to Phase 6** — only ship the e2e + bench. Leaves the operator unable to revoke without `curl`, which means hard-revoke stays untested in anger and the ADR's `compliance_revocation_count_30d` trigger never fires. **Rejected** — pay the UI cost now (it's small: a table + 3 dialogs over existing endpoints).
-4. **Materialised-view flip pre-emptively** instead of measuring. Premature; ADR explicitly demands measured trigger. **Rejected.**
+1. **(Chosen) A+D as one PR, schema migration scoped to `blocked_reason` column only.** Doc work co-located because reviewer is already in `docs/adr/` and `docs/iso42001-*` files for the ADR-0008 stub follow-up. One CI run, one CHANGELOG entry, ~7 files.
+2. **A and D as separate PRs.** Cleaner blame, but doubles the review pass and CI cost. D is ≤2 docs files — not worth its own PR. **Rejected.**
+3. **Use a JSON `metadata` column on `discussion_actions` instead of `blocked_reason`.** Avoids a migration but loses indexability and grep-ability. We already have `source`/`source_ref` as first-class columns precisely because operator inbox SQL queries them directly. **Rejected** — same precedent applies.
+4. **Skip `alias_corpus_ready` and just check the count manually before each ADR-0004 bench run.** Manual = it never happens; ADR sits in `proposed` for months. The sentinel check costs one SQL count per 15-min tick — negligible. **Rejected.**
+5. **Make `alias_corpus_ready` fire as `medium` severity so it pages.** Overkill — corpus crossing 1000 is a milestone, not an incident. `info` severity, visible on /admin/sentinel-findings + rolled into Morning Review, is enough. **Chosen variant.**
 
-## Contract (existing endpoints, no new agent loop)
-No new edge function. M4 reuses:
-- `POST /aliases/revoke { aliasId, hardRevoke?: boolean, reason: string }` → 403 `admin_required` when `hardRevoke && !isAdmin`; 400 `hard_revoke_reason_too_short` when `reason.length < 8`; emits `alias_revoke` or `alias_hard_revoke` event.
-- `POST /aliases/merge`, `POST /aliases/split` — already operator-gated, surfaced in UI as-is.
+## Contract
+No new cron, edge function, or agent loop. `sentinel-tick` is an existing wrapped fn; new check is a same-file function `checkAliasCorpusReady()` returning `SentinelFinding | null`. No `supabase/functions/_shared/contracts/*` entry needed (the contract-first rule applies to *new* autonomous surfaces, not new checks inside an existing one).
 
-Contract file `supabase/functions/_shared/contracts/retrieval-resolver.ts` already covers all three. No new contract needed.
+## Persona sign-off
 
-## Persona sign-off (`docs/agents/team/`)
-- **`compliance-auditor`** — "is there a `qa_check_events` / `entity_resolution_events` row for every state flip in this code path?" → yes, `entity-resolve` already emits `alias_revoke` / `alias_hard_revoke` events; UI uses the same endpoints, no new write path.
-- **`event-engineer`** — "does every UI action go through the edge fn (not a direct table write)?" → yes, the admin page calls `supabase.functions.invoke('entity-resolve', ...)` only; no direct `from('tenant_node_aliases').update()`.
-- **`tenant-manager`** — "can an operator from tenant A revoke an alias of tenant B from the UI?" → no; resolver already enforces tenant scoping on `aliasId` lookup; e2e adds `cross_tenant_revoke_returns_422` test.
-- **`sentinel`** — "will the bench run produce a row in `adr_bench_results` so future drift is detectable?" → yes, `_shared.ts → uploadBenchResult()` already wired.
-- **`control-plane-operator`** — "no routing logic in Core" → admin UI is a thin form; no scheduling, no fan-out.
+- **`compliance-auditor`** — "Will the reclassified rows still appear in audit history?" → Yes; `discussion_actions.updated_at` bumps, original `status` change is captured via existing `discussion_action_findings` join if any was linked, and `blocked_reason` is human-readable for any future audit replay.
+- **`event-engineer`** — "Does the status flip emit an event?" → `discussion_actions` has no `*_events` sibling table (it's the inbox itself, not a domain entity). No event required; updated_at + reason column is the audit trail.
+- **`tenant-manager`** — "Does the new `cross_tenant_revoke_returns_422` test actually exercise the tenant scope check?" → Test creates two operator JWTs from distinct tenants (uses existing `e2e/rls-fixtures.ts` helpers), confirms tenant-A operator hitting tenant-B's alias returns 422 not 200.
+- **`sentinel`** — "Will the new check be noisy?" → Fires once on crossing (idempotent via `dedupe_key='alias_corpus_ready'` + 24h cooldown already in `sentinel-tick`). After firing, only re-fires if corpus drops below 1000 and crosses again — won't happen in practice.
+- **`product-historian`** — "ADR-0008 promotion criteria — does it match the ADR-0007 Part 2 intent?" → Yes; criteria are derived directly from `docs/why-awip.md` §expert-feedback (≥1 module with capability traffic, ≥30d of `capability_events`, ≥1 expert-feedback test fixture).
 
 ## Gap checklist
-- [x] Idempotency — revoke/merge/split already idempotent via aliasId + `revoked_at IS NOT NULL` short-circuit.
-- [x] `*_events` emission — covered by existing handler.
-- [x] RLS + `has_role()` — endpoint enforces `isAdmin = has_role(user_id, 'admin')`; e2e proves it.
-- [x] Realtime — `entity_resolution_events` already in `supabase_realtime` publication; UI subscribes for the activity feed.
-- [x] `observability_registry` — `alias_revoke_burst` already registered (M3).
-- [x] `withLogger` — `entity-resolve` already wrapped.
-- [ ] No new `any` — UI types from `supabase/types.ts` only; lint ratchet must not regress.
-- [x] Mem rule — update `mem/features/entity-resolver.md` (add M4 line: admin-UI + bench result + ADR status).
-- [x] CHANGELOG — one entry per the three deliverables.
-- [x] Doc updates — `docs/adr/0004-alias-revocation-cascade.md` status flip + chosen-branch row; `docs/iso42001-gap-analysis.md` §1 row for resolver gains an `oversight: operator-approve` note (deferred to AIMS lane if scope tight — see Out of scope).
+
+- [x] **Idempotency** — `alias_corpus_ready` check uses 24h dedupe via existing sentinel-tick pattern. Discussion-action UPDATE is idempotent on `WHERE status='open' AND id IN (...)`.
+- [x] **`*_events` emission** — N/A; `discussion_actions` is not an event-emitting entity. Sentinel finding insertion goes through standard `sentinel_findings` insert (already audited).
+- [x] **RLS + `has_role`** — `discussion_actions` RLS already enforces operator-only; UPDATE goes via `supabase--insert` with service role (audit-trail safe, one-off). New migration adds column only — no policy change needed.
+- [x] **Realtime** — `sentinel_findings` already in `supabase_realtime` publication; new check rides existing wiring. `discussion_actions` already published.
+- [x] **`observability_registry`** — `alias_corpus_ready` registered in same migration that's not needed (no new table) — instead, add a row via `supabase--insert` into `observability_registry` if that table exists; otherwise documented in `mem/features/entity-resolver.md`. **Action item in plan.**
+- [x] **`withLogger`** — sentinel-tick is already wrapped; new check inherits.
+- [x] **No new `any`** — new test cases use existing typed helpers in `e2e/helpers.ts` + `e2e/rls-fixtures.ts`. Sentinel check returns typed `SentinelFinding`. Migration is SQL.
+- [x] **Mem rule** — update `mem/features/entity-resolver.md` (add line: M4 test debt closed, ADR-0004 auto-unblock wired) and `mem/index.md` (no new entry — existing entry suffices).
+- [x] **CHANGELOG** — one consolidated entry covering all 5 items.
+- [x] **Doc updates** — `docs/iso42001-gap-analysis.md` §1 (new column), `docs/adr/0008-expert-feedback-as-verifier.md` (promotion section), `docs/adr/0004-alias-revocation-cascade.md` (note the auto-unblock wiring in §Acceptance).
 
 ## Test plan
 
 | Behaviour | Test | Pass criterion |
 |---|---|---|
-| Admin JWT can hard-revoke | `e2e/resolver.test.ts > alias_hard_revoke_requires_admin_role` (promoted from `it.todo`) | adminClient → 200 + event row with `kind='alias_hard_revoke'`; operatorOnlyClient → 403 `admin_required` |
-| Reason length enforced | same test, second case | `reason.length=4` → 400 `hard_revoke_reason_too_short` |
-| Cross-tenant block | new `e2e/resolver.test.ts > cross_tenant_revoke_returns_422` | operator from tenant A trying to revoke tenant B's alias → 422 |
-| Soft revoke idempotent | new `e2e/resolver.test.ts > soft_revoke_idempotent` | second call returns 200 with `already_revoked: true`, no second event row |
-| Bench writes row | bench script smoke-check in `scripts/adr-bench/adr-0004-revocation.ts` | last row in `adr_bench_results` for `adr_key='ADR-0004'` matches the in-process measurement; `tripped_triggers` non-null |
-| Admin UI gates on role | `e2e-playwright/entities-aliases.spec.ts` (new) | operator-only login → /entities/aliases shows "Admin required" banner, revoke button disabled |
+| Admin JWT can hard-revoke; operator-only cannot | `e2e/resolver.test.ts > alias_hard_revoke_requires_admin_role` (promote `it.todo`) | adminClient → 200 + `entity_resolution_events` row with `kind='alias_hard_revoke'`; operatorOnlyClient → 403 `{error:'admin_required'}` |
+| Reason length enforced on hard-revoke | same test, second branch | `reason.length=4` → 400 `{error:'hard_revoke_reason_too_short'}` |
+| Cross-tenant revoke blocked | `e2e/resolver.test.ts > cross_tenant_revoke_returns_422` (new) | tenant-A operator hitting tenant-B alias → 422 `{error:'cross_tenant'}` and no event row emitted |
+| `alias_corpus_ready` fires once at threshold | `supabase/functions/sentinel-tick/checks/alias-corpus-ready.test.ts` (new Deno test) | mock `count=999` → null; mock `count=1000` → finding with severity `info`; second invocation same day → null (dedupe) |
+| Blocked rows leave open feed | `e2e/morning-review.spec.ts` smoke (manual check OK; not a new test) | `select count(*) from discussion_actions where status='open' and title ilike 'ADR%bench%'` drops by 6 |
 
-`tdd` discipline: write the four new `e2e/resolver.test.ts` cases (currently `it.todo` or absent) before touching `entity-resolve`. UI Playwright test before the page. ADR-0004 bench script already exists — only adds a `--write-decision` flag that updates the ADR markdown's status line.
+`tdd` discipline: write the 2 promoted resolver cases first (currently `it.todo` at lines around 439+ in `e2e/resolver.test.ts`), confirm they fail against current handler (they should already pass — gating exists from M4), then commit. Write the Deno test for the sentinel check before the check function.
 
 ## Validation gates
 
-Run after each milestone slice; **all** must be green before "ready":
+Run after build slice; all must be green before "ready":
 
 ```
-bun run lint:ratchet                       # no new no-explicit-any sites
-bun run typecheck                          # tsc --noEmit
-bun run logger:coverage                    # withLogger wrap check
-bunx vitest run e2e/resolver.test.ts       # 4 new cases pass
-bunx vitest run e2e/security-definer-gating.test.ts  # ensure has_role path unbroken
-bun run adr-bench:0004                     # writes adr_bench_results row + JSON in bench-results/
-bunx playwright test e2e-playwright/entities-aliases.spec.ts
-bun run docs:check-drift                   # ADR status flip reflected
+bun run lint:ratchet                                      # no new no-explicit-any
+bun run typecheck                                          # tsc --noEmit
+bun run logger:coverage                                    # sentinel-tick still wrapped
+bunx vitest run e2e/resolver.test.ts                       # 2 newly-promoted + soft-revoke + existing cases
+bunx vitest run e2e/tenant-resolve-isolation.test.ts       # adjacent suite stays green
+deno test supabase/functions/sentinel-tick/checks/         # new alias-corpus-ready test passes
+bun run docs:check-drift                                   # ADR-0004 / ADR-0008 / ISO-42001 edits reflected
 ```
 
 Manual ops gate:
-- ADR-0004 file: `Status: accepted` and the chosen-branch row in §Acceptance has a `✓ matched` annotation.
-- Latest `adr_bench_results` row for `ADR-0004` visible on `/admin/adr-bench`.
-- `/entities/aliases` accessible to operator+admin in preview; revoke / hard-revoke / merge / split round-trip OK and creates events visible on `/admin/entity-resolution`.
+- `read_query` on `discussion_actions where status='blocked'` returns the 6 expected rows with `blocked_reason='phase-5-tables-not-implemented'`.
+- `read_query` count on `tenant_node_aliases` recorded so we know how far below 1000 the corpus currently sits.
+- Invoke `sentinel-tick` once manually; confirm `alias_corpus_ready` is **not** in findings (corpus < 1000) and no exception logged.
 
-`diagnose` skill if the bench p95 sits in the `15–40ms` band: do not flip to MV — add the BRIN index in the same migration and re-bench before deciding.
+`diagnose` skill if the 2 promoted resolver tests fail unexpectedly: read `entity-resolve` handler at the `hardRevoke` branch and confirm the `isAdmin` check survives any post-M4 refactor.
 
 ## Out of scope (footer — feeds `plan-footer-ingest`)
 
-- Telegram routing for `alias_revoke_burst` — owed chat-first checklist; separate task.
-- Fact-side cascade (`canonical_facts.binding_status`, staged re-quarantine, KR grey-out) — Phase 6.
-- `resolve_truth()` wiring for resolver `conflict_open` events — W7.2 task already open.
-- Per-tenant descriptor-weight editing UI — Phase 6 onboarding.
-- Bulk-conflict pattern detection (ADR-0005) — separate sprint.
-- AIMS oversight-matrix column on `docs/iso42001-gap-analysis.md` §1 — AIMS lane (gap #2 from yesterday's stub), not resolver work.
-- ADR-0003 ancestry flip — gated on real ≥5k-node tenant tree, not on this sprint.
-- E2E admin-fixture provisioning automation — for now operator manually creates `E2E_ADMIN_*` GH secret; bootstrap-admin script deferred.
+- Running the ADR-0004 bench + flipping ADR `proposed → accepted` — gated on `alias_corpus_ready` firing; will be a separate session triggered by the sentinel finding.
+- Telegram routing for `alias_revoke_burst` — Batch B (owes 4-question chat-first round).
+- `resolve_truth()` wiring for resolver `conflict_open` events — Batch C (W7.2 task).
+- Phase 6 canonical-fact cascade (`binding_status`, staged re-quarantine, KR grey-out) — Batch F (plan-only).
+- Lint-ratchet pass #2 on next-worst file — Batch E.
+- Drop-7-dead-tables migration — Batch E (destructive, deserves its own review).
+- ISO-42001 oversight column expansion to §§2–4 — this batch covers §1 (Phase 5 resolver surfaces) only; the other 3 sections are Phase 6/W7 territory.
+- ADR-0008 implementation (the actual expert-feedback verifier) — gated explicitly by the promotion criteria this batch ships.
