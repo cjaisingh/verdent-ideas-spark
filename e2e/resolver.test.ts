@@ -582,4 +582,44 @@ describe("entity-resolve — s5.3 M4 hard-revoke admin gating", () => {
     expect(r.status).toBe(422);
     expect(r.body.error).toBe("cross_tenant_rejected");
   });
+
+  it("soft_revoke_idempotent — second call returns idempotent:true with no new event row", async () => {
+    const created = await call(
+      "/alias/create",
+      { tenantId: tenant, nodeId, kind: "name", value: `M4 idem ${nodeId.slice(0, 4)}` },
+      `m4-idem-create-${nodeId}`,
+    );
+    const aliasId = created.body.alias_id as string;
+
+    const first = await call(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "first" },
+      `m4-idem-first-${aliasId}`,
+    );
+    expect(first.status).toBe(200);
+    expect(first.body.idempotent).toBeUndefined();
+
+    // Distinct idempotency key — second call hits the `revoked_at IS NOT NULL`
+    // short-circuit, not the request-cache replay. Must still be a 200 with
+    // `idempotent: true` and emit zero new event rows.
+    const before = await sb
+      .from("entity_resolution_events")
+      .select("id", { count: "exact", head: true })
+      .eq("alias_id", aliasId);
+    const beforeCount = before.count ?? 0;
+
+    const second = await call(
+      "/alias/revoke",
+      { tenantId: tenant, aliasId, reason: "second" },
+      `m4-idem-second-${aliasId}`,
+    );
+    expect(second.status).toBe(200);
+    expect(second.body.idempotent).toBe(true);
+
+    const after = await sb
+      .from("entity_resolution_events")
+      .select("id", { count: "exact", head: true })
+      .eq("alias_id", aliasId);
+    expect(after.count ?? 0).toBe(beforeCount);
+  });
 });
