@@ -16,7 +16,7 @@ import {
   checkOutOfScopeStale,
   checkObservabilityRegistry,
   checkResolverLowConfidenceRate,
-  checkAliasRevokeBurst,
+  checkAliasRevokeBurst, checkAliasCorpusReady,
   checkModuleSilent24h,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
@@ -275,6 +275,12 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .gte("created_at", aliasRevokeCutoff)
       .limit(2000));
 
+    // Alias corpus size for ADR-0004 acceptance gate.
+    const { count: aliasCorpusCountRaw } = await sb
+      .from("tenant_node_aliases")
+      .select("*", { count: "exact", head: true });
+    const aliasCorpusCount = aliasCorpusCountRaw ?? 0;
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
@@ -422,6 +428,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now, 15, 10,
         (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
       )),
+      ...timeCheck("alias_corpus_ready", () => checkAliasCorpusReady(aliasCorpusCount)),
       ...timeCheck("module_silent_24h", () => checkModuleSilent24h(
         now,
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],

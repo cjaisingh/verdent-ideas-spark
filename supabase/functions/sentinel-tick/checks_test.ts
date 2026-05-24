@@ -282,3 +282,32 @@ Deno.test("alias_revoke_burst: events outside window ignored", () => {
   const r = checkAliasRevokeBurst(now, 15, 10, rows);
   assertEquals(r.length, 0);
 });
+
+// --- alias_corpus_ready ---------------------------------------------------
+import { checkAliasCorpusReady, ALIAS_CORPUS_READY_THRESHOLD } from "./checks.ts";
+
+Deno.test("alias_corpus_ready: below threshold → no finding", () => {
+  assertEquals(checkAliasCorpusReady(999).length, 0);
+  assertEquals(checkAliasCorpusReady(0).length, 0);
+});
+
+Deno.test("alias_corpus_ready: at threshold → one info finding with stable dedupe key", () => {
+  const r = checkAliasCorpusReady(ALIAS_CORPUS_READY_THRESHOLD);
+  assertEquals(r.length, 1);
+  assertEquals(r[0].kind, "alias_corpus_ready");
+  assertEquals(r[0].severity, "info");
+  assertEquals(r[0].dedupe_key, "alias_corpus_ready");
+  assertEquals((r[0].payload as { alias_count: number }).alias_count, ALIAS_CORPUS_READY_THRESHOLD);
+});
+
+Deno.test("alias_corpus_ready: above threshold → finding payload carries actual count", () => {
+  const r = checkAliasCorpusReady(5_000);
+  assertEquals(r.length, 1);
+  assertEquals((r[0].payload as { alias_count: number }).alias_count, 5_000);
+  assert(r[0].summary.includes("5000"));
+});
+
+Deno.test("alias_corpus_ready: custom threshold honoured", () => {
+  assertEquals(checkAliasCorpusReady(50, 100).length, 0);
+  assertEquals(checkAliasCorpusReady(100, 100).length, 1);
+});

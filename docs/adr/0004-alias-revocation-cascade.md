@@ -38,6 +38,8 @@ Decision is locked to **option 3 (hybrid)**: soft revoke by default, admin-only 
 
 Bench JSON lands in `bench-results/adr-0004-<timestamp>.json` and uploads to `public.adr_bench_results` (`tripped_triggers` reflects which row above the run matched). CHANGELOG entry records the chosen branch.
 
+**Corpus gate (auto-unblock 2026-05-24):** the `alias_corpus_ready` sentinel check (`supabase/functions/sentinel-tick/checks.ts`, kind in `checks.ts` union, severity `info`, dedupe key `alias_corpus_ready`) fires once when `tenant_node_aliases` count crosses 1000. When it appears on /admin/sentinel-findings, run `bun run adr-bench:0004 -- --write-decision` and flip this ADR's status accordingly. Current corpus = **1100** as of 2026-05-24 — the next tick will surface the nudge.
+
 ### M3/M4 milestones
 
 - **M3** — embedding-hint branch on `/resolve` (cap 0.6, skipped when authoritative descriptor hits or topK full); `alias_revoke_burst` sentinel check (>10 in 15min/tenant → high; ≥3 hard → critical); `idx_alias_tenant_revoked` index added.

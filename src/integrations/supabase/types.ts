@@ -2760,6 +2760,7 @@ export type Database = {
       }
       discussion_actions: {
         Row: {
+          blocked_reason: string | null
           ci_branch: string | null
           ci_close_on_success: boolean
           ci_last_checked_at: string | null
@@ -2793,6 +2794,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          blocked_reason?: string | null
           ci_branch?: string | null
           ci_close_on_success?: boolean
           ci_last_checked_at?: string | null
@@ -2826,6 +2828,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          blocked_reason?: string | null
           ci_branch?: string | null
           ci_close_on_success?: boolean
           ci_last_checked_at?: string | null

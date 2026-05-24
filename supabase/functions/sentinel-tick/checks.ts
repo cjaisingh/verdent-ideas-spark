@@ -39,6 +39,7 @@ export type FindingCandidate = {
     | "observability_stale_surface"
     | "resolver_low_confidence_rate"
     | "alias_revoke_burst"
+    | "alias_corpus_ready"
     | "module_silent_24h"
     | "module_register_idempotency_replay_burst";
   severity: "info" | "low" | "medium" | "high" | "critical";
@@ -1384,3 +1385,32 @@ export function checkModuleSilent24h(now: Date, rows: ModuleLivenessRow[]): Find
   return out;
 }
 
+
+// --- alias_corpus_ready ---------------------------------------------------
+// Fires once when tenant_node_aliases count crosses the ADR-0004 acceptance
+// threshold (≥ALIAS_CORPUS_READY_THRESHOLD). Severity `info`; dedupe key is
+// stable so re-firing requires the row to be resolved + corpus to dip below
+// and re-cross. Purpose: auto-nudge the operator that the ADR-0004 bench can
+// finally produce a representative measurement. See
+// docs/adr/0004-alias-revocation-cascade.md § Acceptance.
+export const ALIAS_CORPUS_READY_THRESHOLD = 1000;
+
+export function checkAliasCorpusReady(
+  aliasCount: number,
+  threshold: number = ALIAS_CORPUS_READY_THRESHOLD,
+): FindingCandidate[] {
+  if (aliasCount < threshold) return [];
+  return [{
+    kind: "alias_corpus_ready",
+    severity: "info",
+    summary: `tenant_node_aliases corpus = ${aliasCount} (≥${threshold}). ADR-0004 bench is unblocked; run scripts/adr-bench/adr-0004-revocation.ts --write-decision.`,
+    dedupe_key: "alias_corpus_ready",
+    subject_ref: { adr: "ADR-0004" },
+    payload: {
+      alias_count: aliasCount,
+      threshold,
+      fix_url: "/admin/adr-bench",
+      bench_script: "scripts/adr-bench/adr-0004-revocation.ts",
+    },
+  }];
+}
