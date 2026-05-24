@@ -4,6 +4,15 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-24 — Phase 5 s5.3 M4 close-out)
+- **`e2e/resolver.test.ts`** — new `soft_revoke_idempotent` case: distinct idempotency keys, second call hits the `revoked_at IS NOT NULL` short-circuit, returns `idempotent: true` with zero new `entity_resolution_events` rows. The other three M4 cases (`alias_hard_revoke_requires_admin_role`, `alias_hard_revoke_admin_success`, `alias_hard_revoke_reason_too_short`, `cross_tenant_revoke_returns_422`) were already in place and verified.
+- **`e2e-playwright/entities-aliases.spec.ts`** (new) — operator UI smoke: page renders, admin-required banner shows for non-admin, Merge/Split buttons gated until tenant id entered.
+- **`scripts/adr-bench/adr-0004-revocation.ts`** — new `--write-decision` flag. Run patches `docs/adr/0004-alias-revocation-cascade.md` in place with a `Bench decision` block (chosen branch in `in_table | add_brin | flip_to_mv`, p95, dataset hash, status-flip verdict). Idempotent via HTML-comment-keyed block. Status flip `proposed → accepted` is gated on `alias_row_count >= 1000`; today's corpus = 0 so the block is written but ADR remains `proposed`.
+- **`docs/adr/0004-alias-revocation-cascade.md`** — § Acceptance documents the new `--write-decision` semantics.
+- **`mem/features/entity-resolver.md`** — refreshed Tests section + new "s5.3 M4 close-out" block + explicit Out-of-scope list (fact cascade, `resolve_truth` wiring, Telegram routing).
+
+
+
 ### Added (2026-05-24 — token-lean batch #2: zombie deletes + lint-ratchet + ADR-0008 stub)
 - **`docs/adr/0008-expert-feedback-as-verifier.md`** (status `proposed`) — vocabulary-only stub for Part 2 of ADR-0007. Defines "expert-feedback verifier" as an *additive* capability-promotion signal (operator votes, AWIP Reviews, sentinel findings, post-hoc audits). Build trigger: ≥1 module producing real capability traffic AND ≥1 expert-feedback source wired into `capability_events`. No code, no schema, no scoring weights — those belong in the follow-up ADR with real data to calibrate against.
 
