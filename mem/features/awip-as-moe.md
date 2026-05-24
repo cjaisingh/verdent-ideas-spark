@@ -14,4 +14,4 @@ Build trigger for any of the three: ≥1 module producing real capability traffi
 
 Part 2 (expert-feedback loop as verifier signal) is a standalone follow-up ADR held back until traffic exists.
 
-See `docs/adr/0007-awip-as-moe.md`.
+See `docs/adr/0007-awip-as-moe.md`. Cross-linked from `docs/why-awip.md` § "How the substrate scales (ADR-0007)".
