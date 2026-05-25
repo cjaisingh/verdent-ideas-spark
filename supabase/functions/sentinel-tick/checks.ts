@@ -38,11 +38,13 @@ export type FindingCandidate = {
     | "observability_missing_watcher"
     | "observability_stale_surface"
     | "resolver_low_confidence_rate"
+    | "resolver_no_match_burst"
     | "alias_revoke_burst"
     | "alias_corpus_ready"
     | "module_silent_24h"
     | "module_register_idempotency_replay_burst"
     | "app_secrets_plaintext_present";
+
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
