@@ -38,6 +38,8 @@ type SessionRow = {
   files_touched: string[];
   migrations_applied: string[];
   edge_fns_touched: string[];
+  unresolved: string[];
+  bootstrap_acknowledged: boolean;
 };
 
 type ActionRow = {
