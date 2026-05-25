@@ -67,6 +67,7 @@ import Trust from "./pages/Trust";
 import Connections from "./pages/Connections";
 import EdgeHealth from "./pages/EdgeHealth";
 import AdminTimeline from "./pages/AdminTimeline";
+import AdminSessionTimeline from "./pages/AdminSessionTimeline";
 import AdminJobs from "./pages/AdminJobs";
 import SentinelPerf from "./pages/SentinelPerf";
 import AdminVideos from "./pages/AdminVideos";
