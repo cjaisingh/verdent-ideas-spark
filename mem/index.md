@@ -18,6 +18,7 @@ Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔author
 Docs are reference, not narrative. `mem/**` ≤30 lines, `docs/**` ≤200, index entries ≤150 chars. Prune in same edit.
 Read live before planning (query `sentinel_findings`/`automation_runs`, not cached state); default hypothesis on a finding is "detector wrong" before "system broken"; verify-before-scope.
 "Deployed" ≠ "verified" — run the relevant check (test/curl/read_query/findings re-query/console) and cite the persona consulted from `docs/agents/team/` before planning. See [verify-completion](mem://preferences/verify-completion).
+app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plaintext only via `get_app_secret` (service_role) / admin RPCs (preview only). Never `.from('app_secrets').select('value')` — column is gone.
 
 
 
