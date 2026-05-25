@@ -15,7 +15,7 @@ import {
   checkInboxKindClassifyFailures, checkInboxSourceSilent,
   checkOutOfScopeStale,
   checkObservabilityRegistry,
-  checkResolverLowConfidenceRate,
+  checkResolverLowConfidenceRate, checkResolverNoMatchBurst,
   checkAliasRevokeBurst, checkAliasCorpusReady,
   checkModuleSilent24h,
   checkAppSecretsPlaintextPresent,
@@ -263,6 +263,20 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .select("tenant_id, band, event_count")
       .limit(500));
 
+    // Resolver no-match burst (s5.2/t3). 60-min window over kind=propose events.
+    const resolverProposeCutoff = new Date(now.getTime() - 60 * 60_000).toISOString();
+    const { data: resolverProposeRows } = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:resolver_propose_events",
+      request_id: reqId,
+      step_label: "Scan recent resolver propose events (60m)", phase_kind: "db_scan",
+    }, () => sb
+      .from("entity_resolution_events")
+      .select("kind, occurred_at, payload")
+      .eq("kind", "propose")
+      .gte("occurred_at", resolverProposeCutoff)
+      .limit(2000));
+
+
     // Alias revoke burst (W: alias_revoke_burst). 15-min window.
     const aliasRevokeCutoff = new Date(now.getTime() - 20 * 60_000).toISOString();
     const { data: aliasRevokeRows } = await recordStep(sb, {
@@ -455,6 +469,15 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (resolverHealthRows ?? []) as ResolverHealthRow[],
       )),
+      ...timeCheck("resolver_no_match_burst", () => checkResolverNoMatchBurst(
+        now,
+        (resolverProposeRows ?? []) as {
+          kind: string;
+          occurred_at: string;
+          payload: { confidence_band?: string | null } | null;
+        }[],
+      )),
+
       ...timeCheck("alias_revoke_burst", () => checkAliasRevokeBurst(
         now, 15, 10,
         (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
