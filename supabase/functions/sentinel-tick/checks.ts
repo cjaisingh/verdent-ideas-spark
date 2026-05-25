@@ -1415,3 +1415,36 @@ export function checkAliasCorpusReady(
     },
   }];
 }
+
+/**
+ * ADR-0009: app_secrets values are encrypted at rest in `value_ciphertext bytea`.
+ * The legacy plaintext `value` column was dropped. If anything (a buggy
+ * migration, an over-eager fix, a manual ALTER) re-introduces it, every row
+ * silently regresses to plaintext. Fire critical the moment the column
+ * reappears OR if any row has NULL ciphertext.
+ */
+export type AppSecretsAtRestSignal = {
+  legacy_value_column_present: boolean;
+  rows_with_null_ciphertext: number;
+};
+
+export function checkAppSecretsPlaintextPresent(
+  signal: AppSecretsAtRestSignal,
+): FindingCandidate[] {
+  const issues: string[] = [];
+  if (signal.legacy_value_column_present) {
+    issues.push("legacy plaintext `value` column has reappeared on public.app_secrets");
+  }
+  if (signal.rows_with_null_ciphertext > 0) {
+    issues.push(`${signal.rows_with_null_ciphertext} row(s) have NULL value_ciphertext`);
+  }
+  if (issues.length === 0) return [];
+  return [{
+    kind: "app_secrets_plaintext_present",
+    severity: "critical",
+    summary: `app_secrets at-rest encryption regressed: ${issues.join("; ")}. See ADR-0009.`,
+    dedupe_key: "app_secrets_plaintext_present",
+    subject_ref: { table: "public.app_secrets", adr: "ADR-0009" },
+    payload: { ...signal, fix_url: "/admin", runbook: "docs/runbooks/secrets-mek-rotation.md" },
+  }];
+}
