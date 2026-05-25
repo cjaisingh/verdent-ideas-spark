@@ -103,6 +103,7 @@ export default function AdminSessionTimeline() {
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<string>("all");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [replayTarget, setReplayTarget] = useState<SessionRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
