@@ -130,6 +130,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/cron-config", title: "Automation schedules", icon: Settings2 },
   { url: "/admin/night-shift", title: "Night Shift (all jobs)", icon: Moon },
   { url: "/admin/logs", title: "Logs", icon: ScrollText },
+  { url: "/admin/session-timeline", title: "Session timeline", icon: ScrollText },
   { url: "/admin/ai-usage", title: "AI usage (admin)", icon: Sparkles },
   { url: "/admin/ai-jobs", title: "AI jobs (local worker)", icon: Sparkles },
   { url: "/admin/videos", title: "HeyGen videos", icon: Video },
