@@ -1249,6 +1249,112 @@ export type Database = {
         }
         Relationships: []
       }
+      canonical_facts: {
+        Row: {
+          ancestry_ids: string[]
+          auto_promoted: boolean
+          effective_at: string
+          fact_type: string
+          id: string
+          promoted_at: string
+          promoted_by: string | null
+          raw_record_id: string
+          recorded_at: string
+          source_mapping_id: string
+          staged_row_no: number
+          staging_batch_id: string
+          superseded_by: string | null
+          supersedes_id: string | null
+          tenant_id: string
+          tenant_node_id: string
+          value: Json
+          value_hash: string
+        }
+        Insert: {
+          ancestry_ids?: string[]
+          auto_promoted: boolean
+          effective_at: string
+          fact_type: string
+          id?: string
+          promoted_at?: string
+          promoted_by?: string | null
+          raw_record_id: string
+          recorded_at?: string
+          source_mapping_id: string
+          staged_row_no: number
+          staging_batch_id: string
+          superseded_by?: string | null
+          supersedes_id?: string | null
+          tenant_id: string
+          tenant_node_id: string
+          value: Json
+          value_hash: string
+        }
+        Update: {
+          ancestry_ids?: string[]
+          auto_promoted?: boolean
+          effective_at?: string
+          fact_type?: string
+          id?: string
+          promoted_at?: string
+          promoted_by?: string | null
+          raw_record_id?: string
+          recorded_at?: string
+          source_mapping_id?: string
+          staged_row_no?: number
+          staging_batch_id?: string
+          superseded_by?: string | null
+          supersedes_id?: string | null
+          tenant_id?: string
+          tenant_node_id?: string
+          value?: Json
+          value_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canonical_facts_raw_record_id_fkey"
+            columns: ["raw_record_id"]
+            isOneToOne: false
+            referencedRelation: "raw_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canonical_facts_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "source_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canonical_facts_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "v_ingest_pipeline_health"
+            referencedColumns: ["source_mapping_id"]
+          },
+          {
+            foreignKeyName: "canonical_facts_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "canonical_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canonical_facts_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "canonical_facts_tenant_node_id_fkey"
+            columns: ["tenant_node_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       capabilities: {
         Row: {
           created_at: string
@@ -1613,6 +1719,65 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      conflict_rules: {
+        Row: {
+          active: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          fact_type: string
+          id: string
+          match_pattern: Json
+          precedence: number
+          resolution: Database["public"]["Enums"]["fact_conflict_resolution"]
+          revoked_at: string | null
+          revoked_by: string | null
+          superseded_by: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description: string
+          fact_type: string
+          id?: string
+          match_pattern?: Json
+          precedence: number
+          resolution: Database["public"]["Enums"]["fact_conflict_resolution"]
+          revoked_at?: string | null
+          revoked_by?: string | null
+          superseded_by?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          fact_type?: string
+          id?: string
+          match_pattern?: Json
+          precedence?: number
+          resolution?: Database["public"]["Enums"]["fact_conflict_resolution"]
+          revoked_at?: string | null
+          revoked_by?: string | null
+          superseded_by?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conflict_rules_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "conflict_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       connection_audit_log: {
         Row: {
@@ -3015,6 +3180,121 @@ export type Database = {
         }
         Relationships: []
       }
+      fact_conflicts: {
+        Row: {
+          applied_rule_id: string | null
+          created_at: string
+          existing_canonical_id: string
+          existing_value: Json
+          fact_type: string
+          id: string
+          incoming_value: Json
+          resolution:
+            | Database["public"]["Enums"]["fact_conflict_resolution"]
+            | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_canonical_id: string | null
+          row_no: number
+          source_mapping_id: string
+          staging_batch_id: string
+          status: Database["public"]["Enums"]["fact_conflict_status"]
+          tenant_id: string
+          tenant_node_id: string
+          updated_at: string
+          value_pair_hash: string
+        }
+        Insert: {
+          applied_rule_id?: string | null
+          created_at?: string
+          existing_canonical_id: string
+          existing_value: Json
+          fact_type: string
+          id?: string
+          incoming_value: Json
+          resolution?:
+            | Database["public"]["Enums"]["fact_conflict_resolution"]
+            | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_canonical_id?: string | null
+          row_no: number
+          source_mapping_id: string
+          staging_batch_id: string
+          status?: Database["public"]["Enums"]["fact_conflict_status"]
+          tenant_id: string
+          tenant_node_id: string
+          updated_at?: string
+          value_pair_hash: string
+        }
+        Update: {
+          applied_rule_id?: string | null
+          created_at?: string
+          existing_canonical_id?: string
+          existing_value?: Json
+          fact_type?: string
+          id?: string
+          incoming_value?: Json
+          resolution?:
+            | Database["public"]["Enums"]["fact_conflict_resolution"]
+            | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_canonical_id?: string | null
+          row_no?: number
+          source_mapping_id?: string
+          staging_batch_id?: string
+          status?: Database["public"]["Enums"]["fact_conflict_status"]
+          tenant_id?: string
+          tenant_node_id?: string
+          updated_at?: string
+          value_pair_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fact_conflicts_applied_rule_fk"
+            columns: ["applied_rule_id"]
+            isOneToOne: false
+            referencedRelation: "conflict_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fact_conflicts_existing_canonical_id_fkey"
+            columns: ["existing_canonical_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fact_conflicts_resolved_canonical_id_fkey"
+            columns: ["resolved_canonical_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_facts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fact_conflicts_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "source_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fact_conflicts_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "v_ingest_pipeline_health"
+            referencedColumns: ["source_mapping_id"]
+          },
+          {
+            foreignKeyName: "fact_conflicts_tenant_node_id_fkey"
+            columns: ["tenant_node_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       frontend_error_logs: {
         Row: {
           colno: number | null
@@ -3257,6 +3537,56 @@ export type Database = {
           tenant_id?: string | null
         }
         Relationships: []
+      }
+      ingest_events: {
+        Row: {
+          actor_id: string | null
+          auto: boolean
+          correlation_id: string | null
+          event_type: Database["public"]["Enums"]["ingest_event_type"]
+          id: string
+          parent_event_id: string | null
+          payload: Json
+          recorded_at: string
+          subject_id: string
+          subject_type: string
+          tenant_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          auto?: boolean
+          correlation_id?: string | null
+          event_type: Database["public"]["Enums"]["ingest_event_type"]
+          id?: string
+          parent_event_id?: string | null
+          payload?: Json
+          recorded_at?: string
+          subject_id: string
+          subject_type: string
+          tenant_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          auto?: boolean
+          correlation_id?: string | null
+          event_type?: Database["public"]["Enums"]["ingest_event_type"]
+          id?: string
+          parent_event_id?: string | null
+          payload?: Json
+          recorded_at?: string
+          subject_id?: string
+          subject_type?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingest_events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "ingest_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ingestion_runs: {
         Row: {
@@ -4874,6 +5204,54 @@ export type Database = {
         }
         Relationships: []
       }
+      raw_records: {
+        Row: {
+          adapter_id: string
+          bytes: number
+          created_at: string
+          id: string
+          idempotency_key: string
+          payload: Json
+          payload_hash: string
+          pii_declared: Json
+          received_at: string
+          retain_until: string | null
+          source_id: string
+          source_kind: Database["public"]["Enums"]["raw_source_kind"]
+          tenant_id: string
+        }
+        Insert: {
+          adapter_id: string
+          bytes: number
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          payload: Json
+          payload_hash: string
+          pii_declared?: Json
+          received_at: string
+          retain_until?: string | null
+          source_id: string
+          source_kind: Database["public"]["Enums"]["raw_source_kind"]
+          tenant_id: string
+        }
+        Update: {
+          adapter_id?: string
+          bytes?: number
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          payload?: Json
+          payload_hash?: string
+          pii_declared?: Json
+          received_at?: string
+          retain_until?: string | null
+          source_id?: string
+          source_kind?: Database["public"]["Enums"]["raw_source_kind"]
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       resolver_decisions: {
         Row: {
           actor: string | null
@@ -6345,6 +6723,152 @@ export type Database = {
           target_query?: Json
         }
         Relationships: []
+      }
+      source_mappings: {
+        Row: {
+          adapter_id: string
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          id: string
+          mapping: Json
+          notes: string | null
+          status: Database["public"]["Enums"]["source_mapping_status"]
+          superseded_by: string | null
+          tenant_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          adapter_id: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          mapping?: Json
+          notes?: string | null
+          status?: Database["public"]["Enums"]["source_mapping_status"]
+          superseded_by?: string | null
+          tenant_id: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          adapter_id?: string
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          mapping?: Json
+          notes?: string | null
+          status?: Database["public"]["Enums"]["source_mapping_status"]
+          superseded_by?: string | null
+          tenant_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_mappings_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "source_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_mappings_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "v_ingest_pipeline_health"
+            referencedColumns: ["source_mapping_id"]
+          },
+        ]
+      }
+      staged_records: {
+        Row: {
+          created_at: string
+          descriptors: Json
+          effective_at: string
+          fact_type: string
+          promoted_canonical_id: string | null
+          raw_record_id: string
+          row_no: number
+          source_mapping_id: string
+          staging_batch_id: string
+          tenant_id: string
+          tenant_node_id: string | null
+          updated_at: string
+          validation_errors: Json
+          validation_status: Database["public"]["Enums"]["staged_validation_status"]
+          value: Json
+          value_hash: string
+        }
+        Insert: {
+          created_at?: string
+          descriptors?: Json
+          effective_at: string
+          fact_type: string
+          promoted_canonical_id?: string | null
+          raw_record_id: string
+          row_no: number
+          source_mapping_id: string
+          staging_batch_id: string
+          tenant_id: string
+          tenant_node_id?: string | null
+          updated_at?: string
+          validation_errors?: Json
+          validation_status?: Database["public"]["Enums"]["staged_validation_status"]
+          value: Json
+          value_hash: string
+        }
+        Update: {
+          created_at?: string
+          descriptors?: Json
+          effective_at?: string
+          fact_type?: string
+          promoted_canonical_id?: string | null
+          raw_record_id?: string
+          row_no?: number
+          source_mapping_id?: string
+          staging_batch_id?: string
+          tenant_id?: string
+          tenant_node_id?: string | null
+          updated_at?: string
+          validation_errors?: Json
+          validation_status?: Database["public"]["Enums"]["staged_validation_status"]
+          value?: Json
+          value_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staged_records_raw_record_id_fkey"
+            columns: ["raw_record_id"]
+            isOneToOne: false
+            referencedRelation: "raw_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staged_records_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "source_mappings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staged_records_source_mapping_id_fkey"
+            columns: ["source_mapping_id"]
+            isOneToOne: false
+            referencedRelation: "v_ingest_pipeline_health"
+            referencedColumns: ["source_mapping_id"]
+          },
+          {
+            foreignKeyName: "staged_records_tenant_node_id_fkey"
+            columns: ["tenant_node_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       table_surface_probes: {
         Row: {
@@ -7845,6 +8369,19 @@ export type Database = {
         }
         Relationships: []
       }
+      v_ingest_pipeline_health: {
+        Row: {
+          adapter_id: string | null
+          conflicts_open: number | null
+          conflicts_resolved_24h: number | null
+          promoted_24h: number | null
+          quarantined_total: number | null
+          source_mapping_id: string | null
+          staged_pending: number | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
       v_job_eta_baseline: {
         Row: {
           job: string | null
@@ -8396,12 +8933,34 @@ export type Database = {
         | "alias_merge"
         | "alias_split"
         | "alias_hard_revoke"
+      fact_conflict_resolution:
+        | "keep_existing"
+        | "accept_incoming"
+        | "superseded_by_rule"
+        | "manual_value"
+      fact_conflict_status: "open" | "resolved" | "dismissed"
+      ingest_event_type:
+        | "row_staged"
+        | "row_promoted"
+        | "row_quarantined"
+        | "conflict_raised"
+        | "conflict_resolved"
+        | "mapping_approved"
+        | "mapping_superseded"
+        | "fact_superseded"
       notebook_kind: "thought" | "issue" | "research" | "suggestion" | "todo"
       notebook_status: "open" | "in_progress" | "resolved" | "archived"
       okr_creator: "discovery_ai" | "awip" | "human"
       okr_kind: "objective" | "key_result"
       okr_status: "draft" | "active" | "superseded" | "achieved" | "abandoned"
       plan_status: "todo" | "in_progress" | "blocked" | "done"
+      raw_source_kind:
+        | "file"
+        | "api"
+        | "webhook"
+        | "voice"
+        | "email"
+        | "bms_batch"
       roadmap_comment_kind: "comment" | "question" | "decision"
       roadmap_status: "planned" | "active" | "done" | "paused"
       roadmap_task_status:
@@ -8411,6 +8970,8 @@ export type Database = {
         | "review"
         | "done"
         | "wont_do"
+      source_mapping_status: "draft" | "approved" | "deprecated"
+      staged_validation_status: "pending" | "passed" | "failed" | "quarantined"
       tenant_node_kind: "org" | "team" | "project" | "individual"
       tenant_node_status: "active" | "merged" | "split" | "retired"
       work_category:
@@ -8575,12 +9136,37 @@ export const Constants = {
         "alias_split",
         "alias_hard_revoke",
       ],
+      fact_conflict_resolution: [
+        "keep_existing",
+        "accept_incoming",
+        "superseded_by_rule",
+        "manual_value",
+      ],
+      fact_conflict_status: ["open", "resolved", "dismissed"],
+      ingest_event_type: [
+        "row_staged",
+        "row_promoted",
+        "row_quarantined",
+        "conflict_raised",
+        "conflict_resolved",
+        "mapping_approved",
+        "mapping_superseded",
+        "fact_superseded",
+      ],
       notebook_kind: ["thought", "issue", "research", "suggestion", "todo"],
       notebook_status: ["open", "in_progress", "resolved", "archived"],
       okr_creator: ["discovery_ai", "awip", "human"],
       okr_kind: ["objective", "key_result"],
       okr_status: ["draft", "active", "superseded", "achieved", "abandoned"],
       plan_status: ["todo", "in_progress", "blocked", "done"],
+      raw_source_kind: [
+        "file",
+        "api",
+        "webhook",
+        "voice",
+        "email",
+        "bms_batch",
+      ],
       roadmap_comment_kind: ["comment", "question", "decision"],
       roadmap_status: ["planned", "active", "done", "paused"],
       roadmap_task_status: [
@@ -8591,6 +9177,8 @@ export const Constants = {
         "done",
         "wont_do",
       ],
+      source_mapping_status: ["draft", "approved", "deprecated"],
+      staged_validation_status: ["pending", "passed", "failed", "quarantined"],
       tenant_node_kind: ["org", "team", "project", "individual"],
       tenant_node_status: ["active", "merged", "split", "retired"],
       work_category: [
