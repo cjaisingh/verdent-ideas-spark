@@ -61,28 +61,31 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   }
 
 
-  const { data: rows, error } = await sb
-    .from("app_secrets").select("key, value").in("key", REQUIRED_SECRETS as unknown as string[]);
-  if (error) {
-    await recordRun("error", 500, `app_secrets query failed: ${error.message}`);
-    return json({ error: error.message }, 500);
+  // Per ADR-0009, plaintext lives in encrypted column and is only readable
+  // via public.get_app_secret(_key) under service_role. We fetch each key one
+  // at a time (only 2 required secrets — negligible).
+  const dbValues = new Map<string, string>();
+  for (const key of REQUIRED_SECRETS) {
+    const { data, error: rpcErr } = await sb.rpc("get_app_secret", { _key: key });
+    if (rpcErr) {
+      await recordRun("error", 500, `get_app_secret(${key}) failed: ${rpcErr.message}`);
+      return json({ error: rpcErr.message }, 500);
+    }
+    if (typeof data === "string" && data.length > 0) dbValues.set(key, data);
   }
-  const dbValues = new Map<string, string>(
-    (rows ?? []).map((r: any) => [r.key as string, r.value as string]),
-  );
   const missingInEnv = REQUIRED_SECRETS.filter((k) => !Deno.env.get(k));
 
   // Auto-sync: if a required secret exists in env but not in app_secrets,
-  // upsert it so cron jobs (which read from app_secrets) can authenticate.
+  // write the encrypted row so cron jobs (which read via get_app_secret) can authenticate.
   const synced: string[] = [];
   for (const key of REQUIRED_SECRETS) {
     const envVal = Deno.env.get(key);
     if (!envVal) continue;
     if (dbValues.has(key)) continue;
-    const { error: upErr } = await sb.from("app_secrets").upsert({
-      key, value: envVal,
-      description: `Auto-synced from edge env by secrets-health-check`,
-    }, { onConflict: "key" });
+    const { error: upErr } = await sb.rpc("set_app_secret", {
+      _key: key, _plaintext: envVal,
+      _description: `Auto-synced from edge env by secrets-health-check`,
+    });
     if (!upErr) {
       dbValues.set(key, envVal);
       synced.push(key);
@@ -92,12 +95,7 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   }
   const missingInDb = REQUIRED_SECRETS.filter((k) => !dbValues.has(k));
 
-  // Mismatch detection: row present in BOTH places but values differ.
-  // We never log raw values — only short fingerprints so operators can tell
-  // which side rotated without leaking the secret.
-  // Opt-in `?sync=env-to-db` aligns the DB to env (env is the rotation surface
-  // operators use via the Lovable secret form). Only available to operator-
-  // authed callers (Bearer auth), never to the cron path.
+  // Mismatch detection: present in BOTH places but values differ.
   const url = new URL(req.url);
   const syncMode = url.searchParams.get("sync");
   const allowSync = !triggeredByCron && syncMode === "env-to-db";
@@ -110,10 +108,10 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     if (envVal === dbVal) continue;
     let resynced = false;
     if (allowSync) {
-      const { error: upErr } = await sb.from("app_secrets").upsert({
-        key, value: envVal,
-        description: `Synced env→db by secrets-health-check (operator sync)`,
-      }, { onConflict: "key" });
+      const { error: upErr } = await sb.rpc("set_app_secret", {
+        _key: key, _plaintext: envVal,
+        _description: `Synced env→db by secrets-health-check (operator sync)`,
+      });
       if (!upErr) { dbValues.set(key, envVal); resynced = true; }
     }
     mismatches.push({
