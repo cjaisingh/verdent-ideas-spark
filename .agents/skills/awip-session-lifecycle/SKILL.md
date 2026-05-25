@@ -28,22 +28,49 @@ POST to `session-summary-log` with:
   "session_id": "<uuid>",
   "started_at": "<iso>",
   "ended_at": "<iso>",
-  "summary": "<2-4 sentence recap>",
+  "outcome": "<2-4 sentence recap>",
   "out_of_scope": ["item one", "item two"],
-  "tasks_done": ["..."],
-  "tasks_blocked": ["..."]
+  "tasks_done": ["s5.1/t3", "s6.1/t0"]
 }
 ```
 
-Both endpoints are idempotent — re-POSTing the same `source_ref` is safe.
+### `tasks_done` — task_id resolution
+
+Each entry may be a bare string OR `{ task_id, summary?, issues?, fixes?, tokens_in?, tokens_out?, tokens_total?, duration_ms?, model?, model_provider? }`.
+
+`task_id` accepts **either**:
+
+- a **UUID** matching `roadmap_tasks.id`, or
+- a **natural key** matching `roadmap_tasks.key` (e.g. `"s5.1/t3"`, `"s6.1/t0"`).
+
+The endpoint batch-resolves non-UUID strings via `roadmap_tasks.key` in a single lookup. **Never invent or `gen_random_uuid()` a task_id** — `roadmap_work_log.task_id` has a FK to `roadmap_tasks(id)` and a fabricated UUID will fail the insert. If a task does not yet exist in `roadmap_tasks`, create it first (or omit from `tasks_done` and capture the work in `outcome` / `out_of_scope`).
+
+The response body carries:
+
+```json
+"work_log": {
+  "attempted": 2,
+  "inserted": 2,
+  "skipped": 0,
+  "resolved": 2,
+  "unresolved": [],
+  "errors": []
+}
+```
+
+Inspect `unresolved[]` after every POST. Non-empty means the key/UUID was not found in `roadmap_tasks` — fix the entry or create the task and re-POST (idempotent on `(session_id, task_id)`).
+
+Both endpoints are idempotent — re-POSTing the same `source_ref` / `(session_id, task_id)` is safe.
 
 ## Verification
 
 - `select count(*) from discussion_actions where source in ('plan_footer','session_summary') and created_at > now() - interval '1 day';` should reflect the session's deferred items.
-- `sentinel_findings.kind = 'out_of_scope_stale'` will fire if those items sit untriaged for >14d.
+- `select count(*) from roadmap_work_log where session_id = '<uuid>';` should equal `work_log.inserted`.
+- `sentinel_findings.kind = 'out_of_scope_stale'` will fire if deferred items sit untriaged for >14d.
 
 ## References
 
 - `docs/session-lifecycle.md` — full contract
 - `docs/out-of-scope-autolog.md` — autologger internals
+- `mem://features/work-log-fanout` — per-task fan-out contract
 - `mem://features/out-of-scope-autolog`
