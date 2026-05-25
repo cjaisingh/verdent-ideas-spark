@@ -4,6 +4,16 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-25 — s6.1/t1 ingest pipeline schema)
+- **Seven new tables** for the Phase 6 ingest backbone: `source_mappings`, `raw_records`, `staged_records`, `canonical_facts`, `fact_conflicts`, `conflict_rules`, `ingest_events`. All operator-only RLS; `staged_records` / `fact_conflicts` / `ingest_events` added to `supabase_realtime`.
+- **DB-enforced invariants**: `canonical_facts` is append-only (`tg_canonical_facts_forbid_update` allows only NULL→non-null on `superseded_by`; `tg_canonical_facts_forbid_delete` blocks all deletes); `tenant_node_id NOT NULL`; partial unique `(tenant_node_id, fact_type, effective_at) WHERE superseded_by IS NULL` forces conflict detection; approved `source_mappings` rows immutable (`tg_source_mappings_lock_approved`); `ingest_events` blocks UPDATE/DELETE.
+- **`ancestry_ids uuid[]`** auto-populated on canonical insert from `tenant_nodes.ancestry_ids` (ADR-0003 winner), GIN-indexed for future RLS scoping.
+- **`fact_conflicts.value_pair_hash`** indexed by `(source_mapping_id, fact_type, value_pair_hash)` — the exact key the `CONFLICT_TRIAGE_RETRIEVAL_CONTRACT` queries (ADR-0005 prep, no algorithm yet).
+- **`v_ingest_pipeline_health`** view (security_invoker) for the future `/ingest` dashboard — locks the counter shape now.
+- **Roadmap**: `s6.1/t1` created and flipped `→ done`.
+
+
+
 ### Added (2026-05-25 — s5.1 close-out + s6.1/t0 retrieval-shape registry)
 - **`public.retrieval_contracts`** — new git-versioned registry (operator read, admin write, realtime on) declaring per-consumer retrieval shape (`prose` / `hierarchical-doc` / `tabular` / `graph` / `relational` / `time-series`), store URI, primary key, token budget, freshness window, fallback, status (`declared|implemented|deprecated`). Unique on `consumer`. Token budget > 0 check.
 - **Seeded the first 6 surfaces**: `morning-review` (hierarchical-doc), `companion-cloud-chat` (prose), `awip-reviews` (prose), `sentinel-tick` (tabular), `night-agent` (graph), `claims-ingest` (relational). The remaining surfaces follow as they ship — low initial coverage is by design.
