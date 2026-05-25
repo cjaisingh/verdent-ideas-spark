@@ -282,3 +282,62 @@ Deno.test("OvernightResponseEnvelope: parses a minimal valid envelope", () => {
   });
   assertEquals(res.success, true);
 });
+
+// ---- s6.1/t0: retrieval-shape declaration registry helpers ---------------
+import {
+  CONSUMER_KINDS,
+  DECLARATION_STATUSES,
+  isComplete,
+  rowToDeclaration,
+  type RetrievalContractRow,
+} from "./retrieval-shape-declaration.ts";
+
+Deno.test("declaration registry: CONSUMER_KINDS + DECLARATION_STATUSES stable", () => {
+  assertEquals(CONSUMER_KINDS.length, 4);
+  assertEquals(DECLARATION_STATUSES.length, 3);
+});
+
+Deno.test("declaration registry: rowToDeclaration maps snake → camel", () => {
+  const row: RetrievalContractRow = {
+    id: UUID_A,
+    consumer: "morning-review",
+    consumer_kind: "cron",
+    shape: "hierarchical-doc",
+    store: "postgres:public.morning_reviews",
+    primary_key: "(id)",
+    token_budget: 8000,
+    freshness_window: "24h",
+    fallback: "plain SELECT",
+    declared_by: "plan:s6.1/t0",
+    status: "implemented",
+    notes: null,
+    created_at: "2026-05-25T10:00:00Z",
+    updated_at: "2026-05-25T10:00:00Z",
+  };
+  const d = rowToDeclaration(row);
+  assertEquals(d.consumer, "morning-review");
+  assertEquals(d.consumerKind, "cron");
+  assertEquals(d.primaryKey, "(id)");
+  assertEquals(d.tokenBudget, 8000);
+  assert(isComplete(d));
+});
+
+Deno.test("declaration registry: isComplete rejects partials and bad token budget", () => {
+  assertEquals(isComplete({ consumer: "x" }), false);
+  assertEquals(
+    isComplete({
+      consumer: "x",
+      consumerKind: "cron",
+      shape: "prose",
+      store: "s",
+      primaryKey: "(id)",
+      tokenBudget: 0,
+      freshnessWindow: "1d",
+      fallback: "f",
+      declaredBy: "d",
+      status: "declared",
+    }),
+    false,
+  );
+});
+

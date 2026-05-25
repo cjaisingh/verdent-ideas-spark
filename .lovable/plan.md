@@ -1,124 +1,168 @@
+# Plan: close s5.1 + open s6.1 — domain & data frameworks foundation
 
 ## Goal
-Encrypt `public.app_secrets.value` at rest using `pgcrypto`, keep the env-fallback architecture intact, and make this posture auditable so it cannot silently regress.
+
+Ship the three foundational pieces that unblock every downstream Phase 5/6 task:
+
+1. **`resolve_entity()`** — deterministic, auditable entity resolution against `tenant_node_aliases`, returning a canonical `tenant_node_id` (or a `pending` conflict id).
+2. **Cross-tenant isolation test suite** — proves both invariants from Q6 (universal RLS predicate + service-token tenant pin) under hostile fixtures.
+3. **Retrieval-shape declaration (`s6.1/t0`)** — every existing and planned agent surface declares which of the 5 shapes (prose / hierarchical-doc / tabular / graph / relational / time-series) it consumes, so Phase 6 store choices are forced before vendor lock.
 
 ## Non-goals
-- **Not** inverting to vault-first (that's option C, deferred).
-- **Not** changing cron auth model, RLS roles, or the env→db sync direction.
-- **Not** re-keying or rotating the secrets themselves (separate operator task; we only change how they're stored).
 
-## Blast radius & Core rule / ADR / FM-AI cited
-- **Tables:** `public.app_secrets` (schema change: add `value_ciphertext bytea`, deprecate `value text`), `app_secrets_audit` trigger (unchanged behaviour), new `app_secret_key` settings row.
-- **Edge fns:** `secrets-health-check`, `rotate-awip-token`, `deepgram-realtime-token`, `sentinel-tick` (new check), `deep-audit` (read path unchanged — only reads `key,updated_at`).
-- **Crons:** all cron jobs that COALESCE env→`app_secrets` for `AWIP_SERVICE_TOKEN` / `SUPABASE_SERVICE_ROLE_KEY` — must now go through `get_app_secret(key)` SECURITY DEFINER fn.
-- **Surfaces:** `/db-explorer`, `/admin` `AppSecretsPanel`, `/admin/secrets-health`.
-- **Core rule cited:** "all new tables operator-only RLS + realtime" — extend to "any table whose row content is a credential must be encrypted at column level".
-- **ADR cited:** new **ADR-0009 Secrets-at-rest**.
-- **FM-AI failure mode:** *Silent privilege creep* — a future RLS regression or service-role leak currently dumps plaintext; encryption raises the bar to also requiring the encryption key.
+- Composite scorer with descriptor weights (s5.2/t1) — deterministic-only for v1 per Q5; weights wait for measured fuzzy-band conflicts.
+- Merge/split operator UX (s5.3/t4) — `discussion_action` queue only for now.
+- Picking the actual retrieval stores (pgvector vs LanceDB vs DuckDB vs Neo4j). Declaration first, vendor later.
+- Backfilling `ancestry_ids[]` on `tenant_node_aliases` rows beyond the 1100 seeded — bench corpus only.
+
+## Blast radius & cited rules
+
+- **Tables touched (RW):** `tenant_node_aliases` (read), `entity_resolution_conflicts` (insert), `entity_resolution_events` (insert), `retrieval_contracts` (new).
+- **Tables touched (read-only):** `tenant_nodes`, `tenant_node_memberships`, `decision_authorities`.
+- **No tenant data crossed.** All writes obey RLS + universal predicate.
+
+- **Core rule:** "all write endpoints idempotent via `Idempotency-Key`" → `resolve_entity()` is read-mostly but the conflict-insert path uses `(tenant_id, candidate_fingerprint)` as a natural idempotency key.
+- **Core rule:** "Every OKR mutation → `okr_node_events`" extended in spirit → every resolution writes `entity_resolution_events` (already exists per `tenant_node_events` family).
+- **ADR-0003:** denormalised `ancestry_ids[]` already chosen and live — resolver reads it directly, no recursive CTE.
+- **ADR-0004:** soft-revoke is the default — `resolve_entity()` filters `revoked_at IS NULL` unless `include_revoked=true` (operator-only).
+- **FM-AI failure mode:** "silent privilege creep" — every resolver call writes an `entity_resolution_event` with `actor`, `principal_kind`, `decided_by_rule_id` so retroactive audit is trivial.
+- **Q9 lock-in:** `tenant_node.merge/split/identity` are operator-exclusive (rules already seeded, verified).
 
 ## Alternatives considered
-1. **A — UI masking only.** Hide values in `/db-explorer` + `AppSecretsPanel`. Cheap (~1h). **Rejected:** doesn't fix at-rest, backups still leak, doesn't satisfy ISO 42001 §A.5.10 / ISO 27001 A.8.24.
-2. **B — pgcrypto column encryption (CHOSEN).** Encrypt `value` with `pgp_sym_encrypt(value, key)`, key held in `vault.secrets` (`APP_SECRETS_MEK`). SECURITY DEFINER fn `get_app_secret(text)` returns plaintext only to `service_role`. Crons call the fn instead of selecting `value`. **Why:** matches existing architecture (env-fallback preserved), no client refactor, auditable via `app_secrets_audit`, sentinel-detectable regression.
-3. **C — Vault-first inversion.** Make `vault.secrets` canonical, demote `app_secrets` to metadata + `vault_secret_id`. **Deferred:** ~1 day work, touches every cron read path, higher rollback cost. Re-evaluate once B is bedded in.
+
+| Option | Why discarded |
+|---|---|
+| **A. Ship the composite scorer (s5.2/t1) first** | Premature — Q5 locked deterministic-only for v1. Building weights before measuring fuzzy-band collisions is exactly the over-engineering Phase 5 was scoped to avoid. |
+| **B. Ship s6.1/t1-t6 (raw/staged/canonical/source/ingest tables) before t0** | Locks the schema before declaring what each consumer needs. Three stores ago we learned this lesson — `mem://preferences/retrieval-shapes` exists precisely to stop this. |
+| **C. Skip cross-tenant isolation tests until s5.3** | Every Phase 6 ingest path will write through the resolver. Without isolation tests we cannot trust any of those writes. Cost now: 1 day. Cost later: a CRITICAL sentinel + tenant-data incident. |
+| **D. Chosen — t3 + t5 + s6.1/t0 in one lane** | Smallest set that (a) makes the resolver real, (b) proves isolation, (c) forces the retrieval-shape conversation before any Phase 6 ingest table exists. |
 
 ## Contract
-No new cron or agent loop. One new SECURITY DEFINER fn — contract is its signature:
+
+Two new typed contracts under `supabase/functions/_shared/contracts/`:
+
+### `resolve-entity.ts`
 
 ```ts
-// supabase/functions/_shared/contracts/app-secret-accessor.ts
-export type AppSecretKey =
-  | "AWIP_SERVICE_TOKEN"
-  | "SUPABASE_SERVICE_ROLE_KEY"
-  | "DEEPGRAM_API_KEY"
-  // …enumerated in MANAGED list, no free-form
-  ;
+export type ResolveEntityInput = {
+  tenant_id: string;            // operator JWT tenant or service-token pinned
+  candidate: {
+    kind: "email_domain" | "display_name" | "lei" | "companies_house_number" | "free_text";
+    value: string;
+    confidence?: number;        // 0..1, default 1.0
+  };
+  parent_hint?: string | null;  // tenant_node_id to scope the search
+  include_revoked?: boolean;    // operator-only; default false
+  idempotency_key?: string;     // optional; if present, replay returns same conflict id
+};
 
-// RPC: public.get_app_secret(_key text) returns text
-//   - SECURITY DEFINER, search_path = public, vault
-//   - GRANT EXECUTE TO service_role ONLY (revoked from anon/authenticated)
-//   - returns NULL if row missing (preserves env-fallback semantics in callers)
-//   - raises 'app_secret.mek_missing' if vault row absent
-//
-// RPC: public.set_app_secret(_key text, _plaintext text) returns void
-//   - SECURITY DEFINER, service_role only
-//   - encrypts with pgp_sym_encrypt(plaintext, mek), upserts ciphertext column
-//   - emits app_secrets_audit row (existing trigger sees ciphertext change)
+export type ResolveEntityOutput =
+  | { status: "matched"; tenant_node_id: string; alias_id: string; rule_id: string; score: number }
+  | { status: "pending"; conflict_id: string; candidates: Array<{ tenant_node_id: string; score: number }> }
+  | { status: "no-match" };
 ```
 
-`set_awip_service_token()` is refactored to call `set_app_secret('AWIP_SERVICE_TOKEN', new_value)` internally — preserves the vault mirror it already does.
+### `retrieval-shape-declaration.ts`
+
+Extends `retrieval-contract.ts` with a registry row per consumer:
+
+```ts
+export type RetrievalShapeDeclaration = RetrievalContractMeta & {
+  consumer: string;             // e.g. "morning-review", "companion-cloud-chat", "awip-reviews"
+  consumer_kind: "edge_fn" | "cron" | "ui_route" | "agent_loop";
+  status: "declared" | "implemented" | "deprecated";
+};
+```
+
+Declarations live in `public.retrieval_contracts` (new table, see Test plan), one row per consumer, asserted at boot.
 
 ## Persona sign-off
-- **compliance-auditor:** Objection — "where's the ADR and the security memory entry?" → Plan ships ADR-0009 + `security--update_memory` call in the same migration window.
-- **event-engineer:** Objection — "does the existing `app_secrets_audit` trigger still fire on UPDATE when the new column changes?" → Yes; trigger is `AFTER INSERT OR UPDATE OR DELETE` row-level, columnar change is still an UPDATE. Verified by audit-log integration test.
-- **sentinel:** Objection — "if someone re-adds plaintext `value`, will I catch it?" → New check `app_secrets_plaintext_present` queries `information_schema.columns` for a non-empty `value` column on `app_secrets`; fires `critical` if found.
-- **product-historian:** Objection — "ADR must cite which FM-AI failure mode and which Core rule it bends/extends" → Done in Frame + ADR body.
-- **tenant-manager:** Not triggered — `app_secrets` is global, no tenant column.
-- **capability-architect / control-plane-operator / okr-strategist / demand-analyst:** Not triggered.
+
+| Persona | Objection it would raise | How plan answers |
+|---|---|---|
+| `tenant-manager` | "Cross-tenant leak via resolver bypass." | s5.1/t5 hostile-fixture suite asserts every read path returns 0 rows for the wrong tenant; CI gate. |
+| `event-engineer` | "Mutation without event." | Every conflict-insert and every successful match writes `entity_resolution_events` row in same transaction (trigger, not handler). |
+| `compliance-auditor` | "Silent rule changes." | Resolver writes `decided_by_rule_id` referencing `decision_authorities.id` — git-versioned per the W7.1 contract. |
+| `okr-strategist` | "Resolver doesn't touch OKRs, why now?" | Phase 6 ingest will create staged_records that map to KRs by tenant_node — without a real resolver, KR rollups land on `tenant_id=NULL`. |
+| `product-historian` | "ADR-0003 was 'TBD' last I checked." | Already resolved to option 4 — but the ADR file still says `TBD`. Updating ADR-0003 status to `accepted` is part of this plan. |
+| `sentinel` | "What detects resolver regressions?" | New sentinel check `resolver_no_match_burst` (p95 no-match rate > 20% in 1h → medium). |
+| `capability-architect` | "Is `resolve_entity` a capability?" | Yes — registered as `entity_resolution.deterministic_v1` in `capability_events`. |
+| `control-plane-operator` | "No routing in Core." | Resolver is a pure function. No dispatch, no "who calls next." |
+| `demand-analyst` | "Who's asking for this?" | Every Phase 6 ingest task (s6.1–s6.3, 18 tasks) blocks on it. Demand is structural. |
 
 ## Gap checklist
-- [x] **Idempotency:** `get_app_secret` is pure read; `set_app_secret` is upsert keyed on `key` — repeat-safe.
-- [x] **Events emission:** `app_secrets_audit` trigger covers ciphertext writes.
-- [x] **RLS + has_role:** unchanged on table; new fns GRANT EXECUTE to `service_role` only, REVOKE from `anon, authenticated, public`.
-- [n/a] **Realtime publication:** not changing.
-- [x] **observability_registry:** add row `app_secrets_at_rest` → sentinel check `app_secrets_plaintext_present`.
-- [x] **withLogger:** no new edge fns; existing wrappers stay.
-- [x] **No new `any`:** TS contract enums only.
-- [x] **mem rule:** new `mem://features/secrets-at-rest`; update `mem://features/secret-rotation-safety` to reference it.
-- [x] **CHANGELOG:** entry under `[Unreleased]` citing ADR-0009.
-- [x] **Doc updates:** `docs/security.md` (encryption posture), `docs/adr/0009-secrets-at-rest.md`, `docs/runbooks/secrets-mek-rotation.md` (how to rotate the MEK without losing data).
-- [x] **Security memory:** `security--update_memory` to record "app_secrets values are encrypted with pgcrypto; raw `value` column must never reappear".
+
+- [x] Idempotency — `(tenant_id, candidate_fingerprint)` natural key on conflict insert
+- [x] Events emission — `entity_resolution_events` row per call (trigger, not handler)
+- [x] RLS + `has_role` — every new RPC `SECURITY DEFINER` + `has_role(auth.uid(), 'operator')` gate
+- [x] Realtime — `retrieval_contracts` added to `supabase_realtime` publication
+- [x] `observability_registry` — new entry for `resolver_no_match_burst`
+- [x] `withLogger` — `resolve-entity` edge fn wrapped
+- [x] No new `any` — both contracts strictly typed
+- [x] Mem rule — update `mem://features/entity-resolver.md` (exists, needs t3 status flip) + new `mem://features/retrieval-contracts-registry.md`
+- [x] CHANGELOG — single entry per task (t3, t5, s6.1/t0)
+- [x] Doc updates — `docs/architecture.md` resolver section, new `docs/retrieval-contracts.md`, ADR-0003 `proposed → accepted`
 
 ## Test plan
-1. **Vitest (unit) — `src/lib/secrets-display.test.ts`:** assert `AppSecretsPanel` and `/db-explorer` row renderer never display anything other than `••••` for the `value`/`value_ciphertext` column to non-service-role clients (mocked supabase returns the ciphertext bytea string; component must mask).
-2. **Deno (edge fn) — `supabase/functions/secrets-health-check/index_test.ts`:** call with `?sync=env-to-db`, assert resulting row has NULL `value`, non-null `value_ciphertext`, and that subsequent `get_app_secret('AWIP_SERVICE_TOKEN')` returns the original plaintext.
-3. **Deno (edge fn) — `supabase/functions/rotate-awip-token/index_test.ts`:** rotate, then assert (a) `value_ciphertext` changed, (b) `vault.secrets.AWIP_SERVICE_TOKEN` updated, (c) `app_secrets_audit` row emitted, (d) `get_app_secret` returns the new token.
-4. **Sentinel test — `supabase/functions/sentinel-tick/checks_test.ts`:** add case for `app_secrets_plaintext_present`:
-   - green when `value` column dropped, `value_ciphertext` populated;
-   - critical finding when `value` column re-added (simulated via temp view).
-5. **e2e — `e2e/secrets-at-rest.test.ts`:** as non-admin user, attempt `SELECT value_ciphertext FROM app_secrets` → 0 rows (RLS); as admin, get rows but `value` column is gone; attempt `rpc('get_app_secret', { _key: 'AWIP_SERVICE_TOKEN' })` as anon → permission denied.
-6. **ADR-bench style — `scripts/security-bench/app-secrets-at-rest.ts`:** snapshot column list, confirm no column named `value`, confirm `pg_dump` of `app_secrets` produces unreadable bytea (regex assertion: no row matches `awip_mac_` or `sb_secret_` patterns).
 
-All six fail first (TDD), pass after migration.
+| Layer | File | Asserts |
+|---|---|---|
+| Unit (vitest) | `src/lib/resolve-entity.test.ts` | Domain normalisation (`Foo@Acme.COM` → `acme.com`), Levenshtein bands, revoked-alias filter |
+| RPC (deno) | `supabase/functions/resolve-entity/test.ts` | Matched / pending / no-match round-trip; idempotency replay returns same conflict_id |
+| Edge fn (curl) | `e2e/resolver.test.ts` (exists, extend) | Service-token + operator JWT both work; wrong tenant returns 403 |
+| Isolation (vitest) | `e2e/tenant-resolve-isolation.test.ts` (exists, extend) | 5 hostile fixtures: cross-tenant parent_hint, service-token tenant override, revoked-alias bypass, conflict-insert leak, RLS bypass via SECURITY DEFINER |
+| RLS matrix | `e2e/rls-matrix.test.ts` (regen via `scripts/generate-rls-map.ts`) | `retrieval_contracts` policies present for operator/admin/service_role |
+| Bench | `scripts/adr-bench/adr-0005-bulk-conflicts.ts` (exists) | p95 resolve ≤ 50ms at 1100-alias corpus; record to `adr_bench_results` |
+| Contract assertion | `supabase/functions/_shared/contracts/retrieval_contracts_test.ts` (exists, extend) | Every `consumer` in registry has `shape`, `store`, `fallback`, `declaredBy` set |
+
+All failing tests written before any handler code (tdd skill).
 
 ## Validation gates
-Run in order, each must pass before the next:
+
+Run after build, in this order. Every failure → fix in place → re-run.
 
 ```bash
-# 1. migration applies cleanly + rolls forward existing rows
-psql -c "SELECT key, value IS NULL AS legacy_null, value_ciphertext IS NOT NULL AS encrypted FROM public.app_secrets;"
-# expect every row: legacy_null=t, encrypted=t
+# 1. Typecheck
+bun run lint:ratchet            # no new `any` in resolver or contract files
 
-# 2. unit + e2e
-bunx vitest run src/lib/secrets-display.test.ts
-bunx vitest run e2e/secrets-at-rest.test.ts
+# 2. Unit + integration
+bunx vitest run src/lib/resolve-entity.test.ts
+bunx vitest run e2e/tenant-resolve-isolation.test.ts
+bunx vitest run e2e/resolver.test.ts
+bunx vitest run e2e/rls-matrix.test.ts
 
-# 3. edge fn tests
-# (via supabase--test_edge_functions: secrets-health-check, rotate-awip-token, sentinel-tick)
+# 3. Edge fn smoke
+curl -X POST $SUPABASE_URL/functions/v1/resolve-entity \
+  -H "x-awip-service-token: $AWIP_SERVICE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant_id":"<seed>","candidate":{"kind":"email_domain","value":"acme.com"}}'
+# expect: {"status":"matched", ...}
 
-# 4. live smoke — secrets-health-check end-to-end, must stay green
-curl -s -H "Authorization: Bearer $ANON" \
-  "https://agzkyzyzopcgeobofjaz.functions.supabase.co/secrets-health-check" \
-  | jq '.status'   # expect "ok"
+# 4. RLS regen + verify
+bun run scripts/generate-rls-map.ts
+bun run rls:verify
 
-# 5. cron auth probe — overnight-phase-runner dry tick, must auth via get_app_secret path
-# (via supabase--curl_edge_functions with dry_run=true)
+# 5. Bench (record to adr_bench_results)
+deno run -A scripts/adr-bench/adr-0005-bulk-conflicts.ts
 
-# 6. sentinel-tick — confirm new check appears and is green
-psql -c "SELECT check_name, severity FROM sentinel_findings 
-         WHERE check_name='app_secrets_plaintext_present' 
-         ORDER BY detected_at DESC LIMIT 1;"
-# expect 0 rows OR severity='info'
+# 6. Contract registry assertion
+bunx vitest run supabase/functions/_shared/contracts/retrieval_contracts_test.ts
 
-# 7. db-explorer visual smoke (manual) — /db-explorer → app_secrets row shows
-# value_ciphertext as bytea blob, no plaintext token visible
+# 7. Logger coverage + delta lint (CI-equivalent)
+bun run scripts/check-logger-coverage.ts
+# expect: 0 unwrapped functions
 ```
 
-Stop and `diagnose` on any non-green; do not advance to the next gate.
+Pass criteria: all green, bench p95 ≤ 50ms, sentinel `resolver_no_match_burst` check returns 0 findings on seeded corpus.
 
 ## Out of scope
-- **Vault-first inversion (option C).** Re-open if B reveals friction or after Phase 5/6.
-- **MEK rotation automation.** Runbook only; manual operator task for now (`docs/runbooks/secrets-mek-rotation.md`).
-- **Hashing operator passwords / other plaintext-credential audit across other tables.** Separate sweep — log as discussion_action `audit_other_credential_columns`.
-- **Encrypting `vault.secrets` content** — already encrypted by Supabase platform.
-- **Changing `/db-explorer` to mask all bytea columns globally.** This plan only redacts `app_secrets`.
-- **Rotating the actual `AWIP_SERVICE_TOKEN` / `SUPABASE_SERVICE_ROLE_KEY` values.** Operator decision, separate run.
+
+- Composite scorer / descriptor weights (s5.2/t1, s5.2/t2) — wait for measured fuzzy-band collisions.
+- Universal RLS predicate helper (s5.2/t4) — separate lane; this plan reuses existing per-table policies.
+- Resolver decision log UI surface (s5.2/t5) — table writes only; UI follow-up.
+- Alias approval flow (s5.3/t1) — separate lane; this plan auto-approves operator-confidence-1.0 only.
+- Bulk re-resolve UX (s5.3/t3) — operator-triggered job; deferred to s5.3.
+- Picking pgvector vs LanceDB vs DuckDB vs Neo4j for any shape — declaration only.
+- Backfilling retrieval-shape declarations onto every consumer in one shot — declare the 6 highest-traffic surfaces (morning-review, companion-cloud-chat, awip-reviews, sentinel-tick, night-agent, claims-ingest); the rest follow.
+- Hardening: revoked-alias hard-revoke path (admin-only) — ADR-0004 already specifies it, ship in s5.3/t2 follow-up.
+- Phase 6 ingest tables (s6.1/t1–t6) — depend on this plan landing first.
