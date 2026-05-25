@@ -1450,3 +1450,62 @@ export function checkAppSecretsPlaintextPresent(
     payload: { ...signal, fix_url: "/admin", runbook: "docs/runbooks/secrets-mek-rotation.md" },
   }];
 }
+
+/**
+ * Resolver no-match burst (s5.2/t3 acceptance gate).
+ *
+ * Reads recent `entity_resolution_events` rows of kind=`propose` with
+ * `payload.confidence_band ∈ {auto_bind, conflict, no_match}` over the last
+ * window (default 60 min). Fires `medium` when the no_match share exceeds
+ * `threshold` AND the sample size clears `minSample` (so a single failed call
+ * doesn't trip it). Critical above 2× threshold.
+ *
+ * Dedupe key bucketed per UTC hour so the same finding doesn't re-fire each tick.
+ */
+export type ResolverProposeRow = {
+  kind: string;
+  occurred_at: string;
+  payload: { confidence_band?: string | null } | null;
+};
+
+export function checkResolverNoMatchBurst(
+  now: Date,
+  rows: ResolverProposeRow[],
+  opts: { windowMinutes?: number; threshold?: number; minSample?: number } = {},
+): FindingCandidate[] {
+  const windowMinutes = opts.windowMinutes ?? 60;
+  const threshold = opts.threshold ?? 0.2;
+  const minSample = opts.minSample ?? 10;
+  const since = now.getTime() - windowMinutes * 60_000;
+  const recent = rows.filter(
+    (r) => r.kind === "propose" && +new Date(r.occurred_at) >= since,
+  );
+  if (recent.length < minSample) return [];
+  const noMatch = recent.filter(
+    (r) => (r.payload?.confidence_band ?? "") === "no_match",
+  ).length;
+  const rate = noMatch / recent.length;
+  if (rate <= threshold) return [];
+  const hourBucket = Math.floor(now.getTime() / (3600 * 1000));
+  const severity: FindingCandidate["severity"] = rate >= threshold * 2 ? "critical" : "medium";
+  return [{
+    kind: "resolver_no_match_burst",
+    severity,
+    summary:
+      `Resolver no-match rate ${(rate * 100).toFixed(1)}% over last ${windowMinutes}m ` +
+      `(${noMatch}/${recent.length}). Threshold ${(threshold * 100).toFixed(0)}%. ` +
+      `Likely corpus drift or normaliser regression.`,
+    dedupe_key: `resolver_no_match_burst:${hourBucket}`,
+    subject_ref: { rpc: "public.resolve_entity", window_minutes: windowMinutes },
+    payload: {
+      window_minutes: windowMinutes,
+      threshold,
+      sample_size: recent.length,
+      no_match_count: noMatch,
+      no_match_rate: Number(rate.toFixed(4)),
+      hour_bucket: hourBucket,
+    },
+  }];
+}
+
+}
