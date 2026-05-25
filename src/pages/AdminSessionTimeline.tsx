@@ -339,7 +339,137 @@ export default function AdminSessionTimeline() {
           </Card>
         ))}
       </div>
+
+      <ReplayDialog
+        target={replayTarget}
+        onClose={(refresh) => {
+          setReplayTarget(null);
+          if (refresh) setRefreshTick((t) => t + 1);
+        }}
+      />
     </div>
+  );
+}
+
+function ReplayDialog({
+  target,
+  onClose,
+}: {
+  target: SessionRow | null;
+  onClose: (refresh: boolean) => void;
+}) {
+  const [includeUnresolved, setIncludeUnresolved] = useState(true);
+  const [extra, setExtra] = useState("");
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (target) {
+      setIncludeUnresolved(true);
+      setExtra("");
+      setRunning(false);
+    }
+  }, [target?.id]);
+
+  if (!target) return null;
+  const unresolvedCount = target.unresolved?.length ?? 0;
+
+  async function run() {
+    setRunning(true);
+    const extra_out_of_scope = extra
+      .split("\n")
+      .map((l) => l.replace(/^[-*]\s*/, "").trim())
+      .filter(Boolean);
+    const { data, error } = await supabase.functions.invoke("session-replay", {
+      body: {
+        summary_id: target!.id,
+        include_unresolved: includeUnresolved,
+        extra_out_of_scope,
+      },
+    });
+    setRunning(false);
+    if (error) {
+      toast({
+        title: "Replay failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    const r = (data as { replayed?: { created?: unknown[]; skipped?: unknown[] } })
+      ?.replayed;
+    toast({
+      title: "Session replayed",
+      description: `${r?.created?.length ?? 0} created · ${r?.skipped?.length ?? 0} already present (idempotent).`,
+    });
+    onClose(true);
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Replay session</DialogTitle>
+          <DialogDescription>
+            Re-runs the deferral fan-out for{" "}
+            <span className="font-mono text-xs">
+              {target.session_id.slice(0, 12)}
+            </span>
+            . Idempotent — items already in <code>discussion_actions</code> will
+            be skipped, not duplicated.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              checked={includeUnresolved}
+              onCheckedChange={(v) => setIncludeUnresolved(!!v)}
+              disabled={unresolvedCount === 0}
+            />
+            <span>
+              Re-fan stored <code>unresolved[]</code>{" "}
+              <span className="text-muted-foreground">
+                ({unresolvedCount} item{unresolvedCount === 1 ? "" : "s"})
+              </span>
+            </span>
+          </label>
+
+          {unresolvedCount > 0 && includeUnresolved && (
+            <ul className="text-xs text-muted-foreground space-y-1 ml-6 max-h-32 overflow-y-auto">
+              {target.unresolved.map((u, i) => (
+                <li key={i}>• {u}</li>
+              ))}
+            </ul>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Extra out-of-scope bullets (one per line)
+            </label>
+            <Textarea
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              placeholder="- Item to defer\n- Another follow-up"
+              rows={4}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onClose(false)} disabled={running}>
+            Cancel
+          </Button>
+          <Button onClick={run} disabled={running}>
+            {running ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Repeat className="h-4 w-4 mr-2" />
+            )}
+            Replay
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
