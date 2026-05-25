@@ -68,6 +68,7 @@ app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plain
 - [Retrieval shapes](mem://preferences/retrieval-shapes) — Phase 5/6 prep: 6 data shapes (prose/hierarchical-doc/tabular/graph/relational/time-series) need different stores not just different parsers; declare retrieval contract per agent surface before picking a vendor
 - [Retrieval contracts registry (s6.1/t0)](mem://features/retrieval-contracts-registry) — public.retrieval_contracts table; 6 surfaces seeded; git-versioned via migration, no UI; observability_stale_surface watcher at 30d
 - [Phase 5/6/6b prep](mem://features/phase-5-6-prep) — 4 retrieval contracts (ingest-concierge/validation/resolver/conflict-triage) + source-adapter contract + ADR-0003..0006 stubs (ancestry/alias-revoke/bulk-conflict/embedding); scaffolding only, decisions per-sprint
+- [OKR value layer](mem://features/okr-value-layer) — projected/realized_value_usd on okr_nodes (authoritative) + discussion_actions (fallback); rollupActionValue helper; operator-authoritative, never AI-written without approval
 
 - [Credits & Usage](mem://features/credits-usage) — credit_entries + credit_settings + credit_balance_snapshots; runway + per-phase deltas + end-of-phase balance prompt on /admin/ai-usage
 - [Tool Policy](mem://features/tool-policy) — tool_policy_rules + tool_policy_recommendations + v_tool_policy_signals; deterministic recommender (Lovable/Claude/Cursor/Codex) on /admin/ai-usage Tool Policy tab

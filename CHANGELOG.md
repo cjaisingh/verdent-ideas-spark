@@ -4,6 +4,14 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-25 — OKR value layer, Klarity takeaway #3)
+- **`okr_nodes.projected_value_usd` + `realized_value_usd`** (both nullable, numeric) — KR is now the canonical home of "what is this outcome worth?". Operator-authoritative; existing `emit_okr_node_event` trigger captures changes automatically.
+- **`discussion_actions.projected_value_usd` + `realized_value_usd`** — fallback override for actions not linked to a KR. Rollup helper (`src/lib/okrValue.ts → rollupActionValue`) prefers KR value to prevent double-counting.
+- **`docs/okr-value-layer.md`** + **`mem/features/okr-value-layer.md`** — authority rule + scope (no Advisor, no UI surfacing, no backfill, USD only).
+- **`docs/ontology-flows.md`** — stub only (Klarity takeaway #1 parked; promote when a Phase 6 source needs a flow layer).
+- Klarity takeaway #2 (screen-capture companion mode) logged as discussion action only.
+
+
 ### Added (2026-05-25 — s6.1/t1 ingest pipeline schema)
 - **Seven new tables** for the Phase 6 ingest backbone: `source_mappings`, `raw_records`, `staged_records`, `canonical_facts`, `fact_conflicts`, `conflict_rules`, `ingest_events`. All operator-only RLS; `staged_records` / `fact_conflicts` / `ingest_events` added to `supabase_realtime`.
 - **DB-enforced invariants**: `canonical_facts` is append-only (`tg_canonical_facts_forbid_update` allows only NULL→non-null on `superseded_by`; `tg_canonical_facts_forbid_delete` blocks all deletes); `tenant_node_id NOT NULL`; partial unique `(tenant_node_id, fact_type, effective_at) WHERE superseded_by IS NULL` forces conflict detection; approved `source_mappings` rows immutable (`tg_source_mappings_lock_approved`); `ingest_events` blocks UPDATE/DELETE.
