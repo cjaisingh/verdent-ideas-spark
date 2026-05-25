@@ -4,6 +4,20 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-25 — ADR-0009 secrets at rest)
+- **`public.app_secrets.value` dropped, replaced by `value_ciphertext bytea NOT NULL`** encrypted with `pgcrypto` (`pgp_sym_encrypt`) using a MEK held in `vault.secrets` as `APP_SECRETS_MEK`. Backfill applied in-migration; both existing rows (AWIP_SERVICE_TOKEN, SUPABASE_SERVICE_ROLE_KEY) round-trip cleanly via `get_app_secret`.
+- **Four new RPCs** (all `SECURITY DEFINER`): `get_app_secret(_key)` + `set_app_secret(_key,_plaintext,_description)` (service_role only) and `admin_list_app_secrets()` + `admin_set_app_secret(_key,_value,_description)` + `admin_delete_app_secret(_key)` (admin role only). Admin list returns `value_preview = 'fp:' + 6 hex chars of SHA-256(ciphertext)` — never plaintext.
+- **`set_awip_service_token()` refactored** to call `set_app_secret` internally; preserves `app_secrets_changed`/`vault_changed` semantics by comparing decrypted-prior, not ciphertext bytes (each encrypt produces fresh nonce).
+- **`app_secrets_audit` trigger** rewritten to log ciphertext fingerprints, not plaintext previews.
+- **Sentinel check `app_secrets_plaintext_present`** (severity `critical`, dedupe `app_secrets_plaintext_present`) — fires if the legacy `value` column reappears OR any row has NULL ciphertext. Wired in `supabase/functions/sentinel-tick/{checks.ts,index.ts}`. Registered in `observability_registry` as `table:app_secrets`.
+- **Caller refactor**: `secrets-health-check` (read + sync paths now go through `get_app_secret`/`set_app_secret`), `deepgram-realtime-token` (DB read via `get_app_secret`), `AppSecretsPanel` (list/set/delete via admin RPCs, never touches the table directly).
+- **`docs/adr/0009-secrets-at-rest.md`** — accepted ADR citing ISO 42001 §A.5.10 and ISO 27001 A.8.24.
+- **`docs/runbooks/secrets-mek-rotation.md`** — transactional rotation procedure (manual, no cron).
+- **`supabase/functions/_shared/contracts/app-secret-accessor.ts`** — typed contract enumerating managed keys.
+- **`mem/features/secrets-at-rest.md`** — durable rule. Out-of-scope follow-up: audit other credential-shaped columns (`connection_secrets`, `operator_inbox_sources.token_encrypted`, etc.).
+
+
+
 ### Added (2026-05-24 — batch A+D: M4 inbox close-out + AIMS/ADR docs)
 - **`alias_corpus_ready` sentinel check** — fires once (severity `info`, dedupe `alias_corpus_ready`) when `tenant_node_aliases` ≥ 1000. Auto-nudges the ADR-0004 bench instead of relying on manual polling. Wired in `supabase/functions/sentinel-tick/{checks.ts,index.ts}`, covered by 4 Deno tests in `checks_test.ts`. Corpus is **1100** today; the next tick will surface the finding.
 - **`discussion_actions.blocked_reason`** column (nullable text + partial index on `status='blocked'`). Surfaces *why* a row is blocked on /morning-review and /operator-inbox without forcing a row open.

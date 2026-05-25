@@ -815,21 +815,21 @@ export type Database = {
           key: string
           updated_at: string
           updated_by: string | null
-          value: string
+          value_ciphertext: string
         }
         Insert: {
           description?: string | null
           key: string
           updated_at?: string
           updated_by?: string | null
-          value: string
+          value_ciphertext: string
         }
         Update: {
           description?: string | null
           key?: string
           updated_at?: string
           updated_by?: string | null
-          value?: string
+          value_ciphertext?: string
         }
         Relationships: []
       }
@@ -8002,6 +8002,21 @@ export type Database = {
     Functions: {
       acknowledge_all_triage_activity: { Args: never; Returns: number }
       acknowledge_triage_activity: { Args: { _id: string }; Returns: undefined }
+      admin_delete_app_secret: { Args: { _key: string }; Returns: Json }
+      admin_list_app_secrets: {
+        Args: never
+        Returns: {
+          description: string
+          key: string
+          updated_at: string
+          updated_by: string
+          value_preview: string
+        }[]
+      }
+      admin_set_app_secret: {
+        Args: { _description?: string; _key: string; _value: string }
+        Returns: Json
+      }
       audit_security_definer_gating: {
         Args: never
         Returns: {
@@ -8079,6 +8094,7 @@ export type Database = {
           total: number
         }[]
       }
+      get_app_secret: { Args: { _key: string }; Returns: string }
       governance_chain: {
         Args: { _anchor_kind: string; _anchor_ref: string }
         Returns: Json
@@ -8258,6 +8274,10 @@ export type Database = {
         }[]
       }
       sentinel_triage_unacked_count: { Args: never; Returns: number }
+      set_app_secret: {
+        Args: { _description?: string; _key: string; _plaintext: string }
+        Returns: Json
+      }
       set_awip_service_token: { Args: { new_value: string }; Returns: Json }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }

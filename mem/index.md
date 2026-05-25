@@ -18,6 +18,7 @@ Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔author
 Docs are reference, not narrative. `mem/**` ≤30 lines, `docs/**` ≤200, index entries ≤150 chars. Prune in same edit.
 Read live before planning (query `sentinel_findings`/`automation_runs`, not cached state); default hypothesis on a finding is "detector wrong" before "system broken"; verify-before-scope.
 "Deployed" ≠ "verified" — run the relevant check (test/curl/read_query/findings re-query/console) and cite the persona consulted from `docs/agents/team/` before planning. See [verify-completion](mem://preferences/verify-completion).
+app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plaintext only via `get_app_secret` (service_role) / admin RPCs (preview only). Never `.from('app_secrets').select('value')` — column is gone.
 
 
 
@@ -84,4 +85,6 @@ Read live before planning (query `sentinel_findings`/`automation_runs`, not cach
 
 - [Module contracts](mem://features/module-contracts) — per-module hashed tokens, `module_heartbeats`, idempotent `/capabilities/register`, granular `status_changed`/`version_bumped`/`deprecated`/`owning_module_changed` events, `/modules/heartbeat`, `module_silent_24h` sentinel
 - [Work-log fan-out](mem://features/work-log-fanout) — session-summary-log accepts `tasks_done[]` → idempotent roadmap_work_log rows on (session_id, task_id); restores per-task AI attribution for Credits/Usage + scheduled-code-review + daily-plan + work_log_recent QA probe
+- [Secrets at rest (ADR-0009)](mem://features/secrets-at-rest) — app_secrets.value dropped → value_ciphertext bytea (pgcrypto + vault MEK); get/set_app_secret RPCs (service_role) + admin_* RPCs (preview only); app_secrets_plaintext_present sentinel
+
 

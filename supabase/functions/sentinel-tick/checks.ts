@@ -41,7 +41,8 @@ export type FindingCandidate = {
     | "alias_revoke_burst"
     | "alias_corpus_ready"
     | "module_silent_24h"
-    | "module_register_idempotency_replay_burst";
+    | "module_register_idempotency_replay_burst"
+    | "app_secrets_plaintext_present";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
@@ -1412,5 +1413,38 @@ export function checkAliasCorpusReady(
       fix_url: "/admin/adr-bench",
       bench_script: "scripts/adr-bench/adr-0004-revocation.ts",
     },
+  }];
+}
+
+/**
+ * ADR-0009: app_secrets values are encrypted at rest in `value_ciphertext bytea`.
+ * The legacy plaintext `value` column was dropped. If anything (a buggy
+ * migration, an over-eager fix, a manual ALTER) re-introduces it, every row
+ * silently regresses to plaintext. Fire critical the moment the column
+ * reappears OR if any row has NULL ciphertext.
+ */
+export type AppSecretsAtRestSignal = {
+  legacy_value_column_present: boolean;
+  rows_with_null_ciphertext: number;
+};
+
+export function checkAppSecretsPlaintextPresent(
+  signal: AppSecretsAtRestSignal,
+): FindingCandidate[] {
+  const issues: string[] = [];
+  if (signal.legacy_value_column_present) {
+    issues.push("legacy plaintext `value` column has reappeared on public.app_secrets");
+  }
+  if (signal.rows_with_null_ciphertext > 0) {
+    issues.push(`${signal.rows_with_null_ciphertext} row(s) have NULL value_ciphertext`);
+  }
+  if (issues.length === 0) return [];
+  return [{
+    kind: "app_secrets_plaintext_present",
+    severity: "critical",
+    summary: `app_secrets at-rest encryption regressed: ${issues.join("; ")}. See ADR-0009.`,
+    dedupe_key: "app_secrets_plaintext_present",
+    subject_ref: { table: "public.app_secrets", adr: "ADR-0009" },
+    payload: { ...signal, fix_url: "/admin", runbook: "docs/runbooks/secrets-mek-rotation.md" },
   }];
 }

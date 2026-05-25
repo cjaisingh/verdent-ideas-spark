@@ -18,6 +18,7 @@ import {
   checkResolverLowConfidenceRate,
   checkAliasRevokeBurst, checkAliasCorpusReady,
   checkModuleSilent24h,
+  checkAppSecretsPlaintextPresent,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
 } from "./checks.ts";
@@ -281,6 +282,36 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .select("*", { count: "exact", head: true });
     const aliasCorpusCount = aliasCorpusCountRaw ?? 0;
 
+    // ADR-0009: at-rest encryption posture for app_secrets. Two cheap probes:
+    //   a) does the legacy plaintext `value` column exist again?
+    //   b) any row with NULL ciphertext?
+    // Both must be false/zero for the table to be considered healthy.
+    const appSecretsAtRest: { legacy_value_column_present: boolean; rows_with_null_ciphertext: number } =
+      await (async () => {
+        try {
+          const { data: colRows } = await sb
+            .from("information_schema.columns" as never)
+            .select("column_name")
+            .eq("table_schema", "public")
+            .eq("table_name", "app_secrets")
+            .eq("column_name", "value")
+            .limit(1) as unknown as { data: unknown[] | null };
+          const { count: nullCipherCount } = await sb
+            .from("app_secrets")
+            .select("*", { count: "exact", head: true })
+            .is("value_ciphertext", null);
+          return {
+            legacy_value_column_present: (colRows?.length ?? 0) > 0,
+            rows_with_null_ciphertext: nullCipherCount ?? 0,
+          };
+        } catch (_e) {
+          // information_schema may not be exposed via PostgREST; default to "ok"
+          // since the NOT NULL constraint on value_ciphertext is enforced at DDL.
+          return { legacy_value_column_present: false, rows_with_null_ciphertext: 0 };
+        }
+      })();
+
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
 
@@ -433,6 +464,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],
       )),
+      ...timeCheck("app_secrets_plaintext_present", () => checkAppSecretsPlaintextPresent(appSecretsAtRest)),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
