@@ -2947,7 +2947,9 @@ export type Database = {
           night_override_reason: string | null
           owner: string | null
           priority: string
+          projected_value_usd: number | null
           promoted_task_id: string | null
+          realized_value_usd: number | null
           risk: string
           short_num: number
           source: string
@@ -2981,7 +2983,9 @@ export type Database = {
           night_override_reason?: string | null
           owner?: string | null
           priority?: string
+          projected_value_usd?: number | null
           promoted_task_id?: string | null
+          realized_value_usd?: number | null
           risk?: string
           short_num?: number
           source?: string
@@ -3015,7 +3019,9 @@ export type Database = {
           night_override_reason?: string | null
           owner?: string | null
           priority?: string
+          projected_value_usd?: number | null
           promoted_task_id?: string | null
+          realized_value_usd?: number | null
           risk?: string
           short_num?: number
           source?: string
@@ -4554,6 +4560,8 @@ export type Database = {
           id: string
           kind: Database["public"]["Enums"]["okr_kind"]
           parent_id: string | null
+          projected_value_usd: number | null
+          realized_value_usd: number | null
           spawned_from_reason: string | null
           status: Database["public"]["Enums"]["okr_status"]
           superseded_by: string | null
@@ -4569,6 +4577,8 @@ export type Database = {
           id?: string
           kind: Database["public"]["Enums"]["okr_kind"]
           parent_id?: string | null
+          projected_value_usd?: number | null
+          realized_value_usd?: number | null
           spawned_from_reason?: string | null
           status?: Database["public"]["Enums"]["okr_status"]
           superseded_by?: string | null
@@ -4584,6 +4594,8 @@ export type Database = {
           id?: string
           kind?: Database["public"]["Enums"]["okr_kind"]
           parent_id?: string | null
+          projected_value_usd?: number | null
+          realized_value_usd?: number | null
           spawned_from_reason?: string | null
           status?: Database["public"]["Enums"]["okr_status"]
           superseded_by?: string | null
