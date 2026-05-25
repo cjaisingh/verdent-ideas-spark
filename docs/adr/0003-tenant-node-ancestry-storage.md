@@ -1,7 +1,8 @@
 # ADR-0003: Tenant-node ancestry storage strategy
 
-- **Status:** proposed
-- **Date:** 2026-05-21
+- **Status:** accepted
+- **Date:** 2026-05-21 (decided), 2026-05-25 (status flip — option 4 shipped, `tenant_nodes.ancestry_ids uuid[]` live, 1100-row seeded corpus, `tg_tenant_nodes_set_ancestry` trigger maintaining the array on every insert/move)
+
 
 ## Context
 
@@ -16,9 +17,10 @@ Four storage options:
 
 ## Decision
 
-**TBD** — decide when sprint `s5.2` opens. Trigger: first real tenant tree imported and we have row-count + depth measurements rather than estimates.
+**Option 4 — denormalised `ancestry_ids uuid[]`** on every `tenant_nodes` row, maintained by `tg_tenant_nodes_set_ancestry` (`BEFORE INSERT OR UPDATE OF parent_id`). GIN index over the array. Reads (RLS predicate and resolver) are a single array-containment check; writes pay an array-rebuild only on subtree moves (rare).
 
-Current lean: option 4 (denormalised `ancestry_ids[]` on facts) because RLS is on every read path and moves are rare. Validate against import sample first.
+This locks in: ADR-0005 (resolver scoring) and ADR-0006 (embedding store) can both assume O(1) ancestry lookup.
+
 
 > Benchmark + dataset requirements: see [`docs/adr/benchmarks.md § ADR-0003`](./benchmarks.md#adr-0003--tenant-node-ancestry-storage).
 
