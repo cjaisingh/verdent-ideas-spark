@@ -5,7 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 
-type Row = { key: string; value: string; description: string | null; updated_at: string; updated_by: string | null };
+// Row no longer carries plaintext. Per ADR-0009 we only ever see a 6-char
+// non-reversible fingerprint of the ciphertext (admin_list_app_secrets RPC).
+type Row = {
+  key: string;
+  value_preview: string;
+  description: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
 
 const MANAGED = [
   { key: "DEEPGRAM_API_KEY", description: "Deepgram master key (Member+ role) — used by deepgram-realtime-token", testable: true },
@@ -18,10 +26,10 @@ export default function AppSecretsPanel() {
   const [testResult, setTestResult] = useState<Record<string, { ok: boolean; msg: string } | undefined>>({});
 
   const load = async () => {
-    const { data, error } = await supabase.from("app_secrets").select("*").in("key", MANAGED.map((m) => m.key));
+    const { data, error } = await supabase.rpc("admin_list_app_secrets");
     if (error) { toast({ title: "Could not load secrets", description: error.message, variant: "destructive" }); return; }
     const map: Record<string, Row | null> = {};
-    for (const m of MANAGED) map[m.key] = data?.find((r) => r.key === m.key) ?? null;
+    for (const m of MANAGED) map[m.key] = (data as Row[] | null)?.find((r) => r.key === m.key) ?? null;
     setRows(map);
   };
   useEffect(() => { load(); }, []);
@@ -30,13 +38,13 @@ export default function AppSecretsPanel() {
     const value = drafts[key]?.trim();
     if (!value) { toast({ title: "Value required" }); return; }
     setBusy(key);
-    const { data: u } = await supabase.auth.getUser();
     const meta = MANAGED.find((m) => m.key === key);
-    const { error } = await supabase.from("app_secrets")
-      .upsert({ key, value, description: meta?.description ?? null, updated_by: u.user?.id, updated_at: new Date().toISOString() });
+    const { error } = await supabase.rpc("admin_set_app_secret", {
+      _key: key, _value: value, _description: meta?.description ?? null,
+    });
     setBusy("");
     if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Saved", description: `${key} updated` });
+    toast({ title: "Saved", description: `${key} encrypted and updated` });
     setDrafts((d) => ({ ...d, [key]: "" }));
     setTestResult((r) => ({ ...r, [key]: undefined }));
     load();
@@ -45,7 +53,7 @@ export default function AppSecretsPanel() {
   const remove = async (key: string) => {
     if (!confirm(`Delete ${key}? The function will fall back to the env-var value.`)) return;
     setBusy(key);
-    const { error } = await supabase.from("app_secrets").delete().eq("key", key);
+    const { error } = await supabase.rpc("admin_delete_app_secret", { _key: key });
     setBusy("");
     if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Deleted" });
@@ -76,7 +84,7 @@ export default function AppSecretsPanel() {
       <div>
         <h2 className="text-lg font-medium">Runtime secrets</h2>
         <p className="text-xs text-muted-foreground">
-          Rotate API keys without redeploying. Stored in <code>app_secrets</code> (admin-only RLS) and read by edge functions on every call. Values fall back to the platform env var if no row exists.
+          Rotate API keys without redeploying. Stored encrypted at rest in <code>app_secrets.value_ciphertext</code> (ADR-0009, pgcrypto + vault MEK) and read by edge functions through <code>get_app_secret</code>. Values fall back to the platform env var if no row exists. The preview below is a non-reversible fingerprint, not the value.
         </p>
       </div>
       <div className="space-y-3">
@@ -88,7 +96,7 @@ export default function AppSecretsPanel() {
               <div className="flex items-center gap-2">
                 <code className="text-sm font-mono">{m.key}</code>
                 {row
-                  ? <Badge variant="default">DB · {row.value.slice(0, 6)}…</Badge>
+                  ? <Badge variant="default">DB · {row.value_preview}</Badge>
                   : <Badge variant="secondary">env fallback</Badge>}
                 {row?.updated_at && (
                   <span className="text-[10px] text-muted-foreground ml-auto tabular-nums">
