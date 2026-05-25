@@ -135,14 +135,57 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
   // Per-task work-log fan-out. Idempotent on (session_id, task_id) via the
   // partial unique index added by the 2026-05-23 migration. We use UPSERT
   // with ignoreDuplicates so re-POSTing the same session is a no-op.
-  let workLog = { attempted: 0, inserted: 0, skipped: 0, errors: [] as string[] };
+  //
+  // task_id may be either a UUID (roadmap_tasks.id) or a natural key string
+  // (roadmap_tasks.key, e.g. "s5.1/t3"). Non-UUID values are resolved against
+  // roadmap_tasks.key in a single batched lookup. Unresolved entries land in
+  // `work_log.unresolved[]` instead of failing the whole request.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const workLog = {
+    attempted: 0,
+    inserted: 0,
+    skipped: 0,
+    resolved: 0,
+    unresolved: [] as string[],
+    errors: [] as string[],
+  };
   if (body.tasks_done?.length) {
-    const rows = body.tasks_done
+    const normalized = body.tasks_done
       .map((t) => (typeof t === "string" ? { task_id: t } : t))
-      .filter((t) => t && typeof t.task_id === "string" && t.task_id.length > 0)
-      .map((t) => ({
+      .filter(
+        (t): t is Exclude<WorkLogTask, string> =>
+          !!t && typeof (t as { task_id?: unknown }).task_id === "string" &&
+          (t as { task_id: string }).task_id.length > 0,
+      );
+
+    // Resolve non-UUID keys → UUIDs via roadmap_tasks.key.
+    const keysToResolve = Array.from(
+      new Set(normalized.filter((t) => !UUID_RE.test(t.task_id)).map((t) => t.task_id)),
+    );
+    const keyMap = new Map<string, string>();
+    if (keysToResolve.length > 0) {
+      const { data: lookups, error: lookupErr } = await sb
+        .from("roadmap_tasks")
+        .select("id, key")
+        .in("key", keysToResolve);
+      if (lookupErr) {
+        workLog.errors.push(`task_key_lookup_failed: ${lookupErr.message}`);
+      } else {
+        for (const row of lookups ?? []) keyMap.set(row.key, row.id);
+        workLog.resolved = keyMap.size;
+      }
+    }
+
+    const rows: Record<string, unknown>[] = [];
+    for (const t of normalized) {
+      const id = UUID_RE.test(t.task_id) ? t.task_id : keyMap.get(t.task_id);
+      if (!id) {
+        workLog.unresolved.push(t.task_id);
+        continue;
+      }
+      rows.push({
         session_id: body.session_id,
-        task_id: t.task_id,
+        task_id: id,
         started_at: startedAt,
         ended_at: endedAt,
         duration_ms:
@@ -159,7 +202,8 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
         fixes: t.fixes ?? null,
         author: body.agent ?? "lovable",
         source: "session_summary",
-      }));
+      });
+    }
     workLog.attempted = rows.length;
     if (rows.length > 0) {
       const { data: ins, error: wlErr } = await sb
