@@ -4,7 +4,21 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-25 — s5.1 close-out + s6.1/t0 retrieval-shape registry)
+- **`public.retrieval_contracts`** — new git-versioned registry (operator read, admin write, realtime on) declaring per-consumer retrieval shape (`prose` / `hierarchical-doc` / `tabular` / `graph` / `relational` / `time-series`), store URI, primary key, token budget, freshness window, fallback, status (`declared|implemented|deprecated`). Unique on `consumer`. Token budget > 0 check.
+- **Seeded the first 6 surfaces**: `morning-review` (hierarchical-doc), `companion-cloud-chat` (prose), `awip-reviews` (prose), `sentinel-tick` (tabular), `night-agent` (graph), `claims-ingest` (relational). The remaining surfaces follow as they ship — low initial coverage is by design.
+- **`supabase/functions/_shared/contracts/retrieval-shape-declaration.ts`** — typed mirror of the row with `RetrievalShapeDeclaration`, `CONSUMER_KINDS`, `DECLARATION_STATUSES`, `rowToDeclaration()`, `isComplete()`. Asserted at boot in any edge fn that consumes a retrieval store.
+- **`supabase/functions/_shared/contracts/retrieval_contracts_test.ts`** extended with 3 new Deno tests covering registry helpers (snake→camel mapping, completeness checks, stable kind/status arrays).
+- **Observability**: `retrieval_contracts` registered in `observability_registry` (`surface_kind=table`, 30-day stale watcher) so `observability_stale_surface` fires if declarations stop arriving for a month.
+- **`docs/retrieval-contracts.md`** — the "data framework" gate, shape table, authoring rule (migrations only, no UI).
+- **`mem/features/retrieval-contracts-registry.md`** — durable rule.
+
+### Changed (2026-05-25 — s5.1 close-out)
+- **ADR-0003 status flipped `proposed → accepted`**: option 4 (denormalised `tenant_nodes.ancestry_ids uuid[]`) was already shipped and maintained by `tg_tenant_nodes_set_ancestry`; the ADR now records the decision. Unlocks ADR-0005 (resolver scoring) + ADR-0006 (embedding store) to assume O(1) ancestry lookup.
+- **Roadmap**: `s5.1/t3 resolve_entity()`, `s5.1/t5 cross-tenant isolation test suite`, and `s6.1/t0 retrieval-shape declaration` flipped `todo → done` (t3/t5 were already implemented — `resolve_entity` + `resolve_entity_logged` SQL functions, `entity-resolve` edge fn, `e2e/tenant-resolve-isolation.test.ts` + `e2e/resolver.test.ts`; today's change is the registry + status flip + ADR-0003 acceptance).
+
 ### Added (2026-05-25 — ADR-0009 secrets at rest)
+
 - **`public.app_secrets.value` dropped, replaced by `value_ciphertext bytea NOT NULL`** encrypted with `pgcrypto` (`pgp_sym_encrypt`) using a MEK held in `vault.secrets` as `APP_SECRETS_MEK`. Backfill applied in-migration; both existing rows (AWIP_SERVICE_TOKEN, SUPABASE_SERVICE_ROLE_KEY) round-trip cleanly via `get_app_secret`.
 - **Four new RPCs** (all `SECURITY DEFINER`): `get_app_secret(_key)` + `set_app_secret(_key,_plaintext,_description)` (service_role only) and `admin_list_app_secrets()` + `admin_set_app_secret(_key,_value,_description)` + `admin_delete_app_secret(_key)` (admin role only). Admin list returns `value_preview = 'fp:' + 6 hex chars of SHA-256(ciphertext)` — never plaintext.
 - **`set_awip_service_token()` refactored** to call `set_app_secret` internally; preserves `app_secrets_changed`/`vault_changed` semantics by comparing decrypted-prior, not ciphertext bytes (each encrypt produces fresh nonce).
