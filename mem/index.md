@@ -23,6 +23,7 @@ app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plain
 
 
 ## Memories
+- [Ingest pipeline schema (s6.1/t1)](mem://features/ingest-pipeline-schema) — 7 tables (source_mappings/raw_records/staged_records/canonical_facts/fact_conflicts/conflict_rules/ingest_events) + DB-enforced append-only invariants
 - [Ontology](mem://features/ontology) — 11 canonical entities with lifecycle/ownership/audit; source docs/ontology.md, surface /ontology
 - [Decision Authority (W7.1)](mem://features/decision-authority) — decision_authorities table + resolve_truth(); operator>ai default, git-versioned rules, read-only card on /ontology
 - [Governance Joins (W7.1.5)](mem://features/governance-joins) — links + chain + coverage + uncovered-tasks worklist on /governance (click → auto-opens AddLinkDialog on missing leg)
