@@ -464,6 +464,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],
       )),
+      ...timeCheck("app_secrets_plaintext_present", () => checkAppSecretsPlaintextPresent(appSecretsAtRest)),
     ]);
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
