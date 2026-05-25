@@ -4,6 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 import {
   RefreshCcw,
   FileText,
@@ -11,6 +22,8 @@ import {
   Cpu,
   Loader2,
   ExternalLink,
+  Repeat,
+  AlertCircle,
 } from "lucide-react";
 
 type SessionRow = {
