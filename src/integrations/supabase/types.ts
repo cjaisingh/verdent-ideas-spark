@@ -5014,6 +5014,57 @@ export type Database = {
         }
         Relationships: []
       }
+      retrieval_contracts: {
+        Row: {
+          consumer: string
+          consumer_kind: string
+          created_at: string
+          declared_by: string
+          fallback: string
+          freshness_window: string
+          id: string
+          notes: string | null
+          primary_key: string
+          shape: string
+          status: string
+          store: string
+          token_budget: number
+          updated_at: string
+        }
+        Insert: {
+          consumer: string
+          consumer_kind: string
+          created_at?: string
+          declared_by: string
+          fallback: string
+          freshness_window: string
+          id?: string
+          notes?: string | null
+          primary_key: string
+          shape: string
+          status?: string
+          store: string
+          token_budget: number
+          updated_at?: string
+        }
+        Update: {
+          consumer?: string
+          consumer_kind?: string
+          created_at?: string
+          declared_by?: string
+          fallback?: string
+          freshness_window?: string
+          id?: string
+          notes?: string | null
+          primary_key?: string
+          shape?: string
+          status?: string
+          store?: string
+          token_budget?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       roadmap_autolog_settings: {
         Row: {
           capture_duration: boolean
