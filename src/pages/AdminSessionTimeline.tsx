@@ -4,6 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "@/hooks/use-toast";
 import {
   RefreshCcw,
   FileText,
@@ -11,6 +22,8 @@ import {
   Cpu,
   Loader2,
   ExternalLink,
+  Repeat,
+  AlertCircle,
 } from "lucide-react";
 
 type SessionRow = {
@@ -25,6 +38,8 @@ type SessionRow = {
   files_touched: string[];
   migrations_applied: string[];
   edge_fns_touched: string[];
+  unresolved: string[];
+  bootstrap_acknowledged: boolean;
 };
 
 type ActionRow = {
@@ -82,12 +97,22 @@ function fmtDuration(mins: number | null) {
 
 const PAGE_SIZE = 25;
 
+function isPartial(s: SessionRow): boolean {
+  return (
+    !s.bootstrap_acknowledged ||
+    (Array.isArray(s.unresolved) && s.unresolved.length > 0) ||
+    !s.outcome ||
+    s.outcome.trim().length === 0
+  );
+}
+
 export default function AdminSessionTimeline() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [actions, setActions] = useState<ActionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<string>("all");
   const [refreshTick, setRefreshTick] = useState(0);
+  const [replayTarget, setReplayTarget] = useState<SessionRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +121,7 @@ export default function AdminSessionTimeline() {
       const sQuery = supabase
         .from("session_summaries")
         .select(
-          "id, session_id, agent, started_at, ended_at, duration_minutes, goal, outcome, files_touched, migrations_applied, edge_fns_touched",
+          "id, session_id, agent, started_at, ended_at, duration_minutes, goal, outcome, files_touched, migrations_applied, edge_fns_touched, unresolved, bootstrap_acknowledged",
         )
         .order("started_at", { ascending: false })
         .limit(PAGE_SIZE);
@@ -250,7 +275,16 @@ export default function AdminSessionTimeline() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap items-center gap-1">
+                  {isPartial(session) && (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-500/15 text-amber-300 border-amber-500/30"
+                    >
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      partial
+                    </Badge>
+                  )}
                   {session.files_touched.length > 0 && (
                     <Badge variant="outline" className="font-normal">
                       <FileText className="h-3 w-3 mr-1" />
@@ -269,6 +303,16 @@ export default function AdminSessionTimeline() {
                       {session.edge_fns_touched.length} edge fns
                     </Badge>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setReplayTarget(session)}
+                    title="Re-fan deferred items via session-replay (idempotent)"
+                  >
+                    <Repeat className="h-3.5 w-3.5 mr-1" />
+                    Replay
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -295,7 +339,137 @@ export default function AdminSessionTimeline() {
           </Card>
         ))}
       </div>
+
+      <ReplayDialog
+        target={replayTarget}
+        onClose={(refresh) => {
+          setReplayTarget(null);
+          if (refresh) setRefreshTick((t) => t + 1);
+        }}
+      />
     </div>
+  );
+}
+
+function ReplayDialog({
+  target,
+  onClose,
+}: {
+  target: SessionRow | null;
+  onClose: (refresh: boolean) => void;
+}) {
+  const [includeUnresolved, setIncludeUnresolved] = useState(true);
+  const [extra, setExtra] = useState("");
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (target) {
+      setIncludeUnresolved(true);
+      setExtra("");
+      setRunning(false);
+    }
+  }, [target?.id]);
+
+  if (!target) return null;
+  const unresolvedCount = target.unresolved?.length ?? 0;
+
+  async function run() {
+    setRunning(true);
+    const extra_out_of_scope = extra
+      .split("\n")
+      .map((l) => l.replace(/^[-*]\s*/, "").trim())
+      .filter(Boolean);
+    const { data, error } = await supabase.functions.invoke("session-replay", {
+      body: {
+        summary_id: target!.id,
+        include_unresolved: includeUnresolved,
+        extra_out_of_scope,
+      },
+    });
+    setRunning(false);
+    if (error) {
+      toast({
+        title: "Replay failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      return;
+    }
+    const r = (data as { replayed?: { created?: unknown[]; skipped?: unknown[] } })
+      ?.replayed;
+    toast({
+      title: "Session replayed",
+      description: `${r?.created?.length ?? 0} created · ${r?.skipped?.length ?? 0} already present (idempotent).`,
+    });
+    onClose(true);
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose(false)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Replay session</DialogTitle>
+          <DialogDescription>
+            Re-runs the deferral fan-out for{" "}
+            <span className="font-mono text-xs">
+              {target.session_id.slice(0, 12)}
+            </span>
+            . Idempotent — items already in <code>discussion_actions</code> will
+            be skipped, not duplicated.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              checked={includeUnresolved}
+              onCheckedChange={(v) => setIncludeUnresolved(!!v)}
+              disabled={unresolvedCount === 0}
+            />
+            <span>
+              Re-fan stored <code>unresolved[]</code>{" "}
+              <span className="text-muted-foreground">
+                ({unresolvedCount} item{unresolvedCount === 1 ? "" : "s"})
+              </span>
+            </span>
+          </label>
+
+          {unresolvedCount > 0 && includeUnresolved && (
+            <ul className="text-xs text-muted-foreground space-y-1 ml-6 max-h-32 overflow-y-auto">
+              {target.unresolved.map((u, i) => (
+                <li key={i}>• {u}</li>
+              ))}
+            </ul>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-sm font-medium">
+              Extra out-of-scope bullets (one per line)
+            </label>
+            <Textarea
+              value={extra}
+              onChange={(e) => setExtra(e.target.value)}
+              placeholder="- Item to defer\n- Another follow-up"
+              rows={4}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onClose(false)} disabled={running}>
+            Cancel
+          </Button>
+          <Button onClick={run} disabled={running}>
+            {running ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Repeat className="h-4 w-4 mr-2" />
+            )}
+            Replay
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
