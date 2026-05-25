@@ -160,6 +160,7 @@ const App = () => (
             <Route path="/connections" element={<Connections />} />
             <Route path="/admin/edge-health" element={<EdgeHealth />} />
             <Route path="/admin/timeline" element={<AdminTimeline />} />
+            <Route path="/admin/session-timeline" element={<AdminSessionTimeline />} />
             <Route path="/admin/sentinel-perf" element={<SentinelPerf />} />
             <Route path="/admin/jobs" element={<AdminJobs />} />
             <Route path="/admin/voice-health" element={<VoiceHealth />} />
