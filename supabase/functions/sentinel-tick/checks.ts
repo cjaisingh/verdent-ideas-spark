@@ -41,7 +41,8 @@ export type FindingCandidate = {
     | "alias_revoke_burst"
     | "alias_corpus_ready"
     | "module_silent_24h"
-    | "module_register_idempotency_replay_burst";
+    | "module_register_idempotency_replay_burst"
+    | "app_secrets_plaintext_present";
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
   dedupe_key: string;
