@@ -266,7 +266,16 @@ export default function AdminSessionTimeline() {
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap items-center gap-1">
+                  {isPartial(session) && (
+                    <Badge
+                      variant="outline"
+                      className="bg-amber-500/15 text-amber-300 border-amber-500/30"
+                    >
+                      <AlertCircle className="h-3 w-3 mr-1" />
+                      partial
+                    </Badge>
+                  )}
                   {session.files_touched.length > 0 && (
                     <Badge variant="outline" className="font-normal">
                       <FileText className="h-3 w-3 mr-1" />
@@ -285,6 +294,16 @@ export default function AdminSessionTimeline() {
                       {session.edge_fns_touched.length} edge fns
                     </Badge>
                   )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setReplayTarget(session)}
+                    title="Re-fan deferred items via session-replay (idempotent)"
+                  >
+                    <Repeat className="h-3.5 w-3.5 mr-1" />
+                    Replay
+                  </Button>
                 </div>
               </div>
             </CardHeader>
