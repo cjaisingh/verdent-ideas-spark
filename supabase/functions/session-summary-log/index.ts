@@ -140,7 +140,9 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
   // (roadmap_tasks.key, e.g. "s5.1/t3"). Non-UUID values are resolved against
   // roadmap_tasks.key in a single batched lookup. Unresolved entries land in
   // `work_log.unresolved[]` instead of failing the whole request.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  //
+  // Resolution + row-building logic lives in tasks-done-resolver.ts so it can
+  // be unit-tested without the edge runtime.
   const workLog = {
     attempted: 0,
     inserted: 0,
@@ -150,18 +152,8 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
     errors: [] as string[],
   };
   if (body.tasks_done?.length) {
-    const normalized = body.tasks_done
-      .map((t) => (typeof t === "string" ? { task_id: t } : t))
-      .filter(
-        (t): t is Exclude<WorkLogTask, string> =>
-          !!t && typeof (t as { task_id?: unknown }).task_id === "string" &&
-          (t as { task_id: string }).task_id.length > 0,
-      );
-
-    // Resolve non-UUID keys → UUIDs via roadmap_tasks.key.
-    const keysToResolve = Array.from(
-      new Set(normalized.filter((t) => !UUID_RE.test(t.task_id)).map((t) => t.task_id)),
-    );
+    const normalised = normaliseTasks(body.tasks_done);
+    const keysToResolve = collectKeysToResolve(normalised);
     const keyMap = new Map<string, string>();
     if (keysToResolve.length > 0) {
       const { data: lookups, error: lookupErr } = await sb
@@ -176,45 +168,27 @@ Deno.serve(withLogger("session-summary-log", async (req) => {
       }
     }
 
-    const rows: Record<string, unknown>[] = [];
-    for (const t of normalized) {
-      const id = UUID_RE.test(t.task_id) ? t.task_id : keyMap.get(t.task_id);
-      if (!id) {
-        workLog.unresolved.push(t.task_id);
-        continue;
-      }
-      rows.push({
-        session_id: body.session_id,
-        task_id: id,
-        started_at: startedAt,
-        ended_at: endedAt,
-        duration_ms:
-          typeof t.duration_ms === "number"
-            ? Math.round(t.duration_ms)
-            : Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime()),
-        tokens_in: typeof t.tokens_in === "number" ? Math.round(t.tokens_in) : null,
-        tokens_out: typeof t.tokens_out === "number" ? Math.round(t.tokens_out) : null,
-        tokens_total: typeof t.tokens_total === "number" ? Math.round(t.tokens_total) : null,
-        model: t.model ?? null,
-        model_provider: t.model_provider ?? null,
-        summary: t.summary ?? body.outcome ?? null,
-        issues: t.issues ?? null,
-        fixes: t.fixes ?? null,
-        author: body.agent ?? "lovable",
-        source: "session_summary",
-      });
-    }
-    workLog.attempted = rows.length;
-    if (rows.length > 0) {
+    const built = buildWorkLogRows({
+      tasks: body.tasks_done,
+      keyMap,
+      session_id: body.session_id,
+      startedAt,
+      endedAt,
+      agent: body.agent ?? "lovable",
+      outcome: body.outcome,
+    });
+    workLog.unresolved = built.unresolved;
+    workLog.attempted = built.rows.length;
+    if (built.rows.length > 0) {
       const { data: ins, error: wlErr } = await sb
         .from("roadmap_work_log")
-        .upsert(rows, { onConflict: "session_id,task_id", ignoreDuplicates: true })
+        .upsert(built.rows, { onConflict: "session_id,task_id", ignoreDuplicates: true })
         .select("id");
       if (wlErr) {
         workLog.errors.push(wlErr.message);
       } else {
         workLog.inserted = ins?.length ?? 0;
-        workLog.skipped = rows.length - workLog.inserted;
+        workLog.skipped = built.rows.length - workLog.inserted;
       }
     }
   }
