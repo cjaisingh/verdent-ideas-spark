@@ -111,7 +111,7 @@ export default function AdminSessionTimeline() {
       const sQuery = supabase
         .from("session_summaries")
         .select(
-          "id, session_id, agent, started_at, ended_at, duration_minutes, goal, outcome, files_touched, migrations_applied, edge_fns_touched",
+          "id, session_id, agent, started_at, ended_at, duration_minutes, goal, outcome, files_touched, migrations_applied, edge_fns_touched, unresolved, bootstrap_acknowledged",
         )
         .order("started_at", { ascending: false })
         .limit(PAGE_SIZE);
