@@ -97,6 +97,15 @@ function fmtDuration(mins: number | null) {
 
 const PAGE_SIZE = 25;
 
+function isPartial(s: SessionRow): boolean {
+  return (
+    !s.bootstrap_acknowledged ||
+    (Array.isArray(s.unresolved) && s.unresolved.length > 0) ||
+    !s.outcome ||
+    s.outcome.trim().length === 0
+  );
+}
+
 export default function AdminSessionTimeline() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [actions, setActions] = useState<ActionRow[]>([]);
