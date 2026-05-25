@@ -1,0 +1,1 @@
+alter view public.v_ingest_pipeline_health set (security_invoker = true);
