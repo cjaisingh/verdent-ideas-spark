@@ -8,6 +8,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withLogger } from "../_shared/logger.ts";
 import { recordOutOfScope } from "../_shared/out-of-scope.ts";
+import {
+  buildWorkLogRows,
+  collectKeysToResolve,
+  normaliseTasks,
+} from "./tasks-done-resolver.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
