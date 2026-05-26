@@ -4,6 +4,15 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-26 — apex Objectives + FM1 registered)
+- **AWIP Platform tenant** (`tenants.slug='awip-platform'`) — holds the platform's own OKRs separate from customer tenants.
+- **7 apex client-goal Objectives** seeded as top-level `okr_nodes` (Operational Excellence, Cost Efficiency, Risk Reduction, Workplace Experience, Sustainability & ESG, Compliance Confidence, Growth & Value Creation). Deterministic UUIDs; re-seed is a no-op. `okr_node_events.created` emitted manually per seed (no DB trigger on `okr_nodes`).
+- **FM1 Stakeholder Intelligence registered** as the first real module: `fm1_stakeholder_profile`, `fm1_stakeholder_engagement_signal`, `fm1_stakeholder_sentiment_pulse` (all `planned`, `0.1.0`, `owning_module='fm1'`). Manifest entries only — the FM1 service ships later as a separate Lovable project and will re-register through the live `POST /capabilities/register` contract path then.
+- **`mem/features/apex-objectives.md`** + **`mem/features/fm1-stakeholder-intelligence.md`** — authority/naming rules.
+- Defuses FM-AI failure mode #1 ("AWIP is talking to itself"); makes the constellation diagram observably true in the database.
+
+
+
 ### Added (2026-05-25 — OKR value layer, Klarity takeaway #3)
 - **`okr_nodes.projected_value_usd` + `realized_value_usd`** (both nullable, numeric) — KR is now the canonical home of "what is this outcome worth?". Operator-authoritative; existing `emit_okr_node_event` trigger captures changes automatically.
 - **`discussion_actions.projected_value_usd` + `realized_value_usd`** — fallback override for actions not linked to a KR. Rollup helper (`src/lib/okrValue.ts → rollupActionValue`) prefers KR value to prevent double-counting.
