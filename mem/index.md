@@ -69,6 +69,8 @@ app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plain
 - [Retrieval contracts registry (s6.1/t0)](mem://features/retrieval-contracts-registry) — public.retrieval_contracts table; 6 surfaces seeded; git-versioned via migration, no UI; observability_stale_surface watcher at 30d
 - [Phase 5/6/6b prep](mem://features/phase-5-6-prep) — 4 retrieval contracts (ingest-concierge/validation/resolver/conflict-triage) + source-adapter contract + ADR-0003..0006 stubs (ancestry/alias-revoke/bulk-conflict/embedding); scaffolding only, decisions per-sprint
 - [OKR value layer](mem://features/okr-value-layer) — projected/realized_value_usd on okr_nodes (authoritative) + discussion_actions (fallback); rollupActionValue helper; operator-authoritative, never AI-written without approval
+- [Apex Objectives](mem://features/apex-objectives) — 7 top-level client-goal Objectives on the AWIP Platform tenant; git-versioned, no UI editing; no DB trigger on okr_nodes so direct writes must emit okr_node_events manually
+- [FM1 Stakeholder Intelligence](mem://features/fm1-stakeholder-intelligence) — first registered module; 3 planned capabilities; reference scaffold for FM2–FM12; id convention fm{N}_<surface>_<capability> (underscores only)
 
 - [Credits & Usage](mem://features/credits-usage) — credit_entries + credit_settings + credit_balance_snapshots; runway + per-phase deltas + end-of-phase balance prompt on /admin/ai-usage
 - [Tool Policy](mem://features/tool-policy) — tool_policy_rules + tool_policy_recommendations + v_tool_policy_signals; deterministic recommender (Lovable/Claude/Cursor/Codex) on /admin/ai-usage Tool Policy tab

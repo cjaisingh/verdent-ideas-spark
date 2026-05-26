@@ -23,3 +23,7 @@ curl -X POST "https://<module-ref>.supabase.co/functions/v1/register" \
 ```
 
 The function reads `capabilities.json` (bundled at deploy time), forwards each entry to Core, and returns the per-capability result.
+
+## Reference module
+
+**FM1 Stakeholder Intelligence** is the worked example. See its 3 seeded capabilities in `public.capabilities WHERE owning_module='fm1'` and the rules in `mem://features/fm1-stakeholder-intelligence`. New FMs should follow the same id convention (`fm{N}_<surface>_<capability>`, underscores only — dots are rejected by `validateRegisterInput`) and start at `status='planned'`, `version='0.1.0'`.
