@@ -125,7 +125,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         .gte("created_at", since30m).limit(2000),
       sb.from("edge_request_logs")
         .select("status,created_at,function_name")
-        .in("function_name", ["gemini-tts", "companion-cloud-chat", "telegram-send-voice"])
+        .in("function_name", ["gemini-tts", "companion-cloud-chat"])
         .gte("created_at", since60m).limit(2000),
       sb.from("app_secrets").select("key,updated_at"),
       sb.from("role_change_audit").select("id,role,action,target_user_id,created_at").gte("created_at", since30m),
