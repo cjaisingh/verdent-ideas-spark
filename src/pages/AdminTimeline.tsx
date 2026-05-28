@@ -70,6 +70,7 @@ export default function AdminTimeline() {
         .gte("started_at", since)
         .order("started_at", { ascending: false })
         .limit(500),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       supabase.from("v_automation_step_p95_30d" as any).select("job,step_key,p95_ms,sample_count"),
     ]);
     setRows((stepsRes.data ?? []) as StepRow[]);
