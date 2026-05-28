@@ -229,7 +229,7 @@ export const SENTINEL_CADENCES: Record<string, number> = {
   "sentinel-tick": 15,
   "tomorrow-plan-refresh": 15,
   "overnight-phase-runner-15m": 15,
-  "automation-auth-monitor": 15,
+  // automation-auth-monitor removed 2026-05-28 (Lane 1 zombie kill).
   // 30-minute
   // NOTE: ci-status-sync-30m doesn't write to automation_runs — its state
   // is recorded in discussion_actions ci_* columns. Skip cron-silence here.
@@ -400,7 +400,7 @@ export function checkClientTransportErrors(
  * Bands: red when error_rate > 10% over 1h OR no successful call in last 60min
  * (provided we've ever seen one — to avoid flapping on cold start).
  */
-const VOICE_FUNCTIONS = ["gemini-tts", "companion-cloud-chat", "telegram-send-voice"] as const;
+const VOICE_FUNCTIONS = ["gemini-tts", "companion-cloud-chat"] as const;
 
 export function checkVoicePipelineRed(
   now: Date,

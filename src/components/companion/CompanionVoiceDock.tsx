@@ -17,9 +17,8 @@ export function CompanionVoiceDock({ threadId }: { threadId: string | null }) {
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground">coming next</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Two-way voice (Deepgram STT + Aura TTS) will mount here and write turns into the active
-            thread{threadId ? "" : " — open or create a thread first"}. Reuses the existing
-            <code className="mx-1">copilot-voice</code> WebSocket from <code>/copilot</code>.
+            Two-way voice (Deepgram STT + Gemini TTS) will mount here and write turns into the active
+            thread{threadId ? "" : " — open or create a thread first"}.
           </p>
         </div>
       </CardContent>

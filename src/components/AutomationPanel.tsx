@@ -732,7 +732,7 @@ const AlertsCard = () => {
             className="w-14 bg-background border border-border rounded px-1 py-0.5 text-right" />
           min
         </label>
-        <span className="text-[10px] opacity-70">scanned every 5 min by automation-auth-monitor</span>
+        <span className="text-[10px] opacity-70">auth-failure scanner removed 2026-05-28; alert_log still populated by individual cron jobs</span>
       </div>
 
       {logs.length > 0 && (

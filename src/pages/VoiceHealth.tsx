@@ -17,7 +17,7 @@ type Component = {
 const COMPONENTS: Component[] = [
   { key: "tts", label: "TTS (Gemini)", fn: "gemini-tts", icon: Volume2, description: "Server-synthesized speech." },
   { key: "browser", label: "Transport — browser", fn: "companion-cloud-chat", icon: Radio, description: "/companion chat round-trip." },
-  { key: "telegram", label: "Transport — Telegram voice", fn: "telegram-send-voice", icon: Radio, description: "Telegram voice delivery." },
+  // telegram-send-voice removed 2026-05-28 (Lane 1 zombie kill).
 ];
 
 type Health = {

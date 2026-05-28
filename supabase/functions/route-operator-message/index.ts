@@ -389,15 +389,11 @@ Deno.serve(withLogger("route-operator-message", async (req) => {
         error: aiRes.ok ? null : `HTTP ${aiRes.status}`,
         request_ref: { activity: classification.activity },
       });
-      const reply = aiData?.choices?.[0]?.message?.content?.trim();
-      if (reply) {
-        const voiceUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/telegram-send-voice`;
-        await fetch(voiceUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-service-token': serviceToken },
-          body: JSON.stringify({ chat_id: chatId, text: reply }),
-        }).catch((e) => console.error('telegram-send-voice failed', e));
-      }
+      // Voice replies removed 2026-05-28 (Lane 1 zombie kill). Operator confirmed
+      // telegram-send-voice was never used. Reply text is still logged via
+      // ai_usage_log above; if a Telegram text reply is wanted, wire telegram-send here.
+      const _reply = aiData?.choices?.[0]?.message?.content?.trim();
+      void _reply;
     } catch (e) {
       console.error('conversational reply failed', e);
     }

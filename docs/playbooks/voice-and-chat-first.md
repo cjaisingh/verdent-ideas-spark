@@ -27,7 +27,7 @@ is a defect.
      logged through `ai_usage_log`.
 5. **Observe** at `/admin/voice-health`. Bands: green &lt; 2% errors,
    amber 2–10%, red &gt; 10% OR no success in 60min over a 1h window for
-   `gemini-tts`, `companion-cloud-chat`, `telegram-send-voice`.
+   `gemini-tts`, `companion-cloud-chat`.
    Sentinel kind `voice_pipeline_red` (high) auto-fires and rolls into
    morning review.
 
