@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { RemindersPanel } from "@/components/scheduler/RemindersPanel";
 
 type Measurement = {
   metric_name: string;
@@ -257,6 +258,15 @@ const TenantDetail = () => {
         <p className="text-sm text-muted-foreground">No OKRs yet. Discovery AI will POST drafts to <code className="font-mono">/okr/ingest</code>.</p>
       ) : (
         tree
+      )}
+
+      {id && (
+        <RemindersPanel
+          subjectType="tenant"
+          subjectId={id}
+          tenantId={id}
+          subjectLabel={tenantName}
+        />
       )}
 
       {/* Spawn dialog */}
