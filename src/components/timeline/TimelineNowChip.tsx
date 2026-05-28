@@ -39,7 +39,9 @@ export default function TimelineNowChip() {
           .eq("status", "ok")
           .not("duration_ms", "is", null)
           .limit(500),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         supabase.from("v_automation_step_p95_30d" as any).select("job,step_key,p95_ms"),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any).from("v_sentinel_check_perf_24h")
           .select("check_key,p95_ms").order("p95_ms", { ascending: false }).limit(3),
       ]);
