@@ -1,90 +1,151 @@
 
-# Codebase Rationalisation — 7 Lanes
+# Global Scheduling Substrate (W8.1) — Core + FM
 
 ## Goal
-Reduce surface area (edge fns, crons, docs, test trees, `any` debt) without losing behaviour. Target: −5 edge fns, −6 cron jobs, −~10 redundant docs, −unfired sentinel checks, single e2e runner, ratchet moving again.
+One scheduler in Core that any module (Core, FM1–FM12) can enqueue against, with handlers running either in-Core (local) or in the owning FM project (remote). Operator-visible UI, tenant-scoped for FM jobs, reuses existing per-module token + heartbeat machinery.
 
 ## Non-goals
-- No new features. No UI redesign. No schema changes beyond cron consolidation.
-- Not touching `awip-api`, Night Agent semantics, or W7 truth resolver.
-- Not adopting OpenHuman / local LLM in this plan (separate decision).
+- Not replacing high-frequency pg_cron pollers (`sentinel-tick`, `ci-status-sync-30m`, `overnight-phase-runner-15m`).
+- Not building email/SMS delivery — Telegram + operator inbox only in v1.
+- Not auto-migrating existing 19 `scheduled-*` crons in this pass (separate lane).
+- Not a workflow engine / DAG — single-step jobs only.
+- Not building FM1–FM12 callback endpoints themselves — Core ships the contract + reference handler stub.
 
-## Blast radius & citations
-- **Tables:** `cron.job`, `automation_runs`, `sentinel_findings`, `lint_*`. No data tables touched.
-- **Edge fns:** delete 3–5 zombies; merge 5 overnight fns into one orchestrator (keep originals as thin re-exports for one release).
-- **Surfaces:** `/admin/edge-health`, `/admin/observability-registry`, CI workflows.
-- **Core rule cited (`CONTEXT.md`):** "Substrate, not a brain" — dead crons & duplicate docs are accidental brain. **ADR-0002** (service-token/idempotency) — fewer cron callers = fewer token surfaces. **FM-AI failure mode:** *unobserved drift* — unfired sentinel checks give false safety; duplicate docs give stale truth.
+## Blast radius & rules cited
+- **New tables (public, operator-only RLS via `has_role`)**:
+  - `scheduled_jobs` — the queue
+  - `scheduled_job_events` — audit trail (every state change)
+  - `module_endpoints` — per-module callback URLs (for remote dispatch)
+  - `external_contacts` — net-new entity for non-tenant clients/prospects
+- **New edge fns** (Core): `scheduler-tick` (1-min cron), `scheduler-enqueue` (write API for operator + FM service tokens).
+- **Reused**: `module_service_tokens` + `resolve_module_token()` (already exists per `mem://features/module-contracts`); `tenant_nodes` for subject scoping; `discussion_actions` + `telegram-send` for notification rails.
+- **New surface**: `/admin/scheduler` (list/filter/create/cancel/retry), reminder panels on tenant detail + `/contacts/:id`.
+- **Core rules cited (`CONTEXT.md`)**:
+  - "Substrate, not a brain" — Core dispatches by `kind`; never decides *what* to schedule.
+  - "No who-acts-when routing in Core" — handler lookup is a flat registry; no branching on tenant/capability/owner.
+  - Every mutation emits an `*_events` row (`scheduled_job_events`).
+- **ADRs cited**: extends 0002 (service-token + idempotency — `dedupe_key` mandatory). Touches 0001 (capability registry contract) via `module_endpoints`.
+- **FM-AI failure mode defused**: silent drift / forgotten work — closes the gap that prompted this conversation. Also closes the cross-module variant: FM modules silently failing to run scheduled work because they each rolled their own cron.
 
 ## Alternatives considered
-1. **Do nothing, write a "tech-debt" memory.** Rejected — debt is already documented (e.g. `edge-function-zombie-triage-2026-05-24.md`) and ignored. Documenting again ≠ fixing.
-2. **Big-bang refactor in one PR.** Rejected — blast radius too wide, can't bisect failures.
-3. **Lane-by-lane, gated, one PR per lane (chosen).** Each lane independently revertable; ratchet/sentinel give immediate signal.
+1. **Status quo (per-consumer pg_cron + bespoke tables)**. Rejected: doesn't generalise to FM projects at all — each FM would re-invent the wheel.
+2. **Inngest / Temporal / Trigger.dev**. Rejected: new vendor, credit burn, sovereignty regression (`mem://preferences/sovereignty-posture`), overkill for single-step jobs.
+3. **Core-dispatch-only (A)** — every kind remote, even Core's own. Rejected: Core calling itself over HTTP for `report.weekly_digest` is wasteful and adds an auth hop where there's no trust boundary.
+4. **Federated (B)** — each FM runs its own tick + table. Rejected: no cross-module reminder UI, duplicated machinery × 12, operator can't see one queue.
+5. **Chosen: Hybrid (C)** — Core hosts table + UI + tick. `scheduled_jobs.handler_kind` is `local` or `remote`. Local handlers live in `_shared/scheduler-handlers.ts`; remote handlers POST to `module_endpoints[owning_module].callback_url` with the module's signed service token and `Idempotency-Key`. Mirrors the `awip-api` pattern operators already understand.
 
-Two specific micro-alternatives:
-- *Overnight crons:* delete vs orchestrator-merge. Chose merge — keeps separation of concerns in code but collapses cron rows + token call sites.
-- *e2e trees:* migrate `e2e/` → `e2e-playwright/` vs vice versa. Chose Playwright (already has fixtures + auth + rls map generator).
+Sub-decisions:
+- **Reuse `module_service_tokens` rather than mint scheduler-specific tokens** — one secret per module across registration + heartbeat + scheduler callbacks. `capability-architect` persona endorsed.
+- **Tenant_id is a column on `scheduled_jobs`, enforced by trigger** (not a separate join table) — when `owning_module != 'awip_core'`, `tenant_id` must be non-null. Trigger `enforce_fm_tenant_scope`.
 
-## Contract (cron/edge-fn/agent)
-Only lane needing a new contract is **Lane 2** (overnight orchestrator). Declare `supabase/functions/_shared/contracts/overnight-orchestrator.ts` per `mem://preferences/contract-first`:
-- input: `{ phase: 'prequeue'|'runner'|'recommender'|'open'|'close', triggered_at, idempotency_key }`
-- output: `{ phase, status, ran_for_ms, child_job }`
-- escalation: any phase erroring twice in 24h → sentinel `overnight_orchestrator_red`.
-- audit table: existing `automation_runs` (no new table).
+## Contract
+`supabase/functions/_shared/contracts/scheduler.ts`:
+
+```ts
+export type SchedulerJobInput = {
+  kind: string;                    // e.g. 'reminder.send', 'report.weekly_digest',
+                                   //      'fm1.stakeholder_pulse', 'rationalisation.lane_eligible'
+  run_at: string;                  // ISO UTC
+  recurrence?: string | null;      // 5-field cron expr; null = one-shot
+  payload: Record<string, unknown>;
+  dedupe_key: string;              // REQUIRED, UNIQUE per (owning_module, dedupe_key)
+  owning_module: string;           // 'awip_core' | 'fm1' | ... | 'rationalisation'
+  tenant_id?: string | null;       // REQUIRED when owning_module != 'awip_core'
+  subject_type?: 'operator' | 'tenant' | 'external_contact' | null;
+  subject_id?: string | null;
+  max_retries?: number;            // default 3
+};
+
+export type SchedulerHandlerResolution =
+  | { mode: 'local'; handler: SchedulerHandler }
+  | { mode: 'remote'; module: string; callback_url: string };
+
+export type SchedulerHandler = (job: ScheduledJobRow) => Promise<
+  | { status: 'done'; result?: unknown }
+  | { status: 'failed'; error: string; retryable: boolean }
+>;
+```
+
+**Remote dispatch shape** (POST from `scheduler-tick` to `module_endpoints.callback_url`):
+```
+Headers:  x-awip-service-token: <module token>
+          Idempotency-Key: <job.id>:<attempt>
+Body:     { kind, payload, tenant_id, subject_type, subject_id, attempt, deadline_at }
+Reply:    200 { status: 'done', result?: any }
+          409 { status: 'duplicate' }      (treat as done)
+          5xx                              (retryable)
+          4xx                              (terminal)
+```
+
+`module_endpoints` row: `module text PRIMARY KEY, callback_url text, registered_at, last_dispatch_ok_at, last_dispatch_err_at, last_error text`. FM registers via `POST /modules/heartbeat` extension or a new tiny `POST /modules/register-endpoint`.
 
 ## Persona sign-off
-- **event-engineer:** every deleted fn must have zero refs in `cron.job`, `src/`, other fns; orchestrator must keep emitting the same `automation_runs` rows under existing `job` names. ✅ Plan keeps job names.
-- **compliance-auditor:** W6 branch-protection list (`mem://preferences/ci-cd-hardening`) names workflows by file — none deleted, only test trees consolidated. ✅
-- **sentinel:** unfired checks may be true safety nets that never fire because the system is healthy. Plan requires 90-day `sentinel_findings` query + per-check operator decision, not blanket delete. ✅
-- **product-historian:** doc dedup must update `README.md` + `CHANGELOG.md` and leave redirects (1-line stub linking new canonical). ✅
-- **control-plane-operator:** no routing logic moves; orchestrator is a multiplexer not a router. ✅
+- **event-engineer**: trigger on `scheduled_jobs` UPDATE writes `scheduled_job_events(prev_status, new_status, actor, attempt, error)`.
+- **tenant-manager**: `enforce_fm_tenant_scope` trigger + RLS policy `scheduled_jobs_fm_tenant_isolation` (FM jobs only visible to operators with tenant access). On tenant revoke → cascade cancel.
+- **compliance-auditor**: operator-initiated cancel/edit requires JWT (not service token); recurrence changes emit a separate `recurrence_changed` event.
+- **sentinel** (new checks):
+  - `scheduled_jobs_stuck` (medium): any `running` >10min or `pending` with `run_at < now()-5min`.
+  - `scheduler_dlq_growth` (high): >20 `failed` in 24h.
+  - `module_endpoint_silent` (medium): `last_dispatch_ok_at < now()-7d` for an endpoint with pending jobs.
+  - `module_endpoint_red` (high): `last_dispatch_err_at > last_dispatch_ok_at` for 1h with ≥3 attempts.
+- **control-plane-operator**: `scheduler-tick` does only `HANDLERS[kind]` lookup OR `module_endpoints[owning_module]` lookup — no branching on capability id, KR id, or tenant. New kinds = new handler file or new FM endpoint; never a tick edit.
+- **capability-architect**: `module_endpoints.module` FK-soft-references `capabilities.owning_module` distinct set; warning (not block) if endpoint registered for unknown module.
+- **demand-analyst**: requires `kind` to appear in `scheduler_kind_catalog` (seed table, free-form add) so operator UI can show what's used vs dead-weight.
 
 ## Gap checklist
-- [x] Idempotency: orchestrator passes through `Idempotency-Key`; child fns unchanged.
-- [x] `*_events` emission: unchanged — no domain mutations in this plan.
-- [x] RLS + `has_role`: no new tables; orchestrator uses `AWIP_SERVICE_TOKEN` like siblings.
-- [x] Realtime publication: n/a.
-- [x] `observability_registry`: must add row for `overnight-orchestrator`; remove rows for deleted fns.
-- [x] `withLogger`: orchestrator wrapped; deletions remove their wrapped fns.
-- [x] No new `any`: Lane 7 reduces `any`; ratchet enforces.
-- [x] Mem rule: update `mem://index.md` Core cron list after Lane 2; add `mem://features/overnight-orchestrator.md`.
-- [x] CHANGELOG: one entry per lane.
-- [x] Doc updates: per lane below.
-
-## Lanes (sequenced, each = 1 PR)
-
-| # | Lane | Effort | Gate |
-|---|---|---|---|
-| 1 | Kill zombie edge fns (`automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`, `copilot-noop-llm`, `telegram-send-voice`) after operator confirm | 30m | `rg` shows 0 refs; sentinel green 24h |
-| 2 | Overnight orchestrator: merge `night-agent-open/close`, `overnight-phase-runner-15m`, `overnight-prequeue`, `scheduled-overnight-recommender` behind `overnight-orchestrator` with `phase` arg; keep 5 cron rows initially, flip to 1 after green week | 3h | `automation_runs` row counts unchanged per job; one full night cycle clean |
-| 3 | Reflection orchestrator: merge `scheduled-lessons-daily/weekly` + `scheduled-deep-audit-weekly/monthly` similarly | 2h | Same |
-| 4 | Sentinel check audit: `SELECT check_name, count(*), max(detected_at) FROM sentinel_findings WHERE detected_at > now()-90d GROUP BY 1`; per-check operator decision (keep/delete/demote) | 1h + decisions | Deleted checks have zero findings in 90d AND no safety-net justification |
-| 5 | Doc dedup: merge `edge-function-audit.md` + `edge-function-sweep-2026-05-10.md` → `docs/edge-function-inventory.md`; merge 4 phase-5-6 docs → `docs/phase-5-6.md`; leave 1-line redirect stubs | 1h | `bun run check-doc-drift` green |
-| 6 | e2e tree consolidation: port remaining `e2e/*.test.ts` into `e2e-playwright/`; delete `e2e/` + `vitest.e2e.config.ts`; update `nightly.yml` | 4h | Playwright suite covers all prior test names; CI green |
-| 7 | `any` ratchet sweep: run `codemod-any-enqueue` drafts → batch-apply low-risk ones; lower baseline by ≥50 sites; close discussion_action #20 if zero, else update target | 2h | `bun run lint:ratchet` passes; baseline.total decreases |
+- [x] Idempotency: `UNIQUE (owning_module, dedupe_key)`; re-enqueue returns existing job id.
+- [x] Events: `scheduled_job_events` trigger on every state change.
+- [x] RLS: operator-only on all 5 new tables via `has_role(auth.uid(), 'admin')`. FM tenant-scoped subset enforced.
+- [x] GRANTs: `authenticated` + `service_role` on every new public table; no `anon`.
+- [x] Realtime: enable for `scheduled_jobs` (live `/admin/scheduler`).
+- [x] Observability registry: add 6 rows (`scheduler-tick`, `scheduler-enqueue`, 4 sentinel checks).
+- [x] `withLogger` on both new edge fns.
+- [x] No new `any` — contracts file strict.
+- [x] Memory: `mem://features/scheduler.md` + index entry + add to Core rule list.
+- [x] CHANGELOG + new `docs/scheduler.md`.
+- [x] FM scaffold updated (`docs/module-scaffold/`) to show how to register a callback endpoint.
 
 ## Test plan
-- **Lane 1:** `bun run scripts/check-logger-coverage.ts` still 0 failures; `curl_edge_functions` 404 on deleted names; existing e2e suites green.
-- **Lane 2/3:** new vitest `supabase/functions/overnight-orchestrator/_test/dispatch.test.ts` — given `{phase:'prequeue'}` calls prequeue handler; given unknown phase returns 400. Live: trigger each phase via `curl_edge_functions` with service token, assert `automation_runs` row written under original `job` name.
-- **Lane 4:** SQL query above; document deletion reasons in `docs/sentinel-prune-2026-05-28.md`.
-- **Lane 5:** `bun run scripts/check-doc-drift.ts`; manual `rg` for old filenames → only redirect stubs remain.
-- **Lane 6:** `bunx playwright test`; diff old vs new test names in PR description.
-- **Lane 7:** `bun run lint:ratchet`; CI lint-and-typecheck workflow.
+- **vitest unit** `src/lib/scheduler.test.ts` — recurrence parsing, subject validation, FM tenant requirement.
+- **deno** `supabase/functions/scheduler-enqueue/_test/enqueue.test.ts` — happy path, duplicate dedupe returns same id, FM job without tenant_id → 400, FM job with wrong module token → 403.
+- **deno** `supabase/functions/scheduler-tick/_test/dispatch.test.ts` — claims due jobs, local handler success, remote handler 200/409/5xx/4xx all handled correctly, attempt backoff, DLQ at max_retries.
+- **curl_edge_functions** smoke after deploy: enqueue + tick + verify event log.
+- **e2e** `e2e-playwright/scheduler.spec.ts` — operator creates reminder for a tenant, sees it on `/admin/scheduler`, cancels, sees event row.
+- **handler smoke** `reminder.send` posts to telegram-send and writes `discussion_actions` row.
 
-## Validation gates (per lane, all must pass before merge)
+## Validation gates
 ```
 bun run lint:ratchet
-bun run scripts/check-logger-coverage.ts
-bun run scripts/check-doc-drift.ts
-bunx vitest run
-bunx playwright test       # Lane 6+
+bun run rls:verify
+bun run scripts/check-logger-coverage.ts        # 70/70
+bunx vitest run src/lib/scheduler.test.ts
+bunx vitest run supabase/functions/scheduler-*/_test/*.test.ts   # via deno test runner
+curl_edge_functions scheduler-enqueue (x2 same dedupe → same id)
+curl_edge_functions scheduler-enqueue (FM payload, no tenant → 400)
+curl_edge_functions scheduler-tick (after seeding past-due test job → status flips to done, event written)
+bunx playwright test scheduler.spec.ts
 ```
-Plus: 24h watch on `sentinel_findings` and `automation_runs` after each merge; rollback if `overnight_orchestrator_red` or `cron_auth_failures_burst` fires.
+Plus 24h watch on the 4 new sentinel checks before declaring v1 stable.
 
-## Out of scope
-- OpenHuman / local LLM swap (separate decision; depends on credit dashboard data).
-- Dashboard widget registry refactor (item #4 in earlier scan) — defer until 7th widget actually needed.
-- "Feature kit" scaffold generator (item #8) — defer; revisit after Lanes 2+3 prove orchestrator pattern.
-- Closing discussion_action #20 if Lane 7 doesn't hit zero — keep as ongoing.
-- Branch protection enablement on `main` (operator-only action, tracked in `docs/ci-cd.md`).
+## Build sequence
+1. Migration #1: `scheduled_jobs`, `scheduled_job_events`, `module_endpoints`, `external_contacts`, `scheduler_kind_catalog` — GRANTs + RLS + triggers + realtime publication.
+2. Contract file + handler registry skeleton + remote-dispatch helper.
+3. `scheduler-enqueue` edge fn (operator JWT + module service token paths).
+4. `scheduler-tick` edge fn + pg_cron row `scheduled-scheduler-tick`.
+5. 3 reference handlers: `reminder.send` (local), `report.weekly_digest` (local), `rationalisation.lane_eligible` (local).
+6. Tiny `POST /modules/register-endpoint` on `awip-api` for FM callback registration.
+7. `/admin/scheduler` page (list + filters by module/tenant/status + create modal + cancel/retry).
+8. Reminder panel component, embedded on tenant detail + new `/contacts/:id`.
+9. 4 sentinel checks + observability_registry rows.
+10. FM scaffold doc update + `docs/module-scaffold/register-endpoint/` example.
+11. Backfill Lane 2 self-scheduling: enqueue `rationalisation.lane_eligible` for Lane 2 at Lane 1 merge + 24h (solves the original complaint).
+12. Docs (`docs/scheduler.md`, `docs/why-awip.md` footnote, ADR-0010 stub if needed) + memory + CHANGELOG.
 
-Used the rigorous-planning skill.
+## Out of scope (footer — will be POSTed to plan-footer-ingest on done)
+- Email/SMS delivery rails (defer until external_contacts proves out).
+- Migration of existing 19 `scheduled-*` pg_cron jobs to the new substrate (separate lane — keep both rails running for now).
+- Client-self-service reminder portal (operator-only in v1).
+- Workflow chaining / DAGs / fan-out jobs.
+- Timezone-aware recurrence (UTC only v1).
+- FM1–FM12 callback handler implementations (each FM's own project ships those).
+- Auto-discovery of FM endpoints (manual `POST /modules/register-endpoint` v1).
