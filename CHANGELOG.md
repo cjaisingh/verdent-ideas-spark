@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-28 — W8.1 Global Scheduling Substrate)
+- **5 new tables**: `scheduled_jobs`, `scheduled_job_events`, `module_endpoints`, `external_contacts`, `scheduler_kind_catalog` (operator-only RLS, realtime on `scheduled_jobs`).
+- **3 edge functions**: `scheduler-enqueue` (operator JWT or `x-awip-service-token`, idempotent on `(owning_module, dedupe_key)`), `scheduler-tick` (1-min `pg_cron`, claims via `claim_scheduled_jobs` RPC, local or remote dispatch with retry backoff), `scheduler-register-endpoint` (FM/operator registers callback URL).
+- **3 reference local handlers** in `_shared/scheduler-handlers.ts`: `reminder.send` (Telegram + operator inbox), `report.weekly_digest`, `rationalisation.lane_eligible`.
+- **`/admin/scheduler`** operator page — list + filters by module/status + create modal + cancel/retry, realtime.
+- **4 sentinel checks**: `scheduled_jobs_stuck` (medium/high), `scheduler_dlq_growth` (high/critical), `module_endpoint_silent` (medium), `module_endpoint_red` (high).
+- **Hybrid (C) dispatch**: Core hosts queue + tick + UI; remote handlers POST to `module_endpoints[owning_module].callback_url` with the module's signed token + `Idempotency-Key`.
+- **FM tenant scope enforced** by trigger — any job with `owning_module != 'awip_core'` requires `tenant_id`.
+- **Docs**: `docs/scheduler.md`, `mem://features/scheduler`.
+
+
+
 ### Removed (2026-05-28 — Lane 1 zombie edge-fn kill)
 - **5 edge functions** deleted after operator confirmation per `.lovable/plan.md` rationalisation plan:
   - `automation-auth-monitor` — unscheduled cron `*/5 * * * *` (jobid 11); auth-failure scanning now relies on per-job `alert_log` writes from each cron handler. `SENTINEL_CADENCES` entry removed (was a misleading silence-watcher for a job that did nothing useful).
