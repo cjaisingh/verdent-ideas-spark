@@ -43,7 +43,12 @@ export type FindingCandidate = {
     | "alias_corpus_ready"
     | "module_silent_24h"
     | "module_register_idempotency_replay_burst"
-    | "app_secrets_plaintext_present";
+    | "app_secrets_plaintext_present"
+    | "scheduled_jobs_stuck"
+    | "scheduler_dlq_growth"
+    | "module_endpoint_silent"
+    | "module_endpoint_red";
+
 
   severity: "info" | "low" | "medium" | "high" | "critical";
   summary: string;
@@ -1508,4 +1513,154 @@ export function checkResolverNoMatchBurst(
   }];
 }
 
+// ============================================================================
+// W8.1 Global Scheduling Substrate — 4 sentinel checks
+// ============================================================================
+
+export type ScheduledJobSentinelRow = {
+  id: string;
+  kind: string;
+  owning_module: string;
+  status: string;
+  run_at: string;
+  started_at: string | null;
+  attempts: number | null;
+  last_error: string | null;
+};
+
+/** scheduled_jobs_stuck — any `running` >10min OR `pending` with run_at < now()-5min. */
+export function checkScheduledJobsStuck(
+  now: Date,
+  rows: ScheduledJobSentinelRow[],
+): FindingCandidate[] {
+  const runningCutoff = now.getTime() - 10 * 60_000;
+  const pendingCutoff = now.getTime() - 5 * 60_000;
+  const stuck = rows.filter((r) => {
+    if (r.status === "running") {
+      const t = r.started_at ? +new Date(r.started_at) : +new Date(r.run_at);
+      return t < runningCutoff;
+    }
+    if (r.status === "pending") {
+      return +new Date(r.run_at) < pendingCutoff;
+    }
+    return false;
+  });
+  if (stuck.length === 0) return [];
+  const byMod = new Map<string, number>();
+  for (const r of stuck) byMod.set(r.owning_module, (byMod.get(r.owning_module) ?? 0) + 1);
+  const hourBucket = Math.floor(now.getTime() / 3600_000);
+  return [{
+    kind: "scheduled_jobs_stuck",
+    severity: stuck.length >= 10 ? "high" : "medium",
+    summary: `${stuck.length} scheduled_jobs stuck (running>10m or pending past run_at>5m) across ${byMod.size} module(s).`,
+    dedupe_key: `scheduled_jobs_stuck:${hourBucket}`,
+    subject_ref: { table: "scheduled_jobs", count: stuck.length },
+    payload: {
+      stuck_count: stuck.length,
+      by_module: Object.fromEntries(byMod),
+      sample_ids: stuck.slice(0, 10).map((r) => r.id),
+      runbook: "docs/scheduler.md#stuck-jobs",
+    },
+  }];
 }
+
+/** scheduler_dlq_growth — >20 failed jobs in last 24h. */
+export function checkSchedulerDlqGrowth(
+  now: Date,
+  rows: { id: string; owning_module: string; kind: string; last_error: string | null; updated_at: string }[],
+  threshold = 20,
+): FindingCandidate[] {
+  if (rows.length <= threshold) return [];
+  const byMod = new Map<string, number>();
+  for (const r of rows) byMod.set(r.owning_module, (byMod.get(r.owning_module) ?? 0) + 1);
+  const dayBucket = now.toISOString().slice(0, 10);
+  return [{
+    kind: "scheduler_dlq_growth",
+    severity: rows.length >= threshold * 2 ? "critical" : "high",
+    summary: `${rows.length} scheduled jobs landed in DLQ (failed) in last 24h (threshold ${threshold}).`,
+    dedupe_key: `scheduler_dlq_growth:${dayBucket}`,
+    subject_ref: { table: "scheduled_jobs", status: "failed" },
+    payload: {
+      failed_24h: rows.length,
+      threshold,
+      by_module: Object.fromEntries(byMod),
+      sample_ids: rows.slice(0, 10).map((r) => r.id),
+      runbook: "docs/scheduler.md#dlq",
+    },
+  }];
+}
+
+export type ModuleEndpointRow = {
+  module: string;
+  callback_url: string | null;
+  last_dispatch_ok_at: string | null;
+  last_dispatch_err_at: string | null;
+  last_error: string | null;
+};
+
+/** module_endpoint_silent — endpoint has pending jobs but last_dispatch_ok_at is >7d old. */
+export function checkModuleEndpointSilent(
+  now: Date,
+  endpoints: ModuleEndpointRow[],
+  pendingByModule: Record<string, number>,
+): FindingCandidate[] {
+  const cutoff = now.getTime() - 7 * 24 * 3600_000;
+  const out: FindingCandidate[] = [];
+  for (const e of endpoints) {
+    const pending = pendingByModule[e.module] ?? 0;
+    if (pending === 0) continue;
+    const last = e.last_dispatch_ok_at ? +new Date(e.last_dispatch_ok_at) : 0;
+    if (last >= cutoff) continue;
+    out.push({
+      kind: "module_endpoint_silent",
+      severity: "medium",
+      summary: `FM module '${e.module}' has ${pending} pending scheduled jobs but no successful dispatch in >7d.`,
+      dedupe_key: `module_endpoint_silent:${e.module}`,
+      subject_ref: { table: "module_endpoints", module: e.module },
+      payload: {
+        module: e.module,
+        pending_jobs: pending,
+        last_dispatch_ok_at: e.last_dispatch_ok_at,
+        callback_url: e.callback_url,
+        runbook: "docs/scheduler.md#endpoint-silent",
+      },
+    });
+  }
+  return out;
+}
+
+/** module_endpoint_red — last_dispatch_err_at > last_dispatch_ok_at for >1h with ≥3 attempts. */
+export function checkModuleEndpointRed(
+  now: Date,
+  endpoints: ModuleEndpointRow[],
+  recentAttemptsByModule: Record<string, number>,
+): FindingCandidate[] {
+  const cutoff = now.getTime() - 60 * 60_000;
+  const out: FindingCandidate[] = [];
+  for (const e of endpoints) {
+    if (!e.last_dispatch_err_at) continue;
+    const errAt = +new Date(e.last_dispatch_err_at);
+    const okAt = e.last_dispatch_ok_at ? +new Date(e.last_dispatch_ok_at) : 0;
+    if (errAt <= okAt) continue;
+    if (errAt > cutoff) continue; // err is recent but maybe transient; need >1h
+    const attempts = recentAttemptsByModule[e.module] ?? 0;
+    if (attempts < 3) continue;
+    out.push({
+      kind: "module_endpoint_red",
+      severity: "high",
+      summary: `FM module '${e.module}' endpoint failing for >1h (${attempts} attempts). Last error: ${(e.last_error ?? "").slice(0, 120)}`,
+      dedupe_key: `module_endpoint_red:${e.module}`,
+      subject_ref: { table: "module_endpoints", module: e.module },
+      payload: {
+        module: e.module,
+        last_dispatch_err_at: e.last_dispatch_err_at,
+        last_dispatch_ok_at: e.last_dispatch_ok_at,
+        last_error: e.last_error,
+        attempts_24h: attempts,
+        runbook: "docs/scheduler.md#endpoint-red",
+      },
+    });
+  }
+  return out;
+}
+
