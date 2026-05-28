@@ -51,6 +51,7 @@ function makeStub(opts: { failTitles?: Set<string> } = {}) {
   };
 
   // deno-lint-ignore no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { sb: client as any, inserted, seen };
 }
 
