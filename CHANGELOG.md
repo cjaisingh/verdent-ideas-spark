@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Removed (2026-05-28 — Lane 1 zombie edge-fn kill)
+- **5 edge functions** deleted after operator confirmation per `.lovable/plan.md` rationalisation plan:
+  - `automation-auth-monitor` — unscheduled cron `*/5 * * * *` (jobid 11); auth-failure scanning now relies on per-job `alert_log` writes from each cron handler. `SENTINEL_CADENCES` entry removed (was a misleading silence-watcher for a job that did nothing useful).
+  - `copilot-voice` — WebSocket STT/TTS gateway; superseded by `gemini-tts` + `companion-cloud-chat`. `/copilot` route stubbed to redirect to `/companion`; `public/copilot-mic-worklet.js` removed; `CompanionVoiceDock` copy updated.
+  - `copilot-noop-llm` — only caller was `copilot-voice` (also deleted).
+  - `roadmap-phase-signoff` — phase sign-off path uses direct DB write; companion test `src/test/proceed-signoff.e2e.test.tsx` removed.
+  - `telegram-send-voice` — operator confirmed Telegram voice replies never used. `route-operator-message` voice branch removed; `VoiceHealth` page drops the Telegram tile; `VOICE_FUNCTIONS` and sentinel `voice_pipeline_red` now watch only `gemini-tts` + `companion-cloud-chat`; playbook updated.
+- **Validation:** `bun run scripts/check-logger-coverage.ts` still passes (removed wrapped fns); no remaining refs found via `rg` (CHANGELOG history excepted). `cron.job` row count: 19 → 18.
+- **Out of scope (deferred):** Lane 2 (overnight orchestrator) waits 24h for sentinel quiet window per operator decision.
+
+
+
 ### Added (2026-05-26 — apex Objectives + FM1 registered)
 - **AWIP Platform tenant** (`tenants.slug='awip-platform'`) — holds the platform's own OKRs separate from customer tenants.
 - **7 apex client-goal Objectives** seeded as top-level `okr_nodes` (Operational Excellence, Cost Efficiency, Risk Reduction, Workplace Experience, Sustainability & ESG, Compliance Confidence, Growth & Value Creation). Deterministic UUIDs; re-seed is a no-op. `okr_node_events.created` emitted manually per seed (no DB trigger on `okr_nodes`).
