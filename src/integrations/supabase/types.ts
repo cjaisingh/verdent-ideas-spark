@@ -8871,6 +8871,17 @@ export type Database = {
       }
       backfill_ai_usage_attribution: { Args: never; Returns: Json }
       cancel_overnight_run: { Args: { _id: string }; Returns: undefined }
+      claim_scheduled_jobs: {
+        Args: {
+          _limit: number
+          _lock_by: string
+          _lock_until: string
+          _now: string
+        }
+        Returns: {
+          id: string
+        }[]
+      }
       db_analyze_public: { Args: never; Returns: undefined }
       db_list_all_columns: {
         Args: never
