@@ -76,6 +76,8 @@ import AdminObservabilityRegistry from "./pages/AdminObservabilityRegistry";
 import AdminModules from "./pages/AdminModules";
 import AdminFreshnessDashboard from "./pages/AdminFreshnessDashboard";
 import OperatorInbox from "./pages/OperatorInbox";
+import AdminScheduler from "./pages/AdminScheduler";
+
 import VoiceHealth from "./pages/VoiceHealth";
 import PlaybookVoiceChatFirst from "./pages/PlaybookVoiceChatFirst";
 import WhatsNew from "./pages/WhatsNew";
@@ -169,7 +171,9 @@ const App = () => (
             <Route path="/admin/observability-registry" element={<AdminObservabilityRegistry />} />
             <Route path="/admin/modules" element={<AdminModules />} />
             <Route path="/admin/freshness-dashboard" element={<AdminFreshnessDashboard />} />
+            <Route path="/admin/scheduler" element={<AdminScheduler />} />
             <Route path="/operator-inbox" element={<OperatorInbox />} />
+
             <Route path="/postmortems" element={<Postmortems />} />
             <Route path="/playbooks/voice-chat-first" element={<PlaybookVoiceChatFirst />} />
             <Route path="/whats-new" element={<WhatsNew />} />
