@@ -8,6 +8,21 @@ This project uses GitHub Actions. Three workflows live in `.github/workflows/`:
 | `deploy-staging.yml` | push to `develop` (or manual) | Build, push DB migrations, deploy edge functions, deploy frontend to staging |
 | `deploy-production.yml` | push to `main` or `v*.*.*` tag (or manual) | Re-runs quality gates, then deploys DB + edge + frontend to production |
 
+## GitHub Actions watcher
+
+`gh-actions-watch` polls the GitHub API for the latest 20 workflow runs on
+`main` in `cjaisingh/verdent-ideas-spark` every 5 minutes. Any run completing
+with `failure`, `timed_out`, or `startup_failure` is recorded in
+`public.gh_actions_runs`, emits a `gh_actions_main_failure` sentinel finding
+(severity `high`, dedupe keyed on the GitHub `run_id`), and fires a Telegram
+alert via `telegram-send`. A subsequent successful run on `main` for the same
+workflow auto-resolves the row and closes the finding.
+
+This catches reds that `ci-status-sync` misses — the latter only watches
+workflows linked to an open `discussion_action`.
+
+
+
 ## Branch model
 
 - `develop` → staging
