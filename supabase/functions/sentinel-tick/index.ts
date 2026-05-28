@@ -19,9 +19,13 @@ import {
   checkAliasRevokeBurst, checkAliasCorpusReady,
   checkModuleSilent24h,
   checkAppSecretsPlaintextPresent,
+  checkScheduledJobsStuck, checkSchedulerDlqGrowth,
+  checkModuleEndpointSilent, checkModuleEndpointRed,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
+  type ScheduledJobSentinelRow, type ModuleEndpointRow,
 } from "./checks.ts";
+
 import { recordStep } from "../_shared/steps.ts";
 
 const corsHeaders = {
@@ -326,8 +330,61 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       })();
 
 
+    // W8.1 scheduler signals.
+    const [schedStuckRes, schedFailedRes, modEndpointsRes, schedAttemptsRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:scheduler_signals",
+      request_id: reqId,
+      step_label: "Scan scheduled_jobs + module_endpoints", phase_kind: "db_scan",
+    }, () => Promise.all([
+      sb.from("scheduled_jobs")
+        .select("id,kind,owning_module,status,run_at,started_at,attempts,last_error")
+        .in("status", ["running", "pending"])
+        .lte("run_at", now.toISOString())
+        .limit(500),
+      sb.from("scheduled_jobs")
+        .select("id,owning_module,kind,last_error,updated_at")
+        .eq("status", "failed")
+        .gte("updated_at", since24h)
+        .limit(500),
+      sb.from("module_endpoints")
+        .select("module,callback_url,last_dispatch_ok_at,last_dispatch_err_at,last_error")
+        .limit(200),
+      sb.from("scheduled_job_events")
+        .select("job_id,actor,created_at")
+        .gte("created_at", since24h)
+        .like("actor", "scheduler-tick:%")
+        .limit(2000),
+    ]));
+    // Pending counts per module (for module_endpoint_silent).
+    const schedPendingByModule: Record<string, number> = {};
+    try {
+      const { data: pendingMods } = await sb.from("scheduled_jobs")
+        .select("owning_module")
+        .eq("status", "pending")
+        .neq("owning_module", "awip_core")
+        .limit(2000);
+      for (const r of (pendingMods ?? []) as { owning_module: string }[]) {
+        schedPendingByModule[r.owning_module] = (schedPendingByModule[r.owning_module] ?? 0) + 1;
+      }
+    } catch (e) { console.error("scheduler pending scan failed", e); }
+    // Recent attempt counts per module (for module_endpoint_red).
+    const schedAttemptsByModule: Record<string, number> = {};
+    try {
+      const jobIds = ((schedAttemptsRes.data ?? []) as { job_id: string }[]).map((r) => r.job_id);
+      if (jobIds.length > 0) {
+        const { data: js } = await sb.from("scheduled_jobs")
+          .select("id,owning_module")
+          .in("id", jobIds.slice(0, 1000));
+        for (const r of (js ?? []) as { id: string; owning_module: string }[]) {
+          schedAttemptsByModule[r.owning_module] = (schedAttemptsByModule[r.owning_module] ?? 0) + 1;
+        }
+      }
+    } catch (e) { console.error("scheduler attempts scan failed", e); }
+
+
     const runs = runsRes.data ?? [];
     const edgeLogs = edgeRes.data ?? [];
+
 
     // Module liveness: one row per owning_module with cap count + last heartbeat.
     // Single query joins capabilities (grouped) with the latest heartbeat per module.
@@ -488,7 +545,26 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],
       )),
       ...timeCheck("app_secrets_plaintext_present", () => checkAppSecretsPlaintextPresent(appSecretsAtRest)),
+      ...timeCheck("scheduled_jobs_stuck", () => checkScheduledJobsStuck(
+        now,
+        (schedStuckRes.data ?? []) as ScheduledJobSentinelRow[],
+      )),
+      ...timeCheck("scheduler_dlq_growth", () => checkSchedulerDlqGrowth(
+        now,
+        (schedFailedRes.data ?? []) as { id: string; owning_module: string; kind: string; last_error: string | null; updated_at: string }[],
+      )),
+      ...timeCheck("module_endpoint_silent", () => checkModuleEndpointSilent(
+        now,
+        (modEndpointsRes.data ?? []) as ModuleEndpointRow[],
+        schedPendingByModule,
+      )),
+      ...timeCheck("module_endpoint_red", () => checkModuleEndpointRed(
+        now,
+        (modEndpointsRes.data ?? []) as ModuleEndpointRow[],
+        schedAttemptsByModule,
+      )),
     ]);
+
 
     let inserted = 0, updated = 0, alerts = 0, autoLinked = 0;
     for (const c of candidates) {
