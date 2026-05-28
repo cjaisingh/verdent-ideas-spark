@@ -51,6 +51,7 @@ function makeStub(opts: { failTitles?: Set<string> } = {}) {
   };
 
   // deno-lint-ignore no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { sb: client as any, inserted, seen };
 }
 
@@ -133,6 +134,7 @@ Deno.test("recordOutOfScope: non-23505 errors bubble up", async () => {
   let threw = false;
   try {
     // deno-lint-ignore no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await recordOutOfScope(sb as any, {
       items: ["x"],
       source: "plan_footer",

@@ -3391,6 +3391,42 @@ export type Database = {
         }
         Relationships: []
       }
+      gh_actions_runs: {
+        Row: {
+          branch: string
+          conclusion: string
+          html_url: string
+          resolved_at: string | null
+          run_id: number
+          run_started_at: string
+          seen_at: string
+          sha: string
+          workflow: string
+        }
+        Insert: {
+          branch: string
+          conclusion: string
+          html_url: string
+          resolved_at?: string | null
+          run_id: number
+          run_started_at: string
+          seen_at?: string
+          sha: string
+          workflow: string
+        }
+        Update: {
+          branch?: string
+          conclusion?: string
+          html_url?: string
+          resolved_at?: string | null
+          run_id?: number
+          run_started_at?: string
+          seen_at?: string
+          sha?: string
+          workflow?: string
+        }
+        Relationships: []
+      }
       governance_deeplink_events: {
         Row: {
           actor: string | null

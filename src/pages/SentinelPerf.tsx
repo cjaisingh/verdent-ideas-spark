@@ -57,6 +57,7 @@ export default function SentinelPerf() {
 
   const load = async () => {
     setLoading(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
       .from("v_sentinel_check_perf_24h")
       .select("*");
@@ -66,16 +67,19 @@ export default function SentinelPerf() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ch = (supabase as any)
       .channel(`sentinel-perf-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "sentinel_check_runs" }, () => load())
       .subscribe();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return () => { (supabase as any).removeChannel(ch); };
   }, []);
 
   useEffect(() => {
     if (!openCheck) return;
     (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data } = await (supabase as any)
         .from("sentinel_check_runs")
         .select("*")
