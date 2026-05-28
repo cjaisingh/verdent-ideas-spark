@@ -3186,6 +3186,48 @@ export type Database = {
         }
         Relationships: []
       }
+      external_contacts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_name: string
+          email: string | null
+          id: string
+          notes: string | null
+          organisation: string | null
+          phone: string | null
+          telegram_chat_id: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_name: string
+          email?: string | null
+          id?: string
+          notes?: string | null
+          organisation?: string | null
+          phone?: string | null
+          telegram_chat_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string
+          email?: string | null
+          id?: string
+          notes?: string | null
+          organisation?: string | null
+          phone?: string | null
+          telegram_chat_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fact_conflicts: {
         Row: {
           applied_rule_id: string | null
@@ -3934,6 +3976,39 @@ export type Database = {
           night_timezone?: string
           night_window_end?: string
           night_window_start?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      module_endpoints: {
+        Row: {
+          callback_url: string
+          last_dispatch_err_at: string | null
+          last_dispatch_ok_at: string | null
+          last_error: string | null
+          module: string
+          registered_at: string
+          registered_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          callback_url: string
+          last_dispatch_err_at?: string | null
+          last_dispatch_ok_at?: string | null
+          last_error?: string | null
+          module: string
+          registered_at?: string
+          registered_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          callback_url?: string
+          last_dispatch_err_at?: string | null
+          last_dispatch_ok_at?: string | null
+          last_error?: string | null
+          module?: string
+          registered_at?: string
+          registered_by?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -6487,6 +6562,152 @@ export type Database = {
           tags?: string[]
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_job_events: {
+        Row: {
+          actor: string | null
+          attempt: number | null
+          created_at: string
+          detail: Json | null
+          event_type: string
+          id: string
+          job_id: string
+          new_status: string | null
+          prev_status: string | null
+        }
+        Insert: {
+          actor?: string | null
+          attempt?: number | null
+          created_at?: string
+          detail?: Json | null
+          event_type: string
+          id?: string
+          job_id: string
+          new_status?: string | null
+          prev_status?: string | null
+        }
+        Update: {
+          actor?: string | null
+          attempt?: number | null
+          created_at?: string
+          detail?: Json | null
+          event_type?: string
+          id?: string
+          job_id?: string
+          new_status?: string | null
+          prev_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_job_events_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduled_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          dedupe_key: string
+          enqueued_by: string | null
+          enqueued_via_module: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          locked_by: string | null
+          locked_until: string | null
+          max_retries: number
+          next_run_at: string | null
+          owning_module: string
+          payload: Json
+          recurrence: string | null
+          result: Json | null
+          run_at: string
+          status: string
+          subject_id: string | null
+          subject_type: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          dedupe_key: string
+          enqueued_by?: string | null
+          enqueued_via_module?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          max_retries?: number
+          next_run_at?: string | null
+          owning_module?: string
+          payload?: Json
+          recurrence?: string | null
+          result?: Json | null
+          run_at: string
+          status?: string
+          subject_id?: string | null
+          subject_type?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          enqueued_by?: string | null
+          enqueued_via_module?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          locked_by?: string | null
+          locked_until?: string | null
+          max_retries?: number
+          next_run_at?: string | null
+          owning_module?: string
+          payload?: Json
+          recurrence?: string | null
+          result?: Json | null
+          run_at?: string
+          status?: string
+          subject_id?: string | null
+          subject_type?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduler_kind_catalog: {
+        Row: {
+          created_at: string
+          description: string | null
+          handler_mode: string
+          kind: string
+          owning_module: string
+          requires_tenant: boolean
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          handler_mode: string
+          kind: string
+          owning_module: string
+          requires_tenant?: boolean
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          handler_mode?: string
+          kind?: string
+          owning_module?: string
+          requires_tenant?: boolean
         }
         Relationships: []
       }
