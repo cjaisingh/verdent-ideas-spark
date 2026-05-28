@@ -14,6 +14,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - **FM tenant scope enforced** by trigger — any job with `owning_module != 'awip_core'` requires `tenant_id`.
 - **Docs**: `docs/scheduler.md`, `mem://features/scheduler`.
 
+### Added (2026-05-28 — W8.1 follow-up: client-facing reminders + FM docs)
+- **`RemindersPanel`** reusable component (`src/components/scheduler/RemindersPanel.tsx`) — lists `scheduled_jobs` of kind `reminder.send` for a subject, with create/cancel and realtime updates.
+- **TenantDetail** (`/tenants/:id`) now embeds `RemindersPanel` scoped to `subject_type='tenant'`.
+- **ContactDetail** (`/contacts/:id`) — new external-contact profile page with embedded reminders panel.
+- **Module scaffold** README gained a **Scheduling (W8.1)** section: how FM modules register their callback, enqueue tenant-scoped jobs, and implement `scheduler-callback`.
+- **E2E**: `e2e-playwright/admin-scheduler.spec.ts` covers `/admin/scheduler` render + console-clean realtime mount.
+
 
 
 ### Removed (2026-05-28 — Lane 1 zombie edge-fn kill)
