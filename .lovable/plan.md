@@ -1,103 +1,90 @@
 
+# Codebase Rationalisation — 7 Lanes
+
 ## Goal
-Make the AWIP constellation diagram **observably true** in the database: the 7 apex client-goal Objectives exist as canonical top-level `okr_nodes`, and FM1 (Stakeholder Intelligence) is registered as the first real capability-producing module — proving the `register → demand → events` loop end-to-end.
+Reduce surface area (edge fns, crons, docs, test trees, `any` debt) without losing behaviour. Target: −5 edge fns, −6 cron jobs, −~10 redundant docs, −unfired sentinel checks, single e2e runner, ratchet moving again.
 
 ## Non-goals
-- No FM2–FM12. One module proves the path; the rest follow on operator demand.
-- No new UI on `/okr` or `/capabilities` — read paths already render whatever is seeded.
-- No flow ontology promotion (parked; needs real FM1 traffic first).
-- No KR seeding under the 7 Objectives — operator authors KRs as real targets emerge. Empty Objectives are intentional placeholders, not stubs to backfill.
-- No Control Plane routing. Core stays substrate.
+- No new features. No UI redesign. No schema changes beyond cron consolidation.
+- Not touching `awip-api`, Night Agent semantics, or W7 truth resolver.
+- Not adopting OpenHuman / local LLM in this plan (separate decision).
 
-## Blast radius & Core rule / ADR / FM-AI cited
-- **Data writes (no schema change):** 7 rows into `public.okr_nodes` (level=`objective`, parent_id=NULL), 1 row into `public.capabilities`, ≥1 row into `public.capability_events` via existing trigger.
-- **Surfaces touched:** `/okr` (renders new Objectives), `/capabilities` (renders FM1), `/capabilities/demand` (FM1 demand=0 until a KR cites it).
-- **Files touched:** `docs/module-scaffold/capabilities.json` (reference example), new `mem://features/fm1-stakeholder-intelligence.md`, `CHANGELOG.md`, `mem://index.md`.
-- **Core rule cited:** *"Every OKR mutation → `okr_node_events`; every manifest change → `capability_events`."* Both fire automatically from existing triggers on the seed inserts — verify, don't reimplement.
-- **ADR cited:** ADR-0001 (Capability registry contract) — FM1 self-registers via `POST /capabilities/register`, no special path. ADR-0003 (OKR-driven execution) — apex Objectives complete the tree's top.
-- **FM-AI failure mode:** #1 *"AWIP is talking to itself"* — empty constellation. Defused by making at least one module real and at least the apex outcomes namable.
-
----
+## Blast radius & citations
+- **Tables:** `cron.job`, `automation_runs`, `sentinel_findings`, `lint_*`. No data tables touched.
+- **Edge fns:** delete 3–5 zombies; merge 5 overnight fns into one orchestrator (keep originals as thin re-exports for one release).
+- **Surfaces:** `/admin/edge-health`, `/admin/observability-registry`, CI workflows.
+- **Core rule cited (`CONTEXT.md`):** "Substrate, not a brain" — dead crons & duplicate docs are accidental brain. **ADR-0002** (service-token/idempotency) — fewer cron callers = fewer token surfaces. **FM-AI failure mode:** *unobserved drift* — unfired sentinel checks give false safety; duplicate docs give stale truth.
 
 ## Alternatives considered
+1. **Do nothing, write a "tech-debt" memory.** Rejected — debt is already documented (e.g. `edge-function-zombie-triage-2026-05-24.md`) and ignored. Documenting again ≠ fixing.
+2. **Big-bang refactor in one PR.** Rejected — blast radius too wide, can't bisect failures.
+3. **Lane-by-lane, gated, one PR per lane (chosen).** Each lane independently revertable; ratchet/sentinel give immediate signal.
 
-**A. Seed all 12 FMs as empty capability stubs.**
-Pros: diagram matches DB on day 1.
-Cons: fake demand, dead-weight rows the `demand-analyst` persona would flag immediately. Violates "no speculative capabilities."
+Two specific micro-alternatives:
+- *Overnight crons:* delete vs orchestrator-merge. Chose merge — keeps separation of concerns in code but collapses cron rows + token call sites.
+- *e2e trees:* migrate `e2e/` → `e2e-playwright/` vs vice versa. Chose Playwright (already has fixtures + auth + rls map generator).
 
-**B. Seed apex Objectives only, no module.** 
-Pros: zero risk; pure data.
-Cons: doesn't prove the constellation works. Core stays talking to itself — exactly the failure mode the picture is meant to defuse.
-
-**C. Seed apex Objectives + register FM1 via the real `POST /capabilities/register` contract path, dry-run with operator approval.** ← **chosen**
-Pros: exercises the live contract (Idempotency-Key, service token, `capability_events` emission); FM1 becomes a reference example for future modules; demand stays honestly 0 until a KR is authored. Proves the loop without lying about traffic.
-Cons: FM1 is registered but does nothing yet — that's fine, it's a manifest entry, not a running service. Operator must understand "registered" ≠ "shipping."
-
-**D. New `fm_modules` table separate from `capabilities`.**
-Discarded — would fork the manifest. FM1–FM12 are *bundles* of capabilities, not a new entity. Use `capabilities.id` prefix convention (`fm1.*`) and a `module` tag.
-
----
-
-## Contract
-No new cron, edge fn, or agent loop. FM1 registration uses the **existing** `POST /capabilities/register` contract on `awip-api` (ADR-0001). Apex Objective seeds use the **existing** `okr_nodes` insert path with existing `emit_okr_node_event` trigger. No `_shared/contracts/*.ts` file needed.
-
-Idempotency: both inserts use `ON CONFLICT (id) DO NOTHING` patterns so re-running the seed is safe.
+## Contract (cron/edge-fn/agent)
+Only lane needing a new contract is **Lane 2** (overnight orchestrator). Declare `supabase/functions/_shared/contracts/overnight-orchestrator.ts` per `mem://preferences/contract-first`:
+- input: `{ phase: 'prequeue'|'runner'|'recommender'|'open'|'close', triggered_at, idempotency_key }`
+- output: `{ phase, status, ran_for_ms, child_job }`
+- escalation: any phase erroring twice in 24h → sentinel `overnight_orchestrator_red`.
+- audit table: existing `automation_runs` (no new table).
 
 ## Persona sign-off
-- **okr-strategist** — apex Objectives have no parent (correct for level=`objective`), no KRs yet (correct: KRs come from real targets, not aspiration). `okr_node_events` fires via existing trigger on insert. ✅
-- **capability-architect** — FM1 registered through the live contract, not a side-channel insert. `capability_events.registered` will land. Uses `module=fm1` tag for grouping. ✅
-- **demand-analyst** — explicitly accepts FM1 demand=0 at seed time. Will flag if it stays 0 after 60d with no KR citing it. ✅
-- **event-engineer** — verify both event tables get rows post-seed; no new event surface required. ✅
-- **compliance-auditor** — no RLS change, no gate change, operator-only writes via service role. ✅
-- **product-historian** — needs CHANGELOG entry + memory rule that the 7 apex Objectives are git-versioned (changes go through migration, not UI) and that FM1 is the **reference module** future FMs copy. ✅
-- **tenant-manager** — apex Objectives are Core-level, not tenant-scoped (correct: they're the platform's own OKRs). FM1 is platform-tier capability. No tenant FK. ✅
+- **event-engineer:** every deleted fn must have zero refs in `cron.job`, `src/`, other fns; orchestrator must keep emitting the same `automation_runs` rows under existing `job` names. ✅ Plan keeps job names.
+- **compliance-auditor:** W6 branch-protection list (`mem://preferences/ci-cd-hardening`) names workflows by file — none deleted, only test trees consolidated. ✅
+- **sentinel:** unfired checks may be true safety nets that never fire because the system is healthy. Plan requires 90-day `sentinel_findings` query + per-check operator decision, not blanket delete. ✅
+- **product-historian:** doc dedup must update `README.md` + `CHANGELOG.md` and leave redirects (1-line stub linking new canonical). ✅
+- **control-plane-operator:** no routing logic moves; orchestrator is a multiplexer not a router. ✅
 
 ## Gap checklist
-- [x] Idempotency: `ON CONFLICT DO NOTHING` on both seeds; capability register uses Idempotency-Key.
-- [x] `*_events` emission: existing `emit_okr_node_event` + capability trigger cover it. **Verify post-seed** with `read_query`.
-- [x] RLS: no policy change.
-- [x] Realtime: `okr_nodes` + `capabilities` already on `supabase_realtime`.
-- [x] `observability_registry`: N/A (no new surface).
-- [x] `withLogger`: N/A (no new fn).
-- [x] No new `any`: data-only change; types regenerate.
-- [x] Mem rule: `mem://features/fm1-stakeholder-intelligence.md` + index entry; note in `mem://features/ontology.md` that apex Objectives are git-versioned.
-- [x] CHANGELOG entry: "Apex Objectives seeded + FM1 registered as reference module."
-- [x] Doc: update `docs/module-scaffold/README.md` to point at FM1 as the worked example.
+- [x] Idempotency: orchestrator passes through `Idempotency-Key`; child fns unchanged.
+- [x] `*_events` emission: unchanged — no domain mutations in this plan.
+- [x] RLS + `has_role`: no new tables; orchestrator uses `AWIP_SERVICE_TOKEN` like siblings.
+- [x] Realtime publication: n/a.
+- [x] `observability_registry`: must add row for `overnight-orchestrator`; remove rows for deleted fns.
+- [x] `withLogger`: orchestrator wrapped; deletions remove their wrapped fns.
+- [x] No new `any`: Lane 7 reduces `any`; ratchet enforces.
+- [x] Mem rule: update `mem://index.md` Core cron list after Lane 2; add `mem://features/overnight-orchestrator.md`.
+- [x] CHANGELOG: one entry per lane.
+- [x] Doc updates: per lane below.
+
+## Lanes (sequenced, each = 1 PR)
+
+| # | Lane | Effort | Gate |
+|---|---|---|---|
+| 1 | Kill zombie edge fns (`automation-auth-monitor`, `copilot-voice`, `roadmap-phase-signoff`, `copilot-noop-llm`, `telegram-send-voice`) after operator confirm | 30m | `rg` shows 0 refs; sentinel green 24h |
+| 2 | Overnight orchestrator: merge `night-agent-open/close`, `overnight-phase-runner-15m`, `overnight-prequeue`, `scheduled-overnight-recommender` behind `overnight-orchestrator` with `phase` arg; keep 5 cron rows initially, flip to 1 after green week | 3h | `automation_runs` row counts unchanged per job; one full night cycle clean |
+| 3 | Reflection orchestrator: merge `scheduled-lessons-daily/weekly` + `scheduled-deep-audit-weekly/monthly` similarly | 2h | Same |
+| 4 | Sentinel check audit: `SELECT check_name, count(*), max(detected_at) FROM sentinel_findings WHERE detected_at > now()-90d GROUP BY 1`; per-check operator decision (keep/delete/demote) | 1h + decisions | Deleted checks have zero findings in 90d AND no safety-net justification |
+| 5 | Doc dedup: merge `edge-function-audit.md` + `edge-function-sweep-2026-05-10.md` → `docs/edge-function-inventory.md`; merge 4 phase-5-6 docs → `docs/phase-5-6.md`; leave 1-line redirect stubs | 1h | `bun run check-doc-drift` green |
+| 6 | e2e tree consolidation: port remaining `e2e/*.test.ts` into `e2e-playwright/`; delete `e2e/` + `vitest.e2e.config.ts`; update `nightly.yml` | 4h | Playwright suite covers all prior test names; CI green |
+| 7 | `any` ratchet sweep: run `codemod-any-enqueue` drafts → batch-apply low-risk ones; lower baseline by ≥50 sites; close discussion_action #20 if zero, else update target | 2h | `bun run lint:ratchet` passes; baseline.total decreases |
 
 ## Test plan
-- **vitest (unit):** none — pure data seed, no new helper.
-- **edge fn (curl):** `curl_edge_functions awip-api POST /capabilities/register` with FM1 payload + Idempotency-Key. Assert 200 first call, 200-noop second call (same key + body), 409 on key reuse with different body.
-- **read_query verification (4 checks):**
-  1. `select count(*) from okr_nodes where parent_id is null and level='objective'` → 7.
-  2. `select count(*) from okr_node_events where okr_node_id in (...seeded ids)` → ≥7.
-  3. `select * from capabilities where id like 'fm1.%'` → ≥1 row.
-  4. `select * from capability_events where capability_id like 'fm1.%' and event='registered'` → ≥1 row.
-- **e2e:** none — `/okr` and `/capabilities` are read-only render paths already covered by existing tests.
+- **Lane 1:** `bun run scripts/check-logger-coverage.ts` still 0 failures; `curl_edge_functions` 404 on deleted names; existing e2e suites green.
+- **Lane 2/3:** new vitest `supabase/functions/overnight-orchestrator/_test/dispatch.test.ts` — given `{phase:'prequeue'}` calls prequeue handler; given unknown phase returns 400. Live: trigger each phase via `curl_edge_functions` with service token, assert `automation_runs` row written under original `job` name.
+- **Lane 4:** SQL query above; document deletion reasons in `docs/sentinel-prune-2026-05-28.md`.
+- **Lane 5:** `bun run scripts/check-doc-drift.ts`; manual `rg` for old filenames → only redirect stubs remain.
+- **Lane 6:** `bunx playwright test`; diff old vs new test names in PR description.
+- **Lane 7:** `bun run lint:ratchet`; CI lint-and-typecheck workflow.
 
-## Validation gates
-- `supabase--insert` on the 7 Objectives succeeds (operator approves).
-- `curl_edge_functions` FM1 register returns 200 + idempotency holds.
-- 4 `read_query` assertions above all pass.
-- `bun run lint:ratchet` — green (no code change expected to move the baseline).
-- `bun run rls:verify` — green (no policy delta).
-- Operator visually confirms `/okr` shows 7 apex rows and `/capabilities` shows FM1.
-
----
-
-## Execution order (once approved)
-1. `supabase--insert` 7 apex Objectives with deterministic UUIDs derived from slugs (`operational-excellence`, `cost-efficiency`, `risk-reduction`, `workplace-experience`, `sustainability-esg`, `compliance-confidence`, `growth-value-creation`).
-2. `curl_edge_functions` register FM1 with capabilities: `fm1.stakeholder.profile`, `fm1.stakeholder.engagement_signal`, `fm1.stakeholder.sentiment_pulse` (3 to start — enough to be real, few enough to be honest).
-3. Run the 4 verification queries.
-4. Write `mem://features/fm1-stakeholder-intelligence.md`, update index, update CHANGELOG, update `docs/module-scaffold/README.md`.
-5. POST plan footer + session summary per `awip-session-lifecycle`.
-
----
+## Validation gates (per lane, all must pass before merge)
+```
+bun run lint:ratchet
+bun run scripts/check-logger-coverage.ts
+bun run scripts/check-doc-drift.ts
+bunx vitest run
+bunx playwright test       # Lane 6+
+```
+Plus: 24h watch on `sentinel_findings` and `automation_runs` after each merge; rollback if `overnight_orchestrator_red` or `cron_auth_failures_burst` fires.
 
 ## Out of scope
-- FM2–FM12 registration (one module at a time, demand-driven).
-- KRs under the 7 Objectives — operator authors when real targets exist.
-- Promoting `docs/ontology-flows.md` from stub (needs FM1 traffic first; logged as `discussion_action` already).
-- An actual FM1 service — this slice registers the manifest entry only. The running module ships as a separate Lovable project later.
-- Seeding any apex Objective with target metrics (premature; would force fake baselines).
-- `/capabilities` UI work to group by `module=fm*` tag (defer until ≥2 FMs exist).
-- Removing the FM1 entry from the diagram-side documentation (`docs/why-awip.md`) — not needed, diagram already names it.
+- OpenHuman / local LLM swap (separate decision; depends on credit dashboard data).
+- Dashboard widget registry refactor (item #4 in earlier scan) — defer until 7th widget actually needed.
+- "Feature kit" scaffold generator (item #8) — defer; revisit after Lanes 2+3 prove orchestrator pattern.
+- Closing discussion_action #20 if Lane 7 doesn't hit zero — keep as ongoing.
+- Branch protection enablement on `main` (operator-only action, tracked in `docs/ci-cd.md`).
+
+Used the rigorous-planning skill.
