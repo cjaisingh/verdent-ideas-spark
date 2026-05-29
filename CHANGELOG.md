@@ -4,6 +4,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-05-29 — Nightly tests reliability)
+- **`nightly.yml`**: e2e step now gated on `E2E_OPERATOR_EMAIL`/`E2E_OPERATOR_PASSWORD` repo secrets being present — skipped with a `::notice::` when not configured instead of failing the job. Operator credentials piped through `env:` when present.
+- **Report step** no longer fails the job on `record-test-run` errors; non-200 emits `::warning::` (with a clear "rotate `AWIP_SERVICE_TOKEN`" hint on 401) while the actual test outcome drives job conclusion. 401s remain captured in `automation_runs` + sentinel.
+- Test result JSON now uploaded as a workflow artefact (7-day retention) for post-mortem.
+- **Operator action still required**: rotate the `AWIP_SERVICE_TOKEN` GitHub Actions secret in repo Settings → Secrets to match the current Lovable Cloud value — nightly has been silently failing this for ≥5 days.
+
+
 ### Added (2026-05-28 — W8.1 Global Scheduling Substrate)
 - **5 new tables**: `scheduled_jobs`, `scheduled_job_events`, `module_endpoints`, `external_contacts`, `scheduler_kind_catalog` (operator-only RLS, realtime on `scheduled_jobs`).
 - **3 edge functions**: `scheduler-enqueue` (operator JWT or `x-awip-service-token`, idempotent on `(owning_module, dedupe_key)`), `scheduler-tick` (1-min `pg_cron`, claims via `claim_scheduled_jobs` RPC, local or remote dispatch with retry backoff), `scheduler-register-endpoint` (FM/operator registers callback URL).
