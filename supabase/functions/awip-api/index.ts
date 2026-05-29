@@ -132,15 +132,24 @@ type Scope = {
   source: string;
 };
 
+type CopilotAgentRow = {
+  id: string;
+  slug: string;
+  allowed_capability_ids: string[] | null;
+  allowed_tables: string[] | null;
+  max_risk: "low" | "medium" | "high" | null;
+  enabled: boolean;
+};
+
 async function resolveActiveScope(req: Request, userId?: string): Promise<Scope | null> {
   // 1) Header override (e.g., service calls) — slug from x-copilot-agent
   const headerSlug = req.headers.get("x-copilot-agent");
-  let agentRow: any = null;
+  let agentRow: CopilotAgentRow | null = null;
   if (headerSlug) {
     const { data } = await supabase.from("copilot_agents")
       .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
       .eq("slug", headerSlug).maybeSingle();
-    if (data?.enabled) agentRow = data;
+    if (data?.enabled) agentRow = data as CopilotAgentRow;
   }
   // 2) Per-user active agent
   if (!agentRow && userId) {
@@ -150,7 +159,7 @@ async function resolveActiveScope(req: Request, userId?: string): Promise<Scope 
       const { data } = await supabase.from("copilot_agents")
         .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
         .eq("id", settings.active_agent_id).maybeSingle();
-      if (data?.enabled) agentRow = data;
+      if (data?.enabled) agentRow = data as CopilotAgentRow;
     }
   }
   if (!agentRow) return null; // no active agent => no scope enforcement
