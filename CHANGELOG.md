@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-05-29 — Gitleaks scheduled scan false positives)
+- Added `.gitleaks.toml` extending the default ruleset with a narrow allowlist for 11 historical false positives surfaced by the daily scheduled full-history scan: redaction test fixtures (`e2e/redaction.test.ts`, `supabase/functions/db-explorer/audit_test.ts`), example tokens in `docs/deepgram-voice.md` + `docs/security.md`, the publishable Supabase anon JWT in `.env`, ADR-bench metric keys, and `hsl(var(--token))` tripping the generic-api-key regex. Push-time diff scans are unaffected.
+
 ### Fixed (2026-05-29 — Nightly tests reliability)
 - **`nightly.yml`**: e2e step now gated on `E2E_OPERATOR_EMAIL`/`E2E_OPERATOR_PASSWORD` repo secrets being present — skipped with a `::notice::` when not configured instead of failing the job. Operator credentials piped through `env:` when present.
 - **Report step** no longer fails the job on `record-test-run` errors; non-200 emits `::warning::` (with a clear "rotate `AWIP_SERVICE_TOKEN`" hint on 401) while the actual test outcome drives job conclusion. 401s remain captured in `automation_runs` + sentinel.
