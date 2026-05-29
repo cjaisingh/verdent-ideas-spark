@@ -1,0 +1,39 @@
+# Gitleaks config — extends the default ruleset and allowlists known false
+# positives surfaced by the scheduled full-history scan.
+#
+# The push-time scan (diff-only) is unaffected; this only quiets historical
+# noise so the daily scheduled run can stay green.
+#
+# When adding entries here:
+#   - prefer `paths` (file globs) for test fixtures / docs whose entire purpose
+#     is to contain example tokens (redaction tests, API examples).
+#   - prefer `regexes` for narrow, well-justified content patterns.
+#   - never broaden enough to mask a real key.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "AWIP Core — historical false positives"
+
+paths = [
+  # Supabase publishable anon JWT (safe by design, ships to every client).
+  '''^\.env$''',
+
+  # Redaction tests — these files exist to prove we strip example tokens.
+  '''^e2e/redaction\.test\.ts$''',
+  '''^supabase/functions/db-explorer/audit_test\.ts$''',
+
+  # Docs containing example curl / token payloads.
+  '''^docs/deepgram-voice\.md$''',
+  '''^docs/security\.md$''',
+]
+
+regexes = [
+  # `hsl(var(--primary))` and friends keep tripping generic-api-key.
+  '''hsl\(var\(--[a-z0-9-]+\)\)''',
+
+  # ADR-bench metric keys like `affected_facts_p95` — descriptive labels, not keys.
+  '''affected_facts_p95''',
+  '''stale_badge_dwell_p95_days''',
+]
