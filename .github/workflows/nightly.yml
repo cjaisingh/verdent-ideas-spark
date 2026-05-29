@@ -24,18 +24,37 @@ jobs:
         continue-on-error: true
         run: bunx vitest run --reporter=json --outputFile=unit.json
 
+      # E2E requires operator credentials. Skip cleanly when the secret
+      # is not configured rather than failing the whole job — gate is the
+      # presence of E2E_OPERATOR_EMAIL.
+      - name: Check e2e secrets
+        id: e2e_gate
+        run: |
+          if [ -n "${{ secrets.E2E_OPERATOR_EMAIL }}" ] && [ -n "${{ secrets.E2E_OPERATOR_PASSWORD }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::E2E suite skipped — set E2E_OPERATOR_EMAIL and E2E_OPERATOR_PASSWORD repo secrets to enable."
+          fi
+
       - name: Run e2e tests
         id: e2e
+        if: steps.e2e_gate.outputs.configured == 'true'
         continue-on-error: true
+        env:
+          E2E_OPERATOR_EMAIL: ${{ secrets.E2E_OPERATOR_EMAIL }}
+          E2E_OPERATOR_PASSWORD: ${{ secrets.E2E_OPERATOR_PASSWORD }}
         run: bunx vitest run -c vitest.e2e.config.ts --reporter=json --outputFile=e2e.json
 
+      # Reporting to Lovable Cloud must NEVER fail the job — a stale
+      # GitHub secret would otherwise mask real test outcomes. The 401 is
+      # already captured in automation_runs and surfaced via sentinel.
       - name: Report to backend
         if: always()
         env:
           AWIP_SERVICE_TOKEN: ${{ secrets.AWIP_SERVICE_TOKEN }}
           SUPABASE_FUNCTIONS_URL: https://agzkyzyzopcgeobofjaz.supabase.co/functions/v1
         run: |
-          set -e
           for suite in unit e2e; do
             file="${suite}.json"
             if [ ! -f "$file" ]; then continue; fi
@@ -45,12 +64,32 @@ jobs:
             skipped=$(jq '.numPendingTests // 0' "$file")
             duration=$(jq '((.testResults // []) | map(.endTime - .startTime) | add) // 0' "$file")
             status=$([ "$failed" -eq 0 ] && echo passed || echo failed)
-            curl -fsS -X POST "$SUPABASE_FUNCTIONS_URL/record-test-run" \
+            http_code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST "$SUPABASE_FUNCTIONS_URL/record-test-run" \
               -H "Content-Type: application/json" \
               -H "x-service-token: $AWIP_SERVICE_TOKEN" \
-              -d "{\"suite\":\"$suite\",\"status\":\"$status\",\"total\":$total,\"passed\":$passed,\"failed\":$failed,\"skipped\":$skipped,\"duration_ms\":$duration,\"commit_sha\":\"${{ github.sha }}\",\"branch\":\"${{ github.ref_name }}\",\"workflow_run_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+              -d "{\"suite\":\"$suite\",\"status\":\"$status\",\"total\":$total,\"passed\":$passed,\"failed\":$failed,\"skipped\":$skipped,\"duration_ms\":$duration,\"commit_sha\":\"${{ github.sha }}\",\"branch\":\"${{ github.ref_name }}\",\"workflow_run_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" || echo "000")
+            if [ "$http_code" = "200" ]; then
+              echo "::notice::Reported $suite ($status) to backend."
+            elif [ "$http_code" = "401" ]; then
+              echo "::warning::record-test-run returned 401 for $suite — GitHub Actions AWIP_SERVICE_TOKEN secret does not match Lovable Cloud. Rotate it in repo Settings → Secrets."
+            else
+              echo "::warning::record-test-run returned $http_code for $suite: $(cat /tmp/resp.txt)"
+            fi
           done
 
+      - name: Upload test result JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-test-results-${{ github.run_id }}
+          path: |
+            unit.json
+            e2e.json
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Fail job if any suite failed
-        if: steps.unit.outcome == 'failure' || steps.e2e.outcome == 'failure'
-        run: exit 1
+        if: always() && (steps.unit.outcome == 'failure' || steps.e2e.outcome == 'failure')
+        run: |
+          echo "unit=${{ steps.unit.outcome }} e2e=${{ steps.e2e.outcome }}"
+          exit 1
