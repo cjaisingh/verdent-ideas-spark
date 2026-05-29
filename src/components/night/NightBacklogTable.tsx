@@ -206,8 +206,17 @@ const NightBacklogTable = () => {
         body: JSON.stringify(force ? { force: true } : {}),
       });
       const text = await resp.text();
-      let parsed: any = null;
-      try { parsed = JSON.parse(text); } catch { /* keep raw */ }
+      type NightAgentResponse = {
+        skipped?: boolean;
+        reason?: string;
+        window?: string;
+        tz?: string;
+        date?: string;
+        audited?: number;
+        proposals?: number;
+      };
+      let parsed: NightAgentResponse | null = null;
+      try { parsed = JSON.parse(text) as NightAgentResponse; } catch { /* keep raw */ }
 
       if (resp.ok && parsed?.skipped === true) {
         const reason = String(parsed.reason ?? "skipped");
