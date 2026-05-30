@@ -1,0 +1,25 @@
+
+REVOKE EXECUTE ON FUNCTION public.auto_module_heartbeat_from_event()         FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.auto_reject_stale_lessons(integer)         FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.emit_tenant_alias_event()                  FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.emit_tenant_node_event()                   FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.is_in_tenant_subtree(uuid)                 FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_postmortem_event()                     FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_qa_check_event()                       FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_scheduled_job_event()                  FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.match_alias_embedding(uuid, vector, double precision, integer) FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.observability_cron_last_seen()             FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.purge_console_captures()                   FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.reclaim_stale_ai_jobs(integer)             FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.resolve_entity(uuid, jsonb)                FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.resolve_entity_logged(uuid, jsonb, text, text) FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.resolve_module_token(text)                 FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.table_surface_last_seen(text)              FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tag_qa_check_actor()                       FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tenant_node_alias_effective(uuid)          FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tenant_node_compute_ancestry(uuid, uuid)   FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_canonical_facts_forbid_delete()         FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_canonical_facts_forbid_update()         FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_canonical_facts_set_ancestry()          FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_ingest_events_append_only()             FROM authenticated;
+REVOKE EXECUTE ON FUNCTION public.tg_source_mappings_lock_approved()         FROM authenticated;
