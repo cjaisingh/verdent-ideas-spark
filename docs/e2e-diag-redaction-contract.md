@@ -162,8 +162,12 @@ Authorization: Bearer [REDACTED]
 
 1. Update `SENSITIVE_KEY_PATTERNS` or `SENSITIVE_VALUE_PATTERNS` in `e2e/diag.ts`.
 2. Add a test case in `e2e/diag.test.ts`.
-3. Update **this document**.
+3. Update **this document** — the worked examples are machine-checked by
+   `e2e/diag-contract.test.ts`, which parses Examples 1–3 below and asserts
+   that `redact()`, `scrubString()`, and `scripts/scrub-e2e-logs.ts` produce
+   the documented "after" output verbatim. If you change a pattern, update
+   the example so the contract test stays green.
 4. Update `CHANGELOG.md`.
-5. Run `bun run test:e2e:unit` (includes `e2e/diag.test.ts`) before committing.
+5. Run `bunx vitest run --config vitest.e2e.config.ts e2e/diag.test.ts e2e/diag-contract.test.ts` before committing.
 
 **Never** weaken a pattern without explicit operator approval — the CI logs are public artefacts.
