@@ -22,6 +22,7 @@ import {
   checkAppSecretsPlaintextPresent,
   checkScheduledJobsStuck, checkSchedulerDlqGrowth,
   checkModuleEndpointSilent, checkModuleEndpointRed,
+  checkGhActionsWatchStale,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
   type ScheduledJobSentinelRow, type ModuleEndpointRow,
