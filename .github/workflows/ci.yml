@@ -48,6 +48,27 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID }}
 
+      - name: Check e2e secrets
+        id: e2e_gate
+        run: |
+          if [ -n "${{ secrets.E2E_OPERATOR_EMAIL }}" ] && [ -n "${{ secrets.E2E_OPERATOR_PASSWORD }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::E2E suite skipped — set E2E_OPERATOR_EMAIL and E2E_OPERATOR_PASSWORD repo secrets to enable."
+          fi
+
+      - name: Run e2e tests
+        if: steps.e2e_gate.outputs.configured == 'true'
+        env:
+          E2E_OPERATOR_EMAIL: ${{ secrets.E2E_OPERATOR_EMAIL }}
+          E2E_OPERATOR_PASSWORD: ${{ secrets.E2E_OPERATOR_PASSWORD }}
+          E2E_AWIP_SERVICE_TOKEN: ${{ secrets.E2E_AWIP_SERVICE_TOKEN }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: bun run test:e2e
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
