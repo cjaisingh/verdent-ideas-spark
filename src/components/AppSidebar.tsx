@@ -135,6 +135,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/ai-jobs", title: "AI jobs (local worker)", icon: Sparkles },
   { url: "/admin/videos", title: "HeyGen videos", icon: Video },
   { url: "/connections", title: "Connections", icon: Plug },
+  { url: "/admin/branding", title: "Tenant branding", icon: Shield },
 ];
 
 const allItems: NavItem[] = [
