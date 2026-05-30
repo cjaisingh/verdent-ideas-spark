@@ -596,6 +596,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         (modEndpointsRes.data ?? []) as ModuleEndpointRow[],
         schedAttemptsByModule,
       )),
+      ...timeCheck("gh_actions_watch_stale", () => checkGhActionsWatchStale(
+        now,
+        (ghWatchRes.data as { seen_at: string } | null)?.seen_at ?? null,
+      )),
     ]);
 
 
