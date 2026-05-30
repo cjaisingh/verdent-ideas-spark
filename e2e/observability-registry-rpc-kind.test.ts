@@ -45,7 +45,25 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .select("*")
       .single();
 
-    expect(error, error?.message).toBeNull();
+    if (error) {
+      // Surface full diagnostic context to CI logs so the failure is
+      // debuggable without re-running locally.
+      const diag = {
+        sqlstate: error.code ?? null,
+        message: error.message,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        attempted_row: row,
+      };
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry rpc insert FAILED]\n" +
+          JSON.stringify(diag, null, 2),
+      );
+      throw new Error(
+        `rpc insert failed (SQLSTATE=${diag.sqlstate ?? "n/a"}): ${error.message} | payload=${JSON.stringify(row)}`,
+      );
+    }
     expect(data).toBeTruthy();
     createdIds.push(data!.id);
 
@@ -63,7 +81,27 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .select("surface_kind,surface_id,watcher_kinds")
       .eq("id", data!.id)
       .single();
-    expect(reErr).toBeNull();
+    if (reErr) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry rpc reread FAILED]\n" +
+          JSON.stringify(
+            {
+              sqlstate: reErr.code ?? null,
+              message: reErr.message,
+              details: reErr.details ?? null,
+              hint: reErr.hint ?? null,
+              row_id: data!.id,
+              attempted_row: row,
+            },
+            null,
+            2,
+          ),
+      );
+      throw new Error(
+        `rpc reread failed (SQLSTATE=${reErr.code ?? "n/a"}): ${reErr.message}`,
+      );
+    }
     expect(reread).toEqual({
       surface_kind: "rpc",
       surface_id: tag,
@@ -72,16 +110,50 @@ describe("observability_registry — surface_kind='rpc'", () => {
   });
 
   it("still rejects an unknown surface_kind (constraint not over-widened)", async () => {
-    const { error } = await sb.from("observability_registry").insert({
+    const bogusRow = {
       surface_kind: "not-a-real-kind",
       surface_id: `${tag}-bogus`,
       expected_cadence_minutes: 60,
       watcher_kinds: ["noop"],
       owner: "e2e",
       declared_in: "e2e/observability-registry-rpc-kind.test.ts",
-    });
-    expect(error).toBeTruthy();
+    };
+    const { data, error } = await sb
+      .from("observability_registry")
+      .insert(bogusRow)
+      .select("id")
+      .maybeSingle();
+
+    if (!error) {
+      if (data?.id) createdIds.push(data.id);
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry constraint OVER-WIDENED]\n" +
+          JSON.stringify({ inserted_row: bogusRow, returned: data }, null, 2),
+      );
+      throw new Error(
+        `expected SQLSTATE 23514 for bogus surface_kind but insert succeeded: ${JSON.stringify(bogusRow)}`,
+      );
+    }
     // Postgres check_violation → PostgREST surfaces SQLSTATE 23514.
-    expect(error!.code).toBe("23514");
+    if (error.code !== "23514") {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry unexpected SQLSTATE]\n" +
+          JSON.stringify(
+            {
+              expected_sqlstate: "23514",
+              actual_sqlstate: error.code ?? null,
+              message: error.message,
+              details: error.details ?? null,
+              hint: error.hint ?? null,
+              attempted_row: bogusRow,
+            },
+            null,
+            2,
+          ),
+      );
+    }
+    expect(error.code).toBe("23514");
   });
 });
