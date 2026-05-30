@@ -29,6 +29,11 @@ import {
   ResolverThresholdsPutSchema,
   type ResolverThresholdRow,
 } from "../_shared/contracts/resolver-thresholds.ts";
+import {
+  CORE_DEFAULT_TOKENS,
+  SPEC_VERSION as DESIGN_SYSTEM_SPEC_VERSION,
+  type TokensResponse,
+} from "../_shared/contracts/design-system-tokens.ts";
 
 
 const corsHeaders = {
