@@ -7,6 +7,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 ### Fixed (2026-05-30 — observability_registry surface_kind constraint)
 - Widened `observability_registry.surface_kind` check constraint to accept `'rpc'` (e.g. `resolve_entity_logged`). Migration `20260530152417_97c8cf58-dde5-4d34-ba30-b114fe1a0664.sql`.
 - E2E coverage: `e2e/observability-registry-rpc-kind.test.ts` verifies `'rpc'` is accepted, columns round-trip intact, and bogus kinds still reject with SQLSTATE `23514`. Requires `SUPABASE_SERVICE_ROLE_KEY`.
+- CI: `.github/workflows/ci.yml` now runs the full e2e suite (`bun run test:e2e`) when `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD` secrets are present; self-skips with a notice otherwise.
 
 ### Phase 5 — s5.2 closeout (composite resolver + thresholds + RLS helper)
 - Composite scorer in `public.resolve_entity` — sums matched-descriptor weights per candidate node, caps at 1.0, returns `matched_kinds[]`. Authoritative short-circuit retained.
