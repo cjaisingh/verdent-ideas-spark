@@ -19,11 +19,14 @@ Docs are reference, not narrative. `mem/**` ≤30 lines, `docs/**` ≤200, index
 Read live before planning (query `sentinel_findings`/`automation_runs`, not cached state); default hypothesis on a finding is "detector wrong" before "system broken"; verify-before-scope.
 "Deployed" ≠ "verified" — run the relevant check (test/curl/read_query/findings re-query/console) and cite the persona consulted from `docs/agents/team/` before planning. See [verify-completion](mem://preferences/verify-completion).
 app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plaintext only via `get_app_secret` (service_role) / admin RPCs (preview only). Never `.from('app_secrets').select('value')` — column is gone.
+Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/design-system-tokens.ts` v1.0.0); siblings pull from `GET /design-system/tokens.json` on `awip-api` — never redeclare. Only `primary/primary-foreground/accent/accent-foreground/ring` swap per tenant; `*-foreground` auto-derived for WCAG-AA via `src/lib/branding/contrast.ts`. Storage in `tenant_branding` + `tenant-branding` bucket; `BrandingProvider` hot-reloads via realtime.
 
 
 
 ## Memories
 - [Ingest pipeline schema (s6.1/t1)](mem://features/ingest-pipeline-schema) — 7 tables (source_mappings/raw_records/staged_records/canonical_facts/fact_conflicts/conflict_rules/ingest_events) + DB-enforced append-only invariants
+- [Common Domain UI (v1)](mem://features/common-domain-ui) — tenant_branding table + /admin/branding + /design-system/tokens.json endpoint; 5 swap-allowed tokens, AA-derived foregrounds
+
 - [Ontology](mem://features/ontology) — 11 canonical entities with lifecycle/ownership/audit; source docs/ontology.md, surface /ontology
 - [Decision Authority (W7.1)](mem://features/decision-authority) — decision_authorities table + resolve_truth(); operator>ai default, git-versioned rules, read-only card on /ontology
 - [Governance Joins (W7.1.5)](mem://features/governance-joins) — links + chain + coverage + uncovered-tasks worklist on /governance (click → auto-opens AddLinkDialog on missing leg)

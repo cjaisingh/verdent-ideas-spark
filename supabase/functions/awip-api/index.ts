@@ -29,6 +29,11 @@ import {
   ResolverThresholdsPutSchema,
   type ResolverThresholdRow,
 } from "../_shared/contracts/resolver-thresholds.ts";
+import {
+  CORE_DEFAULT_TOKENS,
+  SPEC_VERSION as DESIGN_SYSTEM_SPEC_VERSION,
+  type TokensResponse,
+} from "../_shared/contracts/design-system-tokens.ts";
 
 
 const corsHeaders = {
@@ -1983,6 +1988,80 @@ async function getRecentResolverDecisions(url: URL): Promise<Response> {
   return json({ decisions: data ?? [] });
 }
 
+// ---------- design-system tokens ----------
+function hexToHslTriple(hex: string): string | null {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 0xff) / 255;
+  const g = ((n >> 8) & 0xff) / 255;
+  const b = (n & 0xff) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h *= 60;
+  }
+  return `${Math.round(h)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
+function bucketPublicUrl(path: string | null): string | null {
+  if (!path) return null;
+  const { data } = supabase.storage.from("tenant-branding").getPublicUrl(path);
+  return data?.publicUrl ?? null;
+}
+
+async function getDesignSystemTokens(url: URL): Promise<Response> {
+  const tenantId = url.searchParams.get("tenant_id");
+  const body: TokensResponse = {
+    spec_version: DESIGN_SYSTEM_SPEC_VERSION,
+    defaults: CORE_DEFAULT_TOKENS,
+  };
+  if (tenantId) {
+    const { data, error } = await supabase
+      .from("tenant_branding")
+      .select("tenant_id, display_name, primary_hex, accent_hex, primary_foreground_hex, accent_foreground_hex, logo_light_path, logo_dark_path, favicon_path, og_image_path")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (error) return json({ error: error.message }, 500);
+    if (data) {
+      const primaryHsl = hexToHslTriple(data.primary_hex);
+      const primaryFgHsl = hexToHslTriple(data.primary_foreground_hex);
+      const accentHex = data.accent_hex ?? data.primary_hex;
+      const accentFgHex = data.accent_foreground_hex ?? data.primary_foreground_hex;
+      const accentHsl = hexToHslTriple(accentHex);
+      const accentFgHsl = hexToHslTriple(accentFgHex);
+      if (primaryHsl && primaryFgHsl && accentHsl && accentFgHsl) {
+        body.tenant = {
+          tenant_id: data.tenant_id,
+          display_name: data.display_name ?? null,
+          overrides: {
+            primary: primaryHsl,
+            "primary-foreground": primaryFgHsl,
+            accent: accentHsl,
+            "accent-foreground": accentFgHsl,
+            ring: primaryHsl,
+          },
+          logo: {
+            light_url: bucketPublicUrl(data.logo_light_path),
+            dark_url: bucketPublicUrl(data.logo_dark_path),
+            favicon_url: bucketPublicUrl(data.favicon_path),
+            og_image_url: bucketPublicUrl(data.og_image_path),
+          },
+        };
+      }
+    }
+  }
+  return json(body);
+}
+
 Deno.serve(withLogger("awip-api", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -2060,6 +2139,7 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "GET"  && path === "/resolver/thresholds") response = await getResolverThresholds();
       else if (req.method === "PUT"  && path === "/resolver/thresholds") response = await putResolverThresholds(req, auth.actor, auth.user_id, idemKey);
       else if (req.method === "GET"  && path === "/resolver/decisions")  response = await getRecentResolverDecisions(url);
+      else if (req.method === "GET"  && path === "/design-system/tokens.json") response = await getDesignSystemTokens(url);
       else response = json({ error: "not found", path }, 404);
     }
     }

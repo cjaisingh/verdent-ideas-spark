@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-05-30 — Common Domain UI/UX spec v1)
+- `tenant_branding` table + `tenant-branding` storage bucket: per-tenant branding (5 swap-allowed tokens: `primary`, `primary-foreground`, `accent`, `accent-foreground`, `ring`) + logo light/dark/favicon/OG. Audit trigger emits `capability_events` (`kind='tenant_branding_changed'`); realtime publication enabled.
+- Server-side WCAG-AA contrast enforcement: `primary_foreground_hex` / `accent_foreground_hex` are derived (`src/lib/branding/contrast.ts → deriveForegroundHex`) and validated at write time on `/admin/branding`.
+- `BrandingProvider` (`src/lib/branding/BrandingProvider.tsx`) mounted in `src/main.tsx`: loads active tenant (URL `?tenant=` → `localStorage.awip_active_tenant` → most-recent row), writes 5 CSS vars to `:root`, updates favicon + `og:image`, hot-reloads via realtime.
+- `TenantLogo` component (`src/lib/branding/TenantLogo.tsx`) with light/dark-aware src selection.
+- New route `/admin/branding` (operator-only) with live preview + AA gate.
+- Contract `supabase/functions/_shared/contracts/design-system-tokens.ts` (`SPEC_VERSION` 1.0.0, `TOKEN_NAMES`, `SWAP_ALLOWED_TOKENS`, `CORE_DEFAULT_TOKENS`, `assertTokensResponse`).
+- New endpoint `GET /design-system/tokens.json?tenant_id=…` on `awip-api` — siblings (Client Goals etc.) call cross-project with `x-awip-service-token` to pull Core defaults + tenant overrides.
+- Migrations: `20260530193452_*.sql` (table + RLS + GRANTs + trigger + realtime), `20260530193504_*.sql` (storage bucket + policies).
+
+
+
 ### Fixed (2026-05-30 — observability_registry surface_kind constraint)
 - Widened `observability_registry.surface_kind` check constraint to accept `'rpc'` (e.g. `resolve_entity_logged`). Migration `20260530152417_97c8cf58-dde5-4d34-ba30-b114fe1a0664.sql`.
 - E2E coverage: `e2e/observability-registry-rpc-kind.test.ts` verifies `'rpc'` is accepted, columns round-trip intact, and bogus kinds still reject with SQLSTATE `23514`. Requires `SUPABASE_SERVICE_ROLE_KEY`.
