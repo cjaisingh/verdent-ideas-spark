@@ -45,7 +45,25 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .select("*")
       .single();
 
-    expect(error, error?.message).toBeNull();
+    if (error) {
+      // Surface full diagnostic context to CI logs so the failure is
+      // debuggable without re-running locally.
+      const diag = {
+        sqlstate: error.code ?? null,
+        message: error.message,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        attempted_row: row,
+      };
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry rpc insert FAILED]\n" +
+          JSON.stringify(diag, null, 2),
+      );
+      throw new Error(
+        `rpc insert failed (SQLSTATE=${diag.sqlstate ?? "n/a"}): ${error.message} | payload=${JSON.stringify(row)}`,
+      );
+    }
     expect(data).toBeTruthy();
     createdIds.push(data!.id);
 
@@ -63,7 +81,27 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .select("surface_kind,surface_id,watcher_kinds")
       .eq("id", data!.id)
       .single();
-    expect(reErr).toBeNull();
+    if (reErr) {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[observability_registry rpc reread FAILED]\n" +
+          JSON.stringify(
+            {
+              sqlstate: reErr.code ?? null,
+              message: reErr.message,
+              details: reErr.details ?? null,
+              hint: reErr.hint ?? null,
+              row_id: data!.id,
+              attempted_row: row,
+            },
+            null,
+            2,
+          ),
+      );
+      throw new Error(
+        `rpc reread failed (SQLSTATE=${reErr.code ?? "n/a"}): ${reErr.message}`,
+      );
+    }
     expect(reread).toEqual({
       surface_kind: "rpc",
       surface_id: tag,
