@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Phase 5 — s5.2 closeout (composite resolver + thresholds + RLS helper)
+- Composite scorer in `public.resolve_entity` — sums matched-descriptor weights per candidate node, caps at 1.0, returns `matched_kinds[]`. Authoritative short-circuit retained.
+- `resolver_thresholds` + `resolver_thresholds_audit` tables; operator-editable bands at `/admin/resolver` (default `auto_bind=0.95`, `conflict=0.60`, `no_match=0.00`).
+- `resolver_decisions` gains `band_thresholds_snapshot` + `matched_kinds` for replay/audit.
+- `is_in_tenant_subtree(uuid)` universal RLS predicate — derives tenant from JWT `tenant_id` claim, intersects with `ancestry_ids[]`; operator/admin pass-through.
+- `awip-api`: `GET/PUT /resolver/thresholds`, `GET /resolver/decisions` (operator JWT, `Idempotency-Key` required on PUT).
+- `scripts/check-resolver-log-coverage.ts` CI guard — fails build on direct `resolve_entity()` calls in edge functions.
+- `scripts/adr-bench/adr-0005-composite-scorer.ts` — weight-flip determinism bench.
+- Sentinel: new `resolver_no_log_in_window` (high) — entity-resolve calls vs `resolver_decisions` inserts in 15-min window, tolerance 5.
+- Observability registry entries for the three new surfaces.
+
+
 ### Fixed (2026-05-29 — Gitleaks scheduled scan false positives)
 - Added `.gitleaks.toml` extending the default ruleset with a narrow allowlist for 11 historical false positives surfaced by the daily scheduled full-history scan: redaction test fixtures (`e2e/redaction.test.ts`, `supabase/functions/db-explorer/audit_test.ts`), example tokens in `docs/deepgram-voice.md` + `docs/security.md`, the publishable Supabase anon JWT in `.env`, ADR-bench metric keys, and `hsl(var(--token))` tripping the generic-api-key regex. Push-time diff scans are unaffected.
 

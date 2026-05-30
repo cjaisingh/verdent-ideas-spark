@@ -77,6 +77,7 @@ import AdminModules from "./pages/AdminModules";
 import AdminFreshnessDashboard from "./pages/AdminFreshnessDashboard";
 import OperatorInbox from "./pages/OperatorInbox";
 import AdminScheduler from "./pages/AdminScheduler";
+import AdminResolver from "./pages/AdminResolver";
 import ContactDetail from "./pages/ContactDetail";
 
 import VoiceHealth from "./pages/VoiceHealth";
@@ -173,6 +174,7 @@ const App = () => (
             <Route path="/admin/modules" element={<AdminModules />} />
             <Route path="/admin/freshness-dashboard" element={<AdminFreshnessDashboard />} />
             <Route path="/admin/scheduler" element={<AdminScheduler />} />
+            <Route path="/admin/resolver" element={<AdminResolver />} />
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/operator-inbox" element={<OperatorInbox />} />
 

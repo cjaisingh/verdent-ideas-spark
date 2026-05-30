@@ -25,13 +25,17 @@ import {
 } from "./promotion_audit.ts";
 import { validateRegisterInput } from "../_shared/contracts/module-register.ts";
 import { validateHeartbeatInput } from "../_shared/contracts/module-heartbeat.ts";
+import {
+  ResolverThresholdsPutSchema,
+  type ResolverThresholdRow,
+} from "../_shared/contracts/resolver-thresholds.ts";
 
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, idempotency-key, x-awip-service-token, x-copilot-agent",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
 };
 
 // ---------- redaction ----------
@@ -1884,6 +1888,101 @@ ${lessonBlock}`;
   return json({ ok: true, analysis });
 }
 
+// ---------- s5.2/t2: resolver thresholds ----------
+
+async function getResolverThresholds(): Promise<Response> {
+  const { data, error } = await supabase
+    .from("resolver_thresholds")
+    .select("band, min_score, updated_at, updated_by")
+    .order("min_score", { ascending: false });
+  if (error) return json({ error: error.message }, 500);
+  return json({ thresholds: data as ResolverThresholdRow[] });
+}
+
+async function putResolverThresholds(
+  req: Request,
+  actor: string,
+  userId: string | undefined,
+  idemKey: string | null,
+): Promise<Response> {
+  if (!(await isAdminActor(userId)) && !(userId && await isOperatorActor(userId))) {
+    return json({ error: "operator role required" }, 403);
+  }
+  if (!idemKey) return json({ error: "Idempotency-Key header required" }, 400);
+
+  let bodyText = "";
+  try { bodyText = await req.text(); } catch { return json({ error: "invalid body" }, 400); }
+  let parsed: unknown;
+  try { parsed = JSON.parse(bodyText); } catch { return json({ error: "invalid json" }, 400); }
+  const v = ResolverThresholdsPutSchema.safeParse(parsed);
+  if (!v.success) return json({ error: "validation failed", issues: v.error.flatten() }, 422);
+
+  const bodyHash = await hashBody(bodyText);
+  const idem = await checkIdempotencyConflict("resolver_thresholds_put", idemKey, bodyHash);
+  if (idem.conflict) return json({ error: "Idempotency-Key reused with different body" }, 409);
+  if (idem.cached) return json(idem.cached as Record<string, unknown>, 200);
+
+  const { data: prevRows } = await supabase
+    .from("resolver_thresholds")
+    .select("band, min_score, updated_at, updated_by")
+    .order("min_score", { ascending: false });
+  const previous = (prevRows ?? []) as ResolverThresholdRow[];
+  const prevByBand = new Map(previous.map((r) => [r.band, r.min_score]));
+
+  const auditRows: Array<Record<string, unknown>> = [];
+  for (const t of v.data.thresholds) {
+    const before = prevByBand.get(t.band) ?? null;
+    if (before === t.min_score) continue;
+    auditRows.push({
+      band: t.band,
+      before_score: before,
+      after_score: t.min_score,
+      actor: userId ?? null,
+      actor_label: actor,
+      reason: v.data.reason,
+      idempotency_key: idemKey,
+    });
+    const { error: upErr } = await supabase
+      .from("resolver_thresholds")
+      .update({ min_score: t.min_score, updated_at: new Date().toISOString(), updated_by: userId ?? null })
+      .eq("band", t.band);
+    if (upErr) return json({ error: upErr.message }, 500);
+  }
+  if (auditRows.length > 0) {
+    await supabase.from("resolver_thresholds_audit").insert(auditRows);
+  }
+
+  const { data: curRows } = await supabase
+    .from("resolver_thresholds")
+    .select("band, min_score, updated_at, updated_by")
+    .order("min_score", { ascending: false });
+  const current = (curRows ?? []) as ResolverThresholdRow[];
+  const response = { ok: true as const, previous, current };
+  await storeIdempotency("resolver_thresholds_put", idemKey, null, response, bodyHash);
+  return json(response);
+}
+
+async function isOperatorActor(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .in("role", ["operator", "admin"])
+    .maybeSingle();
+  return !!data;
+}
+
+async function getRecentResolverDecisions(url: URL): Promise<Response> {
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
+  const { data, error } = await supabase
+    .from("resolver_decisions")
+    .select("id, request_id, tenant_id, candidate_count, winning_node_id, match_source, score, confidence_band, authoritative_hit, latency_ms, actor_label, matched_kinds, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return json({ error: error.message }, 500);
+  return json({ decisions: data ?? [] });
+}
+
 Deno.serve(withLogger("awip-api", async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -1958,6 +2057,9 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "DELETE" && transcriptIdMatch) response = await deleteTranscript(transcriptIdMatch[1]);
       else if (req.method === "POST" && transcriptAnalyzeMatch) response = await analyzeTranscript(transcriptAnalyzeMatch[1]);
       else if (req.method === "GET" && path === "/night-agent/promotion-audit") response = await getPromotionAudit(url, auth.user_id);
+      else if (req.method === "GET"  && path === "/resolver/thresholds") response = await getResolverThresholds();
+      else if (req.method === "PUT"  && path === "/resolver/thresholds") response = await putResolverThresholds(req, auth.actor, auth.user_id, idemKey);
+      else if (req.method === "GET"  && path === "/resolver/decisions")  response = await getRecentResolverDecisions(url);
       else response = json({ error: "not found", path }, 404);
     }
     }

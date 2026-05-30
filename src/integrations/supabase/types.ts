@@ -5380,6 +5380,7 @@ export type Database = {
           actor: string | null
           actor_label: string | null
           authoritative_hit: boolean
+          band_thresholds_snapshot: Json | null
           candidate_count: number
           confidence_band: string
           created_at: string
@@ -5388,6 +5389,7 @@ export type Database = {
           id: string
           latency_ms: number | null
           match_source: string | null
+          matched_kinds: string[] | null
           request_id: string | null
           score: number | null
           tenant_id: string
@@ -5397,6 +5399,7 @@ export type Database = {
           actor?: string | null
           actor_label?: string | null
           authoritative_hit?: boolean
+          band_thresholds_snapshot?: Json | null
           candidate_count?: number
           confidence_band: string
           created_at?: string
@@ -5405,6 +5408,7 @@ export type Database = {
           id?: string
           latency_ms?: number | null
           match_source?: string | null
+          matched_kinds?: string[] | null
           request_id?: string | null
           score?: number | null
           tenant_id: string
@@ -5414,6 +5418,7 @@ export type Database = {
           actor?: string | null
           actor_label?: string | null
           authoritative_hit?: boolean
+          band_thresholds_snapshot?: Json | null
           candidate_count?: number
           confidence_band?: string
           created_at?: string
@@ -5422,6 +5427,7 @@ export type Database = {
           id?: string
           latency_ms?: number | null
           match_source?: string | null
+          matched_kinds?: string[] | null
           request_id?: string | null
           score?: number | null
           tenant_id?: string
@@ -5458,6 +5464,63 @@ export type Database = {
           notes?: string | null
           updated_at?: string
           weight?: number
+        }
+        Relationships: []
+      }
+      resolver_thresholds: {
+        Row: {
+          band: string
+          min_score: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          band: string
+          min_score: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          band?: string
+          min_score?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      resolver_thresholds_audit: {
+        Row: {
+          actor: string | null
+          actor_label: string | null
+          after_score: number
+          band: string
+          before_score: number | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          reason: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_label?: string | null
+          after_score: number
+          band: string
+          before_score?: number | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          reason: string
+        }
+        Update: {
+          actor?: string | null
+          actor_label?: string | null
+          after_score?: number
+          band?: string
+          before_score?: number | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          reason?: string
         }
         Relationships: []
       }
@@ -9000,6 +9063,7 @@ export type Database = {
         Args: { _module: string; _title: string }
         Returns: string
       }
+      is_in_tenant_subtree: { Args: { _node_id: string }; Returns: boolean }
       is_principal_allowed: {
         Args: { _platform: string; _principal: string }
         Returns: boolean

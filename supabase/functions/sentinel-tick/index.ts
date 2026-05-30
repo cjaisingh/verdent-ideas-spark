@@ -16,6 +16,7 @@ import {
   checkOutOfScopeStale,
   checkObservabilityRegistry,
   checkResolverLowConfidenceRate, checkResolverNoMatchBurst,
+  checkResolverNoLogInWindow,
   checkAliasRevokeBurst, checkAliasCorpusReady,
   checkModuleSilent24h,
   checkAppSecretsPlaintextPresent,
@@ -300,6 +301,25 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .select("*", { count: "exact", head: true });
     const aliasCorpusCount = aliasCorpusCountRaw ?? 0;
 
+    // s5.2/t5 — resolver log coverage: entity-resolve invocations vs
+    // resolver_decisions inserts in the last 15 minutes.
+    const RESOLVER_LOG_WINDOW_MIN = 15;
+    const sinceIso = new Date(Date.now() - RESOLVER_LOG_WINDOW_MIN * 60_000).toISOString();
+    const [{ count: erCallCount }, { count: rdInsertCount }] = await Promise.all([
+      sb.from("api_call_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("route", "/entity-resolve")
+        .gte("created_at", sinceIso),
+      sb.from("resolver_decisions")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", sinceIso),
+    ]);
+    const resolverLogCoverage = {
+      entity_resolve_calls: erCallCount ?? 0,
+      resolver_decisions_inserts: rdInsertCount ?? 0,
+      window_minutes: RESOLVER_LOG_WINDOW_MIN,
+    };
+
     // ADR-0009: at-rest encryption posture for app_secrets. Two cheap probes:
     //   a) does the legacy plaintext `value` column exist again?
     //   b) any row with NULL ciphertext?
@@ -540,6 +560,7 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         (aliasRevokeRows ?? []) as AliasRevokeEventRow[],
       )),
       ...timeCheck("alias_corpus_ready", () => checkAliasCorpusReady(aliasCorpusCount)),
+      ...timeCheck("resolver_no_log_in_window", () => checkResolverNoLogInWindow(resolverLogCoverage)),
       ...timeCheck("module_silent_24h", () => checkModuleSilent24h(
         now,
         (moduleLivenessRows ?? []) as ModuleLivenessRow[],
