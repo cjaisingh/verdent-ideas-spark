@@ -39,6 +39,7 @@ export type FindingCandidate = {
     | "observability_stale_surface"
     | "resolver_low_confidence_rate"
     | "resolver_no_match_burst"
+    | "resolver_no_log_in_window"
     | "alias_revoke_burst"
     | "alias_corpus_ready"
     | "module_silent_24h"
@@ -1419,6 +1420,38 @@ export function checkAliasCorpusReady(
       threshold,
       fix_url: "/admin/adr-bench",
       bench_script: "scripts/adr-bench/adr-0004-revocation.ts",
+    },
+  }];
+}
+
+// --- resolver_no_log_in_window -------------------------------------------
+// s5.2/t5: every entity-resolve invocation MUST land in resolver_decisions.
+// Compare edge_logs invocations vs resolver_decisions inserts in the last
+// `windowMinutes`. Gap > tolerance → high. Owner = resolver.
+export type ResolverLogCoverageSignal = {
+  entity_resolve_calls: number;
+  resolver_decisions_inserts: number;
+  window_minutes: number;
+};
+
+export function checkResolverNoLogInWindow(
+  signal: ResolverLogCoverageSignal,
+  tolerance = 5,
+): FindingCandidate[] {
+  const gap = signal.entity_resolve_calls - signal.resolver_decisions_inserts;
+  if (gap <= tolerance) return [];
+  return [{
+    kind: "resolver_no_log_in_window",
+    severity: "high",
+    summary: `entity-resolve called ${signal.entity_resolve_calls}× in last ${signal.window_minutes}min but only ${signal.resolver_decisions_inserts} resolver_decisions rows — ${gap} unlogged calls.`,
+    dedupe_key: "resolver_no_log_in_window",
+    subject_ref: { rpc: "public.resolve_entity_logged", window_minutes: signal.window_minutes },
+    payload: {
+      entity_resolve_calls: signal.entity_resolve_calls,
+      resolver_decisions_inserts: signal.resolver_decisions_inserts,
+      gap,
+      tolerance,
+      fix_url: "/admin/resolver",
     },
   }];
 }
