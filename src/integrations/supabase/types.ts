@@ -7304,6 +7304,65 @@ export type Database = {
         }
         Relationships: []
       }
+      tenant_branding: {
+        Row: {
+          accent_foreground_hex: string | null
+          accent_hex: string | null
+          accessibility_override_reason: string | null
+          created_at: string
+          display_name: string | null
+          favicon_path: string | null
+          logo_dark_path: string | null
+          logo_light_path: string | null
+          og_image_path: string | null
+          primary_foreground_hex: string
+          primary_hex: string
+          spec_version: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          accent_foreground_hex?: string | null
+          accent_hex?: string | null
+          accessibility_override_reason?: string | null
+          created_at?: string
+          display_name?: string | null
+          favicon_path?: string | null
+          logo_dark_path?: string | null
+          logo_light_path?: string | null
+          og_image_path?: string | null
+          primary_foreground_hex?: string
+          primary_hex?: string
+          spec_version?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          accent_foreground_hex?: string | null
+          accent_hex?: string | null
+          accessibility_override_reason?: string | null
+          created_at?: string
+          display_name?: string | null
+          favicon_path?: string | null
+          logo_dark_path?: string | null
+          logo_light_path?: string | null
+          og_image_path?: string | null
+          primary_foreground_hex?: string
+          primary_hex?: string
+          spec_version?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_branding_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_node_alias_embeddings: {
         Row: {
           alias_id: string
