@@ -210,6 +210,17 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
     ]));
 
+    // gh-actions-watch heartbeat: if no row has been seen recently the
+    // cron-driven sweep is silently broken (this is exactly how a day of
+    // CI reds went unnoticed in May 2026). Newest seen_at on
+    // gh_actions_runs is the canonical "sweep ran" signal.
+    const ghWatchRes = await sb
+      .from("gh_actions_runs")
+      .select("seen_at")
+      .order("seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     // Operator Inbox signals.
     const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
     const [inboxClassifyRes, inboxSourcesRes, inboxRecentRes] = await recordStep(sb, {
