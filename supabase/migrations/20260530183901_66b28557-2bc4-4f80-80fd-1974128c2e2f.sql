@@ -1,0 +1,20 @@
+
+REVOKE EXECUTE ON FUNCTION public.assign_discussion_subject_ordinal()      FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.assign_finding_short_num()               FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.auto_link_promoted_task()                FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.bootstrap_copilot_profile()              FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.bootstrap_first_operator()               FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.clear_previous_morning_review_triage()   FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.enforce_night_eligibility_by_risk()      FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.file_roadmap_task_claim_from_activity()  FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.file_testrun_claim_from_automation_run() FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_app_secret_change()                  FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_autolog_settings_change()            FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_claim_event()                        FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_decision_authority_event()           FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_discussion_action_event()            FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_governance_link_event()              FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_platform_allowlist_event()           FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_retention_settings_change()          FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_roadmap_task_activity()              FROM authenticated, anon, PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.log_sentinel_triage_group()              FROM authenticated, anon, PUBLIC;
