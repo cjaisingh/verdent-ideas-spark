@@ -34,6 +34,7 @@ Full framing in [`docs/why-awip.md`](docs/why-awip.md) — share this with FM st
 - [Edge function audit](docs/edge-function-audit.md) — inventory of all 35 functions and how each is invoked
 - [Migrations](docs/migrations.md) — naming convention; full chronological [index](docs/migration-index.md)
 - [Rork iPhone companion spec](docs/rork-companion-spec.md) — contract between Core and the separate Expo app
+- [E2E diag redaction contract](docs/e2e-diag-redaction-contract.md) — what secrets are scrubbed from CI logs/artefacts, what is allowed, and how to change the rules safely
 - [Changelog](CHANGELOG.md) — major v1 milestones
 - [v1 plan + status](.lovable/plan.md)
 
