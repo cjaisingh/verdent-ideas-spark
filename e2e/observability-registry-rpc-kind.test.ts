@@ -6,8 +6,10 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createClient } from "@supabase/supabase-js";
 import { env } from "./helpers";
+import { emitDiag } from "./diag";
 
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+const TEST_FILE = "e2e/observability-registry-rpc-kind.test.ts";
 
 describe("observability_registry — surface_kind='rpc'", () => {
   if (!SERVICE_KEY) {
@@ -35,7 +37,7 @@ describe("observability_registry — surface_kind='rpc'", () => {
       expected_cadence_minutes: 1440,
       watcher_kinds: ["resolver_no_log_in_window"],
       owner: "e2e",
-      declared_in: "e2e/observability-registry-rpc-kind.test.ts",
+      declared_in: TEST_FILE,
       notes: "rpc kind constraint smoke test",
     };
 
@@ -46,22 +48,17 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .single();
 
     if (error) {
-      // Surface full diagnostic context to CI logs so the failure is
-      // debuggable without re-running locally.
-      const diag = {
-        sqlstate: error.code ?? null,
+      emitDiag({
+        event: "observability_registry_rpc_insert_failed",
+        test_file: TEST_FILE,
+        sqlstate: error.code,
         message: error.message,
-        details: error.details ?? null,
-        hint: error.hint ?? null,
+        details: error.details,
+        hint: error.hint,
         attempted_row: row,
-      };
-      // eslint-disable-next-line no-console
-      console.error(
-        "[observability_registry rpc insert FAILED]\n" +
-          JSON.stringify(diag, null, 2),
-      );
+      });
       throw new Error(
-        `rpc insert failed (SQLSTATE=${diag.sqlstate ?? "n/a"}): ${error.message} | payload=${JSON.stringify(row)}`,
+        `rpc insert failed (SQLSTATE=${error.code ?? "n/a"}): ${error.message} | payload=${JSON.stringify(row)}`,
       );
     }
     expect(data).toBeTruthy();
@@ -72,7 +69,7 @@ describe("observability_registry — surface_kind='rpc'", () => {
     expect(data!.expected_cadence_minutes).toBe(1440);
     expect(data!.watcher_kinds).toEqual(["resolver_no_log_in_window"]);
     expect(data!.owner).toBe("e2e");
-    expect(data!.declared_in).toBe("e2e/observability-registry-rpc-kind.test.ts");
+    expect(data!.declared_in).toBe(TEST_FILE);
     expect(data!.notes).toBe("rpc kind constraint smoke test");
 
     // Round-trip: a fresh read returns the same shape (not just the RETURNING).
@@ -82,22 +79,16 @@ describe("observability_registry — surface_kind='rpc'", () => {
       .eq("id", data!.id)
       .single();
     if (reErr) {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[observability_registry rpc reread FAILED]\n" +
-          JSON.stringify(
-            {
-              sqlstate: reErr.code ?? null,
-              message: reErr.message,
-              details: reErr.details ?? null,
-              hint: reErr.hint ?? null,
-              row_id: data!.id,
-              attempted_row: row,
-            },
-            null,
-            2,
-          ),
-      );
+      emitDiag({
+        event: "observability_registry_rpc_reread_failed",
+        test_file: TEST_FILE,
+        sqlstate: reErr.code,
+        message: reErr.message,
+        details: reErr.details,
+        hint: reErr.hint,
+        attempted_row: row,
+        extra: { row_id: data!.id },
+      });
       throw new Error(
         `rpc reread failed (SQLSTATE=${reErr.code ?? "n/a"}): ${reErr.message}`,
       );
@@ -116,7 +107,7 @@ describe("observability_registry — surface_kind='rpc'", () => {
       expected_cadence_minutes: 60,
       watcher_kinds: ["noop"],
       owner: "e2e",
-      declared_in: "e2e/observability-registry-rpc-kind.test.ts",
+      declared_in: TEST_FILE,
     };
     const { data, error } = await sb
       .from("observability_registry")
@@ -126,33 +117,30 @@ describe("observability_registry — surface_kind='rpc'", () => {
 
     if (!error) {
       if (data?.id) createdIds.push(data.id);
-      // eslint-disable-next-line no-console
-      console.error(
-        "[observability_registry constraint OVER-WIDENED]\n" +
-          JSON.stringify({ inserted_row: bogusRow, returned: data }, null, 2),
-      );
+      emitDiag({
+        event: "observability_registry_constraint_over_widened",
+        test_file: TEST_FILE,
+        sqlstate: null,
+        message: "insert with bogus surface_kind unexpectedly succeeded",
+        attempted_row: bogusRow,
+        extra: { returned: data },
+      });
       throw new Error(
         `expected SQLSTATE 23514 for bogus surface_kind but insert succeeded: ${JSON.stringify(bogusRow)}`,
       );
     }
     // Postgres check_violation → PostgREST surfaces SQLSTATE 23514.
     if (error.code !== "23514") {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[observability_registry unexpected SQLSTATE]\n" +
-          JSON.stringify(
-            {
-              expected_sqlstate: "23514",
-              actual_sqlstate: error.code ?? null,
-              message: error.message,
-              details: error.details ?? null,
-              hint: error.hint ?? null,
-              attempted_row: bogusRow,
-            },
-            null,
-            2,
-          ),
-      );
+      emitDiag({
+        event: "observability_registry_unexpected_sqlstate",
+        test_file: TEST_FILE,
+        sqlstate: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        attempted_row: bogusRow,
+        extra: { expected_sqlstate: "23514" },
+      });
     }
     expect(error.code).toBe("23514");
   });
