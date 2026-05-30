@@ -2139,6 +2139,7 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "GET"  && path === "/resolver/thresholds") response = await getResolverThresholds();
       else if (req.method === "PUT"  && path === "/resolver/thresholds") response = await putResolverThresholds(req, auth.actor, auth.user_id, idemKey);
       else if (req.method === "GET"  && path === "/resolver/decisions")  response = await getRecentResolverDecisions(url);
+      else if (req.method === "GET"  && path === "/design-system/tokens.json") response = await getDesignSystemTokens(url);
       else response = json({ error: "not found", path }, 404);
     }
     }
