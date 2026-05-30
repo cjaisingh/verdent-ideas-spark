@@ -87,10 +87,29 @@ jobs:
           grep -oE 'E2E_DIAG \{.*\}' e2e-logs/raw.log \
             | sed 's/^E2E_DIAG //' \
             > e2e-logs/diagnostics.jsonl || true
+
+      - name: Scrub e2e logs (defence in depth)
+        if: always() && steps.e2e_gate.outputs.configured == 'true'
+        # Re-runs the same redactor used by `emitDiag` against both raw.log
+        # and diagnostics.jsonl, so the step summary and uploaded artefact
+        # are guaranteed-clean even if a non-emitDiag code path logged a
+        # secret-looking string.
+        run: bun scripts/scrub-e2e-logs.ts e2e-logs
+
+      - name: Render step summary
+        if: always() && steps.e2e_gate.outputs.configured == 'true'
+        run: |
+          set -e
+          if [ ! -f e2e-logs/diagnostics.jsonl ]; then
+            echo "_No diagnostics file produced._" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           COUNT=$(wc -l < e2e-logs/diagnostics.jsonl | tr -d ' ')
-          echo "Captured ${COUNT} structured e2e diagnostic record(s)."
+          echo "Captured ${COUNT} structured e2e diagnostic record(s) (post-scrub)."
           {
             echo "## e2e structured diagnostics"
+            echo ""
+            echo "_All values below have been run through the e2e redactor (\`scripts/scrub-e2e-logs.ts\`) — sensitive keys are \`[REDACTED]\` and known token shapes are stripped._"
             echo ""
             if [ "${COUNT}" = "0" ]; then
               echo "_No \`E2E_DIAG\` records emitted (suite passed cleanly or failed before any structured log)._"
@@ -108,7 +127,7 @@ jobs:
                 echo "| ${ts} | ${event} | ${sqlstate} | ${tf} | ${msg} |"
               done < e2e-logs/diagnostics.jsonl
               echo ""
-              echo "<details><summary>Full JSON records</summary>"
+              echo "<details><summary>Full JSON records (redacted)</summary>"
               echo ""
               echo '```json'
               jq -s '.' e2e-logs/diagnostics.jsonl
@@ -117,6 +136,7 @@ jobs:
               echo "</details>"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
 
       - name: Upload e2e logs
         if: always() && steps.e2e_gate.outputs.configured == 'true'
