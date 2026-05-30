@@ -48,7 +48,8 @@ export type FindingCandidate = {
     | "scheduled_jobs_stuck"
     | "scheduler_dlq_growth"
     | "module_endpoint_silent"
-    | "module_endpoint_red";
+    | "module_endpoint_red"
+    | "gh_actions_watch_stale";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
