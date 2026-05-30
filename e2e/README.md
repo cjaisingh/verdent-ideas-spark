@@ -39,6 +39,11 @@ bun run test:e2e
 
 The lists of tables, admin-only tables, self-row tables, write-blocked tables, and operator/admin RPCs used by `rls-matrix.test.ts` and `rls-role-matrix.test.ts` are **generated** from `pg_policies` + `pg_proc` into `e2e/rls-policy-map.generated.ts`. Run `bun run rls:generate` after any RLS migration; CI runs `bun run rls:verify` (regenerate + `git diff --exit-code`) on every PR via `.github/workflows/rls-map-verify.yml` and fails the merge if the committed map drifts from the live schema. This means adding a new table or changing a policy automatically expands the test surface — there are no hand-maintained constants to update.
 
-## Adding a CI job
+## CI
 
-The `quality` job in `.github/workflows/ci.yml` runs unit tests only. To add full e2e, create a separate job (e.g. `e2e-staging.yml` triggered after `deploy-staging.yml`) that exports the env vars from GitHub Environment secrets and runs `bun run test:e2e`.
+The `quality` job in `.github/workflows/ci.yml` runs unit tests and, when `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD` secrets are present, also runs `bun run test:e2e`. The e2e step self-skips with a `::notice::` when the secrets are not configured (e.g. on forks) so it never fails the build for missing configuration.
+
+Required secrets for the full e2e suite:
+- `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD` — operator account on the live project
+- `SUPABASE_SERVICE_ROLE_KEY` — for admin-only RLS tests (observability registry, etc.)
+- `E2E_AWIP_SERVICE_TOKEN` — optional; service-token tests skip without it
