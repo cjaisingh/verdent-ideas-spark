@@ -90,8 +90,8 @@ describe("deriveForegroundHex (WCAG AA)", () => {
 });
 
 describe("passesAA", () => {
-  it("white on Operational Blue passes AA", () => {
-    expect(passesAA("#3B82F6", "#FFFFFF")).toBe(true);
+  it("white on darker blue passes AA", () => {
+    expect(passesAA("#1e40af", "#FFFFFF")).toBe(true);
   });
   it("white on Gold fails AA, black on Gold passes", () => {
     expect(passesAA("#FFD700", "#FFFFFF")).toBe(false);
