@@ -33,7 +33,17 @@ aren't tied to an action go silent. This watcher is the broad net.
 ## Schedule
 
 `scheduled-gh-actions-watch` — `*/5 * * * *` via pg_cron + pg_net,
-service-token in header (pulled from vault).
+service-token pulled from `vault.decrypted_secrets`. Scheduled live (not
+via migration) because the body contains the service token.
+
+## Watchdog
+
+`sentinel-tick` runs `checkGhActionsWatchStale`: if `max(gh_actions_runs.seen_at)`
+is older than 30 minutes (or the table is empty), fires
+`gh_actions_watch_stale` (high). Day-bucketed dedupe. This was added
+after a >24h silent gap on 2026-05-29/30 where the cron schedule had
+never been created — the function only ran when something POSTed it by
+hand.
 
 ## Not in scope
 
