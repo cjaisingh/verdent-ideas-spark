@@ -26,15 +26,16 @@ Deno.serve(withLogger("cache-warm", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const sb = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-  const provided = req.headers.get("x-service-token");
-  const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  const trigger = triggeredByCron ? "cron" : "manual";
+  const { requireCronOrOperator } = await import("../_shared/operator-auth.ts");
+  const authRes = await requireCronOrOperator(req);
+  const trigger = authRes.ok && authRes.triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
 
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await dispatchAlert(sb, "cache-warm", "auth_failed", "cache-warm 401");
-    return json({ error: "unauthorized" }, 401);
+  if (!authRes.ok) {
+    if (authRes.status === 401) {
+      await dispatchAlert(sb, "cache-warm", "auth_failed", "cache-warm 401");
+    }
+    return json({ error: authRes.error }, authRes.status);
   }
 
   // Each touch is a small read meant to pre-warm Postgres plan cache + edge module cache.
