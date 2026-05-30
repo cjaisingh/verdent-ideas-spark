@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.tenant_branding_emit_event() FROM PUBLIC, anon, authenticated;
