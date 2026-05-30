@@ -2057,6 +2057,9 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "DELETE" && transcriptIdMatch) response = await deleteTranscript(transcriptIdMatch[1]);
       else if (req.method === "POST" && transcriptAnalyzeMatch) response = await analyzeTranscript(transcriptAnalyzeMatch[1]);
       else if (req.method === "GET" && path === "/night-agent/promotion-audit") response = await getPromotionAudit(url, auth.user_id);
+      else if (req.method === "GET"  && path === "/resolver/thresholds") response = await getResolverThresholds();
+      else if (req.method === "PUT"  && path === "/resolver/thresholds") response = await putResolverThresholds(req, auth.actor, auth.user_id, idemKey);
+      else if (req.method === "GET"  && path === "/resolver/decisions")  response = await getRecentResolverDecisions(url);
       else response = json({ error: "not found", path }, 404);
     }
     }
