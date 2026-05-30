@@ -9,6 +9,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - E2E coverage: `e2e/observability-registry-rpc-kind.test.ts` verifies `'rpc'` is accepted, columns round-trip intact, and bogus kinds still reject with SQLSTATE `23514`. Requires `SUPABASE_SERVICE_ROLE_KEY`.
 - CI: `.github/workflows/ci.yml` now runs the full e2e suite (`bun run test:e2e`) when `E2E_OPERATOR_EMAIL` / `E2E_OPERATOR_PASSWORD` secrets are present; self-skips with a notice otherwise.
 - E2E diagnostics: failures now emit single-line JSON records prefixed with `E2E_DIAG ` (see `e2e/diag.ts`) carrying `ts`, `event`, `sqlstate`, `test_file`, `message`, `details`, `hint`, and `attempted_row`. CI extracts them into `e2e-logs/diagnostics.jsonl`, renders a summary table in the GitHub step summary, and uploads `e2e-logs/` (raw + JSONL) as an artefact with 14-day retention.
+- E2E diag redaction: `emitDiag` scrubs payloads before serialisation — sensitive key names (`password`, `*token*`, `*secret*`, `api_key`, `authorization`, `cookie`, `service_role`, `anon_key`, etc.) become `[REDACTED]`, and value-level regexes strip JWTs, `Bearer …` headers, `sk-…` API keys, Telegram bot tokens, GitHub PATs, and long hex/base64 blobs from `message` / `details` / `hint` / nested rows. Covered by `e2e/diag.test.ts`.
 
 ### Phase 5 — s5.2 closeout (composite resolver + thresholds + RLS helper)
 - Composite scorer in `public.resolve_entity` — sums matched-descriptor weights per candidate node, caps at 1.0, returns `matched_kinds[]`. Authoritative short-circuit retained.
