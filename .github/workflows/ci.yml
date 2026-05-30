@@ -67,7 +67,66 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-        run: bun run test:e2e
+        run: |
+          set -o pipefail
+          mkdir -p e2e-logs
+          # Tee combined stdout+stderr so we can post-process structured
+          # E2E_DIAG lines even when vitest exits non-zero.
+          bun run test:e2e 2>&1 | tee e2e-logs/raw.log
+
+      - name: Extract structured diagnostics
+        if: always() && steps.e2e_gate.outputs.configured == 'true'
+        run: |
+          set -e
+          mkdir -p e2e-logs
+          if [ ! -f e2e-logs/raw.log ]; then
+            echo "no raw log produced"
+            exit 0
+          fi
+          # Pull every `E2E_DIAG {...}` line into a JSONL file.
+          grep -oE 'E2E_DIAG \{.*\}' e2e-logs/raw.log \
+            | sed 's/^E2E_DIAG //' \
+            > e2e-logs/diagnostics.jsonl || true
+          COUNT=$(wc -l < e2e-logs/diagnostics.jsonl | tr -d ' ')
+          echo "Captured ${COUNT} structured e2e diagnostic record(s)."
+          {
+            echo "## e2e structured diagnostics"
+            echo ""
+            if [ "${COUNT}" = "0" ]; then
+              echo "_No \`E2E_DIAG\` records emitted (suite passed cleanly or failed before any structured log)._"
+            else
+              echo "${COUNT} record(s) captured from \`e2e-logs/raw.log\`."
+              echo ""
+              echo '| ts | event | sqlstate | test_file | message |'
+              echo '|---|---|---|---|---|'
+              while IFS= read -r line; do
+                ts=$(printf '%s' "$line" | jq -r '.ts // ""')
+                event=$(printf '%s' "$line" | jq -r '.event // ""')
+                sqlstate=$(printf '%s' "$line" | jq -r '.sqlstate // ""')
+                tf=$(printf '%s' "$line" | jq -r '.test_file // ""')
+                msg=$(printf '%s' "$line" | jq -r '.message // ""' | tr '|' '/' | head -c 200)
+                echo "| ${ts} | ${event} | ${sqlstate} | ${tf} | ${msg} |"
+              done < e2e-logs/diagnostics.jsonl
+              echo ""
+              echo "<details><summary>Full JSON records</summary>"
+              echo ""
+              echo '```json'
+              jq -s '.' e2e-logs/diagnostics.jsonl
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload e2e logs
+        if: always() && steps.e2e_gate.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ github.sha }}
+          path: e2e-logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
