@@ -179,7 +179,7 @@ Deno.serve(withLogger("morning-review", async (req, ctx) => {
       open_findings: out.open_findings,
       top_actions: out.top_actions,
       revisit_items: out.revisit_items,
-      generated_by: triggeredByCron ? "cron" : "manual",
+      generated_by: trigger,
     }, { onConflict: "review_date" });
 
     if (upsertErr) {
