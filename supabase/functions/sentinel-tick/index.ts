@@ -22,6 +22,7 @@ import {
   checkAppSecretsPlaintextPresent,
   checkScheduledJobsStuck, checkSchedulerDlqGrowth,
   checkModuleEndpointSilent, checkModuleEndpointRed,
+  checkGhActionsWatchStale,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
   type ScheduledJobSentinelRow, type ModuleEndpointRow,
@@ -209,6 +210,17 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       sb.from("ai_workers").select("name,enabled,last_seen_at").limit(50),
       sb.from("ai_jobs").select("id", { count: "exact", head: true }).eq("status","queued"),
     ]));
+
+    // gh-actions-watch heartbeat: if no row has been seen recently the
+    // cron-driven sweep is silently broken (this is exactly how a day of
+    // CI reds went unnoticed in May 2026). Newest seen_at on
+    // gh_actions_runs is the canonical "sweep ran" signal.
+    const ghWatchRes = await sb
+      .from("gh_actions_runs")
+      .select("seen_at")
+      .order("seen_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     // Operator Inbox signals.
     const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
@@ -583,6 +595,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (modEndpointsRes.data ?? []) as ModuleEndpointRow[],
         schedAttemptsByModule,
+      )),
+      ...timeCheck("gh_actions_watch_stale", () => checkGhActionsWatchStale(
+        now,
+        (ghWatchRes.data as { seen_at: string } | null)?.seen_at ?? null,
       )),
     ]);
 

@@ -48,7 +48,8 @@ export type FindingCandidate = {
     | "scheduled_jobs_stuck"
     | "scheduler_dlq_growth"
     | "module_endpoint_silent"
-    | "module_endpoint_red";
+    | "module_endpoint_red"
+    | "gh_actions_watch_stale";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
@@ -1696,4 +1697,46 @@ export function checkModuleEndpointRed(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// gh-actions-watch heartbeat. The cron sweep (scheduled-gh-actions-watch,
+// every 5 min) updates gh_actions_runs.seen_at on every failure row it
+// touches. If the newest seen_at is older than 30 minutes — or the table
+// is empty for >2 hours — the sweep is silently broken and CI reds on
+// main will not page. High severity, dedupe per day so we don't spam.
+// ---------------------------------------------------------------------------
+export function checkGhActionsWatchStale(
+  now: Date,
+  lastSeenAt: string | null,
+): FindingCandidate[] {
+  const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
+  const dedupe = `gh_actions_watch_stale:${dayBucket}`;
+  if (!lastSeenAt) {
+    return [{
+      kind: "gh_actions_watch_stale",
+      severity: "high",
+      summary: "gh-actions-watch has never recorded a run — cron likely not scheduled.",
+      dedupe_key: dedupe,
+      subject_ref: { watcher: "gh-actions-watch" },
+      payload: { last_seen_at: null, runbook: "mem://features/gh-actions-watch" },
+    }];
+  }
+  const ageMin = (now.getTime() - new Date(lastSeenAt).getTime()) / 60_000;
+  if (ageMin < 30) return [];
+  return [{
+    kind: "gh_actions_watch_stale",
+    severity: "high",
+    summary:
+      `gh-actions-watch silent for ${Math.round(ageMin)} min ` +
+      `(last seen ${lastSeenAt}). CI failures on main may not be alerting.`,
+    dedupe_key: dedupe,
+    subject_ref: { watcher: "gh-actions-watch" },
+    payload: {
+      last_seen_at: lastSeenAt,
+      age_minutes: Math.round(ageMin),
+      runbook: "mem://features/gh-actions-watch",
+    },
+  }];
+}
+
 
