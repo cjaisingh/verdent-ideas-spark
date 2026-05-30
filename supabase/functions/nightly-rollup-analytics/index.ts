@@ -48,15 +48,16 @@ Deno.serve(withLogger("nightly-rollup-analytics", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
 
   const sb = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
-  const provided = req.headers.get("x-service-token");
-  const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  const trigger = triggeredByCron ? "cron" : "manual";
+  const { requireCronOrOperator } = await import("../_shared/operator-auth.ts");
+  const authRes = await requireCronOrOperator(req);
+  const trigger = authRes.ok && authRes.triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
 
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await dispatchAlert(sb, "nightly-rollup-analytics", "auth_failed", "rollup-analytics 401");
-    return json({ error: "unauthorized" }, 401);
+  if (!authRes.ok) {
+    if (authRes.status === 401) {
+      await dispatchAlert(sb, "nightly-rollup-analytics", "auth_failed", "rollup-analytics 401");
+    }
+    return json({ error: authRes.error }, authRes.status);
   }
 
   try {

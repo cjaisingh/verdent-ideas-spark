@@ -213,6 +213,27 @@ async function runTick(): Promise<{ claimed: number; dispatched: number }> {
 
 Deno.serve(withLogger("scheduler-tick", async (req, ctx) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  // Auth: require AWIP_SERVICE_TOKEN (cron) OR operator/admin Bearer JWT.
+  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+  const provided = req.headers.get("x-awip-service-token") ?? req.headers.get("x-service-token");
+  const auth = req.headers.get("authorization") ?? "";
+  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+
+  if (!triggeredByCron) {
+    if (!auth.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: auth } } },
+    );
+    const { data: u } = await userClient.auth.getUser();
+    if (!u?.user) return json({ error: "unauthorized" }, 401);
+    const { data: isOp } = await userClient.rpc("has_role", { _user_id: u.user.id, _role: "operator" });
+    const { data: isAdmin } = await userClient.rpc("has_role", { _user_id: u.user.id, _role: "admin" });
+    if (!isOp && !isAdmin) return json({ error: "forbidden" }, 403);
+  }
+
   try {
     const out = await runTick();
     ctx.attach("tick", out);
@@ -221,3 +242,4 @@ Deno.serve(withLogger("scheduler-tick", async (req, ctx) => {
     return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
   }
 }));
+

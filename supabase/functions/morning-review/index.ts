@@ -17,6 +17,7 @@ import {
   type AiUsageRow,
 } from "./aggregator.ts";
 import { recordStep } from "../_shared/steps.ts";
+import { requireCronOrOperator } from "../_shared/operator-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,13 +37,10 @@ Deno.serve(withLogger("morning-review", async (req, ctx) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
-  const provided = req.headers.get("x-service-token");
-  const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  const trigger = triggeredByCron ? "cron" : "manual";
+  const authRes = await requireCronOrOperator(req);
+  const trigger = authRes.ok && authRes.triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
   const reqId = ctx.requestId;
 
@@ -68,10 +66,12 @@ Deno.serve(withLogger("morning-review", async (req, ctx) => {
     }
   };
 
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    await recordRun("error", 401, "Missing auth.");
-    await dispatchAlert(sb, "morning-review", "auth_failed", "morning-review unauthorized");
-    return json({ error: "unauthorized" }, 401);
+  if (!authRes.ok) {
+    await recordRun("rejected", authRes.status, `auth: ${authRes.error}`);
+    if (authRes.status === 401) {
+      await dispatchAlert(sb, "morning-review", "auth_failed", "morning-review unauthorized");
+    }
+    return json({ error: authRes.error }, authRes.status);
   }
 
   try {
@@ -179,7 +179,7 @@ Deno.serve(withLogger("morning-review", async (req, ctx) => {
       open_findings: out.open_findings,
       top_actions: out.top_actions,
       revisit_items: out.revisit_items,
-      generated_by: triggeredByCron ? "cron" : "manual",
+      generated_by: trigger,
     }, { onConflict: "review_date" });
 
     if (upsertErr) {

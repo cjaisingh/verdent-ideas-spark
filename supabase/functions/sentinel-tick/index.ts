@@ -29,6 +29,7 @@ import {
 } from "./checks.ts";
 
 import { recordStep } from "../_shared/steps.ts";
+import { requireCronOrOperator } from "../_shared/operator-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,13 +44,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const SERVICE_TOKEN = Deno.env.get("AWIP_SERVICE_TOKEN");
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
-  const provided = req.headers.get("x-service-token");
-  const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
-  const trigger = triggeredByCron ? "cron" : "manual";
+  const authRes = await requireCronOrOperator(req);
+  const trigger = authRes.ok && authRes.triggeredByCron ? "cron" : "manual";
   const startedAt = Date.now();
   const reqId = ctx.requestId;
 
@@ -63,13 +61,12 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
     } catch (e) { console.error("automation_runs insert failed", e); }
   };
 
-  if (!triggeredByCron && !auth.startsWith("Bearer ")) {
-    // Record as "rejected", not "error" — these are hostile/wrong callers,
-    // not job failures. job_error_rate filters on status === "error" only,
-    // so unauthorized hits no longer pollute the error rate.
-    await recordRun("rejected", 401, "Missing auth.");
-    await dispatchAlert(sb, "sentinel-tick", "auth_failed", "sentinel-tick unauthorized");
-    return json({ error: "unauthorized" }, 401);
+  if (!authRes.ok) {
+    await recordRun("rejected", authRes.status, `auth: ${authRes.error}`);
+    if (authRes.status === 401) {
+      await dispatchAlert(sb, "sentinel-tick", "auth_failed", "sentinel-tick unauthorized");
+    }
+    return json({ error: authRes.error }, authRes.status);
   }
 
 
