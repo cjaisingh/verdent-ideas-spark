@@ -71,3 +71,22 @@ deno run --allow-read scripts/check-resolver-log-coverage.ts
 `sentinel-tick → resolver_no_log_in_window` (severity `high`) compares
 `entity-resolve` invocations in `edge_logs` against `resolver_decisions`
 inserts over the last 15 minutes. A gap > 5 fires a finding.
+
+## Observability registry — rpc surface kind (2026-05-30)
+
+`surface_kind = 'rpc'` was added to `observability_registry` so logged
+resolver calls (`resolve_entity_logged`) can be registered as first-class
+observability surfaces alongside `cron`, `edge_fn`, `table`, and `agent`.
+
+The constraint was widened via migration
+`20260530152417_97c8cf58-dde5-4d34-ba30-b114fe1a0664.sql`.
+
+Validate locally:
+
+```bash
+bun test e2e/observability-registry-rpc-kind.test.ts
+```
+
+Requires `SUPABASE_SERVICE_ROLE_KEY` in env. The test asserts:
+- An `rpc`-kind row inserts cleanly and round-trips on re-read.
+- An unknown kind still fails with SQLSTATE `23514` (constraint not over-widened).
