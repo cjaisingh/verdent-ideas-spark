@@ -49,7 +49,8 @@ export type FindingCandidate = {
     | "scheduler_dlq_growth"
     | "module_endpoint_silent"
     | "module_endpoint_red"
-    | "gh_actions_watch_stale";
+    | "gh_actions_watch_stale"
+    | "gh_actions_watch_auth_failed";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
@@ -61,6 +62,11 @@ export type FindingCandidate = {
 
 export type AutomationRunRow = { id?: string; job: string; created_at: string; status?: string | null };
 export type EdgeLogRow = { status: number | null; created_at: string; function_name: string };
+export type GhActionsWatchRequestRow = {
+  status: number | null;
+  created_at: string;
+  method: string | null;
+};
 export type SecretRow = { key: string; updated_at: string };
 export type RoleAuditRow = { id: string; role: string; action: string; target_user_id: string; created_at: string };
 
@@ -1734,6 +1740,42 @@ export function checkGhActionsWatchStale(
     payload: {
       last_seen_at: lastSeenAt,
       age_minutes: Math.round(ageMin),
+      runbook: "mem://features/gh-actions-watch",
+    },
+  }];
+}
+
+export function checkGhActionsWatchAuthFailed(
+  now: Date,
+  rows: GhActionsWatchRequestRow[],
+): FindingCandidate[] {
+  const windowMin = 20;
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const recent = rows.filter((row) => {
+    const method = (row.method ?? "").toUpperCase();
+    const status = row.status ?? 0;
+    return method === "POST" && +new Date(row.created_at) >= sinceMs && (status === 401 || status === 403);
+  });
+  if (recent.length < 3) return [];
+
+  const latest = recent
+    .slice()
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))[0];
+  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+
+  return [{
+    kind: "gh_actions_watch_auth_failed",
+    severity: "high",
+    summary:
+      `gh-actions-watch returned ${recent.length} auth failures in the last ${windowMin}m ` +
+      `(latest ${latest.created_at}). GitHub reds on main are not paging.`,
+    dedupe_key: `gh_actions_watch_auth_failed:${hourBucket}`,
+    subject_ref: { watcher: "gh-actions-watch", status: latest.status },
+    payload: {
+      auth_failures: recent.length,
+      window_minutes: windowMin,
+      last_seen_at: latest.created_at,
+      last_status: latest.status,
       runbook: "mem://features/gh-actions-watch",
     },
   }];
