@@ -175,7 +175,9 @@ const OnboardingBranding = () => {
     }
     setSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const lightFile = logoLightRef.current?.files?.[0];
+      const logoLightPath = lightFile ? await uploadAsset(tenantId, "logo-light", lightFile) : undefined;
+      const payload = {
         tenant_id: tenantId,
         display_name: displayName.trim() || null,
         primary_hex: primaryHex,
@@ -184,11 +186,8 @@ const OnboardingBranding = () => {
         accent_foreground_hex: accentHex ? derivedAccentFg : null,
         accessibility_override_reason: primaryPass ? null : overrideReason.trim(),
         spec_version: "1.0.0",
+        ...(logoLightPath ? { logo_light_path: logoLightPath } : {}),
       };
-      const lightFile = logoLightRef.current?.files?.[0];
-      if (lightFile) {
-        payload.logo_light_path = await uploadAsset(tenantId, "logo-light", lightFile);
-      }
       const { error } = await supabase
         .from("tenant_branding")
         .upsert(payload, { onConflict: "tenant_id" });
