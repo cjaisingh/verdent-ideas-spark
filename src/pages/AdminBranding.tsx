@@ -209,7 +209,11 @@ const AdminBranding = () => {
             Foreground colours are auto-derived for WCAG AA.
           </p>
         </div>
+        <Button asChild size="sm" variant="outline">
+          <a href={`/onboarding/branding${tenantId ? `?tenant=${tenantId}` : ""}`}>Open onboarding wizard</a>
+        </Button>
       </header>
+
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="md:col-span-1">
