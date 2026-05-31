@@ -24,6 +24,7 @@ import {
   passesAA,
 } from "@/lib/branding/contrast";
 import { useBranding } from "@/lib/branding/BrandingProvider";
+import { RoleBasedConsolePreview } from "@/components/branding/RoleBasedConsolePreview";
 
 interface Tenant {
   id: string;
