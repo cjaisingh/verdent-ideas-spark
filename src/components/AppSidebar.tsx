@@ -136,6 +136,7 @@ const adminItems: NavItem[] = [
   { url: "/admin/videos", title: "HeyGen videos", icon: Video },
   { url: "/connections", title: "Connections", icon: Plug },
   { url: "/admin/branding", title: "Tenant branding", icon: Shield },
+  { url: "/onboarding/branding", title: "Branding wizard", icon: Shield },
 ];
 
 const allItems: NavItem[] = [
