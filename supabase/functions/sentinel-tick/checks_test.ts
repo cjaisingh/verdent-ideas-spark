@@ -159,6 +159,7 @@ Deno.test("job_error_rate: includes triggering run ids in subject_ref + payload"
 });
 
 import { checkBudgetProjection } from "./checks.ts";
+import { checkGhActionsWatchAuthFailed } from "./checks.ts";
 
 const BNOW = new Date("2026-05-17T14:00:00Z");
 
@@ -215,6 +216,30 @@ Deno.test("budget: previous month's row does not block current month", () => {
   ]);
   assertEquals(r.length, 1);
   assertEquals(r[0].kind, "budget_projection_80");
+});
+
+Deno.test("gh_actions_watch_auth_failed: flags repeated 401/403 POSTs", () => {
+  const now = new Date("2026-05-31T08:00:00Z");
+  const rows = [
+    { status: 401, method: "POST", created_at: "2026-05-31T07:58:00Z" },
+    { status: 401, method: "POST", created_at: "2026-05-31T07:55:00Z" },
+    { status: 403, method: "POST", created_at: "2026-05-31T07:50:00Z" },
+    { status: 401, method: "GET", created_at: "2026-05-31T07:59:00Z" },
+  ];
+  const out = checkGhActionsWatchAuthFailed(now, rows);
+  assertEquals(out.length, 1);
+  assertEquals(out[0].kind, "gh_actions_watch_auth_failed");
+  assertEquals(out[0].severity, "high");
+  assertEquals(out[0].dedupe_key, "gh_actions_watch_auth_failed:485288");
+});
+
+Deno.test("gh_actions_watch_auth_failed: ignores sparse or old auth errors", () => {
+  const now = new Date("2026-05-31T08:00:00Z");
+  const rows = [
+    { status: 401, method: "POST", created_at: "2026-05-31T07:58:00Z" },
+    { status: 401, method: "POST", created_at: "2026-05-31T07:10:00Z" },
+  ];
+  assertEquals(checkGhActionsWatchAuthFailed(now, rows).length, 0);
 });
 
 import { checkAliasRevokeBurst } from "./checks.ts";
