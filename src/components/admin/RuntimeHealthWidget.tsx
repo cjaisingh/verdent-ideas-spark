@@ -6,6 +6,7 @@ import { Activity, CheckCircle2, XCircle, Clock, AlertTriangle, RefreshCw } from
 // recent success for a job to be "green".
 const TRACKED_JOBS: { name: string; cadenceMin: number }[] = [
   { name: "scheduled-sentinel-tick", cadenceMin: 15 },
+  { name: "scheduled-gh-actions-watch", cadenceMin: 5 },
   { name: "overnight-phase-runner-15m", cadenceMin: 15 },
   { name: "scheduled-tomorrow-plan-refresh", cadenceMin: 15 },
   { name: "ci-status-sync-30m", cadenceMin: 30 },

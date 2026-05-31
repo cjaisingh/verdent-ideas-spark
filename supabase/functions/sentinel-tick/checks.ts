@@ -49,7 +49,8 @@ export type FindingCandidate = {
     | "scheduler_dlq_growth"
     | "module_endpoint_silent"
     | "module_endpoint_red"
-    | "gh_actions_watch_stale";
+    | "gh_actions_watch_stale"
+    | "gh_actions_watch_auth_failed";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
@@ -61,6 +62,11 @@ export type FindingCandidate = {
 
 export type AutomationRunRow = { id?: string; job: string; created_at: string; status?: string | null };
 export type EdgeLogRow = { status: number | null; created_at: string; function_name: string };
+export type GhActionsWatchRequestRow = {
+  status: number | null;
+  created_at: string;
+  method: string | null;
+};
 export type SecretRow = { key: string; updated_at: string };
 export type RoleAuditRow = { id: string; role: string; action: string; target_user_id: string; created_at: string };
 
@@ -1700,40 +1706,77 @@ export function checkModuleEndpointRed(
 
 // ---------------------------------------------------------------------------
 // gh-actions-watch heartbeat. The cron sweep (scheduled-gh-actions-watch,
-// every 5 min) updates gh_actions_runs.seen_at on every failure row it
-// touches. If the newest seen_at is older than 30 minutes — or the table
-// is empty for >2 hours — the sweep is silently broken and CI reds on
-// main will not page. High severity, dedupe per day so we don't spam.
+// every 5 min) should leave a POST trail in edge_request_logs whether the
+// latest GitHub run is green or red. If the newest request is older than
+// 30 minutes — or no request exists at all — the sweep is silently broken
+// and CI reds on main will not page. High severity, dedupe per day so we
+// don't spam.
 // ---------------------------------------------------------------------------
 export function checkGhActionsWatchStale(
   now: Date,
-  lastSeenAt: string | null,
+  lastRequestAt: string | null,
 ): FindingCandidate[] {
   const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
   const dedupe = `gh_actions_watch_stale:${dayBucket}`;
-  if (!lastSeenAt) {
+  if (!lastRequestAt) {
     return [{
       kind: "gh_actions_watch_stale",
       severity: "high",
-      summary: "gh-actions-watch has never recorded a run — cron likely not scheduled.",
+      summary: "gh-actions-watch has never been invoked — cron likely not scheduled.",
       dedupe_key: dedupe,
       subject_ref: { watcher: "gh-actions-watch" },
-      payload: { last_seen_at: null, runbook: "mem://features/gh-actions-watch" },
+      payload: { last_request_at: null, runbook: "mem://features/gh-actions-watch" },
     }];
   }
-  const ageMin = (now.getTime() - new Date(lastSeenAt).getTime()) / 60_000;
+  const ageMin = (now.getTime() - new Date(lastRequestAt).getTime()) / 60_000;
   if (ageMin < 30) return [];
   return [{
     kind: "gh_actions_watch_stale",
     severity: "high",
     summary:
       `gh-actions-watch silent for ${Math.round(ageMin)} min ` +
-      `(last seen ${lastSeenAt}). CI failures on main may not be alerting.`,
+      `(last request ${lastRequestAt}). CI failures on main may not be alerting.`,
     dedupe_key: dedupe,
     subject_ref: { watcher: "gh-actions-watch" },
     payload: {
-      last_seen_at: lastSeenAt,
+      last_request_at: lastRequestAt,
       age_minutes: Math.round(ageMin),
+      runbook: "mem://features/gh-actions-watch",
+    },
+  }];
+}
+
+export function checkGhActionsWatchAuthFailed(
+  now: Date,
+  rows: GhActionsWatchRequestRow[],
+): FindingCandidate[] {
+  const windowMin = 20;
+  const sinceMs = now.getTime() - windowMin * 60_000;
+  const recent = rows.filter((row) => {
+    const method = (row.method ?? "").toUpperCase();
+    const status = row.status ?? 0;
+    return method === "POST" && +new Date(row.created_at) >= sinceMs && (status === 401 || status === 403);
+  });
+  if (recent.length < 3) return [];
+
+  const latest = recent
+    .slice()
+    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))[0];
+  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+
+  return [{
+    kind: "gh_actions_watch_auth_failed",
+    severity: "high",
+    summary:
+      `gh-actions-watch returned ${recent.length} auth failures in the last ${windowMin}m ` +
+      `(latest ${latest.created_at}). GitHub reds on main are not paging.`,
+    dedupe_key: `gh_actions_watch_auth_failed:${hourBucket}`,
+    subject_ref: { watcher: "gh-actions-watch", status: latest.status },
+    payload: {
+      auth_failures: recent.length,
+      window_minutes: windowMin,
+      last_seen_at: latest.created_at,
+      last_status: latest.status,
       runbook: "mem://features/gh-actions-watch",
     },
   }];
