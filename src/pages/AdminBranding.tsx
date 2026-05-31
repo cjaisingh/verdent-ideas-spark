@@ -24,6 +24,7 @@ import {
   passesAA,
 } from "@/lib/branding/contrast";
 import { useBranding } from "@/lib/branding/BrandingProvider";
+import { RoleBasedConsolePreview } from "@/components/branding/RoleBasedConsolePreview";
 
 interface Tenant {
   id: string;
@@ -321,12 +322,24 @@ const AdminBranding = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Live preview</CardTitle>
+          <CardTitle className="text-sm">Live console preview</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            See how the operator console will look for each role using your staged tokens. Switch
+            tabs to compare. Nothing is saved until you press <strong>Save branding</strong>.
+          </p>
         </CardHeader>
         <CardContent>
-          <BrandPreview primaryHex={primaryHex} primaryFg={derivedPrimaryFg} displayName={displayName || "AWIP"} />
+          <RoleBasedConsolePreview
+            primaryHex={primaryHex}
+            primaryFg={derivedPrimaryFg}
+            accentHex={accentHex || null}
+            accentFg={accentHex ? derivedAccentFg : null}
+            displayName={displayName || "AWIP"}
+            logoUrl={publicUrl(row?.logo_light_path)}
+          />
         </CardContent>
       </Card>
+
     </main>
   );
 };
@@ -378,35 +391,5 @@ function ContrastBadge({ passes, ratio, fg }: { passes: boolean; ratio: number; 
   );
 }
 
-function BrandPreview({
-  primaryHex,
-  primaryFg,
-  displayName,
-}: {
-  primaryHex: string;
-  primaryFg: string;
-  displayName: string;
-}) {
-  const valid = isValidHex(primaryHex);
-  return (
-    <div className="rounded border border-border overflow-hidden">
-      <div
-        className="px-4 py-6 flex items-center justify-between"
-        style={{ background: valid ? primaryHex : undefined, color: valid ? primaryFg : undefined }}
-      >
-        <span className="font-semibold">{displayName}</span>
-        <button
-          className="rounded px-3 py-1 text-xs font-medium border"
-          style={valid ? { background: primaryFg, color: primaryHex, borderColor: primaryFg } : undefined}
-        >
-          Primary action
-        </button>
-      </div>
-      <div className="px-4 py-3 text-xs text-muted-foreground bg-background">
-        Sample card body. Background and foreground stay Core defaults — only primary/accent/ring swap.
-      </div>
-    </div>
-  );
-}
-
 export default AdminBranding;
+
