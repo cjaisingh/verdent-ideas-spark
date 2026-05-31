@@ -79,6 +79,7 @@ import OperatorInbox from "./pages/OperatorInbox";
 import AdminScheduler from "./pages/AdminScheduler";
 import AdminResolver from "./pages/AdminResolver";
 import AdminBranding from "./pages/AdminBranding";
+import OnboardingBranding from "./pages/OnboardingBranding";
 import ContactDetail from "./pages/ContactDetail";
 
 import VoiceHealth from "./pages/VoiceHealth";
