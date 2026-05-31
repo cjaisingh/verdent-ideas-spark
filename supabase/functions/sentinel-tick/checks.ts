@@ -1706,39 +1706,40 @@ export function checkModuleEndpointRed(
 
 // ---------------------------------------------------------------------------
 // gh-actions-watch heartbeat. The cron sweep (scheduled-gh-actions-watch,
-// every 5 min) updates gh_actions_runs.seen_at on every failure row it
-// touches. If the newest seen_at is older than 30 minutes — or the table
-// is empty for >2 hours — the sweep is silently broken and CI reds on
-// main will not page. High severity, dedupe per day so we don't spam.
+// every 5 min) should leave a POST trail in edge_request_logs whether the
+// latest GitHub run is green or red. If the newest request is older than
+// 30 minutes — or no request exists at all — the sweep is silently broken
+// and CI reds on main will not page. High severity, dedupe per day so we
+// don't spam.
 // ---------------------------------------------------------------------------
 export function checkGhActionsWatchStale(
   now: Date,
-  lastSeenAt: string | null,
+  lastRequestAt: string | null,
 ): FindingCandidate[] {
   const dayBucket = Math.floor(now.getTime() / (24 * 60 * 60_000));
   const dedupe = `gh_actions_watch_stale:${dayBucket}`;
-  if (!lastSeenAt) {
+  if (!lastRequestAt) {
     return [{
       kind: "gh_actions_watch_stale",
       severity: "high",
-      summary: "gh-actions-watch has never recorded a run — cron likely not scheduled.",
+      summary: "gh-actions-watch has never been invoked — cron likely not scheduled.",
       dedupe_key: dedupe,
       subject_ref: { watcher: "gh-actions-watch" },
-      payload: { last_seen_at: null, runbook: "mem://features/gh-actions-watch" },
+      payload: { last_request_at: null, runbook: "mem://features/gh-actions-watch" },
     }];
   }
-  const ageMin = (now.getTime() - new Date(lastSeenAt).getTime()) / 60_000;
+  const ageMin = (now.getTime() - new Date(lastRequestAt).getTime()) / 60_000;
   if (ageMin < 30) return [];
   return [{
     kind: "gh_actions_watch_stale",
     severity: "high",
     summary:
       `gh-actions-watch silent for ${Math.round(ageMin)} min ` +
-      `(last seen ${lastSeenAt}). CI failures on main may not be alerting.`,
+      `(last request ${lastRequestAt}). CI failures on main may not be alerting.`,
     dedupe_key: dedupe,
     subject_ref: { watcher: "gh-actions-watch" },
     payload: {
-      last_seen_at: lastSeenAt,
+      last_request_at: lastRequestAt,
       age_minutes: Math.round(ageMin),
       runbook: "mem://features/gh-actions-watch",
     },
