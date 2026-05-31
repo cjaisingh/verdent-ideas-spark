@@ -321,12 +321,24 @@ const AdminBranding = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Live preview</CardTitle>
+          <CardTitle className="text-sm">Live console preview</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            See how the operator console will look for each role using your staged tokens. Switch
+            tabs to compare. Nothing is saved until you press <strong>Save branding</strong>.
+          </p>
         </CardHeader>
         <CardContent>
-          <BrandPreview primaryHex={primaryHex} primaryFg={derivedPrimaryFg} displayName={displayName || "AWIP"} />
+          <RoleBasedConsolePreview
+            primaryHex={primaryHex}
+            primaryFg={derivedPrimaryFg}
+            accentHex={accentHex || null}
+            accentFg={accentHex ? derivedAccentFg : null}
+            displayName={displayName || "AWIP"}
+            logoUrl={publicUrl(row?.logo_light_path)}
+          />
         </CardContent>
       </Card>
+
     </main>
   );
 };
