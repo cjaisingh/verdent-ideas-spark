@@ -178,6 +178,7 @@ const App = () => (
             <Route path="/admin/scheduler" element={<AdminScheduler />} />
             <Route path="/admin/resolver" element={<AdminResolver />} />
             <Route path="/admin/branding" element={<AdminBranding />} />
+            <Route path="/onboarding/branding" element={<OnboardingBranding />} />
             <Route path="/contacts/:id" element={<ContactDetail />} />
             <Route path="/operator-inbox" element={<OperatorInbox />} />
 
