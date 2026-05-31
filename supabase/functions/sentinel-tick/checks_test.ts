@@ -160,6 +160,7 @@ Deno.test("job_error_rate: includes triggering run ids in subject_ref + payload"
 
 import { checkBudgetProjection } from "./checks.ts";
 import { checkGhActionsWatchAuthFailed } from "./checks.ts";
+import { checkGhActionsWatchStale } from "./checks.ts";
 
 const BNOW = new Date("2026-05-17T14:00:00Z");
 
@@ -240,6 +241,14 @@ Deno.test("gh_actions_watch_auth_failed: ignores sparse or old auth errors", () 
     { status: 401, method: "POST", created_at: "2026-05-31T07:10:00Z" },
   ];
   assertEquals(checkGhActionsWatchAuthFailed(now, rows).length, 0);
+});
+
+Deno.test("gh_actions_watch_stale: uses latest request time, not failure rows", () => {
+  const now = new Date("2026-05-31T08:00:00Z");
+  assertEquals(checkGhActionsWatchStale(now, "2026-05-31T07:40:01Z").length, 0);
+  const stale = checkGhActionsWatchStale(now, "2026-05-31T07:20:00Z");
+  assertEquals(stale.length, 1);
+  assertEquals(stale[0].kind, "gh_actions_watch_stale");
 });
 
 import { checkAliasRevokeBurst } from "./checks.ts";
