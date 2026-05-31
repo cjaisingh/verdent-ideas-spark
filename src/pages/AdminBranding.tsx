@@ -391,35 +391,5 @@ function ContrastBadge({ passes, ratio, fg }: { passes: boolean; ratio: number; 
   );
 }
 
-function BrandPreview({
-  primaryHex,
-  primaryFg,
-  displayName,
-}: {
-  primaryHex: string;
-  primaryFg: string;
-  displayName: string;
-}) {
-  const valid = isValidHex(primaryHex);
-  return (
-    <div className="rounded border border-border overflow-hidden">
-      <div
-        className="px-4 py-6 flex items-center justify-between"
-        style={{ background: valid ? primaryHex : undefined, color: valid ? primaryFg : undefined }}
-      >
-        <span className="font-semibold">{displayName}</span>
-        <button
-          className="rounded px-3 py-1 text-xs font-medium border"
-          style={valid ? { background: primaryFg, color: primaryHex, borderColor: primaryFg } : undefined}
-        >
-          Primary action
-        </button>
-      </div>
-      <div className="px-4 py-3 text-xs text-muted-foreground bg-background">
-        Sample card body. Background and foreground stay Core defaults — only primary/accent/ring swap.
-      </div>
-    </div>
-  );
-}
-
 export default AdminBranding;
+
