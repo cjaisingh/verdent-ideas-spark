@@ -132,6 +132,11 @@ export const INSERT_FIXTURES: Record<string, Record<string, unknown>> = {
   },
   telegram_gateway_logs: { endpoint: "/sendMessage", ok: false, attempt: 1 },
   tenants: { name: "Fixture Tenant", slug: "fixture-tenant" },
+  tenant_branding: {
+    tenant_id: FAKE_UUID,
+    primary_hex: "#0F172A",
+    primary_foreground_hex: "#FFFFFF",
+  },
   test_runs: { suite: "fixture", status: "passed", detail: {} },
   user_roles: { user_id: FAKE_UUID, role: "operator" },
 };
