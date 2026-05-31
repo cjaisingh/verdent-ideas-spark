@@ -47,7 +47,11 @@ describe("deriveForegroundHex (WCAG AA)", () => {
     expect(deriveForegroundHex("#0a0a1a")).toBe("#FFFFFF"); // Midnight Indigo
     expect(deriveForegroundHex("#064e3b")).toBe("#FFFFFF"); // Emerald Prestige
     expect(deriveForegroundHex("#0d0d0d")).toBe("#FFFFFF"); // Noir
-    expect(deriveForegroundHex("#3B82F6")).toBe("#FFFFFF"); // Operational Blue
+    expect(deriveForegroundHex("#1e3a8a")).toBe("#FFFFFF"); // Navy Trust
+  });
+  it("mid-tone backgrounds resolve to whichever wins contrast", () => {
+    // #3B82F6 (Operational Blue) is borderline — black actually wins (~6.4 vs ~3.3).
+    expect(deriveForegroundHex("#3B82F6")).toBe("#000000");
   });
   it("light backgrounds get black text", () => {
     expect(deriveForegroundHex("#FFD700")).toBe("#000000"); // Gold
