@@ -22,7 +22,7 @@ import {
   checkAppSecretsPlaintextPresent,
   checkScheduledJobsStuck, checkSchedulerDlqGrowth,
   checkModuleEndpointSilent, checkModuleEndpointRed,
-  checkGhActionsWatchStale,
+  checkGhActionsWatchStale, checkGhActionsWatchAuthFailed,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
   type ScheduledJobSentinelRow, type ModuleEndpointRow,
@@ -218,6 +218,12 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .order("seen_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    const ghWatchEdgeLogRes = await sb
+      .from("edge_request_logs")
+      .select("status,created_at,method")
+      .eq("function_name", "gh-actions-watch")
+      .order("created_at", { ascending: false })
+      .limit(20);
 
     // Operator Inbox signals.
     const since14d = new Date(now.getTime() - 14 * 24 * 3600_000).toISOString();
@@ -596,6 +602,10 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       ...timeCheck("gh_actions_watch_stale", () => checkGhActionsWatchStale(
         now,
         (ghWatchRes.data as { seen_at: string } | null)?.seen_at ?? null,
+      )),
+      ...timeCheck("gh_actions_watch_auth_failed", () => checkGhActionsWatchAuthFailed(
+        now,
+        (ghWatchEdgeLogRes.data ?? []) as { status: number | null; created_at: string; method: string | null }[],
       )),
     ]);
 
