@@ -4,6 +4,20 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-06-01 — Sentinel watchdog: out-of-band watcher-of-the-watcher)
+- New cron `scheduled-sentinel-watchdog` at minutes 7/22/37/52 (offset from `scheduled-sentinel-tick` at 0/15/30/45) — independent 15-min watchdog for sentinel-tick itself.
+- New edge fn `sentinel-watchdog` (wrapped with `withLogger`) — **unauthenticated by design**, idempotent: writes a heartbeat to `sentinel_watchdog_runs` every tick, sends one Telegram alert when sentinel-tick has been silent > 30 min, deduped by hour-bucket key (`sentinel-silent::stale::<YYYY-MM-DDTHH>` or `::never::<…>`) with a 6h cooldown. Worst-case abuse: one redundant Telegram per 6h — which the operator wants anyway.
+- **No shared secret with sentinel-tick** — calls the Telegram connector gateway directly (`LOVABLE_API_KEY` + `TELEGRAM_API_KEY`, both connector-managed), bypassing both `AWIP_SERVICE_TOKEN` and the `telegram-send` edge fn. A stale `AWIP_SERVICE_TOKEN` cannot silence the watchdog the same way it silenced sentinel-tick on 2026-06-01.
+- Alert body lists the top 5 failing crons (last 24h, 4xx/5xx) for immediate triage context. Fix hint: rotate `AWIP_SERVICE_TOKEN` + re-register affected crons.
+- Contract `supabase/functions/_shared/contracts/sentinel-watchdog.ts` declares input + reason enum + thresholds (`STALE_THRESHOLD_MIN=30`, `ALERT_COOLDOWN_MIN=360`, `NEVER_RAN_WINDOW_HOURS=24`).
+- Unit tests in `supabase/functions/sentinel-watchdog/decide_test.ts` cover healthy/stale/never-ran/deduped/cooldown-elapsed.
+- New table `public.sentinel_watchdog_runs` (operator-only SELECT via `has_role(_,'admin')`, service-role full). Heartbeat + `last_alert_key` for dedupe.
+- Registered in `observability_registry` (`surface_id='scheduled-sentinel-watchdog'`, cadence 15 min) so `observability_missing_watcher` flags if the watchdog itself ever goes silent. Bounded at 2 layers — no infinite turtles.
+- New Core rule (mem/index.md): "On every new session, glance at last-24h `automation_runs` 4xx/5xx counts before the first substantive answer" — surfaces silent cron auth regressions without the operator having to ask.
+- Verified live on 2026-06-01 against the in-flight sentinel-tick outage: `POST /sentinel-watchdog?trigger=manual` returned `alerted=true reason=never_ran` and listed the 401'd crons (`scheduled-code-review`, `record-test-run`, `postmortem-generate`, `night-agent-close`, `lessons-daily-synth`).
+- Migration: `sentinel_watchdog_runs` + observability registry row.
+
+
 ### Added (2026-05-30 — Common Domain UI/UX spec v1)
 - `tenant_branding` table + `tenant-branding` storage bucket: per-tenant branding (5 swap-allowed tokens: `primary`, `primary-foreground`, `accent`, `accent-foreground`, `ring`) + logo light/dark/favicon/OG. Audit trigger emits `capability_events` (`kind='tenant_branding_changed'`); realtime publication enabled.
 - Server-side WCAG-AA contrast enforcement: `primary_foreground_hex` / `accent_foreground_hex` are derived (`src/lib/branding/contrast.ts → deriveForegroundHex`) and validated at write time on `/admin/branding`.

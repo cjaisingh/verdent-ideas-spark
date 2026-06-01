@@ -17,6 +17,8 @@ Truth arbitration goes through `public.resolve_truth(entity, entity_id, field)` 
 Governance chain (W7.1.5): `governance_links` (task↔notebook↔entity↔authority_rule, relations touches/justifies/governs/supersedes) + `governance_chain()` + `governance_coverage()` surfaced at `/governance`. Manual links only, no backfill, no enforcement — coverage starts at 0% by design to make holes visible before W7.2.
 Docs are reference, not narrative. `mem/**` ≤30 lines, `docs/**` ≤200, index entries ≤150 chars. Prune in same edit.
 Read live before planning (query `sentinel_findings`/`automation_runs`, not cached state); default hypothesis on a finding is "detector wrong" before "system broken"; verify-before-scope.
+**On every new session, glance at last-24h `automation_runs` 4xx/5xx counts before the first substantive answer** — surfaces silent cron auth regressions (e.g. stale `AWIP_SERVICE_TOKEN`) without the operator having to ask.
+sentinel-tick has its own out-of-band watchdog: `scheduled-sentinel-watchdog` (every 15 min, offset minutes 7/22/37/52) calls the unauthenticated `sentinel-watchdog` edge fn → Telegram gateway directly. No shared secret with sentinel-tick. Bounded at 2 layers.
 "Deployed" ≠ "verified" — run the relevant check (test/curl/read_query/findings re-query/console) and cite the persona consulted from `docs/agents/team/` before planning. See [verify-completion](mem://preferences/verify-completion).
 app_secrets values are encrypted at rest (pgcrypto + vault MEK, ADR-0009); plaintext only via `get_app_secret` (service_role) / admin RPCs (preview only). Never `.from('app_secrets').select('value')` — column is gone.
 Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/design-system-tokens.ts` v1.0.0); siblings pull from `GET /design-system/tokens.json` on `awip-api` — never redeclare. Only `primary/primary-foreground/accent/accent-foreground/ring` swap per tenant; `*-foreground` auto-derived for WCAG-AA via `src/lib/branding/contrast.ts`. Storage in `tenant_branding` + `tenant-branding` bucket; `BrandingProvider` hot-reloads via realtime.
@@ -98,6 +100,7 @@ Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/d
 - [Secrets at rest (ADR-0009)](mem://features/secrets-at-rest) — app_secrets.value dropped → value_ciphertext bytea (pgcrypto + vault MEK); get/set_app_secret RPCs (service_role) + admin_* RPCs (preview only); app_secrets_plaintext_present sentinel
 - [GH Actions watcher](mem://features/gh-actions-watch) — gh-actions-watch every 5min polls main-branch runs in cjaisingh/verdent-ideas-spark; failures → gh_actions_runs + sentinel (gh_actions_main_failure, high) + Telegram; auto-resolves on next green
 - [Nightly tests workflow](mem://features/nightly-tests) — 02:00 UTC unit + (secret-gated) e2e; report step never fatal; AWIP_SERVICE_TOKEN GitHub secret must match Lovable Cloud
+- [Sentinel watchdog (out-of-band)](mem://features/sentinel-watchdog) — independent 15-min cron at minutes 7/22/37/52; unauthenticated `sentinel-watchdog` edge fn → Telegram gateway direct (no shared secret with sentinel-tick); hour-bucket dedupe + 6h cooldown; sentinel_watchdog_runs heartbeat table
 
 
 
