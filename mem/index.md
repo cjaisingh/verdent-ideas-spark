@@ -100,6 +100,7 @@ Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/d
 - [Secrets at rest (ADR-0009)](mem://features/secrets-at-rest) — app_secrets.value dropped → value_ciphertext bytea (pgcrypto + vault MEK); get/set_app_secret RPCs (service_role) + admin_* RPCs (preview only); app_secrets_plaintext_present sentinel
 - [GH Actions watcher](mem://features/gh-actions-watch) — gh-actions-watch every 5min polls main-branch runs in cjaisingh/verdent-ideas-spark; failures → gh_actions_runs + sentinel (gh_actions_main_failure, high) + Telegram; auto-resolves on next green
 - [Nightly tests workflow](mem://features/nightly-tests) — 02:00 UTC unit + (secret-gated) e2e; report step never fatal; AWIP_SERVICE_TOKEN GitHub secret must match Lovable Cloud
+- [Sentinel watchdog (out-of-band)](mem://features/sentinel-watchdog) — independent 15-min cron at minutes 7/22/37/52; unauthenticated `sentinel-watchdog` edge fn → Telegram gateway direct (no shared secret with sentinel-tick); hour-bucket dedupe + 6h cooldown; sentinel_watchdog_runs heartbeat table
 
 
 
