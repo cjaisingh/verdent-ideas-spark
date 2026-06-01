@@ -93,15 +93,12 @@ function formatAlert(args: {
 Deno.serve(withLogger("sentinel-watchdog", async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Independent auth: this token is deliberately separate from AWIP_SERVICE_TOKEN.
-  const watchdogToken = Deno.env.get("AWIP_WATCHDOG_TOKEN");
-  const provided = req.headers.get("x-awip-watchdog-token");
-  if (!watchdogToken || provided !== watchdogToken) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // Deliberately unauthenticated. The endpoint is idempotent: it always writes
+  // a heartbeat row and only sends a Telegram alert when sentinel-tick has been
+  // silent > STALE_THRESHOLD_MIN, deduped by hour-bucket key with a 6h cooldown.
+  // Worst-case abuse: one redundant Telegram alert per 6h — which the operator
+  // would want anyway. This avoids any shared-secret coupling with sentinel-tick
+  // (the exact failure mode being guarded against).
 
   const url = new URL(req.url);
   const trigger = (url.searchParams.get("trigger") === "manual" ? "manual" : "cron") as
