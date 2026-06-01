@@ -18,7 +18,7 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, content-type, x-awip-watchdog-token",
+  "Access-Control-Allow-Headers": "authorization, content-type, apikey",
 };
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/telegram";
