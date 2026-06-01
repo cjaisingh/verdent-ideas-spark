@@ -29,3 +29,16 @@ and writes to `public.sentinel_findings` (unique on `dedupe_key`).
 ```bash
 deno test supabase/functions/sentinel-tick/checks_test.ts
 ```
+
+## Out-of-band watchdog
+
+`sentinel-tick` cannot detect its own silence — every check it runs depends on the same edge runtime + service token. The **`sentinel-watchdog`** edge fn is the watcher-of-the-watcher:
+
+- Cron: `scheduled-sentinel-watchdog` at minutes `7,22,37,52` (offset from sentinel-tick).
+- Auth: **none** — idempotent by design (hour-bucket dedupe + 6h cooldown).
+- Telegram path: **direct connector gateway** (`LOVABLE_API_KEY` + `TELEGRAM_API_KEY`), bypassing `telegram-send` and `AWIP_SERVICE_TOKEN` entirely.
+- Heartbeat: `public.sentinel_watchdog_runs` (operator-only). Alerts after sentinel-tick has been silent > 30 min.
+- Self-watched: registered in `observability_registry` so `observability_missing_watcher` fires if it ever goes silent. Bounded at 2 layers.
+- Manual smoke test: `POST /sentinel-watchdog?trigger=manual`.
+
+Tests: `supabase/functions/sentinel-watchdog/decide_test.ts`.
