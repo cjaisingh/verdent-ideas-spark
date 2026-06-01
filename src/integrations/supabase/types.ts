@@ -6954,6 +6954,39 @@ export type Database = {
           },
         ]
       }
+      sentinel_watchdog_runs: {
+        Row: {
+          alerted: boolean
+          details: Json
+          id: string
+          last_alert_key: string | null
+          minutes_silent: number | null
+          ran_at: string
+          reason: string
+          sentinel_last_run_at: string | null
+        }
+        Insert: {
+          alerted?: boolean
+          details?: Json
+          id?: string
+          last_alert_key?: string | null
+          minutes_silent?: number | null
+          ran_at?: string
+          reason: string
+          sentinel_last_run_at?: string | null
+        }
+        Update: {
+          alerted?: boolean
+          details?: Json
+          id?: string
+          last_alert_key?: string | null
+          minutes_silent?: number | null
+          ran_at?: string
+          reason?: string
+          sentinel_last_run_at?: string | null
+        }
+        Relationships: []
+      }
       session_summaries: {
         Row: {
           agent: string
