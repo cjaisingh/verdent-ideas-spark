@@ -4,10 +4,11 @@
 // its own silence. On 2026-06-01 a stale AWIP_SERVICE_TOKEN 401'd sentinel-tick
 // itself, so every alert built on top of it (gh_actions_watch_auth_failed,
 // cron_auth_failures_burst, secrets_health_stale, Telegram fan-out) went silent
-// in lockstep. The watchdog is a deliberately tiny, single-purpose edge fn
-// that authenticates with a SEPARATE token (AWIP_WATCHDOG_TOKEN) and calls
-// the Telegram connector gateway DIRECTLY — bypassing both AWIP_SERVICE_TOKEN
-// and the `telegram-send` edge fn — so a single-token rotation cannot silence it.
+// in lockstep. The watchdog is a deliberately tiny, single-purpose edge fn with
+// NO shared-secret coupling to sentinel-tick. It is unauthenticated by design —
+// idempotent (heartbeat-only) with hour-bucket dedupe + 6h cooldown on alerts,
+// and calls the Telegram connector gateway DIRECTLY (no telegram-send middleman),
+// so neither AWIP_SERVICE_TOKEN nor any other rotating secret can silence it.
 //
 // See docs/sentinel.md and mem://features/sentinel-monitoring-coverage.
 
