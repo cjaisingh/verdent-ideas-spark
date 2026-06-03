@@ -98,7 +98,13 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // Mismatch detection: present in BOTH places but values differ.
   const url = new URL(req.url);
   const syncMode = url.searchParams.get("sync");
-  const allowSync = !triggeredByCron && syncMode === "env-to-db";
+  // sync modes (operator-only):
+  //   env-to-db    → overwrite app_secrets from edge env
+  //   env-to-vault → overwrite vault.secrets from edge env (AWIP_SERVICE_TOKEN only)
+  //   env-to-all   → both of the above in lockstep
+  const allowSync = !triggeredByCron && (syncMode === "env-to-db" || syncMode === "env-to-all");
+  const allowVaultSync = !triggeredByCron && (syncMode === "env-to-vault" || syncMode === "env-to-all");
+
 
   const mismatches: { key: string; env_fp: string; db_fp: string; resynced?: boolean }[] = [];
   for (const key of REQUIRED_SECRETS) {
