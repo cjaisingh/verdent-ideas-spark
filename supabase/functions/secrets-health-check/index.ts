@@ -153,28 +153,34 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   const finalMismatches = effectiveMismatches.filter((m) => !vaultSyncedKeys.includes(m.key));
 
 
-  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && effectiveMismatches.length === 0;
+  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && finalMismatches.length === 0;
   const messageParts: string[] = [];
   if (missingInDb.length) messageParts.push(`missing in db: [${missingInDb.join(",")}]`);
   if (missingInEnv.length) messageParts.push(`missing in env: [${missingInEnv.join(",")}]`);
-  if (effectiveMismatches.length) messageParts.push(`mismatched: [${effectiveMismatches.map((m) => m.key).join(",")}]`);
+  if (finalMismatches.length) messageParts.push(`mismatched: [${finalMismatches.map((m) => m.key).join(",")}]`);
   const resyncedKeys = mismatches.filter((m) => m.resynced).map((m) => m.key);
   if (resyncedKeys.length) messageParts.push(`resynced env→db: [${resyncedKeys.join(",")}]`);
+  if (vaultSyncedKeys.length) messageParts.push(`resynced env→vault: [${vaultSyncedKeys.join(",")}]`);
+  const vaultSyncFailed = vaultSynced.filter((v) => !v.ok);
+  if (vaultSyncFailed.length) messageParts.push(`vault sync failed: [${vaultSyncFailed.map((v) => `${v.key}:${v.error}`).join(",")}]`);
   const message = ok
     ? `All ${REQUIRED_SECRETS.length} required secrets present and matching` +
-      (resyncedKeys.length ? ` (resynced: ${resyncedKeys.join(",")})` : "")
+      (resyncedKeys.length ? ` (resynced db: ${resyncedKeys.join(",")})` : "") +
+      (vaultSyncedKeys.length ? ` (resynced vault: ${vaultSyncedKeys.join(",")})` : "")
     : `Secret check failed — ${messageParts.join(" · ")}`;
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
-    synced_to_db: synced, mismatches, resynced_env_to_db: resyncedKeys,
+    synced_to_db: synced, mismatches: finalMismatches,
+    resynced_env_to_db: resyncedKeys, resynced_env_to_vault: vaultSyncedKeys,
+    vault_sync: vaultSynced,
   });
 
-  if (effectiveMismatches.length > 0) {
+  if (finalMismatches.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_mismatch",
-      `Edge env and app_secrets disagree for: ${effectiveMismatches.map((m) => m.key).join(", ")}. ` +
+      `Edge env and app_secrets disagree for: ${finalMismatches.map((m) => m.key).join(", ")}. ` +
       `Rotate one side or run the sync to align them.`,
-      { mismatches: effectiveMismatches });
+      { mismatches: finalMismatches });
   }
   if (missingInDb.length > 0 || missingInEnv.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_missing", message, {
@@ -188,9 +194,12 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     missing_in_env: missingInEnv,
     synced_to_db: synced,
     resynced_env_to_db: resyncedKeys,
-    mismatches: effectiveMismatches,
+    resynced_env_to_vault: vaultSyncedKeys,
+    vault_sync: vaultSynced,
+    mismatches: finalMismatches,
   });
 }));
+
 
 async function fingerprint(v: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
