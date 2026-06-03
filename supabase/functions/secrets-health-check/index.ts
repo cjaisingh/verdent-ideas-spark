@@ -130,6 +130,29 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // After sync, recompute mismatches (drop the ones we just aligned).
   const effectiveMismatches = mismatches.filter((m) => !m.resynced);
 
+  // Vault sync: AWIP_SERVICE_TOKEN is mirrored into vault.secrets for the cron
+  // jobs that read from vault.decrypted_secrets. We can't read vault from here
+  // (no decrypt access), so we call set_awip_service_token which atomically
+  // writes app_secrets + vault. Only fires on explicit operator request.
+  const vaultSynced: { key: string; ok: boolean; error?: string }[] = [];
+  if (allowVaultSync) {
+    const envToken = Deno.env.get("AWIP_SERVICE_TOKEN");
+    if (envToken) {
+      const { error: vErr } = await sb.rpc("set_awip_service_token", { new_value: envToken });
+      vaultSynced.push({ key: "AWIP_SERVICE_TOKEN", ok: !vErr, error: vErr?.message });
+      if (!vErr) {
+        // app_secrets row was also overwritten — make sure mismatch state reflects that.
+        dbValues.set("AWIP_SERVICE_TOKEN", envToken);
+      }
+    } else {
+      vaultSynced.push({ key: "AWIP_SERVICE_TOKEN", ok: false, error: "AWIP_SERVICE_TOKEN missing in edge env" });
+    }
+  }
+  const vaultSyncedKeys = vaultSynced.filter((v) => v.ok).map((v) => v.key);
+  // Recompute mismatches after vault sync may have realigned app_secrets too.
+  const finalMismatches = effectiveMismatches.filter((m) => !vaultSyncedKeys.includes(m.key));
+
+
   const ok = missingInDb.length === 0 && missingInEnv.length === 0 && effectiveMismatches.length === 0;
   const messageParts: string[] = [];
   if (missingInDb.length) messageParts.push(`missing in db: [${missingInDb.join(",")}]`);
