@@ -98,7 +98,13 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // Mismatch detection: present in BOTH places but values differ.
   const url = new URL(req.url);
   const syncMode = url.searchParams.get("sync");
-  const allowSync = !triggeredByCron && syncMode === "env-to-db";
+  // sync modes (operator-only):
+  //   env-to-db    → overwrite app_secrets from edge env
+  //   env-to-vault → overwrite vault.secrets from edge env (AWIP_SERVICE_TOKEN only)
+  //   env-to-all   → both of the above in lockstep
+  const allowSync = !triggeredByCron && (syncMode === "env-to-db" || syncMode === "env-to-all");
+  const allowVaultSync = !triggeredByCron && (syncMode === "env-to-vault" || syncMode === "env-to-all");
+
 
   const mismatches: { key: string; env_fp: string; db_fp: string; resynced?: boolean }[] = [];
   for (const key of REQUIRED_SECRETS) {
@@ -124,28 +130,57 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
   // After sync, recompute mismatches (drop the ones we just aligned).
   const effectiveMismatches = mismatches.filter((m) => !m.resynced);
 
-  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && effectiveMismatches.length === 0;
+  // Vault sync: AWIP_SERVICE_TOKEN is mirrored into vault.secrets for the cron
+  // jobs that read from vault.decrypted_secrets. We can't read vault from here
+  // (no decrypt access), so we call set_awip_service_token which atomically
+  // writes app_secrets + vault. Only fires on explicit operator request.
+  const vaultSynced: { key: string; ok: boolean; error?: string }[] = [];
+  if (allowVaultSync) {
+    const envToken = Deno.env.get("AWIP_SERVICE_TOKEN");
+    if (envToken) {
+      const { error: vErr } = await sb.rpc("set_awip_service_token", { new_value: envToken });
+      vaultSynced.push({ key: "AWIP_SERVICE_TOKEN", ok: !vErr, error: vErr?.message });
+      if (!vErr) {
+        // app_secrets row was also overwritten — make sure mismatch state reflects that.
+        dbValues.set("AWIP_SERVICE_TOKEN", envToken);
+      }
+    } else {
+      vaultSynced.push({ key: "AWIP_SERVICE_TOKEN", ok: false, error: "AWIP_SERVICE_TOKEN missing in edge env" });
+    }
+  }
+  const vaultSyncedKeys = vaultSynced.filter((v) => v.ok).map((v) => v.key);
+  // Recompute mismatches after vault sync may have realigned app_secrets too.
+  const finalMismatches = effectiveMismatches.filter((m) => !vaultSyncedKeys.includes(m.key));
+
+
+  const ok = missingInDb.length === 0 && missingInEnv.length === 0 && finalMismatches.length === 0;
   const messageParts: string[] = [];
   if (missingInDb.length) messageParts.push(`missing in db: [${missingInDb.join(",")}]`);
   if (missingInEnv.length) messageParts.push(`missing in env: [${missingInEnv.join(",")}]`);
-  if (effectiveMismatches.length) messageParts.push(`mismatched: [${effectiveMismatches.map((m) => m.key).join(",")}]`);
+  if (finalMismatches.length) messageParts.push(`mismatched: [${finalMismatches.map((m) => m.key).join(",")}]`);
   const resyncedKeys = mismatches.filter((m) => m.resynced).map((m) => m.key);
   if (resyncedKeys.length) messageParts.push(`resynced env→db: [${resyncedKeys.join(",")}]`);
+  if (vaultSyncedKeys.length) messageParts.push(`resynced env→vault: [${vaultSyncedKeys.join(",")}]`);
+  const vaultSyncFailed = vaultSynced.filter((v) => !v.ok);
+  if (vaultSyncFailed.length) messageParts.push(`vault sync failed: [${vaultSyncFailed.map((v) => `${v.key}:${v.error}`).join(",")}]`);
   const message = ok
     ? `All ${REQUIRED_SECRETS.length} required secrets present and matching` +
-      (resyncedKeys.length ? ` (resynced: ${resyncedKeys.join(",")})` : "")
+      (resyncedKeys.length ? ` (resynced db: ${resyncedKeys.join(",")})` : "") +
+      (vaultSyncedKeys.length ? ` (resynced vault: ${vaultSyncedKeys.join(",")})` : "")
     : `Secret check failed — ${messageParts.join(" · ")}`;
 
   await recordRun(ok ? "ok" : "error", ok ? 200 : 503, message, {
     required: REQUIRED_SECRETS, missing_in_db: missingInDb, missing_in_env: missingInEnv,
-    synced_to_db: synced, mismatches, resynced_env_to_db: resyncedKeys,
+    synced_to_db: synced, mismatches: finalMismatches,
+    resynced_env_to_db: resyncedKeys, resynced_env_to_vault: vaultSyncedKeys,
+    vault_sync: vaultSynced,
   });
 
-  if (effectiveMismatches.length > 0) {
+  if (finalMismatches.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_mismatch",
-      `Edge env and app_secrets disagree for: ${effectiveMismatches.map((m) => m.key).join(", ")}. ` +
+      `Edge env and app_secrets disagree for: ${finalMismatches.map((m) => m.key).join(", ")}. ` +
       `Rotate one side or run the sync to align them.`,
-      { mismatches: effectiveMismatches });
+      { mismatches: finalMismatches });
   }
   if (missingInDb.length > 0 || missingInEnv.length > 0) {
     await dispatchAlert(sb, "secrets-health-check", "secrets_missing", message, {
@@ -159,9 +194,12 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     missing_in_env: missingInEnv,
     synced_to_db: synced,
     resynced_env_to_db: resyncedKeys,
-    mismatches: effectiveMismatches,
+    resynced_env_to_vault: vaultSyncedKeys,
+    vault_sync: vaultSynced,
+    mismatches: finalMismatches,
   });
 }));
+
 
 async function fingerprint(v: string): Promise<string> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
