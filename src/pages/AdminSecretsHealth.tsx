@@ -86,8 +86,9 @@ export default function AdminSecretsHealth() {
   const [lastOk, setLastOk] = useState<RunRow | null>(null);
   const [lastError, setLastError] = useState<RunRow | null>(null);
   const [recent, setRecent] = useState<RunRow[]>([]);
-  const [busy, setBusy] = useState<"check" | "sync" | null>(null);
+  const [busy, setBusy] = useState<"check" | "sync" | "syncAll" | null>(null);
   const [confirmSync, setConfirmSync] = useState(false);
+  const [confirmSyncAll, setConfirmSyncAll] = useState(false);
 
   const loadRuns = async () => {
     const select = "id, trigger, status, status_code, message, detail, created_at";
