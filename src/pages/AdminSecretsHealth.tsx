@@ -6,12 +6,15 @@ import { toast } from "@/hooks/use-toast";
 import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ArrowLeftRight, ShieldAlert } from "lucide-react";
 
 type Mismatch = { key: string; env_fp: string; db_fp: string; resynced?: boolean };
+type VaultSyncEntry = { key: string; ok: boolean; error?: string };
 type Result = {
   ok: boolean;
   missing_in_db: string[];
   missing_in_env: string[];
   synced_to_db: string[];
   resynced_env_to_db?: string[];
+  resynced_env_to_vault?: string[];
+  vault_sync?: VaultSyncEntry[];
   mismatches: Mismatch[];
 };
 type RunRow = {
@@ -83,8 +86,9 @@ export default function AdminSecretsHealth() {
   const [lastOk, setLastOk] = useState<RunRow | null>(null);
   const [lastError, setLastError] = useState<RunRow | null>(null);
   const [recent, setRecent] = useState<RunRow[]>([]);
-  const [busy, setBusy] = useState<"check" | "sync" | null>(null);
+  const [busy, setBusy] = useState<"check" | "sync" | "syncAll" | null>(null);
   const [confirmSync, setConfirmSync] = useState(false);
+  const [confirmSyncAll, setConfirmSyncAll] = useState(false);
 
   const loadRuns = async () => {
     const select = "id, trigger, status, status_code, message, detail, created_at";
@@ -119,7 +123,7 @@ export default function AdminSecretsHealth() {
 
   useEffect(() => { loadRuns(); }, []);
 
-  const call = async (mode: "check" | "sync") => {
+  const call = async (mode: "check" | "sync" | "syncAll") => {
     setBusy(mode);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -127,7 +131,11 @@ export default function AdminSecretsHealth() {
         toast({ title: "Not signed in", description: "Operator session required.", variant: "destructive" });
         return;
       }
-      const url = mode === "sync" ? `${SECRETS_HEALTH_URL}?sync=env-to-db` : SECRETS_HEALTH_URL;
+      const qs =
+        mode === "sync" ? "?sync=env-to-db" :
+        mode === "syncAll" ? "?sync=env-to-all" :
+        "";
+      const url = `${SECRETS_HEALTH_URL}${qs}`;
       const resp = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -135,7 +143,7 @@ export default function AdminSecretsHealth() {
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         toast({
-          title: mode === "sync" ? "Sync failed" : "Check failed",
+          title: mode === "check" ? "Check failed" : "Sync failed",
           description: body.error ?? `HTTP ${resp.status}`,
           variant: "destructive",
         });
@@ -144,7 +152,13 @@ export default function AdminSecretsHealth() {
       setResult(body as Result);
       const r = body as Result;
       const resynced = r.resynced_env_to_db ?? [];
-      if (mode === "sync" && resynced.length) {
+      const resyncedVault = r.resynced_env_to_vault ?? [];
+      if (mode === "syncAll" && (resynced.length || resyncedVault.length)) {
+        toast({
+          title: "Synced env → app_secrets + vault",
+          description: `db: ${resynced.join(", ") || "—"} · vault: ${resyncedVault.join(", ") || "—"}`,
+        });
+      } else if (mode === "sync" && resynced.length) {
         toast({
           title: "Synced env → db",
           description: `${resynced.join(", ")} aligned to edge env values.`,
@@ -156,7 +170,7 @@ export default function AdminSecretsHealth() {
           variant: "destructive",
         });
       } else if (r.ok) {
-        toast({ title: mode === "sync" ? "Already aligned" : "All secrets aligned" });
+        toast({ title: mode === "check" ? "All secrets aligned" : "Already aligned" });
       }
     } catch (e) {
       toast({
@@ -167,6 +181,7 @@ export default function AdminSecretsHealth() {
     } finally {
       setBusy(null);
       setConfirmSync(false);
+      setConfirmSyncAll(false);
       await loadRuns();
     }
   };
@@ -176,6 +191,8 @@ export default function AdminSecretsHealth() {
   const missingInDb: string[] = view?.missing_in_db ?? [];
   const missingInEnv: string[] = view?.missing_in_env ?? [];
   const resynced: string[] = view?.resynced_env_to_db ?? [];
+  const resyncedVault: string[] = view?.resynced_env_to_vault ?? [];
+  const vaultSync: VaultSyncEntry[] = view?.vault_sync ?? [];
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -210,7 +227,27 @@ export default function AdminSecretsHealth() {
               Cancel
             </Button>
             <span className="text-xs text-muted-foreground self-center">
-              Overwrites <code>app_secrets</code> rows from edge env. Run a check first.
+              Overwrites <code>app_secrets</code> rows from edge env.
+            </span>
+          </>
+        )}
+        {!confirmSyncAll ? (
+          <Button onClick={() => setConfirmSyncAll(true)} disabled={!!busy} variant="secondary">
+            <ArrowLeftRight className="h-4 w-4 mr-1.5" />
+            Sync env → all (db + vault)
+          </Button>
+        ) : (
+          <>
+            <Button onClick={() => call("syncAll")} disabled={!!busy} variant="destructive">
+              <ShieldAlert className={`h-4 w-4 mr-1.5 ${busy === "syncAll" ? "animate-spin" : ""}`} />
+              {busy === "syncAll" ? "Syncing…" : "Confirm sync all"}
+            </Button>
+            <Button onClick={() => setConfirmSyncAll(false)} disabled={!!busy} variant="ghost" size="sm">
+              Cancel
+            </Button>
+            <span className="text-xs text-muted-foreground self-center">
+              Aligns <code>app_secrets</code> AND <code>vault.secrets</code> to edge env. Use after rotating
+              <code> AWIP_SERVICE_TOKEN</code>.
             </span>
           </>
         )}
@@ -262,6 +299,19 @@ export default function AdminSecretsHealth() {
           {resynced.length > 0 && (
             <div className="text-xs text-muted-foreground">
               Re-synced env→db: <code className="font-mono">{resynced.join(", ")}</code>
+            </div>
+          )}
+          {resyncedVault.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Re-synced env→vault: <code className="font-mono">{resyncedVault.join(", ")}</code>
+            </div>
+          )}
+          {vaultSync.filter((v) => !v.ok).length > 0 && (
+            <div className="text-xs">
+              <span className="text-destructive font-medium">Vault sync errors:</span>{" "}
+              <code className="font-mono">
+                {vaultSync.filter((v) => !v.ok).map((v) => `${v.key}: ${v.error ?? "unknown"}`).join(" · ")}
+              </code>
             </div>
           )}
         </section>

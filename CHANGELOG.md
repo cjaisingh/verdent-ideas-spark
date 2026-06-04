@@ -4,6 +4,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-06-04 — Operator one-click rotation of `AWIP_SERVICE_TOKEN` across all three stores)
+- `secrets-health-check` gains two operator-only modes: `?sync=env-to-vault` (writes `AWIP_SERVICE_TOKEN` to `vault.secrets` via the atomic `set_awip_service_token` RPC, which also rewrites `app_secrets`) and `?sync=env-to-all` (env → app_secrets AND env → vault in one call). Cron path (service-role-key Bearer) is still blocked from any sync mode — env stays source of truth.
+- `/admin/secrets-health` gets a `Sync env → all (db + vault)` button with two-step confirm. UI now surfaces `resynced_env_to_vault` and any per-key vault sync errors.
+- New runbook `docs/runbooks/awip-service-token-rotation.md` — 5-step rotation procedure ending at the new button. Cross-linked from `mem://features/secret-rotation-safety` and `docs/runbooks/secrets-mek-rotation.md`.
+- Memory: `mem://features/secret-rotation-safety` written for the first time (was referenced in `mem://index.md` but the file was missing). Documents the three-store mirror, the sync modes, the auth model, and the out-of-band safety net.
+- Closes the recovery half of the 2026-06-01 outage: the watchdog detects silence, this lets the operator clear it in one click without curl.
+
 ### Added (2026-06-01 — Sentinel watchdog: out-of-band watcher-of-the-watcher)
 - New cron `scheduled-sentinel-watchdog` at minutes 7/22/37/52 (offset from `scheduled-sentinel-tick` at 0/15/30/45) — independent 15-min watchdog for sentinel-tick itself.
 - New edge fn `sentinel-watchdog` (wrapped with `withLogger`) — **unauthenticated by design**, idempotent: writes a heartbeat to `sentinel_watchdog_runs` every tick, sends one Telegram alert when sentinel-tick has been silent > 30 min, deduped by hour-bucket key (`sentinel-silent::stale::<YYYY-MM-DDTHH>` or `::never::<…>`) with a 6h cooldown. Worst-case abuse: one redundant Telegram per 6h — which the operator wants anyway.
