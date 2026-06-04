@@ -6,12 +6,15 @@ import { toast } from "@/hooks/use-toast";
 import { CheckCircle2, XCircle, AlertTriangle, RefreshCw, ArrowLeftRight, ShieldAlert } from "lucide-react";
 
 type Mismatch = { key: string; env_fp: string; db_fp: string; resynced?: boolean };
+type VaultSyncEntry = { key: string; ok: boolean; error?: string };
 type Result = {
   ok: boolean;
   missing_in_db: string[];
   missing_in_env: string[];
   synced_to_db: string[];
   resynced_env_to_db?: string[];
+  resynced_env_to_vault?: string[];
+  vault_sync?: VaultSyncEntry[];
   mismatches: Mismatch[];
 };
 type RunRow = {
