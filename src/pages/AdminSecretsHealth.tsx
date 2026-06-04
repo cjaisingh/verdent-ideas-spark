@@ -301,6 +301,19 @@ export default function AdminSecretsHealth() {
               Re-synced env→db: <code className="font-mono">{resynced.join(", ")}</code>
             </div>
           )}
+          {resyncedVault.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Re-synced env→vault: <code className="font-mono">{resyncedVault.join(", ")}</code>
+            </div>
+          )}
+          {vaultSync.filter((v) => !v.ok).length > 0 && (
+            <div className="text-xs">
+              <span className="text-destructive font-medium">Vault sync errors:</span>{" "}
+              <code className="font-mono">
+                {vaultSync.filter((v) => !v.ok).map((v) => `${v.key}: ${v.error ?? "unknown"}`).join(" · ")}
+              </code>
+            </div>
+          )}
         </section>
       )}
 
