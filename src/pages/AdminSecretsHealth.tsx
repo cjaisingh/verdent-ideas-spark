@@ -191,6 +191,8 @@ export default function AdminSecretsHealth() {
   const missingInDb: string[] = view?.missing_in_db ?? [];
   const missingInEnv: string[] = view?.missing_in_env ?? [];
   const resynced: string[] = view?.resynced_env_to_db ?? [];
+  const resyncedVault: string[] = view?.resynced_env_to_vault ?? [];
+  const vaultSync: VaultSyncEntry[] = view?.vault_sync ?? [];
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
