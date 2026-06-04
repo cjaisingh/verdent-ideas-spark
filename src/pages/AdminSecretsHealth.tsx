@@ -123,7 +123,7 @@ export default function AdminSecretsHealth() {
 
   useEffect(() => { loadRuns(); }, []);
 
-  const call = async (mode: "check" | "sync") => {
+  const call = async (mode: "check" | "sync" | "syncAll") => {
     setBusy(mode);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -131,7 +131,11 @@ export default function AdminSecretsHealth() {
         toast({ title: "Not signed in", description: "Operator session required.", variant: "destructive" });
         return;
       }
-      const url = mode === "sync" ? `${SECRETS_HEALTH_URL}?sync=env-to-db` : SECRETS_HEALTH_URL;
+      const qs =
+        mode === "sync" ? "?sync=env-to-db" :
+        mode === "syncAll" ? "?sync=env-to-all" :
+        "";
+      const url = `${SECRETS_HEALTH_URL}${qs}`;
       const resp = await fetch(url, {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -139,7 +143,7 @@ export default function AdminSecretsHealth() {
       const body = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         toast({
-          title: mode === "sync" ? "Sync failed" : "Check failed",
+          title: mode === "check" ? "Check failed" : "Sync failed",
           description: body.error ?? `HTTP ${resp.status}`,
           variant: "destructive",
         });
@@ -148,7 +152,13 @@ export default function AdminSecretsHealth() {
       setResult(body as Result);
       const r = body as Result;
       const resynced = r.resynced_env_to_db ?? [];
-      if (mode === "sync" && resynced.length) {
+      const resyncedVault = r.resynced_env_to_vault ?? [];
+      if (mode === "syncAll" && (resynced.length || resyncedVault.length)) {
+        toast({
+          title: "Synced env → app_secrets + vault",
+          description: `db: ${resynced.join(", ") || "—"} · vault: ${resyncedVault.join(", ") || "—"}`,
+        });
+      } else if (mode === "sync" && resynced.length) {
         toast({
           title: "Synced env → db",
           description: `${resynced.join(", ")} aligned to edge env values.`,
@@ -160,7 +170,7 @@ export default function AdminSecretsHealth() {
           variant: "destructive",
         });
       } else if (r.ok) {
-        toast({ title: mode === "sync" ? "Already aligned" : "All secrets aligned" });
+        toast({ title: mode === "check" ? "All secrets aligned" : "Already aligned" });
       }
     } catch (e) {
       toast({
@@ -171,6 +181,7 @@ export default function AdminSecretsHealth() {
     } finally {
       setBusy(null);
       setConfirmSync(false);
+      setConfirmSyncAll(false);
       await loadRuns();
     }
   };
