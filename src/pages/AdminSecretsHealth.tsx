@@ -227,7 +227,27 @@ export default function AdminSecretsHealth() {
               Cancel
             </Button>
             <span className="text-xs text-muted-foreground self-center">
-              Overwrites <code>app_secrets</code> rows from edge env. Run a check first.
+              Overwrites <code>app_secrets</code> rows from edge env.
+            </span>
+          </>
+        )}
+        {!confirmSyncAll ? (
+          <Button onClick={() => setConfirmSyncAll(true)} disabled={!!busy} variant="secondary">
+            <ArrowLeftRight className="h-4 w-4 mr-1.5" />
+            Sync env → all (db + vault)
+          </Button>
+        ) : (
+          <>
+            <Button onClick={() => call("syncAll")} disabled={!!busy} variant="destructive">
+              <ShieldAlert className={`h-4 w-4 mr-1.5 ${busy === "syncAll" ? "animate-spin" : ""}`} />
+              {busy === "syncAll" ? "Syncing…" : "Confirm sync all"}
+            </Button>
+            <Button onClick={() => setConfirmSyncAll(false)} disabled={!!busy} variant="ghost" size="sm">
+              Cancel
+            </Button>
+            <span className="text-xs text-muted-foreground self-center">
+              Aligns <code>app_secrets</code> AND <code>vault.secrets</code> to edge env. Use after rotating
+              <code> AWIP_SERVICE_TOKEN</code>.
             </span>
           </>
         )}
