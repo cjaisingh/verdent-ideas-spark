@@ -60,6 +60,31 @@ Deno.serve(withLogger("secrets-health-check", async (req) => {
     return json({ error: "unauthorized" }, 401);
   }
 
+  // Manual (non-cron) callers MUST be an operator/admin. The earlier
+  // "Bearer-present" check is not enough — any authenticated user could
+  // otherwise enumerate secret status or trigger ?sync=env-to-db and
+  // disrupt token rotation.
+  if (!triggeredByCron) {
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: auth } } },
+    );
+    const { data: u } = await userClient.auth.getUser();
+    if (!u?.user) {
+      await recordRun("error", 401, "Invalid bearer for manual call.");
+      return json({ error: "unauthorized" }, 401);
+    }
+    const [{ data: isOp }, { data: isAdmin }] = await Promise.all([
+      userClient.rpc("has_role", { _user_id: u.user.id, _role: "operator" }),
+      userClient.rpc("has_role", { _user_id: u.user.id, _role: "admin" }),
+    ]);
+    if (!isOp && !isAdmin) {
+      await recordRun("error", 403, `Non-operator user ${u.user.id} attempted manual call.`);
+      return json({ error: "forbidden" }, 403);
+    }
+  }
+
 
   // Per ADR-0009, plaintext lives in encrypted column and is only readable
   // via public.get_app_secret(_key) under service_role. We fetch each key one

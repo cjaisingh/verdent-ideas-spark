@@ -47,6 +47,44 @@ const corsHeaders = {
 // Scrub secrets from anything we persist (api_call_logs, *_events.payload).
 // Defensive: walk strings, leave non-strings alone, cap recursion depth.
 const SERVICE_TOKEN_VALUE = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+
+// ---------- approval callback SSRF guard ----------
+// Approval callbacks fire to caller-supplied URLs. To prevent token
+// exfiltration we (1) require https, (2) allowlist hostnames via
+// APPROVAL_CALLBACK_ALLOWED_HOSTS (comma-separated; supports leading "."
+// suffix matches), and (3) NEVER forward the global AWIP service token —
+// instead we sign the body with APPROVAL_CALLBACK_SECRET (if set) so the
+// receiver can verify authenticity without holding the master token.
+const APPROVAL_CALLBACK_ALLOWED_HOSTS = (Deno.env.get("APPROVAL_CALLBACK_ALLOWED_HOSTS") ?? "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const APPROVAL_CALLBACK_SECRET = Deno.env.get("APPROVAL_CALLBACK_SECRET") ?? "";
+
+export function isCallbackUrlAllowed(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  // Block obvious internal/loopback targets even if allowlist is empty.
+  if (host === "localhost" || host.endsWith(".local") ||
+      host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" ||
+      /^10\./.test(host) || /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      /^169\.254\./.test(host)) return false;
+  if (APPROVAL_CALLBACK_ALLOWED_HOSTS.length === 0) return false;
+  return APPROVAL_CALLBACK_ALLOWED_HOSTS.some((allowed) =>
+    allowed.startsWith(".") ? host.endsWith(allowed) || host === allowed.slice(1) : host === allowed,
+  );
+}
+
+async function signCallbackBody(body: string): Promise<string | null> {
+  if (!APPROVAL_CALLBACK_SECRET) return null;
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(APPROVAL_CALLBACK_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 const REDACTION_PATTERNS: RegExp[] = [
   /sk-[A-Za-z0-9_\-]{16,}/g,
   /Bearer\s+[A-Za-z0-9._\-]+/g,
@@ -1273,6 +1311,14 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
   const RISK_MAP: Record<string, string> = { low: "safe", medium: "risky", high: "blocker", safe: "safe", risky: "risky", blocker: "blocker", unknown: "unknown" };
   const risk = RISK_MAP[String(body.risk ?? "unknown")] ?? "unknown";
 
+  // Reject SSRF-prone callback URLs before they ever land in the queue.
+  if (body.callback_url && !isCallbackUrlAllowed(String(body.callback_url))) {
+    return json({
+      error: "callback_url_not_allowed",
+      detail: "callback_url must be https and on APPROVAL_CALLBACK_ALLOWED_HOSTS",
+    }, 400);
+  }
+
   // ----- Agent scope enforcement -----
   // Resolves the caller's active Copilot agent (header override or session) intersected
   // with the user's profile narrowing, then checks capability/tables/risk.
@@ -1436,15 +1482,18 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
     }),
   });
 
-  // Fire callback (best-effort)
+  // Fire callback (best-effort). NEVER forward the global AWIP service
+  // token — re-validate the URL (rules may have changed since insert) and
+  // sign the body with APPROVAL_CALLBACK_SECRET so the receiver can verify
+  // authenticity without holding the master token.
   if (row.callback_url) {
-    fetch(row.callback_url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-awip-service-token": SERVICE_TOKEN_VALUE,
-      },
-      body: JSON.stringify({
+    if (!isCallbackUrlAllowed(String(row.callback_url))) {
+      console.error(JSON.stringify({
+        fn: "awip-api", severity: "warn", msg: "approval callback URL no longer allowed — skipping",
+        approval_id: upd.id, callback_url: row.callback_url,
+      }));
+    } else {
+      const payload = JSON.stringify({
         approval_id: upd.id,
         status: decision,
         decided_by: decidedBy,
@@ -1453,11 +1502,16 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
         capability_id: row.capability_id,
         intent_payload: row.intent_payload,
         result: upd.result,
-      }),
-    }).catch((e) => console.error(JSON.stringify({
-      fn: "awip-api", severity: "warn", msg: "approval callback failed",
-      approval_id: upd.id, callback_url: row.callback_url, error: String(e),
-    })));
+      });
+      const sig = await signCallbackBody(payload);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sig) headers["x-approval-signature"] = `sha256=${sig}`;
+      fetch(row.callback_url, { method: "POST", headers, body: payload })
+        .catch((e) => console.error(JSON.stringify({
+          fn: "awip-api", severity: "warn", msg: "approval callback failed",
+          approval_id: upd.id, callback_url: row.callback_url, error: String(e),
+        })));
+    }
   }
 
   return json({ ok: true, approval_id: upd.id, status: upd.status });
