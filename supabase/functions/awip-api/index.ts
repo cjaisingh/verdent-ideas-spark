@@ -1482,15 +1482,18 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
     }),
   });
 
-  // Fire callback (best-effort)
+  // Fire callback (best-effort). NEVER forward the global AWIP service
+  // token — re-validate the URL (rules may have changed since insert) and
+  // sign the body with APPROVAL_CALLBACK_SECRET so the receiver can verify
+  // authenticity without holding the master token.
   if (row.callback_url) {
-    fetch(row.callback_url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-awip-service-token": SERVICE_TOKEN_VALUE,
-      },
-      body: JSON.stringify({
+    if (!isCallbackUrlAllowed(String(row.callback_url))) {
+      console.error(JSON.stringify({
+        fn: "awip-api", severity: "warn", msg: "approval callback URL no longer allowed — skipping",
+        approval_id: upd.id, callback_url: row.callback_url,
+      }));
+    } else {
+      const payload = JSON.stringify({
         approval_id: upd.id,
         status: decision,
         decided_by: decidedBy,
@@ -1499,11 +1502,16 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
         capability_id: row.capability_id,
         intent_payload: row.intent_payload,
         result: upd.result,
-      }),
-    }).catch((e) => console.error(JSON.stringify({
-      fn: "awip-api", severity: "warn", msg: "approval callback failed",
-      approval_id: upd.id, callback_url: row.callback_url, error: String(e),
-    })));
+      });
+      const sig = await signCallbackBody(payload);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sig) headers["x-approval-signature"] = `sha256=${sig}`;
+      fetch(row.callback_url, { method: "POST", headers, body: payload })
+        .catch((e) => console.error(JSON.stringify({
+          fn: "awip-api", severity: "warn", msg: "approval callback failed",
+          approval_id: upd.id, callback_url: row.callback_url, error: String(e),
+        })));
+    }
   }
 
   return json({ ok: true, approval_id: upd.id, status: upd.status });
