@@ -1311,6 +1311,14 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
   const RISK_MAP: Record<string, string> = { low: "safe", medium: "risky", high: "blocker", safe: "safe", risky: "risky", blocker: "blocker", unknown: "unknown" };
   const risk = RISK_MAP[String(body.risk ?? "unknown")] ?? "unknown";
 
+  // Reject SSRF-prone callback URLs before they ever land in the queue.
+  if (body.callback_url && !isCallbackUrlAllowed(String(body.callback_url))) {
+    return json({
+      error: "callback_url_not_allowed",
+      detail: "callback_url must be https and on APPROVAL_CALLBACK_ALLOWED_HOSTS",
+    }, 400);
+  }
+
   // ----- Agent scope enforcement -----
   // Resolves the caller's active Copilot agent (header override or session) intersected
   // with the user's profile narrowing, then checks capability/tables/risk.
