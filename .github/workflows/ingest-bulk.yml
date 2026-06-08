@@ -1,0 +1,35 @@
+name: Ingest bulk worker
+
+on:
+  schedule:
+    - cron: "30 2 * * *"   # 02:30 UTC nightly
+  workflow_dispatch:
+
+concurrency:
+  group: ingest-bulk
+  cancel-in-progress: false
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      AWIP_SERVICE_TOKEN: ${{ secrets.AWIP_SERVICE_TOKEN }}
+      APPROVAL_CALLBACK_SECRET: ${{ secrets.APPROVAL_CALLBACK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install markitdown
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils tesseract-ocr ffmpeg libreoffice
+          pip install "markitdown[all]==0.0.*"
+      - name: Run bulk parser
+        run: |
+          if [ -f scripts/ingest-bulk-worker.py ]; then
+            python scripts/ingest-bulk-worker.py --max-files 50
+          else
+            echo "scripts/ingest-bulk-worker.py not present yet — skipping. Tracked as discussion_action."
+          fi
