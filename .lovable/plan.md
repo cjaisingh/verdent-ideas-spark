@@ -1,84 +1,119 @@
 
-# Fix the stale AWIP_SERVICE_TOKEN outage end-to-end
+# W9.0 — Client file ingestion via markitdown
 
-## Goal
-Restore authentication for the 31 cron jobs that have been 401-ing for ~4 days, and close the structural gap that let `sentinel-watchdog` stay silent throughout.
+## Why
 
-## Non-goals
-- Not rewriting the secrets-at-rest model (ADR-0009 stands).
-- Not migrating cron jobs off `AWIP_SERVICE_TOKEN` onto per-job tokens (that's a separate W6 follow-up).
-- Not touching the Vault MEK or any Supabase-managed key.
+Engagements receive client files (contracts, reports, spreadsheets, drawings, BIM, emails) feeding multiple domains. Today every file is re-tokenised by the LLM on each query — expensive and slow. Convert once at ingest into markdown + chunks + embeddings, store under `(engagement_id, domain_id)`, and let RAG read cheap structured text instead of raw binaries.
 
-## Blast radius & Core rule / ADR / FM-AI cited
-- **Tables / state:** `app_secrets` (AWIP_SERVICE_TOKEN row), `vault.secrets` (AWIP_SERVICE_TOKEN entry), `automation_runs`, `sentinel_findings`, `gh_actions_runs`.
-- **Edge fns:** `secrets-health-check` (new UI wiring), `sentinel-tick` (watchdog path), every cron-fronted fn listed in `mem://features/secret-rotation-safety`.
-- **Surfaces:** `/admin/secrets-health`, `/admin/edge-health`.
-- **Core rule cited:** "Auth: operator JWT or `x-awip-service-token`; cron auth must be observable." (CONTEXT.md §Auth + `mem://features/secret-rotation-safety`).
-- **ADR cited:** ADR-0009 secrets-at-rest — env is source of truth, `app_secrets` + `vault.secrets` are mirrors.
-- **FM-AI failure mode defused:** "Silent dependency on a single shared credential with no out-of-band liveness probe" — same class as the FM-AI hidden-coupling failure documented in `docs/why-awip.md`.
+This is the substrate piece for W9 (engagements). It does NOT route, decide, or summarise — it ingests, parses, stores, emits events.
 
-## Alternatives considered
-1. **Rotate the token to a new value now.** Rejected — there's no evidence the current value leaked; the failure is divergence between env/db/vault, not compromise. Rotating adds a re-issue step to every consumer without buying security.
-2. **Re-register the 31 cron `cron.schedule(...)` bodies to read from a new shared source.** Rejected — schedules already resolve at runtime; the bug is the stores, not the schedules. Touching 31 schedules is unnecessary churn.
-3. **Chosen: align edge env → `app_secrets` → `vault.secrets` via the new `?sync=env-to-all` mode, then add an out-of-band watchdog ping that cannot be 401'd by the same token.** Smallest blast radius; uses the code we already shipped this turn; addresses both the immediate outage and the structural blindness.
+## Scope decisions (locked from chat)
 
-## Contract (cron/edge-fn touched)
-- `secrets-health-check` already has a typed surface (mode = `check | env-to-db | env-to-vault | env-to-all`). New work only adds a UI caller — no new contract.
-- New `sentinel-watchdog-ping` cron (step 4) needs a contract in `supabase/functions/_shared/contracts/sentinel-watchdog-ping.ts`:
-  ```ts
-  export type SentinelWatchdogPingInput = { source: "cron"; expected_max_age_minutes: number };
-  export type SentinelWatchdogPingOutput = { ok: boolean; last_tick_age_minutes: number | null; escalated: boolean };
-  ```
-  Authenticates with `SUPABASE_SERVICE_ROLE_KEY` (NOT `AWIP_SERVICE_TOKEN`) so it survives exactly this failure mode.
+- **Surfaces fed:** RAG corpus, Operator Inbox attachments, notebook/discussion-action attachments, engagement intake.
+- **CAD/FM (DWG, RVT, IFC, NWD, etc.):** v1 stores file + indexes metadata only (filename, MIME, size, embedded thumbnail/preview if present, declared discipline). No geometry parsing. Adapter slot reserved for W9.2.
+- **Execution:** hybrid.
+  - **Sidecar** (containerised markitdown, called from `awip-api`) — interactive single-file drops, seconds-class latency.
+  - **GHA worker** — nightly bulk re-index + back-fill + heavy/large files.
+- **Ownership:** every file row carries `engagement_id` + `domain_id`. Re-engagement inherits via `engagement.continuation_of`.
 
-## Persona sign-off
-- **sentinel** — objects to "the only watchdog uses the credential it's watching"; answered by adding `sentinel-watchdog-ping` on a service-role-key path.
-- **compliance-auditor** — wants the rotation procedure documented before next quarterly review; answered by the runbook in step 5.
-- **event-engineer** — wants the sync action emitted as an event row; answered by the existing `automation_runs` insert in `secrets-health-check` (no new event type needed).
-- **control-plane-operator** — wants no new routing logic in Core; the ping cron is a pure liveness probe, not a dispatcher. Satisfied.
-- **product-historian** — wants `mem://features/secret-rotation-safety` updated with the env-to-all mode + ping; covered in step 6.
+## What gets built
 
-## Gap checklist
-- [x] Idempotency — `set_awip_service_token` RPC is atomic across both stores; safe to re-run.
-- [x] `*_events` emission — `automation_runs` already records every sync call with `detail.vault_sync`.
-- [x] RLS + `has_role` — `secrets-health-check` is operator-JWT gated; ping cron uses service-role auth, no RLS surface.
-- [n/a] Realtime publication — no new tables.
-- [x] `observability_registry` — add row for `sentinel-watchdog-ping` (15-min cadence).
-- [x] `withLogger` — wrap `sentinel-watchdog-ping`.
-- [x] No new `any`.
-- [x] mem rule — update `mem://features/secret-rotation-safety` + `mem://features/sentinel-watchdog`.
-- [x] CHANGELOG — entry under Unreleased.
-- [x] Docs — new `docs/runbooks/awip-service-token-rotation.md`; cross-link from `docs/runbooks/secrets-mek-rotation.md` and `mem://features/secrets-at-rest`.
+### 1. Database (one migration)
 
-## Test plan
-1. **Vitest** — extend `secrets-health-check` tests with a case asserting `?sync=env-to-all` returns both `resynced_env_to_db` and `resynced_env_to_vault` populated when both stores diverge.
-2. **curl_edge_functions** — after step 2 below, POST `?sync=env-to-all` with operator JWT and assert HTTP 200 + `ok=true` + `resynced_env_to_vault` includes `AWIP_SERVICE_TOKEN`.
-3. **DB assertion** — `select count(*) from gh_actions_runs where created_at > now() - interval '30 min'` returns ≥1 within 15 min of the sync.
-4. **DB assertion** — `select status, count(*) from automation_runs where job='sentinel-tick' and created_at > now() - interval '30 min' group by 1` shows `ok` rows.
-5. **e2e** — new `e2e/sentinel-watchdog-ping.test.ts`: invoke ping with service-role key, assert `escalated=false` when `sentinel-tick` is fresh, `escalated=true` when stale (mock).
+New tables, all operator-only RLS, all with `service_role` GRANT for the sidecar/GHA worker:
 
-## Validation gates
-Run after build, in order. Stop and fix on first failure:
-1. `bun run lint:ratchet` — must pass.
-2. `bun run test -- secrets-health-check` — must pass.
-3. `bunx vitest run e2e/sentinel-watchdog-ping.test.ts` — must pass.
-4. Operator fires `POST /secrets-health-check?sync=env-to-all` — response `ok=true`.
-5. 15 min later: `gh_actions_runs` fresh row exists AND `automation_runs` for `sentinel-tick` is `ok`.
-6. `sentinel_findings` does NOT contain new `secrets_health_stale` or `cron_auth_failures_burst` rows in the next 1 h window.
+- `ingested_files` — `engagement_id`, `domain_id`, `storage_path`, `mime`, `size_bytes`, `sha256` (dedupe key), `source` (`upload|inbox|notebook|gha-bulk`), `status` (`pending|parsing|parsed|metadata_only|failed`), `parser` (`markitdown|metadata_only|adapter:<name>`), `parser_version`, `failure_reason`, `uploaded_by`, `cad_fm` boolean.
+- `ingested_file_chunks` — `file_id`, `chunk_index`, `content` (markdown), `tokens`, `embedding vector(3072)`, `metadata jsonb` (page/section/sheet). HNSW index on `embedding` with `vector_cosine_ops`.
+- `ingested_file_events` — append-only event stream (`uploaded`, `parse_started`, `parsed`, `chunked`, `embedded`, `failed`, `superseded`).
+- Unique index `(engagement_id, sha256)` for dedupe; new upload of same bytes → returns existing `file_id`.
 
-If any gate fails, diagnose via `supabase--edge_function_logs` on the failing function, fix, re-run from gate 1.
+Helper function `match_ingested_chunks(query_embedding, engagement_id, domain_ids[], match_count)` returning similarity-ranked chunks scoped to the caller's engagement/domain set.
 
-## Build steps (in execution order)
-1. **Add `Sync env → all` button** to `src/pages/AdminSecretsHealth.tsx`. Two-step confirm, same pattern as existing sync button. Shows `resynced_env_to_vault` in the result panel.
-2. **Operator fires sync** from the new button (this is the actual outage fix — code from prior turn + this button is all that's required to unblock the 31 crons).
-3. **Create `sentinel-watchdog-ping` edge fn + cron** at 15-min cadence, auth via `SUPABASE_SERVICE_ROLE_KEY`. Checks `automation_runs` for `sentinel-tick` freshness; if older than 30 min, fires `sentinel_watchdog_silent` finding (critical) + Telegram via `telegram-send`.
-4. **Add observability_registry row** for `sentinel-watchdog-ping`.
-5. **Write `docs/runbooks/awip-service-token-rotation.md`** — 5-step procedure ending at the `?sync=env-to-all` button.
-6. **Update memory** — `mem://features/secret-rotation-safety` (add env-to-all + ping), `mem://features/sentinel-watchdog` (add out-of-band path), `mem://index.md` (one-liner refresh).
-7. **CHANGELOG entry** under Unreleased.
+### 2. Storage
 
-## Out of scope
-- Per-cron token isolation (each cron gets its own narrowly-scoped token) — separate W6 ticket.
-- Rotating to a fresh `AWIP_SERVICE_TOKEN` value — no compromise evidence, skip.
-- Moving `vault.decrypted_secrets`-backed crons onto `app_secrets` for uniformity — tracked, not done here.
-- Replacing `secrets-health-check`'s operator-JWT gating with a stricter role check — `has_role('admin')` upgrade is a separate hardening pass.
+Private Supabase Storage bucket `ingested-files`. Path: `<engagement_id>/<sha256>.<ext>`. Operator-only RLS via `has_role()`.
+
+### 3. Edge functions (Deno, wrapped with `withLogger`, typed contracts in `_shared/contracts/`)
+
+- `ingest-file` — accepts upload (signed URL or multipart), computes sha256, dedupes, writes `ingested_files` row, decides route:
+  - CAD/FM extension → `metadata_only` (extract magic-bytes preview/thumbnail if present, no parse).
+  - markitdown-supported MIME → enqueue sidecar job.
+  - Oversize / batch flag → mark `pending`, leave for GHA worker.
+- `ingest-callback` — sidecar/GHA POST markdown + chunks back. HMAC-signed body (reuse `APPROVAL_CALLBACK_SECRET` pattern). Writes chunks, calls embeddings via Lovable AI Gateway (`google/gemini-embedding-001`, 3072 dims), upserts vectors, emits `embedded` event.
+- `ingest-search` — query endpoint. Embeds query once, calls `match_ingested_chunks`, returns chunks + file refs.
+- `ingest-stale-sentinel` — pulled into existing `sentinel-tick`: flags files stuck in `parsing` >15min, failed >3× attempts.
+
+All idempotent on `Idempotency-Key` = `sha256` for ingest, `(file_id, chunk_index)` for chunks.
+
+### 4. Sidecar (separate repo / Cloud Run, not in this project)
+
+Out of repo. The plan adds a `docs/runbooks/ingest-sidecar.md` spec: Python container running `markitdown`, polls `ingest_jobs` view or accepts signed-URL push, posts back to `ingest-callback`. Spec only — building/hosting is a follow-up discussion_action.
+
+### 5. GHA worker
+
+Workflow `.github/workflows/ingest-bulk.yml` — nightly 02:30 UTC. Reads pending `ingested_files` with `source='gha-bulk'` or `attempts<3 AND status='failed'`, runs markitdown locally, posts results via `AWIP_SERVICE_TOKEN`. Concurrency-1, 50-file cap per run.
+
+### 6. UI
+
+- `/engagements/<id>/files` — upload zone, file list with status pill, per-file domain selector, supersede/delete, retry-failed.
+- `/admin/ingest-health` — queue depth, parser breakdown, failure reasons, last sidecar heartbeat. Linked from `/admin/edge-health`.
+
+### 7. Observability
+
+- Sentinel checks: `ingest_files_stuck_parsing`, `ingest_failures_burst`, `ingest_sidecar_silent`, `ingest_embeddings_rate_limited`.
+- Add 4 entries to `observability_registry`.
+- Credits ledger entry per embedding batch (tokens × rate proxy).
+
+### 8. Docs + memory
+
+- `docs/features/ingestion.md` — surfaces, pipeline diagram, parser routing table, CAD/FM caveat.
+- `docs/runbooks/ingest-sidecar.md` — sidecar API contract + deploy notes.
+- `mem://features/file-ingestion` index entry.
+- CHANGELOG.
+
+## Out of scope (logged as discussion_actions)
+
+- Building/hosting the actual sidecar container (separate infra discussion).
+- CAD/IFC/BIM geometry adapters (W9.2).
+- Per-user OAuth for client cloud drives (Drive/SharePoint/Dropbox pull).
+- Reranking (BM25+vector hybrid) — defer until corpus >10k chunks.
+- Multilingual handling beyond what markitdown gives for free.
+
+## Technical details
+
+```text
+upload ─► ingest-file ─► storage + ingested_files(pending)
+                       │
+            ┌──────────┼──────────┬───────────────┐
+            ▼          ▼          ▼               ▼
+       metadata_only  sidecar   gha-bulk      duplicate
+       (CAD/FM)       (interactive) (nightly)  (return existing)
+                          │          │
+                          └────►ingest-callback (HMAC-signed)
+                                     │
+                                     ▼
+                        chunks + embeddings(3072d)
+                                     │
+                                     ▼
+                        match_ingested_chunks() ─► RAG, /companion, agents
+```
+
+Embedding model: `google/gemini-embedding-001` (3072 dims), called from `ingest-callback` only (server-side). Re-embed on model bump is gated by `parser_version` mismatch — handled by GHA worker.
+
+Idempotency: `sha256(bytes)` is the dedupe key. Same bytes on the same engagement returns existing row, never re-parses. Same bytes on a different engagement parses again (engagement isolation > storage savings).
+
+Auth on `ingest-callback`: HMAC over body using `APPROVAL_CALLBACK_SECRET`; same allowlist gate (`is_principal_allowed`) as other write callbacks.
+
+Night-window model policy applies automatically (callback writes happening 22:00–06:00 UTC use the cheap embedding tier already — no change needed).
+
+## Definition of done
+
+- Migration applied; `bun run rls:verify` green.
+- 6 edge functions wrapped with `withLogger`, typed contracts in place.
+- `ingest-file` end-to-end test: upload PDF → row appears → mock callback posts chunks → `match_ingested_chunks` returns results.
+- CAD/FM file (.dwg) ends in `metadata_only` without errors.
+- Dedupe verified (same file twice → one row).
+- `/engagements/.../files` and `/admin/ingest-health` rendering.
+- 4 sentinel checks live; registry entries added.
+- Docs + CHANGELOG + memory updated.
+- Sidecar + CAD adapters logged as follow-up discussion_actions (not built).
