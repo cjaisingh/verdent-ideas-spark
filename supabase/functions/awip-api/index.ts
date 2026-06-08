@@ -47,6 +47,44 @@ const corsHeaders = {
 // Scrub secrets from anything we persist (api_call_logs, *_events.payload).
 // Defensive: walk strings, leave non-strings alone, cap recursion depth.
 const SERVICE_TOKEN_VALUE = Deno.env.get("AWIP_SERVICE_TOKEN") ?? "";
+
+// ---------- approval callback SSRF guard ----------
+// Approval callbacks fire to caller-supplied URLs. To prevent token
+// exfiltration we (1) require https, (2) allowlist hostnames via
+// APPROVAL_CALLBACK_ALLOWED_HOSTS (comma-separated; supports leading "."
+// suffix matches), and (3) NEVER forward the global AWIP service token —
+// instead we sign the body with APPROVAL_CALLBACK_SECRET (if set) so the
+// receiver can verify authenticity without holding the master token.
+const APPROVAL_CALLBACK_ALLOWED_HOSTS = (Deno.env.get("APPROVAL_CALLBACK_ALLOWED_HOSTS") ?? "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+const APPROVAL_CALLBACK_SECRET = Deno.env.get("APPROVAL_CALLBACK_SECRET") ?? "";
+
+export function isCallbackUrlAllowed(raw: string): boolean {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  // Block obvious internal/loopback targets even if allowlist is empty.
+  if (host === "localhost" || host.endsWith(".local") ||
+      host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" ||
+      /^10\./.test(host) || /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      /^169\.254\./.test(host)) return false;
+  if (APPROVAL_CALLBACK_ALLOWED_HOSTS.length === 0) return false;
+  return APPROVAL_CALLBACK_ALLOWED_HOSTS.some((allowed) =>
+    allowed.startsWith(".") ? host.endsWith(allowed) || host === allowed.slice(1) : host === allowed,
+  );
+}
+
+async function signCallbackBody(body: string): Promise<string | null> {
+  if (!APPROVAL_CALLBACK_SECRET) return null;
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(APPROVAL_CALLBACK_SECRET),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 const REDACTION_PATTERNS: RegExp[] = [
   /sk-[A-Za-z0-9_\-]{16,}/g,
   /Bearer\s+[A-Za-z0-9._\-]+/g,
