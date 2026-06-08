@@ -4,7 +4,22 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
-### Added (2026-06-04 — Operator one-click rotation of `AWIP_SERVICE_TOKEN` across all three stores)
+### Added (2026-06-08 — W9.0: client file ingestion substrate via markitdown)
+- New tables `ingested_files`, `ingested_file_chunks` (vector(1536) + HNSW), `ingested_file_events`; operator/admin-only RLS; dedupe key `(engagement_id, sha256)`.
+- Private storage bucket `ingested-files` with operator-only `storage.objects` policies.
+- SQL helper `public.match_ingested_chunks(query_embedding, engagement_id, domain_ids, match_count)` (SECURITY INVOKER).
+- Three edge functions wrapped with `withLogger`:
+  - `ingest-file` — operator/service auth; dedupes; routes to `sidecar` / `gha-bulk` / `metadata_only` / `duplicate`. CAD/FM extensions (DWG, RVT, IFC, NWD, SKP, STEP, …) auto-route to metadata_only.
+  - `ingest-callback` — HMAC-SHA256 over body via `APPROVAL_CALLBACK_SECRET`; upserts chunks; embeds via Lovable AI Gateway (`google/gemini-embedding-001`, dims=1536) in batches of 32.
+  - `ingest-search` — embeds query then calls `match_ingested_chunks`.
+- Typed contract `supabase/functions/_shared/contracts/ingest-file.ts` — schemas, routing helpers, idempotency rules, embed model pinned.
+- `/admin/ingest-health` page — status counts, stuck/failed banners, last 100 files with realtime updates.
+- GHA workflow `.github/workflows/ingest-bulk.yml` — nightly 02:30 UTC bulk worker stub (concurrency-1, 50-file cap).
+- Docs: `docs/features/ingestion.md` (pipeline + routing table + CAD/FM caveat), `docs/runbooks/ingest-sidecar.md` (sidecar API contract).
+- Memory: `mem://features/file-ingestion`.
+- Out of scope (tracked as follow-ups): sidecar host + container; CAD/IFC/BIM geometry adapters (W9.2); per-user OAuth for client cloud drives; BM25+vector reranker; sentinel checks for `ingest_files_stuck_parsing` / `ingest_failures_burst` / `ingest_sidecar_silent`.
+
+
 - `secrets-health-check` gains two operator-only modes: `?sync=env-to-vault` (writes `AWIP_SERVICE_TOKEN` to `vault.secrets` via the atomic `set_awip_service_token` RPC, which also rewrites `app_secrets`) and `?sync=env-to-all` (env → app_secrets AND env → vault in one call). Cron path (service-role-key Bearer) is still blocked from any sync mode — env stays source of truth.
 - `/admin/secrets-health` gets a `Sync env → all (db + vault)` button with two-step confirm. UI now surfaces `resynced_env_to_vault` and any per-key vault sync errors.
 - New runbook `docs/runbooks/awip-service-token-rotation.md` — 5-step rotation procedure ending at the new button. Cross-linked from `mem://features/secret-rotation-safety` and `docs/runbooks/secrets-mek-rotation.md`.

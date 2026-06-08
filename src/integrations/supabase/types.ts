@@ -3672,6 +3672,163 @@ export type Database = {
           },
         ]
       }
+      ingested_file_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string
+          embed_model: string | null
+          embedding: string | null
+          file_id: string
+          id: string
+          metadata: Json
+          tokens: number | null
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string
+          embed_model?: string | null
+          embedding?: string | null
+          file_id: string
+          id?: string
+          metadata?: Json
+          tokens?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string
+          embed_model?: string | null
+          embedding?: string | null
+          file_id?: string
+          id?: string
+          metadata?: Json
+          tokens?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingested_file_chunks_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "ingested_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingested_file_events: {
+        Row: {
+          actor: string | null
+          created_at: string
+          event_type: string
+          file_id: string
+          id: string
+          payload: Json
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          event_type: string
+          file_id: string
+          id?: string
+          payload?: Json
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          event_type?: string
+          file_id?: string
+          id?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingested_file_events_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "ingested_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingested_files: {
+        Row: {
+          attempts: number
+          cad_fm: boolean
+          created_at: string
+          declared_discipline: string | null
+          domain_id: string | null
+          engagement_id: string | null
+          failure_reason: string | null
+          filename: string
+          id: string
+          last_heartbeat_at: string | null
+          max_attempts: number
+          mime: string
+          parsed_at: string | null
+          parser: string | null
+          parser_version: string | null
+          sha256: string
+          size_bytes: number
+          source: string
+          status: string
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          attempts?: number
+          cad_fm?: boolean
+          created_at?: string
+          declared_discipline?: string | null
+          domain_id?: string | null
+          engagement_id?: string | null
+          failure_reason?: string | null
+          filename: string
+          id?: string
+          last_heartbeat_at?: string | null
+          max_attempts?: number
+          mime: string
+          parsed_at?: string | null
+          parser?: string | null
+          parser_version?: string | null
+          sha256: string
+          size_bytes: number
+          source: string
+          status?: string
+          storage_bucket?: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          attempts?: number
+          cad_fm?: boolean
+          created_at?: string
+          declared_discipline?: string | null
+          domain_id?: string | null
+          engagement_id?: string | null
+          failure_reason?: string | null
+          filename?: string
+          id?: string
+          last_heartbeat_at?: string | null
+          max_attempts?: number
+          mime?: string
+          parsed_at?: string | null
+          parser?: string | null
+          parser_version?: string | null
+          sha256?: string
+          size_bytes?: number
+          source?: string
+          status?: string
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       ingestion_runs: {
         Row: {
           created_at: string
@@ -9206,6 +9363,23 @@ export type Database = {
           alias_id: string
           kind: Database["public"]["Enums"]["alias_descriptor_kind"]
           node_id: string
+          similarity: number
+        }[]
+      }
+      match_ingested_chunks: {
+        Args: {
+          match_count?: number
+          p_domain_ids?: string[]
+          p_engagement_id: string
+          query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          domain_id: string
+          file_id: string
+          filename: string
+          metadata: Json
           similarity: number
         }[]
       }
