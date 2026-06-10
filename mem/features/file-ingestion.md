@@ -29,12 +29,18 @@ W9.0 substrate for client file ingestion.
 ## UI
 - `/admin/ingest-health` — status counts, recent files, stuck/failed banners.
 
+## Sentinel (wired 2026-06-10)
+- `ingest_files_stuck_parsing` — status=parsing + heartbeat >15min stale; medium, high ≥5.
+- `ingest_files_failed_burst` — ≥3 failures/24h; medium, high ≥10.
+
+## GHA worker
+- `scripts/ingest-bulk-worker.py` — local markitdown, claims via PATCH on PostgREST, posts HMAC-signed callbacks. Requires `SUPABASE_SERVICE_ROLE_KEY` as a GHA secret.
+
 ## Out of scope (v1)
 - Sidecar host + actual sidecar container (separate infra discussion).
 - CAD/IFC/BIM geometry adapters → W9.2.
 - Per-user OAuth for client cloud drives.
 - BM25+vector reranker (defer until >10k chunks).
-- Sentinel checks (`ingest_files_stuck_parsing`, etc.) — kinds reserved but not wired yet.
 
 ## Contract source
 `supabase/functions/_shared/contracts/ingest-file.ts` (mandatory + optional evidence, idempotency key, embed model).
