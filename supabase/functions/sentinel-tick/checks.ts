@@ -50,7 +50,9 @@ export type FindingCandidate = {
     | "module_endpoint_silent"
     | "module_endpoint_red"
     | "gh_actions_watch_stale"
-    | "gh_actions_watch_auth_failed";
+    | "gh_actions_watch_auth_failed"
+    | "ingest_files_stuck_parsing"
+    | "ingest_files_failed_burst";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
@@ -650,6 +652,64 @@ export function checkHeygenVideosFailed(now: Date, rows: HeygenFailedRow[]): Fin
       window_h: 24,
       sample_error: rows[0]?.error ?? null,
       kinds: Array.from(new Set(rows.map((r) => r.kind))),
+    },
+  }];
+}
+
+// ── ingest_files_stuck_parsing ──────────────────────────────────────────────
+// Files left in `parsing` past their heartbeat (>15 min stale). Any row is a
+// red flag because the sidecar/GHA worker should have completed or marked
+// failed. >5 rows escalates to high.
+export type IngestStuckRow = {
+  id: string;
+  filename: string;
+  engagement_id: string | null;
+  last_heartbeat_at: string | null;
+  attempts: number | null;
+  created_at: string;
+};
+
+export function checkIngestFilesStuckParsing(
+  now: Date,
+  rows: IngestStuckRow[],
+): FindingCandidate[] {
+  if (rows.length === 0) return [];
+  const hourBucket = Math.floor(now.getTime() / 3600_000);
+  return [{
+    kind: "ingest_files_stuck_parsing",
+    severity: rows.length >= 5 ? "high" : "medium",
+    summary: `Ingest: ${rows.length} file(s) stuck in parsing >15min (e.g. ${rows[0].filename}).`,
+    dedupe_key: `ingest_files_stuck_parsing:${hourBucket}`,
+    subject_ref: { sample_id: rows[0].id, sample_engagement: rows[0].engagement_id },
+    payload: { stuck: rows.length, sample: rows.slice(0, 5).map((r) => ({ id: r.id, filename: r.filename, attempts: r.attempts })) },
+  }];
+}
+
+// ── ingest_files_failed_burst ───────────────────────────────────────────────
+// Failed ingestions in last 24h. >3 = medium, >10 = high.
+export type IngestFailedRow = {
+  id: string;
+  filename: string;
+  failure_reason: string | null;
+  created_at: string;
+};
+
+export function checkIngestFilesFailedBurst(
+  now: Date,
+  rows: IngestFailedRow[],
+): FindingCandidate[] {
+  if (rows.length < 3) return [];
+  const dayBucket = Math.floor(now.getTime() / (24 * 3600_000));
+  return [{
+    kind: "ingest_files_failed_burst",
+    severity: rows.length >= 10 ? "high" : "medium",
+    summary: `Ingest: ${rows.length} file(s) failed in last 24h (e.g. ${rows[0].filename}: ${rows[0].failure_reason ?? "no reason"}).`,
+    dedupe_key: `ingest_files_failed_burst:${dayBucket}`,
+    subject_ref: { sample_id: rows[0].id },
+    payload: {
+      failures: rows.length,
+      window_h: 24,
+      sample: rows.slice(0, 5).map((r) => ({ id: r.id, filename: r.filename, reason: r.failure_reason })),
     },
   }];
 }

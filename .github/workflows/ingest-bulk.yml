@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 45
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      AWIP_SERVICE_TOKEN: ${{ secrets.AWIP_SERVICE_TOKEN }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       APPROVAL_CALLBACK_SECRET: ${{ secrets.APPROVAL_CALLBACK_SECRET }}
     steps:
       - uses: actions/checkout@v4
@@ -25,11 +25,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils tesseract-ocr ffmpeg libreoffice
-          pip install "markitdown[all]==0.0.*"
+          pip install "markitdown[all]==0.0.*" requests
       - name: Run bulk parser
-        run: |
-          if [ -f scripts/ingest-bulk-worker.py ]; then
-            python scripts/ingest-bulk-worker.py --max-files 50
-          else
-            echo "scripts/ingest-bulk-worker.py not present yet — skipping. Tracked as discussion_action."
-          fi
+        run: python scripts/ingest-bulk-worker.py --max-files 50
