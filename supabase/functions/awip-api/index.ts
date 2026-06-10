@@ -248,7 +248,7 @@ async function resolveActiveScope(req: Request, userId?: string, via?: "service"
     capability_ids: intersect(agentRow.allowed_capability_ids ?? [], narrowedCaps),
     tables: intersect(agentRow.allowed_tables ?? [], narrowedTables),
     max_risk: minRisk(agentRow.max_risk ?? "high", narrowedRisk),
-    source: headerSlug ? "header" : "session",
+    source: headerSlug && via === "service" ? "header" : "session",
   };
 }
 
