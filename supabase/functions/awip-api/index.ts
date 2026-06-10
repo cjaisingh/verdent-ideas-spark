@@ -131,13 +131,21 @@ async function sha256Hex(s: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; owning_module?: string | null; error?: string }> {
+// Constant-time string compare to prevent timing attacks on token equality.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+async function authorize(req: Request): Promise<{ ok: boolean; actor: string; user_id?: string; owning_module?: string | null; via?: "service" | "module" | "jwt"; error?: string }> {
   const serviceToken = Deno.env.get("AWIP_SERVICE_TOKEN");
   const provided = req.headers.get("x-awip-service-token");
   if (provided) {
     // 1) Legacy global token (Discovery AI + cron). Unscoped.
-    if (serviceToken && provided === serviceToken) {
-      return { ok: true, actor: "service:discovery_ai", owning_module: null };
+    if (serviceToken && timingSafeEqual(provided, serviceToken)) {
+      return { ok: true, actor: "service:discovery_ai", owning_module: null, via: "service" };
     }
     // 2) Per-module hashed token lookup.
     try {
@@ -147,7 +155,7 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
       if (row) {
         // best-effort last-used touch (don't block)
         supabase.from("module_service_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.token_id).then(() => {}, () => {});
-        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module };
+        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module, via: "module" };
       }
     } catch (_e) { /* fall through */ }
     return { ok: false, actor: "", error: "invalid service token" };
@@ -163,7 +171,7 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
     .eq("user_id", data.user.id);
   const isOp = roles?.some((r) => r.role === "operator" || r.role === "admin");
   if (!isOp) return { ok: false, actor: "", error: "not operator" };
-  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null };
+  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null, via: "jwt" };
 }
 
 
@@ -188,11 +196,15 @@ type CopilotAgentRow = {
   enabled: boolean;
 };
 
-async function resolveActiveScope(req: Request, userId?: string): Promise<Scope | null> {
-  // 1) Header override (e.g., service calls) — slug from x-copilot-agent
+async function resolveActiveScope(req: Request, userId?: string, via?: "service" | "module" | "jwt"): Promise<Scope | null> {
+  // 1) Header override (e.g., service calls) — slug from x-copilot-agent.
+  //    SECURITY: only trusted internal callers (legacy global service token) may
+  //    assume an arbitrary agent's scope via this header. Operator JWTs and
+  //    per-module tokens must fall through to their bound session/profile so
+  //    they cannot escalate to a more-permissive agent. (Audit #18)
   const headerSlug = req.headers.get("x-copilot-agent");
   let agentRow: CopilotAgentRow | null = null;
-  if (headerSlug) {
+  if (headerSlug && via === "service") {
     const { data } = await supabase.from("copilot_agents")
       .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
       .eq("slug", headerSlug).maybeSingle();
@@ -236,7 +248,7 @@ async function resolveActiveScope(req: Request, userId?: string): Promise<Scope 
     capability_ids: intersect(agentRow.allowed_capability_ids ?? [], narrowedCaps),
     tables: intersect(agentRow.allowed_tables ?? [], narrowedTables),
     max_risk: minRisk(agentRow.max_risk ?? "high", narrowedRisk),
-    source: headerSlug ? "header" : "session",
+    source: headerSlug && via === "service" ? "header" : "session",
   };
 }
 
@@ -809,6 +821,10 @@ async function moduleHeartbeat(req: Request, actor: string, tokenScope: string |
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
+  // Audit #13: the multi-row insert below is not transactional. Without an
+  // idempotency key, a retry after a mid-flight failure creates a duplicate
+  // tree. Require the header so the cached response can short-circuit retries.
+  if (!idemKey) return json({ error: "idempotency-key header required for /okr/ingest" }, 400);
   const raw = await req.text();
   if (raw.length === 0) return json({ error: "empty body" }, 400);
   let body: any;
@@ -1006,10 +1022,21 @@ async function supersedeOkr(req: Request, oldId: string, actor: string) {
     .single();
   if (ins.error) return json({ error: ins.error.message }, 500);
 
-  await supabase
+  // Audit #14: must verify the supersede UPDATE actually flipped the old row,
+  // otherwise two active versions co-exist (race or already-superseded node).
+  const { data: supUpd, error: supErr } = await supabase
     .from("okr_nodes")
     .update({ status: "superseded", superseded_by: ins.data.id, updated_at: new Date().toISOString() })
-    .eq("id", oldId);
+    .eq("id", oldId)
+    .eq("status", old.status) // optimistic-concurrency guard
+    .select("id")
+    .maybeSingle();
+  if (supErr) return json({ error: supErr.message }, 500);
+  if (!supUpd) {
+    // The old node changed under us — roll back the new insert to avoid a duplicate active version.
+    await supabase.from("okr_nodes").delete().eq("id", ins.data.id);
+    return json({ error: "supersede race — old node already changed; retry" }, 409);
+  }
 
   await supabase.from("okr_node_events").insert([
     {
@@ -1043,7 +1070,7 @@ async function getTree(url: URL) {
   return json({ nodes });
 }
 
-async function ingestEvents(req: Request, actor: string) {
+async function ingestEvents(req: Request, actor: string, tokenScope: string | null | undefined) {
   const idemKey = req.headers.get("idempotency-key");
   const raw = await req.text();
   if (raw.length === 0) return json({ error: "empty body" }, 400);
@@ -1070,6 +1097,25 @@ async function ingestEvents(req: Request, actor: string) {
     return json({ error: "each event needs capability_id and event_type" }, 400);
   }
 
+  // Audit #17: per-module tokens may only emit events for capabilities they own.
+  // Legacy global service token (tokenScope === null) and operator JWTs are unscoped.
+  if (tokenScope) {
+    const capIds = Array.from(new Set(rows.map((r) => r.capability_id)));
+    const { data: owned, error: ownErr } = await supabase
+      .from("capabilities")
+      .select("id, owning_module")
+      .in("id", capIds);
+    if (ownErr) return json({ error: ownErr.message }, 500);
+    const known = new Map((owned ?? []).map((c) => [c.id, c.owning_module]));
+    const violations = capIds.filter((id) => !known.has(id) || known.get(id) !== tokenScope);
+    if (violations.length > 0) {
+      return json({
+        error: `token scope '${tokenScope}' cannot emit events for capabilities owned by other modules`,
+        capability_ids: violations,
+      }, 403);
+    }
+  }
+
   const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
   if (error) return json({ error: error.message }, 500);
   const response = { ok: true, inserted: data?.length ?? 0, ids: (data ?? []).map((d) => d.id) };
@@ -1085,7 +1131,7 @@ async function getRecentEvents(url: URL) {
   let oq = supabase.from("okr_node_events").select("*").order("created_at", { ascending: false }).limit(limit);
   let cq = supabase.from("capability_events").select("*").order("created_at", { ascending: false }).limit(limit);
   if (since) { oq = oq.gt("created_at", since); cq = cq.gt("created_at", since); }
-  if (tenantId) oq = oq.eq("tenant_id", tenantId);
+  if (tenantId) { oq = oq.eq("tenant_id", tenantId); cq = cq.eq("tenant_id", tenantId); } // audit #9: capability_events must honour tenant filter
 
   const [o, c] = await Promise.all([oq, cq]);
   if (o.error) return json({ error: o.error.message }, 500);
@@ -1430,7 +1476,20 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
   return json({ ok: true, approval_id: ins.id, status: ins.status });
 }
 
-async function decideApproval(req: Request, approvalId: string, actor: string) {
+// Audit #10: approvals are owned by the (requesting_module, tenant_id) pair
+// that created them. A module/tenant may only read or decide its own approvals.
+// The legacy global service token and operator JWTs (auth.via === "jwt" or
+// "service") bypass the check because they are trusted internal callers.
+function callerOwnsApproval(
+  row: { requesting_module: string | null; tenant_id: string | null },
+  ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null },
+): boolean {
+  if (ctx.via === "service" || ctx.via === "jwt") return true; // operator + legacy global token
+  if (!ctx.owning_module) return false;
+  return row.requesting_module === ctx.owning_module;
+}
+
+async function decideApproval(req: Request, approvalId: string, actor: string, ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null }) {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   const decision = body.decision;
@@ -1445,6 +1504,7 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
     .maybeSingle();
   if (fErr) return json({ error: fErr.message }, 500);
   if (!row) return json({ error: "approval not found" }, 404);
+  if (!callerOwnsApproval(row, ctx)) return json({ error: "forbidden" }, 403);
   if (row.status !== "pending") {
     return json({ ok: true, approval_id: row.id, status: row.status, replayed: true });
   }
@@ -1517,7 +1577,7 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
   return json({ ok: true, approval_id: upd.id, status: upd.status });
 }
 
-async function getApproval(approvalId: string) {
+async function getApproval(approvalId: string, ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null }) {
   const { data, error } = await supabase
     .from("approval_queue")
     .select("*")
@@ -1525,6 +1585,7 @@ async function getApproval(approvalId: string) {
     .maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!data) return json({ error: "approval not found" }, 404);
+  if (!callerOwnsApproval(data, ctx)) return json({ error: "forbidden" }, 403);
   return json({ approval: data });
 }
 
@@ -1746,7 +1807,13 @@ async function listNotebook(url: URL) {
     .limit(limit);
   if (kind) q = q.eq("kind", kind);
   if (status) q = q.eq("status", status);
-  if (search) q = q.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+  if (search) {
+    // Audit #16: PostgREST .or() parses unquoted commas and parens as filter
+    // syntax. Strip metachars and cap length to neutralise injection that
+    // could otherwise reach across columns or close out of the ilike pattern.
+    const safe = search.replace(/[,()*\\"]/g, "").slice(0, 200);
+    if (safe.length > 0) q = q.or(`title.ilike.%${safe}%,body.ilike.%${safe}%`);
+  }
   const { data, error } = await q;
   if (error) return json({ error: error.message }, 500);
   return json({ entries: data, count: data?.length ?? 0 });
@@ -2161,7 +2228,7 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
-      else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
+      else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor, auth.owning_module);
       else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand(auth.actor);
       else if (req.method === "GET" && path === "/capabilities/promotion-status") response = await getPromotionStatus(auth.user_id);
       else if (req.method === "GET" && capPromoteStatusMatch) response = await getPromotionStatusOne(decodeURIComponent(capPromoteStatusMatch[1]), auth.user_id);
@@ -2171,8 +2238,8 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
       else if (req.method === "POST" && path === "/approvals/request") response = await requestApproval(req, auth.actor, auth.user_id);
-      else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor);
-      else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1]);
+      else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor, { via: auth.via, owning_module: auth.owning_module });
+      else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1], { via: auth.via, owning_module: auth.owning_module });
       else if (req.method === "GET" && path === "/approvals") response = await listApprovals(url);
       else if (req.method === "POST" && path === "/onboarding/start") response = await startOnboarding(req, auth.actor, auth.user_id);
       else if (req.method === "POST" && onboardingConfirmMatch) response = await confirmOnboarding(req, onboardingConfirmMatch[1], auth.actor);

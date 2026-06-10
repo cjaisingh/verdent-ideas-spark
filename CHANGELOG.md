@@ -4,6 +4,19 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-06-10 — external audit triage: tier 1 critical + tier 2 high)
+- **#9 (critical)** `GET /events/recent` now applies the `tenant_id` filter to `capability_events` as well as `okr_node_events`; previous code leaked all tenants' capability event history to any authenticated caller.
+- **#10 (critical)** `GET /approvals/:id` and `POST /approvals/:id/decide` now require the calling module/tenant to own the approval (`requesting_module` match); operator JWTs and the legacy global service token retain unscoped access.
+- **#11 (critical)** `ingest-callback` strips the `sha256=` prefix from `x-approval-signature` before HMAC compare, so legitimate callbacks from `awip-api` (prefixed) and the GHA worker (bare hex) both verify; previously every prefixed signature returned 401.
+- **#12 (critical)** Verified the `ingested-files` storage bucket already exists in this environment (W9.0 RLS policies bind to it); the missing-`INSERT INTO storage.buckets` in the original migration is benign here because the bucket is present.
+- **#13 (high)** `/okr/ingest` now requires the `Idempotency-Key` header. The multi-row insert is not transactional, so without a stable key a retry after partial failure created a duplicate tree.
+- **#14 (high)** `supersedeOkr` now checks the result of the supersede `UPDATE` (with an optimistic `status` guard) and rolls back the newly-inserted node on a lost race; previously two active versions could co-exist.
+- **#15 (high)** `claim_scheduled_jobs` now also sets `status = 'running'` (and `started_at`) inside the same `UPDATE`, so a concurrent `scheduler-tick` cannot re-claim the same job by reading `status = 'pending'`.
+- **#16 (high)** `/notebook?search=` is now sanitised — `,()*\\\"` are stripped and the string is capped at 200 chars before being interpolated into a PostgREST `.or(...)` ilike clause.
+- **#17 (high)** `POST /events/ingest` now verifies that every `capability_id` in the batch is owned by the caller's module when the request uses a per-module token; the legacy global service token and operator JWTs remain unscoped.
+- **#18 (high)** `x-copilot-agent` header override on `resolveActiveScope` is now honoured only when the caller authenticated via the legacy global service token; operator JWTs and per-module tokens can no longer assume a more-permissive agent. No internal caller currently sends this header, so the change is backward compatible.
+- **#19 (high)** `AWIP_SERVICE_TOKEN` equality now uses a constant-time compare (`timingSafeEqual` helper) to neutralise the timing-side-channel that `===` exposed.
+
 ### Added (2026-06-08 — W9.0: client file ingestion substrate via markitdown)
 - New tables `ingested_files`, `ingested_file_chunks` (vector(1536) + HNSW), `ingested_file_events`; operator/admin-only RLS; dedupe key `(engagement_id, sha256)`.
 - Private storage bucket `ingested-files` with operator-only `storage.objects` policies.
