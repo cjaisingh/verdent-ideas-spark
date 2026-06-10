@@ -50,7 +50,9 @@ export type FindingCandidate = {
     | "module_endpoint_silent"
     | "module_endpoint_red"
     | "gh_actions_watch_stale"
-    | "gh_actions_watch_auth_failed";
+    | "gh_actions_watch_auth_failed"
+    | "ingest_files_stuck_parsing"
+    | "ingest_files_failed_burst";
 
 
   severity: "info" | "low" | "medium" | "high" | "critical";
