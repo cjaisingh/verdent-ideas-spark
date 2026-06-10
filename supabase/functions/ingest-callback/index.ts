@@ -82,7 +82,11 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
   if (!HMAC_SECRET) return json({ error: "callback_secret_not_configured" }, 503);
 
   const rawBody = await req.text();
-  const sig = req.headers.get("x-approval-signature");
+  // Audit #11: awip-api signs with the `sha256=<hex>` prefix; the GHA worker
+  // and sidecar send a bare hex digest. Accept both by stripping the optional
+  // prefix before HMAC compare so legitimate callbacks are not rejected as 401.
+  const rawSig = req.headers.get("x-approval-signature");
+  const sig = rawSig?.replace(/^sha256=/, "") ?? null;
   const ok = await verifyHmac(HMAC_SECRET, rawBody, sig);
   if (!ok) return json({ error: "invalid_signature" }, 401);
 
