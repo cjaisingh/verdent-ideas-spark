@@ -2238,8 +2238,8 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "POST" && spawnMatch) response = await spawnSubOkr(req, spawnMatch[1], auth.actor);
       else if (req.method === "POST" && supMatch) response = await supersedeOkr(req, supMatch[1], auth.actor);
       else if (req.method === "POST" && path === "/approvals/request") response = await requestApproval(req, auth.actor, auth.user_id);
-      else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor);
-      else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1]);
+      else if (req.method === "POST" && approvalDecideMatch) response = await decideApproval(req, approvalDecideMatch[1], auth.actor, { via: auth.via, owning_module: auth.owning_module });
+      else if (req.method === "GET" && approvalGetMatch) response = await getApproval(approvalGetMatch[1], { via: auth.via, owning_module: auth.owning_module });
       else if (req.method === "GET" && path === "/approvals") response = await listApprovals(url);
       else if (req.method === "POST" && path === "/onboarding/start") response = await startOnboarding(req, auth.actor, auth.user_id);
       else if (req.method === "POST" && onboardingConfirmMatch) response = await confirmOnboarding(req, onboardingConfirmMatch[1], auth.actor);
