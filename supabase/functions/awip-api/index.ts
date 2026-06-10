@@ -1097,7 +1097,7 @@ async function getRecentEvents(url: URL) {
   let oq = supabase.from("okr_node_events").select("*").order("created_at", { ascending: false }).limit(limit);
   let cq = supabase.from("capability_events").select("*").order("created_at", { ascending: false }).limit(limit);
   if (since) { oq = oq.gt("created_at", since); cq = cq.gt("created_at", since); }
-  if (tenantId) oq = oq.eq("tenant_id", tenantId);
+  if (tenantId) { oq = oq.eq("tenant_id", tenantId); cq = cq.eq("tenant_id", tenantId); } // audit #9: capability_events must honour tenant filter
 
   const [o, c] = await Promise.all([oq, cq]);
   if (o.error) return json({ error: o.error.message }, 500);
