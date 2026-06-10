@@ -155,7 +155,7 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
       if (row) {
         // best-effort last-used touch (don't block)
         supabase.from("module_service_tokens").update({ last_used_at: new Date().toISOString() }).eq("id", row.token_id).then(() => {}, () => {});
-        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module };
+        return { ok: true, actor: `module:${row.owning_module}:${row.label}`, owning_module: row.owning_module, via: "module" };
       }
     } catch (_e) { /* fall through */ }
     return { ok: false, actor: "", error: "invalid service token" };
@@ -171,7 +171,7 @@ async function authorize(req: Request): Promise<{ ok: boolean; actor: string; us
     .eq("user_id", data.user.id);
   const isOp = roles?.some((r) => r.role === "operator" || r.role === "admin");
   if (!isOp) return { ok: false, actor: "", error: "not operator" };
-  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null };
+  return { ok: true, actor: `user:${data.user.id}`, user_id: data.user.id, owning_module: null, via: "jwt" };
 }
 
 
