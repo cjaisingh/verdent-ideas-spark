@@ -196,11 +196,15 @@ type CopilotAgentRow = {
   enabled: boolean;
 };
 
-async function resolveActiveScope(req: Request, userId?: string): Promise<Scope | null> {
-  // 1) Header override (e.g., service calls) — slug from x-copilot-agent
+async function resolveActiveScope(req: Request, userId?: string, via?: "service" | "module" | "jwt"): Promise<Scope | null> {
+  // 1) Header override (e.g., service calls) — slug from x-copilot-agent.
+  //    SECURITY: only trusted internal callers (legacy global service token) may
+  //    assume an arbitrary agent's scope via this header. Operator JWTs and
+  //    per-module tokens must fall through to their bound session/profile so
+  //    they cannot escalate to a more-permissive agent. (Audit #18)
   const headerSlug = req.headers.get("x-copilot-agent");
   let agentRow: CopilotAgentRow | null = null;
-  if (headerSlug) {
+  if (headerSlug && via === "service") {
     const { data } = await supabase.from("copilot_agents")
       .select("id, slug, allowed_capability_ids, allowed_tables, max_risk, enabled")
       .eq("slug", headerSlug).maybeSingle();
