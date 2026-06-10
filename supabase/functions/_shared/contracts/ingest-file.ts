@@ -8,6 +8,10 @@
 // All idempotent on `sha256` (file) and `(file_id, chunk_index)` (chunks).
 // CAD/FM file types are stored + indexed metadata-only in v1; no parse.
 //
+// Semantic index fields (chunk_type, section_id, parent_chunk_index,
+// is_section_root, entity_refs, doc_embedding) were added in W9.1 to enable
+// hierarchical retrieval and entity-scoped search.
+//
 // See docs/features/ingestion.md and docs/agents/contract-checklist.md.
 
 import { z } from "https://esm.sh/zod@3.23.8";
@@ -71,6 +75,20 @@ export function isMarkitdownSupported(mime: string): boolean {
   return MARKITDOWN_MIME_PREFIXES.some((p) => m.startsWith(p));
 }
 
+// ---------- semantic index shared enum ----------
+
+// Chunk classification labels understood by the semantic index.
+// Used in both IngestCallbackBody (write) and IngestSearchBody (filter).
+export const CHUNK_TYPES = [
+  "maintenance_record",
+  "asset_spec",
+  "compliance_clause",
+  "inspection_note",
+  "procedure",
+  "general",
+] as const;
+export type ChunkType = (typeof CHUNK_TYPES)[number];
+
 // ---------- ingest-file ----------
 
 export const IngestFileBody = z.object({
@@ -107,10 +125,32 @@ export const IngestCallbackBody = z.object({
       content: z.string().min(1).max(20000),
       tokens: z.number().int().min(0).optional(),
       metadata: z.record(z.unknown()).default({}),
+
+      // --- semantic index fields (W9.1) ---
+      // Classification label for this chunk; drives filtered retrieval.
+      chunk_type: z.enum(CHUNK_TYPES).default("general"),
+      // Section heading or logical section identifier within the document.
+      // Used to group sibling chunks under the same heading.
+      section_id: z.string().max(255).nullable().optional(),
+      // chunk_index of the parent chunk in a hierarchical doc structure.
+      // Integer index (not a DB UUID) — the sidecar does not know DB UUIDs.
+      parent_chunk_index: z.number().int().min(0).nullable().optional(),
+      // True when this chunk is the root / summary node for a section.
+      // The coarse retrieval pass preferentially fetches section roots.
+      is_section_root: z.boolean().default(false),
+      // UUIDs of domain entities (assets, spaces, systems, …) that the
+      // sidecar resolved from the chunk text via NER / lookup.
+      entity_refs: z.array(z.string().uuid()).max(50).default([]),
     }),
   ).max(2000),
   status: z.enum(["parsed", "metadata_only", "failed"]),
   failure_reason: z.string().max(2000).nullable().optional(),
+
+  // --- doc-level embedding (W9.1) ---
+  // 1536-dimensional vector representing the whole document.
+  // Used for coarse (doc-level) retrieval before chunk re-ranking.
+  // Omit when the sidecar cannot produce a doc embedding (e.g. metadata_only).
+  doc_embedding: z.array(z.number()).length(1536).nullable().optional(),
 });
 export type IngestCallbackBody = z.infer<typeof IngestCallbackBody>;
 
@@ -128,6 +168,15 @@ export const IngestSearchBody = z.object({
   engagement_id: z.string().uuid(),
   domain_ids: z.array(z.string().uuid()).max(16).nullable().optional(),
   match_count: z.number().int().min(1).max(50).default(8),
+
+  // --- semantic index filters (W9.1) ---
+  // Restrict retrieval to chunks that reference any of these entity UUIDs.
+  entity_ids: z.array(z.string().uuid()).max(32).nullable().optional(),
+  // Restrict retrieval to specific chunk classification labels.
+  chunk_types: z.array(z.enum(CHUNK_TYPES)).max(6).nullable().optional(),
+  // When true (default), perform a coarse doc-level retrieval pass first,
+  // then re-rank within the top-K documents using chunk embeddings.
+  hierarchical: z.boolean().default(true),
 });
 export type IngestSearchBody = z.infer<typeof IngestSearchBody>;
 
@@ -139,12 +188,42 @@ export type IngestSearchHit = {
   similarity: number;
   domain_id: string | null;
   metadata: Record<string, unknown>;
+
+  // --- semantic index fields (W9.1) ---
+  chunk_id: string;           // DB UUID of the chunk row
+  chunk_type: string;         // one of CHUNK_TYPES
+  section_id: string | null;  // section heading / identifier, if set
+  entity_refs: string[];      // entity UUIDs resolved for this chunk
+};
+
+// Entity resolved from entity_refs during search result enrichment.
+export type EntityContext = {
+  entity_id: string;
+  name: string;
+  kind: string; // 'capability' | 'asset' | 'space' | 'system' | 'unknown'
+};
+
+// OKR / goal node linked to entities that appeared in the search results.
+export type OkrContext = {
+  node_id: string;
+  title: string;
+  type: string;
+  status: string;
+  current_value: number | null;
+  target_value: number | null;
+  linked_capability_ids: string[];
 };
 
 export type IngestSearchResponse = {
   hits: IngestSearchHit[];
   query_tokens: number;
   embed_model: string;
+
+  // --- semantic index enrichment (W9.1) ---
+  // Deduplicated entity records for every entity_ref that appeared in hits.
+  entity_context: EntityContext[];
+  // OKR nodes linked to those entities, for contextual goal awareness.
+  okr_context: OkrContext[];
 };
 
 // ---------- contract metadata ----------
@@ -159,4 +238,17 @@ export const INGEST_CONTRACT = {
   cadFmPolicy:
     "v1: metadata_only. No geometry parsing. Adapter slot reserved for W9.2." as const,
   embedModel: "google/gemini-embedding-001 (dimensions=1536)" as const,
+
+  // W9.1 semantic index additions
+  semanticIndex:
+    "Two-pass hierarchical retrieval: (1) coarse doc-level ANN using doc_embedding; " +
+    "(2) chunk-level re-ranking within shortlisted docs. Chunks are classified by " +
+    "chunk_type and organised into section trees via section_id + parent_chunk_index. " +
+    "Section root chunks (is_section_root=true) are preferentially fetched in the " +
+    "coarse pass. Results are enriched with EntityContext and OkrContext for the " +
+    "entity_refs that appear across returned hits." as const,
+  entityExtraction:
+    "entity_refs in each chunk must be populated by the sidecar via NER + entity " +
+    "lookup against the engagement's domain entity registry before posting the callback. " +
+    "Only confirmed UUID matches should be included; fuzzy candidates must be omitted." as const,
 } as const;
