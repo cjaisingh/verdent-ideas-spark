@@ -1055,7 +1055,7 @@ async function getTree(url: URL) {
   return json({ nodes });
 }
 
-async function ingestEvents(req: Request, actor: string) {
+async function ingestEvents(req: Request, actor: string, tokenScope: string | null | undefined) {
   const idemKey = req.headers.get("idempotency-key");
   const raw = await req.text();
   if (raw.length === 0) return json({ error: "empty body" }, 400);
@@ -1080,6 +1080,25 @@ async function ingestEvents(req: Request, actor: string) {
   }));
   if (rows.some((r) => !r.capability_id || !r.event_type)) {
     return json({ error: "each event needs capability_id and event_type" }, 400);
+  }
+
+  // Audit #17: per-module tokens may only emit events for capabilities they own.
+  // Legacy global service token (tokenScope === null) and operator JWTs are unscoped.
+  if (tokenScope) {
+    const capIds = Array.from(new Set(rows.map((r) => r.capability_id)));
+    const { data: owned, error: ownErr } = await supabase
+      .from("capabilities")
+      .select("id, owning_module")
+      .in("id", capIds);
+    if (ownErr) return json({ error: ownErr.message }, 500);
+    const known = new Map((owned ?? []).map((c) => [c.id, c.owning_module]));
+    const violations = capIds.filter((id) => !known.has(id) || known.get(id) !== tokenScope);
+    if (violations.length > 0) {
+      return json({
+        error: `token scope '${tokenScope}' cannot emit events for capabilities owned by other modules`,
+        capability_ids: violations,
+      }, 403);
+    }
   }
 
   const { data, error } = await supabase.from("capability_events").insert(rows).select("id, created_at");
