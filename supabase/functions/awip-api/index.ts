@@ -1461,7 +1461,20 @@ async function requestApproval(req: Request, actor: string, userId?: string) {
   return json({ ok: true, approval_id: ins.id, status: ins.status });
 }
 
-async function decideApproval(req: Request, approvalId: string, actor: string) {
+// Audit #10: approvals are owned by the (requesting_module, tenant_id) pair
+// that created them. A module/tenant may only read or decide its own approvals.
+// The legacy global service token and operator JWTs (auth.via === "jwt" or
+// "service") bypass the check because they are trusted internal callers.
+function callerOwnsApproval(
+  row: { requesting_module: string | null; tenant_id: string | null },
+  ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null },
+): boolean {
+  if (ctx.via === "service" || ctx.via === "jwt") return true; // operator + legacy global token
+  if (!ctx.owning_module) return false;
+  return row.requesting_module === ctx.owning_module;
+}
+
+async function decideApproval(req: Request, approvalId: string, actor: string, ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null }) {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "invalid json" }, 400); }
   const decision = body.decision;
@@ -1476,6 +1489,7 @@ async function decideApproval(req: Request, approvalId: string, actor: string) {
     .maybeSingle();
   if (fErr) return json({ error: fErr.message }, 500);
   if (!row) return json({ error: "approval not found" }, 404);
+  if (!callerOwnsApproval(row, ctx)) return json({ error: "forbidden" }, 403);
   if (row.status !== "pending") {
     return json({ ok: true, approval_id: row.id, status: row.status, replayed: true });
   }
