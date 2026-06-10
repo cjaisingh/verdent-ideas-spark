@@ -23,6 +23,7 @@ import {
   checkScheduledJobsStuck, checkSchedulerDlqGrowth,
   checkModuleEndpointSilent, checkModuleEndpointRed,
   checkGhActionsWatchStale, checkGhActionsWatchAuthFailed,
+  checkIngestFilesStuckParsing, checkIngestFilesFailedBurst,
   SENTINEL_CADENCES, type FindingCandidate, type ObservabilityStatusRow,
   type ResolverHealthRow, type AliasRevokeEventRow, type ModuleLivenessRow,
   type ScheduledJobSentinelRow, type ModuleEndpointRow,
