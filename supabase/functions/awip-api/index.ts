@@ -821,6 +821,10 @@ async function moduleHeartbeat(req: Request, actor: string, tokenScope: string |
 
 async function ingestOkrTree(req: Request, actor: string) {
   const idemKey = req.headers.get("idempotency-key");
+  // Audit #13: the multi-row insert below is not transactional. Without an
+  // idempotency key, a retry after a mid-flight failure creates a duplicate
+  // tree. Require the header so the cached response can short-circuit retries.
+  if (!idemKey) return json({ error: "idempotency-key header required for /okr/ingest" }, 400);
   const raw = await req.text();
   if (raw.length === 0) return json({ error: "empty body" }, 400);
   let body: any;
