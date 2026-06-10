@@ -461,6 +461,26 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
       .select("job,id,status,created_at")
       .in("job", Object.keys(SENTINEL_CADENCES)));
 
+    // W9.0 ingest signals: stuck parsing (>15min heartbeat) + failed burst (24h).
+    const since15m = new Date(now.getTime() - 15 * 60_000).toISOString();
+    const [ingestStuckRes, ingestFailedRes] = await recordStep(sb, {
+      job: "sentinel-tick", step_key: "db_scan:ingest_signals",
+      request_id: reqId,
+      step_label: "Scan ingested_files stuck/failed", phase_kind: "db_scan",
+    }, () => Promise.all([
+      sb.from("ingested_files")
+        .select("id,filename,engagement_id,last_heartbeat_at,attempts,created_at")
+        .eq("status", "parsing")
+        .or(`last_heartbeat_at.lt.${since15m},last_heartbeat_at.is.null`)
+        .lt("created_at", since15m)
+        .limit(200),
+      sb.from("ingested_files")
+        .select("id,filename,failure_reason,created_at")
+        .eq("status", "failed")
+        .gte("created_at", since24h)
+        .limit(200),
+    ]));
+
     // Per-check timing: each check runs inside timeCheck() so we can attribute
     // duration, candidates, alerts, retries and queue depth back to a single
     // check function. Tagging each candidate with __check_key lets the persist
