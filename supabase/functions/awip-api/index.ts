@@ -1018,10 +1018,21 @@ async function supersedeOkr(req: Request, oldId: string, actor: string) {
     .single();
   if (ins.error) return json({ error: ins.error.message }, 500);
 
-  await supabase
+  // Audit #14: must verify the supersede UPDATE actually flipped the old row,
+  // otherwise two active versions co-exist (race or already-superseded node).
+  const { data: supUpd, error: supErr } = await supabase
     .from("okr_nodes")
     .update({ status: "superseded", superseded_by: ins.data.id, updated_at: new Date().toISOString() })
-    .eq("id", oldId);
+    .eq("id", oldId)
+    .eq("status", old.status) // optimistic-concurrency guard
+    .select("id")
+    .maybeSingle();
+  if (supErr) return json({ error: supErr.message }, 500);
+  if (!supUpd) {
+    // The old node changed under us — roll back the new insert to avoid a duplicate active version.
+    await supabase.from("okr_nodes").delete().eq("id", ins.data.id);
+    return json({ error: "supersede race — old node already changed; retry" }, 409);
+  }
 
   await supabase.from("okr_node_events").insert([
     {
