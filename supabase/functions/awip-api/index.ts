@@ -1803,7 +1803,13 @@ async function listNotebook(url: URL) {
     .limit(limit);
   if (kind) q = q.eq("kind", kind);
   if (status) q = q.eq("status", status);
-  if (search) q = q.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+  if (search) {
+    // Audit #16: PostgREST .or() parses unquoted commas and parens as filter
+    // syntax. Strip metachars and cap length to neutralise injection that
+    // could otherwise reach across columns or close out of the ilike pattern.
+    const safe = search.replace(/[,()*\\"]/g, "").slice(0, 200);
+    if (safe.length > 0) q = q.or(`title.ilike.%${safe}%,body.ilike.%${safe}%`);
+  }
   const { data, error } = await q;
   if (error) return json({ error: error.message }, 500);
   return json({ entries: data, count: data?.length ?? 0 });
