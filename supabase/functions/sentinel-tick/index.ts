@@ -619,6 +619,14 @@ Deno.serve(withLogger("sentinel-tick", async (req, ctx) => {
         now,
         (ghWatchEdgeLogRes.data ?? []) as { status: number | null; created_at: string; method: string | null }[],
       )),
+      ...timeCheck("ingest_files_stuck_parsing", () => checkIngestFilesStuckParsing(
+        now,
+        (ingestStuckRes.data ?? []) as { id: string; filename: string; engagement_id: string | null; last_heartbeat_at: string | null; attempts: number | null; created_at: string }[],
+      )),
+      ...timeCheck("ingest_files_failed_burst", () => checkIngestFilesFailedBurst(
+        now,
+        (ingestFailedRes.data ?? []) as { id: string; filename: string; failure_reason: string | null; created_at: string }[],
+      )),
     ]);
 
 
