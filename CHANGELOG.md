@@ -17,7 +17,12 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - GHA workflow `.github/workflows/ingest-bulk.yml` — nightly 02:30 UTC bulk worker stub (concurrency-1, 50-file cap).
 - Docs: `docs/features/ingestion.md` (pipeline + routing table + CAD/FM caveat), `docs/runbooks/ingest-sidecar.md` (sidecar API contract).
 - Memory: `mem://features/file-ingestion`.
-- Out of scope (tracked as follow-ups): sidecar host + container; CAD/IFC/BIM geometry adapters (W9.2); per-user OAuth for client cloud drives; BM25+vector reranker; sentinel checks for `ingest_files_stuck_parsing` / `ingest_failures_burst` / `ingest_sidecar_silent`.
+- Out of scope (tracked as follow-ups): sidecar host + container; CAD/IFC/BIM geometry adapters (W9.2); per-user OAuth for client cloud drives; BM25+vector reranker.
+
+### Added (2026-06-10 — W9.0 follow-up: GHA worker + sentinel wiring)
+- `scripts/ingest-bulk-worker.py` — pulls `source=gha-bulk` pending/failed rows, claims atomically, runs markitdown locally, posts HMAC-signed chunks back to `ingest-callback`. Cost note: markitdown is CPU-only; the only AI tokens spent are embeddings inside `ingest-callback`, which uses the cheapest Lovable embedding model (`google/gemini-embedding-001`) and falls into the night-cheap chat-model band by policy.
+- Wired two sentinel checks into `sentinel-tick`: `ingest_files_stuck_parsing` (parsing >15min, medium/high) and `ingest_files_failed_burst` (≥3 failures/24h, medium/high).
+- GHA workflow now requires `SUPABASE_SERVICE_ROLE_KEY` secret (only used inside the runner) and drops the unused `AWIP_SERVICE_TOKEN` from this job.
 
 
 - `secrets-health-check` gains two operator-only modes: `?sync=env-to-vault` (writes `AWIP_SERVICE_TOKEN` to `vault.secrets` via the atomic `set_awip_service_token` RPC, which also rewrites `app_secrets`) and `?sync=env-to-all` (env → app_secrets AND env → vault in one call). Cron path (service-role-key Bearer) is still blocked from any sync mode — env stays source of truth.
