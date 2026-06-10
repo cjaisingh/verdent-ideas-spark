@@ -2228,7 +2228,7 @@ Deno.serve(withLogger("awip-api", async (req) => {
       else if (req.method === "POST" && path === "/okr/ingest") response = await ingestOkrTree(req, auth.actor);
       else if (req.method === "GET" && path === "/okr/tree") response = await getTree(url);
       else if (req.method === "GET" && path === "/events/recent") response = await getRecentEvents(url);
-      else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor);
+      else if (req.method === "POST" && path === "/events/ingest") response = await ingestEvents(req, auth.actor, auth.owning_module);
       else if (req.method === "GET" && path === "/capabilities/demand") response = await getCapabilityDemand(auth.actor);
       else if (req.method === "GET" && path === "/capabilities/promotion-status") response = await getPromotionStatus(auth.user_id);
       else if (req.method === "GET" && capPromoteStatusMatch) response = await getPromotionStatusOne(decodeURIComponent(capPromoteStatusMatch[1]), auth.user_id);
