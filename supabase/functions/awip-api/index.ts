@@ -1573,7 +1573,7 @@ async function decideApproval(req: Request, approvalId: string, actor: string, c
   return json({ ok: true, approval_id: upd.id, status: upd.status });
 }
 
-async function getApproval(approvalId: string) {
+async function getApproval(approvalId: string, ctx: { via?: "service" | "module" | "jwt"; owning_module?: string | null }) {
   const { data, error } = await supabase
     .from("approval_queue")
     .select("*")
@@ -1581,6 +1581,7 @@ async function getApproval(approvalId: string) {
     .maybeSingle();
   if (error) return json({ error: error.message }, 500);
   if (!data) return json({ error: "approval not found" }, 404);
+  if (!callerOwnsApproval(data, ctx)) return json({ error: "forbidden" }, 403);
   return json({ approval: data });
 }
 
