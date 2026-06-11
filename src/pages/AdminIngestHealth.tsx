@@ -74,7 +74,7 @@ export default function AdminIngestHealth() {
   useEffect(() => {
     load();
     const ch = supabase
-      .channel("admin-ingest-health")
+      .channel(`admin-ingest-health-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "ingested_files" }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };

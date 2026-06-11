@@ -66,7 +66,7 @@ export function useCopilotAgents() {
   // Realtime: keep the catalog and overrides fresh.
   useEffect(() => {
     const ch = supabase
-      .channel("copilot_agents_stream")
+      .channel(`copilot_agents_stream_${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "copilot_agents" }, async () => {
         const { data } = await supabase.from("copilot_agents").select("*").order("order", { ascending: true });
         setAgents((data ?? []) as CopilotAgent[]);

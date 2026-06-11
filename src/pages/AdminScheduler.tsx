@@ -124,6 +124,10 @@ export default function AdminScheduler() {
   };
 
   const submitCreate = async () => {
+    if (!fKind.trim()) {
+      toast({ title: "Job kind is required", variant: "destructive" });
+      return;
+    }
     setSubmitting(true);
     try {
       let payload: Record<string, unknown> = {};

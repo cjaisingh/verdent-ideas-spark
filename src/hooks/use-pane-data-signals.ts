@@ -71,7 +71,7 @@ export function usePaneDataSignals(): PaneDataSignals {
     refresh();
     const interval = window.setInterval(refresh, 60_000);
     const ch = supabase
-      .channel("pane-data-signals")
+      .channel(`pane-data-signals-${crypto.randomUUID()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "approval_queue" }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "discussion_actions" }, refresh)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "night_observations" }, refresh)
