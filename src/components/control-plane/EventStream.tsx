@@ -43,6 +43,8 @@ const EventStream = ({ paused, onError }: { paused: boolean; onError?: (msg: str
   const [sourceFilter, setSourceFilter] = useState<"all" | "okr" | "capability">("all");
   const [windowSize, setWindowSize] = useState<Window>("1h");
   const lastSeen = useRef<string | null>(null);
+  const windowSizeRef = useRef<Window>(windowSize);
+  useEffect(() => { windowSizeRef.current = windowSize; }, [windowSize]);
 
   const pollEvents = async () => {
     try {
@@ -56,7 +58,7 @@ const EventStream = ({ paused, onError }: { paused: boolean; onError?: (msg: str
       setLastPoll(new Date());
       if (fresh.length > 0) {
         lastSeen.current = fresh[0].created_at;
-        const floor = Date.now() - WINDOW_MS[windowSize];
+        const floor = Date.now() - WINDOW_MS[windowSizeRef.current];
         setEvents((prev) =>
           [...fresh, ...prev].filter((e) => new Date(e.created_at).getTime() >= floor),
         );
