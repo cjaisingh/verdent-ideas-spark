@@ -4,6 +4,18 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-06-11 — external audit triage: tier 3 medium/low)
+- **#20 (medium)** `v_resolver_decisions.auto_bind_rate` was permanently 0 because the view filtered `confidence_band = 'auto'` while writers use `'auto_bind'`. View recreated with the correct band name.
+- **#21 (medium)** `raw_records` unique constraint now includes `tenant_id` (`(tenant_id, adapter_id, idempotency_key)`); two tenants sharing an adapter can no longer collide on identical content hashes.
+- **#22 (medium)** `source_mappings` unique constraint now includes `tenant_id` (`(tenant_id, adapter_id, version)`).
+- **#23 (medium)** Added a second partial unique index on `ingested_files (sha256) WHERE engagement_id IS NULL` so notebook/inbox/gha-bulk re-submits dedupe by content hash.
+- **#24 (medium)** Per-mount channel names (`crypto.randomUUID()` suffix) in `AdminIngestHealth`, `use-pane-data-signals`, `useCopilotAgents` — prevents double callbacks on remount/concurrent use.
+- **#25 (medium)** `EventStream.pollEvents` now reads `windowSize` from a ref, so in-flight ticks after a window change use the current value instead of the stale closure.
+- **#26 (low)** `AdminScheduler.submitCreate` rejects an empty `kind` before invoking `scheduler-enqueue` so jobs cannot enter the queue permanently stuck.
+- **#27 (medium)** `POST /capabilities/:id/promote` and `/ack-warnings` now use `checkIdempotencyConflict` with a body hash; replaying the same `Idempotency-Key` with a different body returns `409` instead of silently returning the cached response.
+
+
+
 ### Fixed (2026-06-10 — external audit triage: tier 1 critical + tier 2 high)
 - **#9 (critical)** `GET /events/recent` now applies the `tenant_id` filter to `capability_events` as well as `okr_node_events`; previous code leaked all tenants' capability event history to any authenticated caller.
 - **#10 (critical)** `GET /approvals/:id` and `POST /approvals/:id/decide` now require the calling module/tenant to own the approval (`requesting_module` match); operator JWTs and the legacy global service token retain unscoped access.
