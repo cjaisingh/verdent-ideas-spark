@@ -646,10 +646,18 @@ async function getPromotionAudit(url: URL, userId?: string) {
 async function promoteCapability(req: Request, capId: string, actor: string, userId?: string) {
   if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("capability_promote", idemKey);
-  if (cached) return json(cached);
+  const raw = await req.text();
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("capability_promote", idemKey, bodyHash);
+  if (conflict.conflict) {
+    return json({ error: "idempotency-key reused with different body" }, 409);
+  }
+  if (conflict.cached) return json(conflict.cached);
 
-  const body = await req.text().then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
+  let body: { ack_rationale?: string | null } = {};
+  if (raw) {
+    try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  }
   const ackRationale: string | null = body?.ack_rationale ?? null;
 
   const evalResp = await getPromotionStatusOne(capId, userId);
@@ -677,19 +685,27 @@ async function promoteCapability(req: Request, capId: string, actor: string, use
   });
 
   const result = { ok: true, id: capId, status: "available", ack_rationale: ackRationale };
-  await storeIdempotency("capability_promote", idemKey, null, result);
+  await storeIdempotency("capability_promote", idemKey, null, result, bodyHash);
   return json(result);
 }
 
 async function ackCapabilityWarnings(req: Request, capId: string, actor: string, userId?: string) {
   if (!(await isAdminActor(userId))) return json({ error: "admin role required" }, 403);
   const idemKey = req.headers.get("idempotency-key");
-  const cached = await checkIdempotency("capability_ack_warnings", idemKey);
-  if (cached) return json(cached);
+  const raw = await req.text();
+  const bodyHash = await hashBody(raw);
+  const conflict = await checkIdempotencyConflict("capability_ack_warnings", idemKey, bodyHash);
+  if (conflict.conflict) {
+    return json({ error: "idempotency-key reused with different body" }, 409);
+  }
+  if (conflict.cached) return json(conflict.cached);
 
-  const body = await req.text().then((t) => (t ? JSON.parse(t) : {})).catch(() => ({}));
+  let body: { rationale?: string | null; gate_keys?: unknown } = {};
+  if (raw) {
+    try { body = JSON.parse(raw); } catch { return json({ error: "invalid json" }, 400); }
+  }
   const rationale: string | null = body?.rationale ?? null;
-  const gateKeys: string[] = Array.isArray(body?.gate_keys) ? body.gate_keys : [];
+  const gateKeys: string[] = Array.isArray(body?.gate_keys) ? body.gate_keys as string[] : [];
   if (!rationale?.trim()) return json({ error: "rationale required" }, 400);
 
   const { data: cap } = await supabase.from("capabilities").select("id").eq("id", capId).maybeSingle();
@@ -703,7 +719,7 @@ async function ackCapabilityWarnings(req: Request, capId: string, actor: string,
   });
 
   const result = { ok: true, id: capId, gate_keys: gateKeys };
-  await storeIdempotency("capability_ack_warnings", idemKey, null, result);
+  await storeIdempotency("capability_ack_warnings", idemKey, null, result, bodyHash);
   return json(result);
 }
 
