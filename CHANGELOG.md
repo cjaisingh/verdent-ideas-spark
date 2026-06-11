@@ -13,6 +13,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 - **#25 (medium)** `EventStream.pollEvents` now reads `windowSize` from a ref, so in-flight ticks after a window change use the current value instead of the stale closure.
 - **#26 (low)** `AdminScheduler.submitCreate` rejects an empty `kind` before invoking `scheduler-enqueue` so jobs cannot enter the queue permanently stuck.
 - **#27 (medium)** `POST /capabilities/:id/promote` and `/ack-warnings` now use `checkIdempotencyConflict` with a body hash; replaying the same `Idempotency-Key` with a different body returns `409` instead of silently returning the cached response.
+- Rollback runbook: `docs/runbooks/rollback-tier3-audit-2026-06-11.md` — pre-checks, reversal SQL for #20–#23, and post-rollback verification.
 
 
 
