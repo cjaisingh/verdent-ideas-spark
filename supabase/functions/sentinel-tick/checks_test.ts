@@ -238,7 +238,8 @@ Deno.test("gh_actions_watch_auth_failed: flags repeated 401/403 POSTs", () => {
   assertEquals(out.length, 1);
   assertEquals(out[0].kind, "gh_actions_watch_auth_failed");
   assertEquals(out[0].severity, "high");
-  assertEquals(out[0].dedupe_key, "gh_actions_watch_auth_failed:485288");
+  const expectedBucket = Math.floor(now.getTime() / (60 * 60_000));
+  assertEquals(out[0].dedupe_key, `gh_actions_watch_auth_failed:${expectedBucket}`);
 });
 
 Deno.test("gh_actions_watch_auth_failed: ignores sparse or old auth errors", () => {
