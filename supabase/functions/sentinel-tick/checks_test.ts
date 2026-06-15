@@ -102,11 +102,14 @@ Deno.test("job_error_rate: medium when >=2 errors in last hour", () => {
   assertEquals(out[0].subject_ref.job, "morning-review");
 });
 
-Deno.test("job_error_rate: high when >=5 errors in 24h", () => {
+Deno.test("job_error_rate: high when >=20 errors in 24h with recent activity", () => {
+  // Implementation tightened 2026-Q2: a 24h spike only fires when at least one
+  // error is still landing in the last hour — otherwise it's stale aftershock.
   const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
-  const runs = Array.from({ length: 5 }, (_, i) => ({
+  const runs = Array.from({ length: 20 }, (_, i) => ({
     job: "sentinel-tick", status: "error", created_at: t(60 * (i + 2)),
   }));
+  runs.push({ job: "sentinel-tick", status: "error", created_at: t(10) });
   runs.push({ job: "sentinel-tick", status: "ok", created_at: t(30) });
   const out = checkJobErrorRate(NOW, runs);
   assertEquals(out.length, 1);
@@ -114,8 +117,12 @@ Deno.test("job_error_rate: high when >=5 errors in 24h", () => {
 });
 
 Deno.test("job_error_rate: high when only errors and no successes in 24h", () => {
+  // Must include a last-hour error so the "no successes" branch fires.
   const t = (mins: number) => new Date(NOW.getTime() - mins * 60_000).toISOString();
-  const runs = [{ job: "lessons-synthesize", status: "error", created_at: t(120) }];
+  const runs = [
+    { job: "lessons-synthesize", status: "error", created_at: t(120) },
+    { job: "lessons-synthesize", status: "error", created_at: t(15) },
+  ];
   const out = checkJobErrorRate(NOW, runs);
   assertEquals(out.length, 1);
   assertEquals(out[0].severity, "high");
