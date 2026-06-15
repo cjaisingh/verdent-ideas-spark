@@ -238,7 +238,11 @@ Deno.test("gh_actions_watch_auth_failed: flags repeated 401/403 POSTs", () => {
   assertEquals(out.length, 1);
   assertEquals(out[0].kind, "gh_actions_watch_auth_failed");
   assertEquals(out[0].severity, "high");
-  const expectedBucket = Math.floor(now.getTime() / (60 * 60_000));
+  // Dedupe key is anchored on the latest failure row's hour bucket — pure
+  // function of input, independent of when the tick runs.
+  const expectedBucket = Math.floor(
+    Date.UTC(2026, 4, 31, 7, 58) / (60 * 60_000),
+  );
   assertEquals(out[0].dedupe_key, `gh_actions_watch_auth_failed:${expectedBucket}`);
 });
 
