@@ -1822,7 +1822,11 @@ export function checkGhActionsWatchAuthFailed(
   const latest = recent
     .slice()
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))[0];
-  const hourBucket = Math.floor(now.getTime() / (60 * 60_000));
+  // Bucket on the latest failure's timestamp, NOT `now`. Two ticks 1ms apart
+  // would otherwise land in different hour buckets when `now` crosses the
+  // hour boundary, defeating dedupe. Anchoring on the data makes the key
+  // a pure function of the input rows.
+  const hourBucket = Math.floor(+new Date(latest.created_at) / (60 * 60_000));
 
   return [{
     kind: "gh_actions_watch_auth_failed",
