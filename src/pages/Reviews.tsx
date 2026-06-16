@@ -17,7 +17,9 @@ type Review = {
   processed_at: string | null;
   process_status: string;
   process_error: string | null;
+  report_html_path: string | null;
 };
+
 
 type Finding = {
   id: string;
