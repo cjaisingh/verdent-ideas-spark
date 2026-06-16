@@ -167,9 +167,28 @@ export default function Reviews() {
                   <div className="text-[10px] text-muted-foreground font-mono">
                     {r.source_repo}/{r.source_path}
                   </div>
+                  {r.report_html_path && (
+                    <button
+                      type="button"
+                      className="text-xs underline text-foreground/80 hover:text-foreground"
+                      onClick={async () => {
+                        const { data, error } = await supabase.storage
+                          .from("audit-reports")
+                          .createSignedUrl(r.report_html_path!, 300);
+                        if (error || !data?.signedUrl) {
+                          toast({ title: "Could not sign URL", description: error?.message, variant: "destructive" });
+                          return;
+                        }
+                        window.open(data.signedUrl, "_blank", "noopener");
+                      }}
+                    >
+                      Open HTML report
+                    </button>
+                  )}
                   {r.process_error && (
                     <div className="text-xs text-destructive">{r.process_error}</div>
                   )}
+
                   {fs.length === 0 ? (
                     <div className="text-xs text-muted-foreground italic">No findings.</div>
                   ) : (
