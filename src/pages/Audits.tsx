@@ -37,7 +37,9 @@ type Run = {
   summary: Record<string, number> & { promoted_lessons?: number; promoted_findings?: number };
   modules: ModuleResult[];
   findings: Finding[];
+  report_html_path: string | null;
 };
+
 
 const sevColor: Record<Severity, string> = {
   critical: "bg-destructive text-destructive-foreground",
@@ -284,7 +286,27 @@ export default function Audits() {
                   {selected.summary?.promoted_lessons ? (
                     <Badge variant="outline">{selected.summary.promoted_lessons} → lessons</Badge>
                   ) : null}
+                  {selected.report_html_path && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-xs ml-auto"
+                      onClick={async () => {
+                        const { data, error } = await supabase.storage
+                          .from("audit-reports")
+                          .createSignedUrl(selected.report_html_path!, 300);
+                        if (error || !data?.signedUrl) {
+                          toast.error(error?.message ?? "Could not sign URL");
+                          return;
+                        }
+                        window.open(data.signedUrl, "_blank", "noopener");
+                      }}
+                    >
+                      Open HTML report
+                    </Button>
+                  )}
                 </div>
+
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="findings">

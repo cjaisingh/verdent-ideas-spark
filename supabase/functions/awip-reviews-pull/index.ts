@@ -11,6 +11,8 @@ import { parse as parseYaml } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import { withLogger } from "../_shared/logger.ts";
 import { pickModel } from "../_shared/model-policy.ts";
 import { logAiCall } from "../_shared/ai-usage.ts";
+import { renderReviewReport, type ReportFinding } from "../_shared/html-report.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -366,13 +368,48 @@ async function processOneFile(
     });
   }
 
+  // Render self-contained HTML report and upload. Non-fatal on failure.
+  let reportPath: string | null = null;
+  try {
+    const reportFindings: ReportFinding[] = parsed.findings.map((f) => ({
+      severity: f.severity,
+      title: f.title,
+      area: f.area ?? null,
+      recommendation: f.recommendation ?? null,
+      detail: f.evidence ?? null,
+    }));
+    const html = renderReviewReport({
+      review_id: review.id,
+      review_date: parsed.review_date ?? null,
+      reviewer: parsed.reviewer ?? null,
+      scope: parsed.scope ?? null,
+      summary: parsed.summary ?? null,
+      source_repo: REPO,
+      source_path: file.path,
+      file_sha: file.sha,
+      findings: reportFindings,
+    });
+    const path = `awip-reviews/${review.id}.html`;
+    const { error: upErr } = await admin.storage.from("audit-reports").upload(
+      path,
+      new Blob([html], { type: "text/html" }),
+      { upsert: true, contentType: "text/html" },
+    );
+    if (upErr) console.error("audit-reports upload failed", upErr.message);
+    else reportPath = path;
+  } catch (e) {
+    console.error("renderReviewReport failed", e);
+  }
+
   await admin.from("awip_reviews").update({
     processed_at: new Date().toISOString(),
     process_status: "processed",
+    report_html_path: reportPath,
   }).eq("id", review.id);
 
   return { inserted: true, new_findings: parsed.findings.length, actions, sentinel, rag };
 }
+
 
 async function appendToTodayMorningReview(summary: Record<string, unknown>, perFile: Array<Record<string, unknown>>) {
   const today = new Date().toISOString().slice(0, 10);

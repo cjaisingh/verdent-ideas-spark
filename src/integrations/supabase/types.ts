@@ -1173,6 +1173,7 @@ export type Database = {
           process_status: string
           processed_at: string | null
           raw_markdown: string
+          report_html_path: string | null
           review_date: string | null
           reviewer: string | null
           scope: string | null
@@ -1191,6 +1192,7 @@ export type Database = {
           process_status?: string
           processed_at?: string | null
           raw_markdown: string
+          report_html_path?: string | null
           review_date?: string | null
           reviewer?: string | null
           scope?: string | null
@@ -1209,6 +1211,7 @@ export type Database = {
           process_status?: string
           processed_at?: string | null
           raw_markdown?: string
+          report_html_path?: string | null
           review_date?: string | null
           reviewer?: string | null
           scope?: string | null
@@ -2720,6 +2723,7 @@ export type Database = {
           finished_at: string | null
           id: string
           modules: Json
+          report_html_path: string | null
           started_at: string
           status: string
           summary: Json
@@ -2732,6 +2736,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           modules?: Json
+          report_html_path?: string | null
           started_at?: string
           status?: string
           summary?: Json
@@ -2744,6 +2749,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           modules?: Json
+          report_html_path?: string | null
           started_at?: string
           status?: string
           summary?: Json

@@ -51,3 +51,7 @@ Counts surface in `summary.promoted_lessons` / `summary.promoted_findings`.
 1. **Fail status** → open `/audits`, click the latest run, address `critical` then `high` findings, then re-run.
 2. **Auto-promoted lessons** appear at `/admin/lessons` with `category` starting `audit:`. Apply / Defer / Reject as usual.
 3. To pause a cadence (e.g. during a planned migration) use `/admin/cron-config` and toggle `scheduled-deep-audit-weekly` / `scheduled-deep-audit-monthly`.
+
+## HTML report
+
+Each run also produces a self-contained HTML report (inline CSS + SVG, no JS) at `audit-reports/deep-audit/<run_id>.html` in the private `audit-reports` bucket. `deep_audit_runs.report_html_path` holds the path. Surfaced as an **Open HTML report** button on `/audits` (signed URL, 5-min TTL). Markdown / DB rows remain the source of truth — render failure is non-fatal and logged via `console.error`.
