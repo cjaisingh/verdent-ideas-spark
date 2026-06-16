@@ -77,3 +77,7 @@ The whole pipeline is idempotent — re-running with no new files is a no-op.
 - Auto-resolving sentinel findings when a follow-up review confirms a fix.
 - Multi-repo / multi-folder ingestion (currently the source is hardcoded).
 - Writing the AWIP response back into the review repo as a PR comment.
+
+## HTML report
+
+Each processed review also produces a self-contained HTML report (inline CSS + SVG, no JS) at `audit-reports/awip-reviews/<review_id>.html` in the private `audit-reports` bucket. `awip_reviews.report_html_path` holds the path. Surfaced as an **Open HTML report** button on `/reviews` (signed URL, 5-min TTL). Markdown remains the source of truth — render failure is non-fatal.
