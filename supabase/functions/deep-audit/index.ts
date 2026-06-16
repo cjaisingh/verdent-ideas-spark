@@ -5,10 +5,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { withLogger } from "../_shared/logger.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
+import { renderAuditReport, type ReportFinding } from "../_shared/html-report.ts";
 import {
   auditSecrets, auditAdmins, auditAutomation, auditRls, auditRetention,
   summarise, type ModuleResult, type AuditFinding,
 } from "./checks.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
