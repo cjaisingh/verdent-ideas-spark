@@ -287,23 +287,50 @@ export default function Audits() {
                     <Badge variant="outline">{selected.summary.promoted_lessons} → lessons</Badge>
                   ) : null}
                   {selected.report_html_path && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-6 text-xs ml-auto"
-                      onClick={async () => {
-                        const { data, error } = await supabase.storage
-                          .from("audit-reports")
-                          .createSignedUrl(selected.report_html_path!, 300);
-                        if (error || !data?.signedUrl) {
-                          toast.error(error?.message ?? "Could not sign URL");
-                          return;
-                        }
-                        window.open(data.signedUrl, "_blank", "noopener");
-                      }}
-                    >
-                      Open HTML report
-                    </Button>
+                    <div className="ml-auto flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={async () => {
+                          const { data, error } = await supabase.storage
+                            .from("audit-reports")
+                            .createSignedUrl(selected.report_html_path!, 300);
+                          if (error || !data?.signedUrl) {
+                            toast.error(error?.message ?? "Could not sign URL");
+                            return;
+                          }
+                          window.open(data.signedUrl, "_blank", "noopener");
+                        }}
+                      >
+                        Open HTML report
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={async () => {
+                          const path = selected.report_html_path!;
+                          const { data, error } = await supabase.storage
+                            .from("audit-reports")
+                            .download(path);
+                          if (error || !data) {
+                            toast.error(error?.message ?? "Download failed");
+                            return;
+                          }
+                          const url = URL.createObjectURL(data);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = path.split("/").pop() ?? `audit-${selected.id}.html`;
+                          document.body.appendChild(a);
+                          a.click();
+                          a.remove();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        Download
+                      </Button>
+                    </div>
                   )}
                 </div>
 
