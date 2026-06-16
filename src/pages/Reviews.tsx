@@ -63,12 +63,13 @@ export default function Reviews() {
     const { data: r } = await supabase
       .from("awip_reviews" as any)
       .select(
-        "id,source_repo,source_path,review_date,reviewer,scope,summary,fetched_at,processed_at,process_status,process_error"
+        "id,source_repo,source_path,review_date,reviewer,scope,summary,fetched_at,processed_at,process_status,process_error,report_html_path"
       )
       .order("fetched_at", { ascending: false })
       .limit(50);
     setReviews(((r ?? []) as unknown) as Review[]);
   };
+
 
   const loadFindings = async (reviewId: string) => {
     if (findings[reviewId]) return;
