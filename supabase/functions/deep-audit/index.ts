@@ -153,13 +153,46 @@ Deno.serve(withLogger("deep-audit", async (req) => {
     const agg = summarise(modules);
     const promotion = await autoPromote(sb, runId, agg.findings);
 
+    // Render self-contained HTML report and upload to the private audit-reports bucket.
+    // Failure here is non-fatal: the row + JSONB findings remain the source of truth.
+    let reportPath: string | null = null;
+    try {
+      const reportFindings: ReportFinding[] = agg.findings.map((f) => ({
+        severity: f.severity,
+        title: f.title,
+        module: f.module,
+        detail: f.detail,
+      }));
+      const html = renderAuditReport({
+        run_id: runId,
+        cadence,
+        started_at: new Date(startedAt).toISOString(),
+        finished_at: new Date().toISOString(),
+        status: agg.status,
+        summary: agg.summary as Record<string, number>,
+        findings: reportFindings,
+      });
+      const path = `deep-audit/${runId}.html`;
+      const { error: upErr } = await sb.storage.from("audit-reports").upload(
+        path,
+        new Blob([html], { type: "text/html" }),
+        { upsert: true, contentType: "text/html" },
+      );
+      if (upErr) console.error("audit-reports upload failed", upErr.message);
+      else reportPath = path;
+    } catch (e) {
+      console.error("renderAuditReport failed", e);
+    }
+
     await sb.from("deep_audit_runs").update({
       finished_at: new Date().toISOString(),
       status: agg.status,
       summary: { ...agg.summary, promoted_lessons: promotion.lessons, promoted_findings: promotion.findings },
       modules,
       findings: agg.findings,
+      report_html_path: reportPath,
     }).eq("id", runId);
+
 
     if (agg.status === "fail") {
       await dispatchAlert(
