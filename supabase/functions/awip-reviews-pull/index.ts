@@ -11,6 +11,8 @@ import { parse as parseYaml } from "https://deno.land/std@0.224.0/yaml/mod.ts";
 import { withLogger } from "../_shared/logger.ts";
 import { pickModel } from "../_shared/model-policy.ts";
 import { logAiCall } from "../_shared/ai-usage.ts";
+import { renderReviewReport, type ReportFinding } from "../_shared/html-report.ts";
+
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
