@@ -722,3 +722,5 @@ Out of scope this sprint (lands in s5.2/s5.3): `ancestry_ids[]` materialisation 
 - New `telegram-webhook-reregister` edge fn: probes `getWebhookInfo` and re-asserts `setWebhook` (same URL/secret/allowed_updates, preserves backlog) when Telegram reports `pending_update_count>0`, `last_error_date` within 15min, or empty URL.
 - Back-off: max 3 attempts in rolling 6h; after that, raises critical `telegram_webhook_silent` sentinel + best-effort operator Telegram alert.
 - `sentinel-tick` kicks it fire-and-forget every 15min; healthy probe auto-resolves any open `telegram_webhook_silent` finding.
+
+- 2026-06-16 HTML reports for Deep Audit + AWIP Reviews (private `audit-reports` bucket, signed-URL view; markdown stays source of truth).

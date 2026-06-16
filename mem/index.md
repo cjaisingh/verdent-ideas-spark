@@ -107,3 +107,4 @@ Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/d
 
 
 - [File ingestion (W9.0)](mem://features/file-ingestion) — markitdown substrate; ingested_files/chunks/events + 3 edge fns + /admin/ingest-health; CAD/FM metadata-only; hybrid sidecar + GHA
+- [HTML as renderable view](mem://preferences/html-as-view) — HTML reports for Deep Audit + AWIP Reviews only; markdown stays source of truth for docs/mem/plans/ADRs/CHANGELOG
