@@ -168,22 +168,48 @@ export default function Reviews() {
                     {r.source_repo}/{r.source_path}
                   </div>
                   {r.report_html_path && (
-                    <button
-                      type="button"
-                      className="text-xs underline text-foreground/80 hover:text-foreground"
-                      onClick={async () => {
-                        const { data, error } = await supabase.storage
-                          .from("audit-reports")
-                          .createSignedUrl(r.report_html_path!, 300);
-                        if (error || !data?.signedUrl) {
-                          toast({ title: "Could not sign URL", description: error?.message, variant: "destructive" });
-                          return;
-                        }
-                        window.open(data.signedUrl, "_blank", "noopener");
-                      }}
-                    >
-                      Open HTML report
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        className="text-xs underline text-foreground/80 hover:text-foreground"
+                        onClick={async () => {
+                          const { data, error } = await supabase.storage
+                            .from("audit-reports")
+                            .createSignedUrl(r.report_html_path!, 300);
+                          if (error || !data?.signedUrl) {
+                            toast({ title: "Could not sign URL", description: error?.message, variant: "destructive" });
+                            return;
+                          }
+                          window.open(data.signedUrl, "_blank", "noopener");
+                        }}
+                      >
+                        Open HTML report
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs underline text-foreground/80 hover:text-foreground"
+                        onClick={async () => {
+                          const path = r.report_html_path!;
+                          const { data, error } = await supabase.storage
+                            .from("audit-reports")
+                            .download(path);
+                          if (error || !data) {
+                            toast({ title: "Download failed", description: error?.message, variant: "destructive" });
+                            return;
+                          }
+                          const url = URL.createObjectURL(data);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = path.split("/").pop() ?? `review-${r.id}.html`;
+                          document.body.appendChild(a);
+                          a.click();
+                          a.remove();
+                          URL.revokeObjectURL(url);
+                        }}
+                      >
+                        Download
+                      </button>
+                    </div>
                   )}
                   {r.process_error && (
                     <div className="text-xs text-destructive">{r.process_error}</div>
