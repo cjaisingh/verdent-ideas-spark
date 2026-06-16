@@ -37,7 +37,9 @@ type Run = {
   summary: Record<string, number> & { promoted_lessons?: number; promoted_findings?: number };
   modules: ModuleResult[];
   findings: Finding[];
+  report_html_path: string | null;
 };
+
 
 const sevColor: Record<Severity, string> = {
   critical: "bg-destructive text-destructive-foreground",
