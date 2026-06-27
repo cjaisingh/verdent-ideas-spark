@@ -62,43 +62,62 @@ Deno.serve(withLogger("ingest-search", async (req) => {
   if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
   const p = parsed.data;
 
-  // Embed query.
-  const eRes = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: EMBED_MODEL, input: p.query, dimensions: EMBED_DIMS }),
-  });
-  if (!eRes.ok) {
-    const text = await eRes.text();
-    return json({ error: "embed_failed", status: eRes.status, detail: text.slice(0, 300) }, 502);
+  // Embed query (skipped in lexical-only mode).
+  let vec: number[] | null = null;
+  let qTokens = 0;
+  if (p.mode !== "lexical") {
+    const eRes = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ model: EMBED_MODEL, input: p.query, dimensions: EMBED_DIMS }),
+    });
+    if (!eRes.ok) {
+      const text = await eRes.text();
+      return json({ error: "embed_failed", status: eRes.status, detail: text.slice(0, 300) }, 502);
+    }
+    const eData = await eRes.json();
+    vec = eData?.data?.[0]?.embedding ?? null;
+    qTokens = eData?.usage?.prompt_tokens ?? 0;
+    if (!vec) return json({ error: "embed_empty" }, 502);
   }
-  const eData = await eRes.json();
-  const vec: number[] | undefined = eData?.data?.[0]?.embedding;
-  const qTokens: number = eData?.usage?.prompt_tokens ?? 0;
-  if (!vec) return json({ error: "embed_empty" }, 502);
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
-  const { data: hits, error: mErr } = await sb.rpc("match_ingested_chunks", {
-    query_embedding: vec as unknown as string,
+
+  // Dense-only mode: blank query_text → lexical CTE no-ops.
+  // Lexical-only mode: null embedding → dense CTE no-ops (RPC handles this).
+  const callEmbedding = p.mode === "lexical" ? null : (vec as number[]);
+  const callQueryText = p.mode === "dense" ? "" : p.query;
+
+  const { data: hits, error: mErr } = await sb.rpc("hybrid_match_ingested_chunks", {
+    query_embedding: callEmbedding as unknown as string | null,
+    query_text: callQueryText,
     p_engagement_id: p.engagement_id,
     p_domain_ids: p.domain_ids ?? null,
     match_count: p.match_count,
+    rrf_k: p.rrf_k,
+    candidate_pool: p.candidate_pool,
   });
 
   if (mErr) return json({ error: "search_failed", detail: mErr.message }, 500);
 
   const mapped: IngestSearchHit[] = (hits ?? []).map((h: {
     file_id: string; filename: string; chunk_index: number; content: string;
-    similarity: number; domain_id: string | null; metadata: Record<string, unknown>;
+    dense_similarity: number | null; lexical_score: number | null;
+    dense_rank: number | null; lexical_rank: number | null; rrf_score: number;
+    domain_id: string | null; metadata: Record<string, unknown>;
   }) => ({
     file_id: h.file_id,
     filename: h.filename,
     chunk_index: h.chunk_index,
     content: h.content,
-    similarity: h.similarity,
+    similarity: h.dense_similarity ?? 0,
+    lexical_score: h.lexical_score ?? 0,
+    dense_rank: h.dense_rank,
+    lexical_rank: h.lexical_rank,
+    rrf_score: h.rrf_score,
     domain_id: h.domain_id,
     metadata: h.metadata,
   }));
@@ -107,5 +126,7 @@ Deno.serve(withLogger("ingest-search", async (req) => {
     hits: mapped,
     query_tokens: qTokens,
     embed_model: EMBED_MODEL,
+    mode: p.mode,
+    rrf_k: p.rrf_k,
   });
 }));

@@ -4,6 +4,14 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-06-27 — W9.1 hybrid retrieval)
+- `ingested_file_chunks.content_tsv` generated tsvector column + GIN index (English FTS).
+- `public.hybrid_match_ingested_chunks(query_embedding, query_text, ...)` RPC fuses dense cosine and Postgres FTS via Reciprocal Rank Fusion (`rrf_k=60` default, `candidate_pool=50`). Each leg is opt-out: `query_embedding IS NULL` skips dense; blank `query_text` skips lexical.
+- `ingest-search` edge fn accepts `mode: "hybrid" | "dense" | "lexical"` (default hybrid) plus `rrf_k` / `candidate_pool`. Hits now expose `dense_rank`, `lexical_rank`, `lexical_score`, `rrf_score` alongside `similarity`.
+- Note on naming: "BM25" in product wording = `ts_rank_cd` for v1. True BM25 (pg_search / paradedb) is a W9.2 swap; RRF contract stays stable.
+
+
+
 ### Fixed (2026-06-11 — external audit triage: tier 3 medium/low)
 - **#20 (medium)** `v_resolver_decisions.auto_bind_rate` was permanently 0 because the view filtered `confidence_band = 'auto'` while writers use `'auto_bind'`. View recreated with the correct band name.
 - **#21 (medium)** `raw_records` unique constraint now includes `tenant_id` (`(tenant_id, adapter_id, idempotency_key)`); two tenants sharing an adapter can no longer collide on identical content hashes.

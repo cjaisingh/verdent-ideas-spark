@@ -3682,6 +3682,7 @@ export type Database = {
         Row: {
           chunk_index: number
           content: string
+          content_tsv: unknown
           created_at: string
           embed_model: string | null
           embedding: string | null
@@ -3693,6 +3694,7 @@ export type Database = {
         Insert: {
           chunk_index: number
           content: string
+          content_tsv?: unknown
           created_at?: string
           embed_model?: string | null
           embedding?: string | null
@@ -3704,6 +3706,7 @@ export type Database = {
         Update: {
           chunk_index?: number
           content?: string
+          content_tsv?: unknown
           created_at?: string
           embed_model?: string | null
           embedding?: string | null
@@ -9312,6 +9315,30 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      hybrid_match_ingested_chunks: {
+        Args: {
+          candidate_pool?: number
+          match_count?: number
+          p_domain_ids?: string[]
+          p_engagement_id: string
+          query_embedding: string
+          query_text: string
+          rrf_k?: number
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          dense_rank: number
+          dense_similarity: number
+          domain_id: string
+          file_id: string
+          filename: string
+          lexical_rank: number
+          lexical_score: number
+          metadata: Json
+          rrf_score: number
+        }[]
       }
       infer_ai_job_module: { Args: { _job: string }; Returns: string }
       infer_task_entity: {
