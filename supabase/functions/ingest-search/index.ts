@@ -86,19 +86,13 @@ Deno.serve(withLogger("ingest-search", async (req) => {
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
-  // Dense-only mode: zero out query_text so the lexical CTE returns nothing.
-  // Lexical-only mode: pass a zero vector so the dense CTE returns nothing
-  // (embedding IS NULL filter excludes real chunks from matching a zero vec
-  // via cosine; we still want to skip the dense leg cleanly, so we send a
-  // zero-filled vector and trust the rrf_score ordering to surface lexical
-  // hits exclusively because dense_rank will be > pool for non-matches).
-  const zeroVec = new Array(EMBED_DIMS).fill(0);
-  const callEmbedding =
-    p.mode === "lexical" ? zeroVec : (vec as number[]);
+  // Dense-only mode: blank query_text → lexical CTE no-ops.
+  // Lexical-only mode: null embedding → dense CTE no-ops (RPC handles this).
+  const callEmbedding = p.mode === "lexical" ? null : (vec as number[]);
   const callQueryText = p.mode === "dense" ? "" : p.query;
 
   const { data: hits, error: mErr } = await sb.rpc("hybrid_match_ingested_chunks", {
-    query_embedding: callEmbedding as unknown as string,
+    query_embedding: callEmbedding as unknown as string | null,
     query_text: callQueryText,
     p_engagement_id: p.engagement_id,
     p_domain_ids: p.domain_ids ?? null,
