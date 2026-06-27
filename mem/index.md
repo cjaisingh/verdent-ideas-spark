@@ -78,6 +78,7 @@ Common Domain UI spec: Core hosts tokens (`src/index.css` + `_shared/contracts/d
 - [FM1 Stakeholder Intelligence](mem://features/fm1-stakeholder-intelligence) — first registered module; 3 planned capabilities; reference scaffold for FM2–FM12; id convention fm{N}_<surface>_<capability> (underscores only)
 - [Resolver thresholds (s5.2/t2)](mem://features/resolver-thresholds) — operator-editable bands at /admin/resolver, audit trail + snapshot on every decision; composite scorer in resolve_entity; is_in_tenant_subtree() universal RLS helper; resolver_no_log_in_window sentinel
 - [Hybrid retrieval (W9.1)](mem://features/hybrid-retrieval) — content_tsv + GIN on ingested_file_chunks; hybrid_match_ingested_chunks fuses dense+lexical via RRF (k=60); ingest-search defaults to mode=hybrid; ts_rank_cd now, pg_search swap reserved for W9.2
+- [CSV/XLSX adapter (W9.1)](mem://features/csv-xlsx-adapter) — ingest-csv-adapter edge fn: first SOURCE_ADAPTER_CONTRACT impl; reads approved source_mappings.mapping, parses CSV/XLSX from ingested-files bucket, promotes rows to canonical_facts or raises fact_conflicts; idempotent on (file_id, source_mapping_id)
 
 - [Credits & Usage](mem://features/credits-usage) — credit_entries + credit_settings + credit_balance_snapshots; runway + per-phase deltas + end-of-phase balance prompt on /admin/ai-usage
 - [Tool Policy](mem://features/tool-policy) — tool_policy_rules + tool_policy_recommendations + v_tool_policy_signals; deterministic recommender (Lovable/Claude/Cursor/Codex) on /admin/ai-usage Tool Policy tab
