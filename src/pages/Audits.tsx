@@ -62,6 +62,7 @@ export default function Audits() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<"html" | "signed_url" | "json">("html");
 
   const load = async () => {
     setLoading(true);
