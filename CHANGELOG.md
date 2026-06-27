@@ -4,6 +4,13 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-06-27 — W9.1 structured CSV/XLSX adapter)
+- `supabase/functions/_shared/contracts/ingest-csv-adapter.ts` — Zod `CsvMappingSchema` + `IngestCsvAdapterBody`/`Response` types + `parseCellValue` helper; first concrete implementation of `SOURCE_ADAPTER_CONTRACT`.
+- `ingest-csv-adapter` edge fn: pulls a CSV/XLSX out of `ingested-files`, applies the approved `source_mappings.mapping`, writes one `raw_records` envelope, fans rows into `staged_records`, and either promotes to `canonical_facts`, raises a `fact_conflicts` row (on live-value mismatch), or quarantines. Emits `ingest_events` per outcome. Idempotent on `(file_id, source_mapping_id)`.
+- Mapping shape supports `kind: csv|xlsx`, `tenant_node` by fixed/column, `effective_at` by fixed/column/received_at, and per-fact parsers (`string`/`number`/`integer`/`boolean`/`json`/`iso_date`) with optional `unit`.
+- Auto-promote precondition trio enforced: mapping approved + every row validates + every PII column declares a lawful basis. Empty `pii_fields` = adapter asserts zero PII.
+- Docs: `docs/features/csv-xlsx-adapter.md`.
+
 ### Added (2026-06-27 — W9.1 hybrid retrieval)
 - `ingested_file_chunks.content_tsv` generated tsvector column + GIN index (English FTS).
 - `public.hybrid_match_ingested_chunks(query_embedding, query_text, ...)` RPC fuses dense cosine and Postgres FTS via Reciprocal Rank Fusion (`rrf_k=60` default, `candidate_pool=50`). Each leg is opt-out: `query_embedding IS NULL` skips dense; blank `query_text` skips lexical.
