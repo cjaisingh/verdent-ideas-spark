@@ -58,6 +58,7 @@ export default function Reviews() {
   const [findings, setFindings] = useState<Record<string, Finding[]>>({});
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
+  const [exportFormat, setExportFormat] = useState<Record<string, "html" | "signed_url" | "json">>({});
   const channelName = useMemo(() => `reviews_page:${crypto.randomUUID()}`, []);
 
   const load = async () => {
