@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Play, ShieldCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -61,6 +62,7 @@ export default function Audits() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<"html" | "signed_url" | "json">("html");
 
   const load = async () => {
     setLoading(true);
@@ -287,30 +289,49 @@ export default function Audits() {
                     <Badge variant="outline">{selected.summary.promoted_lessons} → lessons</Badge>
                   ) : null}
                   {selected.report_html_path && (
-                    <div className="ml-auto flex gap-2">
+                    <div className="ml-auto flex gap-2 items-center">
+                      <Select value={exportFormat} onValueChange={(v) => setExportFormat(v as typeof exportFormat)}>
+                        <SelectTrigger className="h-7 text-xs w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="html">HTML (download)</SelectItem>
+                          <SelectItem value="signed_url">Signed URL (copy)</SelectItem>
+                          <SelectItem value="json">JSON (download)</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 text-xs"
-                        onClick={async () => {
-                          const { data, error } = await supabase.storage
-                            .from("audit-reports")
-                            .createSignedUrl(selected.report_html_path!, 300);
-                          if (error || !data?.signedUrl) {
-                            toast.error(error?.message ?? "Could not sign URL");
-                            return;
-                          }
-                          window.open(data.signedUrl, "_blank", "noopener");
-                        }}
-                      >
-                        Open HTML report
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-xs"
+                        className="h-7 text-xs"
                         onClick={async () => {
                           const path = selected.report_html_path!;
+                          if (exportFormat === "signed_url") {
+                            const { data, error } = await supabase.storage
+                              .from("audit-reports")
+                              .createSignedUrl(path, 300);
+                            if (error || !data?.signedUrl) {
+                              toast.error(error?.message ?? "Could not sign URL");
+                              return;
+                            }
+                            await navigator.clipboard.writeText(data.signedUrl);
+                            toast.success("Signed URL copied (5-min TTL)");
+                            return;
+                          }
+                          if (exportFormat === "json") {
+                            const blob = new Blob([JSON.stringify(selected, null, 2)], {
+                              type: "application/json",
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `audit-${selected.id}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                            return;
+                          }
                           const { data, error } = await supabase.storage
                             .from("audit-reports")
                             .download(path);
@@ -328,7 +349,7 @@ export default function Audits() {
                           URL.revokeObjectURL(url);
                         }}
                       >
-                        Download
+                        Export
                       </Button>
                     </div>
                   )}

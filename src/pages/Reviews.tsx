@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, PlayCircle, ChevronDown, ChevronRight, AlertTriangle, FileText } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -57,6 +58,7 @@ export default function Reviews() {
   const [findings, setFindings] = useState<Record<string, Finding[]>>({});
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [running, setRunning] = useState(false);
+  const [exportFormat, setExportFormat] = useState<Record<string, "html" | "signed_url" | "json">>({});
   const channelName = useMemo(() => `reviews_page:${crypto.randomUUID()}`, []);
 
   const load = async () => {
@@ -168,28 +170,56 @@ export default function Reviews() {
                     {r.source_repo}/{r.source_path}
                   </div>
                   {r.report_html_path && (
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        className="text-xs underline text-foreground/80 hover:text-foreground"
-                        onClick={async () => {
-                          const { data, error } = await supabase.storage
-                            .from("audit-reports")
-                            .createSignedUrl(r.report_html_path!, 300);
-                          if (error || !data?.signedUrl) {
-                            toast({ title: "Could not sign URL", description: error?.message, variant: "destructive" });
-                            return;
-                          }
-                          window.open(data.signedUrl, "_blank", "noopener");
-                        }}
+                    <div className="flex gap-2 items-center">
+                      <Select
+                        value={exportFormat[r.id] ?? "html"}
+                        onValueChange={(v) =>
+                          setExportFormat((prev) => ({ ...prev, [r.id]: v as "html" | "signed_url" | "json" }))
+                        }
                       >
-                        Open HTML report
-                      </button>
-                      <button
-                        type="button"
-                        className="text-xs underline text-foreground/80 hover:text-foreground"
+                        <SelectTrigger className="h-7 text-xs w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="html">HTML (download)</SelectItem>
+                          <SelectItem value="signed_url">Signed URL (copy)</SelectItem>
+                          <SelectItem value="json">JSON (download)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
                         onClick={async () => {
                           const path = r.report_html_path!;
+                          const fmt = exportFormat[r.id] ?? "html";
+                          if (fmt === "signed_url") {
+                            const { data, error } = await supabase.storage
+                              .from("audit-reports")
+                              .createSignedUrl(path, 300);
+                            if (error || !data?.signedUrl) {
+                              toast({ title: "Could not sign URL", description: error?.message, variant: "destructive" });
+                              return;
+                            }
+                            await navigator.clipboard.writeText(data.signedUrl);
+                            toast({ title: "Signed URL copied", description: "5-min TTL" });
+                            return;
+                          }
+                          if (fmt === "json") {
+                            const fs = findings[r.id] ?? [];
+                            const blob = new Blob([JSON.stringify({ ...r, findings: fs }, null, 2)], {
+                              type: "application/json",
+                            });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `review-${r.id}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            URL.revokeObjectURL(url);
+                            return;
+                          }
                           const { data, error } = await supabase.storage
                             .from("audit-reports")
                             .download(path);
@@ -207,8 +237,8 @@ export default function Reviews() {
                           URL.revokeObjectURL(url);
                         }}
                       >
-                        Download
-                      </button>
+                        Export
+                      </Button>
                     </div>
                   )}
                   {r.process_error && (
