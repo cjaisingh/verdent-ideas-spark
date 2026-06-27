@@ -128,6 +128,9 @@ export const IngestSearchBody = z.object({
   engagement_id: z.string().uuid(),
   domain_ids: z.array(z.string().uuid()).max(16).nullable().optional(),
   match_count: z.number().int().min(1).max(50).default(8),
+  mode: z.enum(["hybrid", "dense", "lexical"]).default("hybrid"),
+  rrf_k: z.number().int().min(1).max(1000).default(60),
+  candidate_pool: z.number().int().min(1).max(200).default(50),
 });
 export type IngestSearchBody = z.infer<typeof IngestSearchBody>;
 
@@ -136,7 +139,11 @@ export type IngestSearchHit = {
   filename: string;
   chunk_index: number;
   content: string;
-  similarity: number;
+  similarity: number;          // dense cosine sim (0 if dense leg missed)
+  lexical_score: number;       // ts_rank_cd (0 if lexical leg missed)
+  dense_rank: number | null;
+  lexical_rank: number | null;
+  rrf_score: number;           // fused score (sole sort key in hybrid mode)
   domain_id: string | null;
   metadata: Record<string, unknown>;
 };
@@ -145,6 +152,8 @@ export type IngestSearchResponse = {
   hits: IngestSearchHit[];
   query_tokens: number;
   embed_model: string;
+  mode: "hybrid" | "dense" | "lexical";
+  rrf_k: number;
 };
 
 // ---------- contract metadata ----------
