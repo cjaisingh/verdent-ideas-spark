@@ -782,9 +782,8 @@ function ConflictsPreviewTable({
           {filtered.length !== rows.length ? ` filtered of ${rows.length}` : ""}
           {totalCount > rows.length ? ` · ${rows.length} of ${totalCount}` : ""})
         </span>
-        <Button variant="outline" size="sm" onClick={onDownload}>
-          <Download className="h-3 w-3 mr-1" /> Conflicts CSV
-        </Button>
+        <DownloadFormatMenu label="Conflicts" onDownload={onDownload} />
+
       </div>
       <div className="p-3 flex flex-wrap items-center gap-2 border-b bg-background">
         <Input
