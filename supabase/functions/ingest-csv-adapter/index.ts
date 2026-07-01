@@ -193,6 +193,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
         existing_canonical_id: c.existing_canonical_id as string,
         existing_value_hash:
           (c.existing_value as { hash?: string } | null)?.hash ?? "",
+        existing_value:
+          (c.existing_value as { value?: unknown } | null)?.value,
       }));
     return json<IngestCsvAdapterResponse>({
       staging_batch_id: batchId,
