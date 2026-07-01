@@ -168,7 +168,7 @@ export default function AdminIngestUpload() {
           .select("id")
           .single();
         if (error) throw error;
-        setSelectedMappingId((data as { id: string }).id);
+        setSelectedMappingId((data as unknown as { id: string }).id);
       }
       await loadMappings();
       toast({ title: approve ? "Mapping approved" : "Mapping saved" });
