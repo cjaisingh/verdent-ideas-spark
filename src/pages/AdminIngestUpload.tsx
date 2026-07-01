@@ -894,7 +894,7 @@ function DownloadFormatMenu({
   );
 }
 
-type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at";
+type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at" | "reason";
 
 function ConflictsPreviewTable({
   rows,
@@ -1019,7 +1019,7 @@ function ConflictsPreviewTable({
   );
 }
 
-type QuarantineSortKey = "row_no" | "fact_type" | "column" | "tenant_node_id";
+type QuarantineSortKey = "row_no" | "fact_type" | "column" | "tenant_node_id" | "reason";
 
 function quarantineErrorKinds(q: QuarantinePreview): string[] {
   return q.errors.map((e) => String((e as { kind?: unknown }).kind ?? "error"));
