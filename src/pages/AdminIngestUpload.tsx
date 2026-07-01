@@ -18,7 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
+import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type Mapping = {
   id: string;
@@ -544,7 +545,7 @@ export default function AdminIngestUpload() {
         <ConflictsPreviewTable
           rows={result.conflicts_preview}
           totalCount={result.conflicts_raised}
-          onDownload={() => downloadConflictsReport(result.staging_batch_id)}
+          onDownload={(fmt) => downloadConflictsReport(result.staging_batch_id, fmt)}
         />
       )}
 
@@ -552,7 +553,7 @@ export default function AdminIngestUpload() {
         <QuarantinePreviewTable
           rows={result.quarantine_preview}
           totalCount={result.rows_quarantined}
-          onDownload={() => downloadQuarantineReport(result.staging_batch_id)}
+          onDownload={(fmt) => downloadQuarantineReport(result.staging_batch_id, fmt)}
         />
       )}
     </div>
@@ -579,7 +580,31 @@ function downloadCsv(filename: string, header: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-async function downloadQuarantineReport(batchId: string) {
+type ReportFormat = "csv" | "xlsx";
+
+async function downloadXlsx(filename: string, header: string[], rows: string[][]) {
+  const XLSX = await import("xlsx");
+  const aoa = [header, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "report");
+  XLSX.writeFile(wb, filename);
+}
+
+async function writeReport(
+  format: ReportFormat,
+  baseName: string,
+  header: string[],
+  rows: string[][],
+) {
+  if (format === "xlsx") {
+    await downloadXlsx(`${baseName}.xlsx`, header, rows);
+  } else {
+    downloadCsv(`${baseName}.csv`, header, rows);
+  }
+}
+
+async function downloadQuarantineReport(batchId: string, format: ReportFormat = "csv") {
   const { data, error } = await supabase
     .from("staged_records" as any)
     .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors, source_mapping_id")
@@ -600,14 +625,15 @@ async function downloadQuarantineReport(batchId: string) {
     JSON.stringify(s.value ?? null),
     JSON.stringify(s.validation_errors ?? []),
   ]);
-  downloadCsv(
-    `quarantine-${batchId.slice(0, 8)}.csv`,
+  await writeReport(
+    format,
+    `quarantine-${batchId.slice(0, 8)}`,
     ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "errors"],
     rows,
   );
 }
 
-async function downloadConflictsReport(batchId: string) {
+async function downloadConflictsReport(batchId: string, format: ReportFormat = "csv") {
   const { data, error } = await supabase
     .from("fact_conflicts" as any)
     .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id, status, created_at")
@@ -628,8 +654,9 @@ async function downloadConflictsReport(batchId: string) {
     String(c.status ?? ""),
     String(c.created_at ?? ""),
   ]);
-  downloadCsv(
-    `conflicts-${batchId.slice(0, 8)}.csv`,
+  await writeReport(
+    format,
+    `conflicts-${batchId.slice(0, 8)}`,
     ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_canonical_id", "status", "created_at"],
     rows,
   );
@@ -698,6 +725,29 @@ function SortHeader<K extends string>({
   );
 }
 
+function DownloadFormatMenu({
+  label,
+  onDownload,
+}: {
+  label: string;
+  onDownload: (format: ReportFormat) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Download className="h-3 w-3 mr-1" /> {label}
+          <ChevronDown className="h-3 w-3 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onDownload("csv")}>Download CSV</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onDownload("xlsx")}>Download XLSX</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at";
 
 function ConflictsPreviewTable({
@@ -707,7 +757,7 @@ function ConflictsPreviewTable({
 }: {
   rows: ConflictPreview[];
   totalCount: number;
-  onDownload: () => void;
+  onDownload: (format: ReportFormat) => void;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
@@ -755,9 +805,8 @@ function ConflictsPreviewTable({
           {filtered.length !== rows.length ? ` filtered of ${rows.length}` : ""}
           {totalCount > rows.length ? ` · ${rows.length} of ${totalCount}` : ""})
         </span>
-        <Button variant="outline" size="sm" onClick={onDownload}>
-          <Download className="h-3 w-3 mr-1" /> Conflicts CSV
-        </Button>
+        <DownloadFormatMenu label="Conflicts" onDownload={onDownload} />
+
       </div>
       <div className="p-3 flex flex-wrap items-center gap-2 border-b bg-background">
         <Input
@@ -829,7 +878,7 @@ function QuarantinePreviewTable({
 }: {
   rows: QuarantinePreview[];
   totalCount: number;
-  onDownload: () => void;
+  onDownload: (format: ReportFormat) => void;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
@@ -884,9 +933,8 @@ function QuarantinePreviewTable({
           {filtered.length !== rows.length ? ` filtered of ${rows.length}` : ""}
           {totalCount > rows.length ? ` · ${rows.length} of ${totalCount}` : ""})
         </span>
-        <Button variant="outline" size="sm" onClick={onDownload}>
-          <Download className="h-3 w-3 mr-1" /> Quarantine CSV
-        </Button>
+        <DownloadFormatMenu label="Quarantine" onDownload={onDownload} />
+
       </div>
       <div className="p-3 flex flex-wrap items-center gap-2 border-b bg-background">
         <Input
