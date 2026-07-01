@@ -274,6 +274,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       conflicts_raised: 0,
       auto_promote_eligible: precheckFailures.length === 0,
       precheck_failures: precheckFailures,
+      quarantine_preview: [],
+      conflicts_preview: [],
       deduped: false,
       dry_run: true,
     });
