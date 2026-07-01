@@ -20,6 +20,8 @@ import {
   CsvMappingSchema,
   parseCellValue,
   type CsvMapping,
+  type IngestCsvAdapterConflictPreview,
+  type IngestCsvAdapterQuarantinePreview,
   type IngestCsvAdapterResponse,
 } from "../_shared/contracts/ingest-csv-adapter.ts";
 
@@ -156,14 +158,39 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
   if (existingRaw) {
     // Replay counts from staged_records / canonical_facts.
     const [{ data: staged }, { data: promoted }, { data: conflicts }] = await Promise.all([
-      sb.from("staged_records").select("staging_batch_id, validation_status, promoted_canonical_id").eq("raw_record_id", existingRaw.id),
+      sb.from("staged_records").select("staging_batch_id, validation_status, promoted_canonical_id, row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors").eq("raw_record_id", existingRaw.id),
       sb.from("canonical_facts").select("id").eq("raw_record_id", existingRaw.id),
-      sb.from("fact_conflicts").select("id").eq("source_mapping_id", mappingRow.id),
+      sb.from("fact_conflicts").select("id, row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id, staging_batch_id").eq("source_mapping_id", mappingRow.id),
     ]);
     const batchId = staged?.[0]?.staging_batch_id ?? crypto.randomUUID();
     const rowsStaged = staged?.length ?? 0;
     const rowsAutoPromoted = promoted?.length ?? 0;
     const rowsQuarantined = staged?.filter((s) => s.validation_status === "quarantined").length ?? 0;
+    const quarantinePreview: IngestCsvAdapterQuarantinePreview[] = (staged ?? [])
+      .filter((s) => s.validation_status === "quarantined")
+      .slice(0, 50)
+      .map((s) => ({
+        row_no: s.row_no as number,
+        fact_type: s.fact_type as string,
+        column: (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+        tenant_node_id: (s.tenant_node_id as string | null) ?? null,
+        effective_at: (s.effective_at as string | null) ?? null,
+        raw_value: s.value,
+        errors: (s.validation_errors as Array<Record<string, unknown>>) ?? [],
+      }));
+    const conflictsPreview: IngestCsvAdapterConflictPreview[] = (conflicts ?? [])
+      .filter((c) => c.staging_batch_id === batchId)
+      .slice(0, 50)
+      .map((c) => ({
+        row_no: c.row_no as number,
+        fact_type: c.fact_type as string,
+        tenant_node_id: c.tenant_node_id as string,
+        effective_at: "",
+        incoming_value: c.incoming_value,
+        existing_canonical_id: c.existing_canonical_id as string,
+        existing_value_hash:
+          (c.existing_value as { hash?: string } | null)?.hash ?? "",
+      }));
     return json<IngestCsvAdapterResponse>({
       staging_batch_id: batchId,
       raw_record_id: existingRaw.id,
@@ -174,6 +201,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       conflicts_raised: conflicts?.length ?? 0,
       auto_promote_eligible: precheckFailures.length === 0,
       precheck_failures: precheckFailures,
+      quarantine_preview: quarantinePreview,
+      conflicts_preview: conflictsPreview,
       deduped: true,
       dry_run: false,
     });
@@ -245,6 +274,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       conflicts_raised: 0,
       auto_promote_eligible: precheckFailures.length === 0,
       precheck_failures: precheckFailures,
+      quarantine_preview: [],
+      conflicts_preview: [],
       deduped: false,
       dry_run: true,
     });
@@ -284,7 +315,10 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
   let rowsAutoPromoted = 0;
   let rowsQuarantined = 0;
   let conflictsRaised = 0;
+  const quarantinePreview: IngestCsvAdapterQuarantinePreview[] = [];
+  const conflictsPreview: IngestCsvAdapterConflictPreview[] = [];
   const blockAutoPromote = precheckFailures.length > 0;
+
 
   for (let r = 0; r < dataRows.length; r++) {
     const rowNo = r + 1;
@@ -352,6 +386,17 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
 
       if (status === "quarantined") {
         rowsQuarantined++;
+        if (quarantinePreview.length < 50) {
+          quarantinePreview.push({
+            row_no: rowNo * 1000 + mapping.facts.indexOf(f),
+            fact_type: f.fact_type,
+            column: f.column,
+            tenant_node_id: tenantNodeId,
+            effective_at: effectiveAt,
+            raw_value: cellRaw ?? null,
+            errors,
+          });
+        }
         await sb.from("ingest_events").insert({
           event_type: "row_quarantined",
           tenant_id: mappingRow.tenant_id,
@@ -405,6 +450,17 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
         });
         if (!cfErr) {
           conflictsRaised++;
+          if (conflictsPreview.length < 50) {
+            conflictsPreview.push({
+              row_no: rowNo * 1000 + mapping.facts.indexOf(f),
+              fact_type: f.fact_type,
+              tenant_node_id: tenantNodeId!,
+              effective_at: effectiveAt!,
+              incoming_value: valuePayload,
+              existing_canonical_id: live.id,
+              existing_value_hash: liveHashHex,
+            });
+          }
           await sb.from("ingest_events").insert({
             event_type: "conflict_raised",
             tenant_id: mappingRow.tenant_id,
@@ -439,6 +495,17 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       if (cErr || !canon) {
         // Treat as quarantine on promotion failure.
         rowsQuarantined++;
+        if (quarantinePreview.length < 50) {
+          quarantinePreview.push({
+            row_no: rowNo * 1000 + mapping.facts.indexOf(f),
+            fact_type: f.fact_type,
+            column: f.column,
+            tenant_node_id: tenantNodeId,
+            effective_at: effectiveAt,
+            raw_value: valuePayload,
+            errors: [{ kind: "promote_failed", reason: cErr?.message ?? "unknown" }],
+          });
+        }
         await sb.from("ingest_events").insert({
           event_type: "row_quarantined",
           tenant_id: mappingRow.tenant_id,
@@ -475,6 +542,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     conflicts_raised: conflictsRaised,
     auto_promote_eligible: !blockAutoPromote,
     precheck_failures: precheckFailures.slice(0, 50),
+    quarantine_preview: quarantinePreview,
+    conflicts_preview: conflictsPreview,
     deduped: false,
     dry_run: false,
   });
