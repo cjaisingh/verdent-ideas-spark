@@ -50,6 +50,7 @@ type ConflictPreview = {
   incoming_value: unknown;
   existing_canonical_id: string;
   existing_value_hash: string;
+  existing_value?: unknown;
 };
 
 type AdapterResponse = {
