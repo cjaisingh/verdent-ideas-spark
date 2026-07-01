@@ -131,6 +131,11 @@ export const IngestSearchBody = z.object({
   mode: z.enum(["hybrid", "dense", "lexical"]).default("hybrid"),
   rrf_k: z.number().int().min(1).max(1000).default(60),
   candidate_pool: z.number().int().min(1).max(200).default(50),
+  // W9.1 — structured retrieval leg over canonical_facts. Returned as a
+  // parallel `fact_hits[]` (not RRF-fused with prose chunks) because facts
+  // and chunks have different retrieval shapes.
+  include_facts: z.boolean().default(false),
+  fact_match_count: z.number().int().min(1).max(100).default(20),
 });
 export type IngestSearchBody = z.infer<typeof IngestSearchBody>;
 
@@ -148,8 +153,20 @@ export type IngestSearchHit = {
   metadata: Record<string, unknown>;
 };
 
+export type IngestSearchFactHit = {
+  fact_id: string;
+  tenant_node_id: string | null;
+  fact_type: string;
+  value: unknown;
+  effective_at: string;
+  file_id: string;
+  filename: string;
+  lexical_score: number;
+};
+
 export type IngestSearchResponse = {
   hits: IngestSearchHit[];
+  fact_hits?: IngestSearchFactHit[];
   query_tokens: number;
   embed_model: string;
   mode: "hybrid" | "dense" | "lexical";
