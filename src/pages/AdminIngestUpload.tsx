@@ -544,7 +544,7 @@ export default function AdminIngestUpload() {
         <ConflictsPreviewTable
           rows={result.conflicts_preview}
           totalCount={result.conflicts_raised}
-          onDownload={() => downloadConflictsReport(result.staging_batch_id)}
+          onDownload={(fmt) => downloadConflictsReport(result.staging_batch_id, fmt)}
         />
       )}
 
@@ -552,7 +552,7 @@ export default function AdminIngestUpload() {
         <QuarantinePreviewTable
           rows={result.quarantine_preview}
           totalCount={result.rows_quarantined}
-          onDownload={() => downloadQuarantineReport(result.staging_batch_id)}
+          onDownload={(fmt) => downloadQuarantineReport(result.staging_batch_id, fmt)}
         />
       )}
     </div>
