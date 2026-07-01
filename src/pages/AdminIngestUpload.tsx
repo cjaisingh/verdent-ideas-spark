@@ -539,9 +539,194 @@ export default function AdminIngestUpload() {
           </div>
         </section>
       )}
+
+      {result && (result.conflicts_preview.length > 0 || result.conflicts_raised > 0) && (
+        <section className="border rounded-md overflow-hidden">
+          <div className="p-3 bg-muted/50 font-medium text-sm flex items-center justify-between">
+            <span>
+              fact_conflicts preview ({result.conflicts_preview.length}
+              {result.conflicts_raised > result.conflicts_preview.length
+                ? ` of ${result.conflicts_raised}`
+                : ""})
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadConflictsReport(result.staging_batch_id)}
+            >
+              <Download className="h-3 w-3 mr-1" /> Conflicts CSV
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr className="text-left">
+                  <th className="p-2">row</th>
+                  <th className="p-2">fact_type</th>
+                  <th className="p-2">tenant_node</th>
+                  <th className="p-2">effective_at</th>
+                  <th className="p-2">incoming</th>
+                  <th className="p-2">existing_canonical</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.conflicts_preview.map((c) => (
+                  <tr key={`${c.row_no}-${c.fact_type}`} className="border-t">
+                    <td className="p-2 font-mono">{c.row_no}</td>
+                    <td className="p-2 font-mono">{c.fact_type}</td>
+                    <td className="p-2 font-mono">
+                      {c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}
+                    </td>
+                    <td className="p-2 text-muted-foreground">
+                      {c.effective_at
+                        ? new Date(c.effective_at).toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="p-2 font-mono max-w-xs truncate">
+                      {JSON.stringify(c.incoming_value)}
+                    </td>
+                    <td className="p-2 font-mono">
+                      {c.existing_canonical_id.slice(0, 8)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {result && (result.quarantine_preview.length > 0 || result.rows_quarantined > 0) && (
+        <section className="border rounded-md overflow-hidden">
+          <div className="p-3 bg-muted/50 font-medium text-sm flex items-center justify-between">
+            <span>
+              Quarantined rows ({result.quarantine_preview.length}
+              {result.rows_quarantined > result.quarantine_preview.length
+                ? ` of ${result.rows_quarantined}`
+                : ""})
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => downloadQuarantineReport(result.staging_batch_id)}
+            >
+              <Download className="h-3 w-3 mr-1" /> Quarantine CSV
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/30">
+                <tr className="text-left">
+                  <th className="p-2">row</th>
+                  <th className="p-2">fact_type</th>
+                  <th className="p-2">column</th>
+                  <th className="p-2">tenant_node</th>
+                  <th className="p-2">raw_value</th>
+                  <th className="p-2">errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.quarantine_preview.map((q) => (
+                  <tr key={`${q.row_no}-${q.fact_type}`} className="border-t">
+                    <td className="p-2 font-mono">{q.row_no}</td>
+                    <td className="p-2 font-mono">{q.fact_type}</td>
+                    <td className="p-2 font-mono">{q.column}</td>
+                    <td className="p-2 font-mono">
+                      {q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}
+                    </td>
+                    <td className="p-2 font-mono max-w-xs truncate">
+                      {JSON.stringify(q.raw_value)}
+                    </td>
+                    <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
+                      {q.errors.map((e) => e.kind ?? JSON.stringify(e)).join(", ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
+
+function csvEscape(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function downloadCsv(filename: string, header: string[], rows: string[][]) {
+  const body = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([body], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadQuarantineReport(batchId: string) {
+  const { data, error } = await supabase
+    .from("staged_records" as any)
+    .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors, source_mapping_id")
+    .eq("staging_batch_id", batchId)
+    .eq("validation_status", "quarantined")
+    .order("row_no", { ascending: true })
+    .limit(50000);
+  if (error) {
+    toast({ title: "Report failed", description: error.message, variant: "destructive" });
+    return;
+  }
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((s) => [
+    String(s.row_no ?? ""),
+    String(s.fact_type ?? ""),
+    (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+    String(s.tenant_node_id ?? ""),
+    String(s.effective_at ?? ""),
+    JSON.stringify(s.value ?? null),
+    JSON.stringify(s.validation_errors ?? []),
+  ]);
+  downloadCsv(
+    `quarantine-${batchId.slice(0, 8)}.csv`,
+    ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "errors"],
+    rows,
+  );
+}
+
+async function downloadConflictsReport(batchId: string) {
+  const { data, error } = await supabase
+    .from("fact_conflicts" as any)
+    .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id, status, created_at")
+    .eq("staging_batch_id", batchId)
+    .order("row_no", { ascending: true })
+    .limit(50000);
+  if (error) {
+    toast({ title: "Report failed", description: error.message, variant: "destructive" });
+    return;
+  }
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((c) => [
+    String(c.row_no ?? ""),
+    String(c.fact_type ?? ""),
+    String(c.tenant_node_id ?? ""),
+    JSON.stringify(c.incoming_value ?? null),
+    JSON.stringify(c.existing_value ?? null),
+    String(c.existing_canonical_id ?? ""),
+    String(c.status ?? ""),
+    String(c.created_at ?? ""),
+  ]);
+  downloadCsv(
+    `conflicts-${batchId.slice(0, 8)}.csv`,
+    ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_canonical_id", "status", "created_at"],
+    rows,
+  );
+}
+
 
 function Metric({
   label,
