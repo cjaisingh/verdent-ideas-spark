@@ -968,10 +968,16 @@ function QuarantinePreviewTable({
   rows,
   totalCount,
   onDownload,
+  onRetry,
+  retryingRow,
+  canRetry,
 }: {
   rows: QuarantinePreview[];
   totalCount: number;
   onDownload: (format: ReportFormat) => void;
+  onRetry?: (rowNo: number) => void;
+  retryingRow?: number | null;
+  canRetry?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
