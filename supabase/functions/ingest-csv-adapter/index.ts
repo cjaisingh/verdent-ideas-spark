@@ -148,6 +148,9 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
 
   const idempotencyKey = `csv-adapter:${p.file_id}:${p.source_mapping_id}`;
 
+  const retrySet = new Set(p.retry_row_nos ?? []);
+  const isRetry = retrySet.size > 0;
+
   const { data: existingRaw } = await sb
     .from("raw_records")
     .select("id")
@@ -155,7 +158,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
 
-  if (existingRaw) {
+  if (existingRaw && !isRetry) {
     // Replay counts from staged_records / canonical_facts.
     const [{ data: staged }, { data: promoted }, { data: conflicts }] = await Promise.all([
       sb.from("staged_records").select("staging_batch_id, validation_status, promoted_canonical_id, row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors").eq("raw_record_id", existingRaw.id),
@@ -207,6 +210,25 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       dry_run: false,
     });
   }
+
+  if (isRetry && !existingRaw) {
+    return json({ error: "batch_not_found_for_retry" }, 404);
+  }
+
+  // Retry mode: clear prior staged_records + fact_conflicts for the targeted
+  // composite row_nos so the re-run writes fresh rows into the same batch.
+  if (isRetry && p.staging_batch_id) {
+    const rowNoList = [...retrySet];
+    await sb.from("staged_records")
+      .delete()
+      .eq("staging_batch_id", p.staging_batch_id)
+      .in("row_no", rowNoList);
+    await sb.from("fact_conflicts")
+      .delete()
+      .eq("staging_batch_id", p.staging_batch_id)
+      .in("row_no", rowNoList);
+  }
+
 
   // -------- download bytes from storage --------
 
