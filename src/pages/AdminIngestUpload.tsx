@@ -1140,43 +1140,50 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="column" col="column" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">raw_value</th>
-              <th className="p-2">errors</th>
+              <th className="p-2">reason</th>
+              <th className="p-2">error kinds</th>
               {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((q) => (
-              <tr key={`${q.row_no}-${q.fact_type}-${q.column}`} className="border-t">
-                <td className="p-2 font-mono">{q.row_no}</td>
-                <td className="p-2 font-mono">{q.fact_type}</td>
-                <td className="p-2 font-mono">{q.column}</td>
-                <td className="p-2 font-mono">{q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}</td>
-                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(q.raw_value)}</td>
-                <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
-                  {quarantineErrorKinds(q).join(", ")}
-                </td>
-                {onRetry && (
-                  <td className="p-2 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={!canRetry || retryingRow !== null}
-                      onClick={() => onRetry(q.row_no)}
-                      title="Re-run this row against the current mapping"
-                    >
-                      {retryingRow === q.row_no ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        "Retry mapping"
-                      )}
-                    </Button>
+            {filtered.map((q) => {
+              const rawText = formatRawCell(q.raw_value);
+              const reasonText = humanizeErrors(q.errors);
+              const kinds = quarantineErrorKinds(q).join(", ");
+              return (
+                <tr key={`${q.row_no}-${q.fact_type}-${q.column}`} className="border-t align-top">
+                  <td className="p-2 font-mono">{q.row_no}</td>
+                  <td className="p-2 font-mono">{q.fact_type}</td>
+                  <td className="p-2 font-mono">{q.column}</td>
+                  <td className="p-2 font-mono">{q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(q.raw_value)}>{rawText}</td>
+                  <td className="p-2 max-w-sm text-amber-700 dark:text-amber-300" title={JSON.stringify(q.errors)}>
+                    {reasonText}
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="p-2 font-mono text-xs text-muted-foreground">{kinds}</td>
+                  {onRetry && (
+                    <td className="p-2 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={!canRetry || retryingRow !== null}
+                        onClick={() => onRetry(q.row_no)}
+                        title="Re-run this row against the current mapping"
+                      >
+                        {retryingRow === q.row_no ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Retry mapping"
+                        )}
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 7 : 6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 8 : 7}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>
