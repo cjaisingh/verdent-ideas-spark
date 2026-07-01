@@ -541,111 +541,19 @@ export default function AdminIngestUpload() {
       )}
 
       {result && (result.conflicts_preview.length > 0 || result.conflicts_raised > 0) && (
-        <section className="border rounded-md overflow-hidden">
-          <div className="p-3 bg-muted/50 font-medium text-sm flex items-center justify-between">
-            <span>
-              fact_conflicts preview ({result.conflicts_preview.length}
-              {result.conflicts_raised > result.conflicts_preview.length
-                ? ` of ${result.conflicts_raised}`
-                : ""})
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadConflictsReport(result.staging_batch_id)}
-            >
-              <Download className="h-3 w-3 mr-1" /> Conflicts CSV
-            </Button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/30">
-                <tr className="text-left">
-                  <th className="p-2">row</th>
-                  <th className="p-2">fact_type</th>
-                  <th className="p-2">tenant_node</th>
-                  <th className="p-2">effective_at</th>
-                  <th className="p-2">incoming</th>
-                  <th className="p-2">existing_canonical</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.conflicts_preview.map((c) => (
-                  <tr key={`${c.row_no}-${c.fact_type}`} className="border-t">
-                    <td className="p-2 font-mono">{c.row_no}</td>
-                    <td className="p-2 font-mono">{c.fact_type}</td>
-                    <td className="p-2 font-mono">
-                      {c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}
-                    </td>
-                    <td className="p-2 text-muted-foreground">
-                      {c.effective_at
-                        ? new Date(c.effective_at).toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="p-2 font-mono max-w-xs truncate">
-                      {JSON.stringify(c.incoming_value)}
-                    </td>
-                    <td className="p-2 font-mono">
-                      {c.existing_canonical_id.slice(0, 8)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <ConflictsPreviewTable
+          rows={result.conflicts_preview}
+          totalCount={result.conflicts_raised}
+          onDownload={() => downloadConflictsReport(result.staging_batch_id)}
+        />
       )}
 
       {result && (result.quarantine_preview.length > 0 || result.rows_quarantined > 0) && (
-        <section className="border rounded-md overflow-hidden">
-          <div className="p-3 bg-muted/50 font-medium text-sm flex items-center justify-between">
-            <span>
-              Quarantined rows ({result.quarantine_preview.length}
-              {result.rows_quarantined > result.quarantine_preview.length
-                ? ` of ${result.rows_quarantined}`
-                : ""})
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadQuarantineReport(result.staging_batch_id)}
-            >
-              <Download className="h-3 w-3 mr-1" /> Quarantine CSV
-            </Button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-muted/30">
-                <tr className="text-left">
-                  <th className="p-2">row</th>
-                  <th className="p-2">fact_type</th>
-                  <th className="p-2">column</th>
-                  <th className="p-2">tenant_node</th>
-                  <th className="p-2">raw_value</th>
-                  <th className="p-2">errors</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.quarantine_preview.map((q) => (
-                  <tr key={`${q.row_no}-${q.fact_type}`} className="border-t">
-                    <td className="p-2 font-mono">{q.row_no}</td>
-                    <td className="p-2 font-mono">{q.fact_type}</td>
-                    <td className="p-2 font-mono">{q.column}</td>
-                    <td className="p-2 font-mono">
-                      {q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}
-                    </td>
-                    <td className="p-2 font-mono max-w-xs truncate">
-                      {JSON.stringify(q.raw_value)}
-                    </td>
-                    <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
-                      {q.errors.map((e) => e.kind ?? JSON.stringify(e)).join(", ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <QuarantinePreviewTable
+          rows={result.quarantine_preview}
+          totalCount={result.rows_quarantined}
+          onDownload={() => downloadQuarantineReport(result.staging_batch_id)}
+        />
       )}
     </div>
   );
