@@ -18,7 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
+import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 type Mapping = {
   id: string;
