@@ -985,10 +985,11 @@ function ConflictsPreviewTable({
               <SortHeader<ConflictSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <th className="p-2">incoming</th>
-              <th className="p-2">existing_value</th>
-              <th className="p-2">existing_canonical</th>
+               <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <SortHeader<ConflictSortKey> label="reason" col="reason" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">incoming</th>
+               <th className="p-2">existing_value</th>
+               <th className="p-2">existing_canonical</th>
             </tr>
           </thead>
           <tbody>
@@ -1138,10 +1139,10 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="column" col="column" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <th className="p-2">raw_value</th>
-              <th className="p-2">reason</th>
-              <th className="p-2">error kinds</th>
+               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">raw_value</th>
+               <SortHeader<QuarantineSortKey> label="reason" col="reason" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">error kinds</th>
               {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
