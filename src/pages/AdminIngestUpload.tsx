@@ -841,6 +841,10 @@ function humanizeErrors(errs: Array<Record<string, unknown>>): string {
   return errs.map(humanizeError).join(" · ");
 }
 
+function humanizeConflictReason(c: ConflictPreview): string {
+  return "Incoming value differs from existing canonical fact";
+}
+
 
 function SortHeader<K extends string>({
   label,
