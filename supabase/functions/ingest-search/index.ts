@@ -9,6 +9,7 @@ import {
   IngestSearchBody,
   type IngestSearchResponse,
   type IngestSearchHit,
+  type IngestSearchFactHit,
 } from "../_shared/contracts/ingest-file.ts";
 
 const corsHeaders = {
