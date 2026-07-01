@@ -309,6 +309,95 @@ export default function AdminIngestUpload() {
     }
   };
 
+  const refreshBatchState = async (batchId: string) => {
+    const [{ data: stagedRows }, { data: conflictRows }, { data: fRows }] = await Promise.all([
+      supabase
+        .from("staged_records" as any)
+        .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_status, validation_errors, descriptors")
+        .eq("staging_batch_id", batchId)
+        .order("row_no", { ascending: true })
+        .limit(50000),
+      supabase
+        .from("fact_conflicts" as any)
+        .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id")
+        .eq("staging_batch_id", batchId)
+        .order("row_no", { ascending: true })
+        .limit(50000),
+      supabase
+        .from("canonical_facts" as any)
+        .select("id, tenant_node_id, fact_type, value, effective_at, auto_promoted, staged_row_no")
+        .eq("staging_batch_id", batchId)
+        .order("staged_row_no", { ascending: true })
+        .limit(500),
+    ]);
+    const staged = ((stagedRows ?? []) as unknown) as Array<Record<string, unknown>>;
+    const conflicts = ((conflictRows ?? []) as unknown) as Array<Record<string, unknown>>;
+    const quarantined = staged.filter((s) => s.validation_status === "quarantined");
+    const promoted = staged.filter((s) => s.validation_status === "passed");
+    setFacts(((fRows ?? []) as unknown) as CanonicalFactRow[]);
+    setResult((prev) => prev && ({
+      ...prev,
+      rows_staged: staged.length,
+      rows_auto_promoted: promoted.length,
+      rows_quarantined: quarantined.length,
+      conflicts_raised: conflicts.length,
+      quarantine_preview: quarantined.slice(0, 50).map((s) => ({
+        row_no: s.row_no as number,
+        fact_type: s.fact_type as string,
+        column: (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+        tenant_node_id: (s.tenant_node_id as string | null) ?? null,
+        effective_at: (s.effective_at as string | null) ?? null,
+        raw_value: s.value,
+        errors: (s.validation_errors as Array<Record<string, unknown>>) ?? [],
+      })),
+      conflicts_preview: conflicts.slice(0, 50).map((c) => ({
+        row_no: c.row_no as number,
+        fact_type: c.fact_type as string,
+        tenant_node_id: (c.tenant_node_id as string) ?? "",
+        effective_at: "",
+        incoming_value: c.incoming_value,
+        existing_canonical_id: (c.existing_canonical_id as string) ?? "",
+        existing_value_hash:
+          (c.existing_value as { hash?: string } | null)?.hash ?? "",
+      })),
+    }));
+  };
+
+  const retryRow = async (rowNo: number) => {
+    if (!result?.staging_batch_id || !uploadedFileId || !selectedMappingId) {
+      toast({ title: "Nothing to retry", variant: "destructive" });
+      return;
+    }
+    setRetryingRow(rowNo);
+    try {
+      const { data, error } = await supabase.functions.invoke("ingest-csv-adapter", {
+        body: {
+          file_id: uploadedFileId,
+          source_mapping_id: selectedMappingId,
+          staging_batch_id: result.staging_batch_id,
+          retry_row_nos: [rowNo],
+          pii_fields: [],
+          max_rows: 10000,
+        },
+      });
+      if (error) throw error;
+      const res = data as AdapterResponse;
+      await refreshBatchState(result.staging_batch_id);
+      toast({
+        title: `Row ${rowNo} retried`,
+        description: `${res.rows_auto_promoted} promoted · ${res.rows_quarantined} quarantined · ${res.conflicts_raised} conflicts`,
+      });
+    } catch (e) {
+      toast({
+        title: "Retry failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingRow(null);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
       <header>
