@@ -841,6 +841,10 @@ function humanizeErrors(errs: Array<Record<string, unknown>>): string {
   return errs.map(humanizeError).join(" · ");
 }
 
+function humanizeConflictReason(c: ConflictPreview): string {
+  return "Incoming value differs from existing canonical fact";
+}
+
 
 function SortHeader<K extends string>({
   label,
@@ -894,7 +898,7 @@ function DownloadFormatMenu({
   );
 }
 
-type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at";
+type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at" | "reason";
 
 function ConflictsPreviewTable({
   rows,
@@ -931,7 +935,12 @@ function ConflictsPreviewTable({
     if (sortKey) {
       const k = sortKey;
       const dir = sortDir === "asc" ? 1 : -1;
-      out = [...out].sort((a, b) => cmp(a[k], b[k]) * dir);
+      out = [...out].sort((a, b) => {
+        if (k === "reason") {
+          return cmp(humanizeConflictReason(a), humanizeConflictReason(b)) * dir;
+        }
+        return cmp(a[k], b[k]) * dir;
+      });
     }
     return out;
   }, [rows, query, factType, sortKey, sortDir]);
@@ -985,10 +994,11 @@ function ConflictsPreviewTable({
               <SortHeader<ConflictSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <th className="p-2">incoming</th>
-              <th className="p-2">existing_value</th>
-              <th className="p-2">existing_canonical</th>
+               <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <SortHeader<ConflictSortKey> label="reason" col="reason" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">incoming</th>
+               <th className="p-2">existing_value</th>
+               <th className="p-2">existing_canonical</th>
             </tr>
           </thead>
           <tbody>
@@ -1019,7 +1029,7 @@ function ConflictsPreviewTable({
   );
 }
 
-type QuarantineSortKey = "row_no" | "fact_type" | "column" | "tenant_node_id";
+type QuarantineSortKey = "row_no" | "fact_type" | "column" | "tenant_node_id" | "reason";
 
 function quarantineErrorKinds(q: QuarantinePreview): string[] {
   return q.errors.map((e) => String((e as { kind?: unknown }).kind ?? "error"));
@@ -1073,7 +1083,12 @@ function QuarantinePreviewTable({
     if (sortKey) {
       const k = sortKey;
       const dir = sortDir === "asc" ? 1 : -1;
-      out = [...out].sort((a, b) => cmp(a[k], b[k]) * dir);
+      out = [...out].sort((a, b) => {
+        if (k === "reason") {
+          return cmp(humanizeErrors(a.errors), humanizeErrors(b.errors)) * dir;
+        }
+        return cmp(a[k], b[k]) * dir;
+      });
     }
     return out;
   }, [rows, query, factType, errorKind, sortKey, sortDir]);
@@ -1138,10 +1153,10 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="column" col="column" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              <th className="p-2">raw_value</th>
-              <th className="p-2">reason</th>
-              <th className="p-2">error kinds</th>
+               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">raw_value</th>
+               <SortHeader<QuarantineSortKey> label="reason" col="reason" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+               <th className="p-2">error kinds</th>
               {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
