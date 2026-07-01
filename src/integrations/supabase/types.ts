@@ -1256,6 +1256,7 @@ export type Database = {
         Row: {
           ancestry_ids: string[]
           auto_promoted: boolean
+          content_tsv: unknown
           effective_at: string
           fact_type: string
           id: string
@@ -1276,6 +1277,7 @@ export type Database = {
         Insert: {
           ancestry_ids?: string[]
           auto_promoted: boolean
+          content_tsv?: unknown
           effective_at: string
           fact_type: string
           id?: string
@@ -1296,6 +1298,7 @@ export type Database = {
         Update: {
           ancestry_ids?: string[]
           auto_promoted?: boolean
+          content_tsv?: unknown
           effective_at?: string
           fact_type?: string
           id?: string
@@ -9502,6 +9505,19 @@ export type Database = {
           last_start: string
           last_status: string
           schedule: string
+        }[]
+      }
+      search_canonical_facts: {
+        Args: { engagement: string; match_count?: number; q: string }
+        Returns: {
+          effective_at: string
+          fact_id: string
+          fact_type: string
+          file_id: string
+          filename: string
+          lexical_score: number
+          tenant_node_id: string
+          value: Json
         }[]
       }
       sentinel_triage_unacked_count: { Args: never; Returns: number }
