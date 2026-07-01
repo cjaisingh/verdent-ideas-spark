@@ -644,6 +644,9 @@ export default function AdminIngestUpload() {
           rows={result.quarantine_preview}
           totalCount={result.rows_quarantined}
           onDownload={(fmt) => downloadQuarantineReport(result.staging_batch_id, fmt)}
+          onRetry={retryRow}
+          retryingRow={retryingRow}
+          canRetry={!!uploadedFileId && !!selectedMappingId}
         />
       )}
     </div>
