@@ -658,3 +658,302 @@ function Metric({
     </div>
   );
 }
+
+type SortDir = "asc" | "desc";
+
+function cmp(a: unknown, b: unknown): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b));
+}
+
+function SortHeader<K extends string>({
+  label,
+  col,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  label: string;
+  col: K;
+  sortKey: K | null;
+  sortDir: SortDir;
+  onSort: (k: K) => void;
+}) {
+  const active = sortKey === col;
+  const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className="p-2">
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`}
+      >
+        {label}
+        <Icon className="h-3 w-3" />
+      </button>
+    </th>
+  );
+}
+
+type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at";
+
+function ConflictsPreviewTable({
+  rows,
+  totalCount,
+  onDownload,
+}: {
+  rows: ConflictPreview[];
+  totalCount: number;
+  onDownload: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [factType, setFactType] = useState<string>("__all__");
+  const [sortKey, setSortKey] = useState<ConflictSortKey | null>("row_no");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const factTypes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.fact_type))).sort(),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let out = rows.filter((r) => {
+      if (factType !== "__all__" && r.fact_type !== factType) return false;
+      if (!q) return true;
+      return (
+        r.fact_type.toLowerCase().includes(q) ||
+        String(r.row_no).includes(q) ||
+        (r.tenant_node_id ?? "").toLowerCase().includes(q) ||
+        JSON.stringify(r.incoming_value).toLowerCase().includes(q) ||
+        r.existing_canonical_id.toLowerCase().includes(q)
+      );
+    });
+    if (sortKey) {
+      const k = sortKey;
+      const dir = sortDir === "asc" ? 1 : -1;
+      out = [...out].sort((a, b) => cmp(a[k], b[k]) * dir);
+    }
+    return out;
+  }, [rows, query, factType, sortKey, sortDir]);
+
+  const onSort = (k: ConflictSortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("asc"); }
+  };
+  const clearFilters = () => { setQuery(""); setFactType("__all__"); };
+  const hasFilters = query !== "" || factType !== "__all__";
+
+  return (
+    <section className="border rounded-md overflow-hidden">
+      <div className="p-3 bg-muted/50 font-medium text-sm flex flex-wrap items-center justify-between gap-2">
+        <span>
+          fact_conflicts preview ({filtered.length}
+          {filtered.length !== rows.length ? ` filtered of ${rows.length}` : ""}
+          {totalCount > rows.length ? ` · ${rows.length} of ${totalCount}` : ""})
+        </span>
+        <Button variant="outline" size="sm" onClick={onDownload}>
+          <Download className="h-3 w-3 mr-1" /> Conflicts CSV
+        </Button>
+      </div>
+      <div className="p-3 flex flex-wrap items-center gap-2 border-b bg-background">
+        <Input
+          placeholder="Search row / fact / tenant / value…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-8 max-w-xs text-xs"
+        />
+        <Select value={factType} onValueChange={setFactType}>
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue placeholder="Fact type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All fact types</SelectItem>
+            {factTypes.map((f) => (
+              <SelectItem key={f} value={f}>{f}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearFilters}>
+            <X className="h-3 w-3 mr-1" /> Clear
+          </Button>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/30">
+            <tr className="text-left">
+              <SortHeader<ConflictSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<ConflictSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<ConflictSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <th className="p-2">incoming</th>
+              <th className="p-2">existing_canonical</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((c) => (
+              <tr key={`${c.row_no}-${c.fact_type}`} className="border-t">
+                <td className="p-2 font-mono">{c.row_no}</td>
+                <td className="p-2 font-mono">{c.fact_type}</td>
+                <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
+                <td className="p-2 text-muted-foreground">{c.effective_at ? new Date(c.effective_at).toLocaleString() : "—"}</td>
+                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(c.incoming_value)}</td>
+                <td className="p-2 font-mono">{c.existing_canonical_id.slice(0, 8)}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+type QuarantineSortKey = "row_no" | "fact_type" | "column" | "tenant_node_id";
+
+function quarantineErrorKinds(q: QuarantinePreview): string[] {
+  return q.errors.map((e) => String((e as { kind?: unknown }).kind ?? "error"));
+}
+
+function QuarantinePreviewTable({
+  rows,
+  totalCount,
+  onDownload,
+}: {
+  rows: QuarantinePreview[];
+  totalCount: number;
+  onDownload: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [factType, setFactType] = useState<string>("__all__");
+  const [errorKind, setErrorKind] = useState<string>("__all__");
+  const [sortKey, setSortKey] = useState<QuarantineSortKey | null>("row_no");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const factTypes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.fact_type))).sort(),
+    [rows],
+  );
+  const errorKinds = useMemo(
+    () => Array.from(new Set(rows.flatMap(quarantineErrorKinds))).sort(),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    let out = rows.filter((r) => {
+      if (factType !== "__all__" && r.fact_type !== factType) return false;
+      if (errorKind !== "__all__" && !quarantineErrorKinds(r).includes(errorKind)) return false;
+      if (!q) return true;
+      return (
+        r.fact_type.toLowerCase().includes(q) ||
+        r.column.toLowerCase().includes(q) ||
+        String(r.row_no).includes(q) ||
+        (r.tenant_node_id ?? "").toLowerCase().includes(q) ||
+        JSON.stringify(r.raw_value).toLowerCase().includes(q) ||
+        JSON.stringify(r.errors).toLowerCase().includes(q)
+      );
+    });
+    if (sortKey) {
+      const k = sortKey;
+      const dir = sortDir === "asc" ? 1 : -1;
+      out = [...out].sort((a, b) => cmp(a[k], b[k]) * dir);
+    }
+    return out;
+  }, [rows, query, factType, errorKind, sortKey, sortDir]);
+
+  const onSort = (k: QuarantineSortKey) => {
+    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(k); setSortDir("asc"); }
+  };
+  const clearFilters = () => { setQuery(""); setFactType("__all__"); setErrorKind("__all__"); };
+  const hasFilters = query !== "" || factType !== "__all__" || errorKind !== "__all__";
+
+  return (
+    <section className="border rounded-md overflow-hidden">
+      <div className="p-3 bg-muted/50 font-medium text-sm flex flex-wrap items-center justify-between gap-2">
+        <span>
+          Quarantined rows ({filtered.length}
+          {filtered.length !== rows.length ? ` filtered of ${rows.length}` : ""}
+          {totalCount > rows.length ? ` · ${rows.length} of ${totalCount}` : ""})
+        </span>
+        <Button variant="outline" size="sm" onClick={onDownload}>
+          <Download className="h-3 w-3 mr-1" /> Quarantine CSV
+        </Button>
+      </div>
+      <div className="p-3 flex flex-wrap items-center gap-2 border-b bg-background">
+        <Input
+          placeholder="Search row / fact / column / value / error…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="h-8 max-w-xs text-xs"
+        />
+        <Select value={factType} onValueChange={setFactType}>
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue placeholder="Fact type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All fact types</SelectItem>
+            {factTypes.map((f) => (
+              <SelectItem key={f} value={f}>{f}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={errorKind} onValueChange={setErrorKind}>
+          <SelectTrigger className="h-8 w-48 text-xs">
+            <SelectValue placeholder="Error kind" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All error kinds</SelectItem>
+            {errorKinds.map((k) => (
+              <SelectItem key={k} value={k}>{k}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearFilters}>
+            <X className="h-3 w-3 mr-1" /> Clear
+          </Button>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/30">
+            <tr className="text-left">
+              <SortHeader<QuarantineSortKey> label="row" col="row_no" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<QuarantineSortKey> label="fact_type" col="fact_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<QuarantineSortKey> label="column" col="column" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <th className="p-2">raw_value</th>
+              <th className="p-2">errors</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((q) => (
+              <tr key={`${q.row_no}-${q.fact_type}-${q.column}`} className="border-t">
+                <td className="p-2 font-mono">{q.row_no}</td>
+                <td className="p-2 font-mono">{q.fact_type}</td>
+                <td className="p-2 font-mono">{q.column}</td>
+                <td className="p-2 font-mono">{q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}</td>
+                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(q.raw_value)}</td>
+                <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
+                  {quarantineErrorKinds(q).join(", ")}
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
