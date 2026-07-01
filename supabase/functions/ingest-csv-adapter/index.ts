@@ -303,33 +303,41 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     });
   }
 
-  // -------- insert raw_records --------
+  // -------- insert raw_records (or reuse existing in retry mode) --------
 
-  const stagingBatchId = crypto.randomUUID();
-  const { data: rawIns, error: rawErr } = await sb
-    .from("raw_records")
-    .insert({
-      tenant_id: mappingRow.tenant_id,
-      adapter_id: mappingRow.adapter_id,
-      source_kind: "file",
-      source_id: file.id,
-      received_at: new Date().toISOString(),
-      payload: {
-        file_id: file.id,
-        filename: file.filename,
-        sha256: file.sha256,
-        rows: dataRows.length,
-        mapping_version: mappingRow.version,
-      },
-      payload_hash: hexToBytea(file.sha256),
-      bytes: file.size_bytes,
-      idempotency_key: idempotencyKey,
-      pii_declared: p.pii_fields,
-    })
-    .select("id")
-    .single();
-  if (rawErr || !rawIns) return json({ error: "raw_insert_failed", detail: rawErr?.message }, 500);
-  const rawRecordId = rawIns.id;
+  const stagingBatchId = isRetry && p.staging_batch_id
+    ? p.staging_batch_id
+    : crypto.randomUUID();
+  let rawRecordId: string;
+  if (isRetry && existingRaw) {
+    rawRecordId = existingRaw.id;
+  } else {
+    const { data: rawIns, error: rawErr } = await sb
+      .from("raw_records")
+      .insert({
+        tenant_id: mappingRow.tenant_id,
+        adapter_id: mappingRow.adapter_id,
+        source_kind: "file",
+        source_id: file.id,
+        received_at: new Date().toISOString(),
+        payload: {
+          file_id: file.id,
+          filename: file.filename,
+          sha256: file.sha256,
+          rows: dataRows.length,
+          mapping_version: mappingRow.version,
+        },
+        payload_hash: hexToBytea(file.sha256),
+        bytes: file.size_bytes,
+        idempotency_key: idempotencyKey,
+        pii_declared: p.pii_fields,
+      })
+      .select("id")
+      .single();
+    if (rawErr || !rawIns) return json({ error: "raw_insert_failed", detail: rawErr?.message }, 500);
+    rawRecordId = rawIns.id;
+  }
+
 
   // -------- stage + promote / conflict / quarantine row-by-row --------
 
