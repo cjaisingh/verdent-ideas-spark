@@ -20,6 +20,8 @@ import {
   CsvMappingSchema,
   parseCellValue,
   type CsvMapping,
+  type IngestCsvAdapterConflictPreview,
+  type IngestCsvAdapterQuarantinePreview,
   type IngestCsvAdapterResponse,
 } from "../_shared/contracts/ingest-csv-adapter.ts";
 
