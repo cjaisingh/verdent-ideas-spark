@@ -73,6 +73,7 @@ import SentinelPerf from "./pages/SentinelPerf";
 import AdminVideos from "./pages/AdminVideos";
 import AdminSecretsHealth from "./pages/AdminSecretsHealth";
 import AdminIngestHealth from "./pages/AdminIngestHealth";
+import AdminIngestUpload from "./pages/AdminIngestUpload";
 import AdminObservabilityRegistry from "./pages/AdminObservabilityRegistry";
 import AdminModules from "./pages/AdminModules";
 import AdminFreshnessDashboard from "./pages/AdminFreshnessDashboard";
@@ -174,6 +175,7 @@ const App = () => (
             <Route path="/admin/videos" element={<AdminVideos />} />
             <Route path="/admin/secrets-health" element={<AdminSecretsHealth />} />
             <Route path="/admin/ingest-health" element={<AdminIngestHealth />} />
+            <Route path="/admin/ingest-upload" element={<AdminIngestUpload />} />
             <Route path="/admin/observability-registry" element={<AdminObservabilityRegistry />} />
             <Route path="/admin/modules" element={<AdminModules />} />
             <Route path="/admin/freshness-dashboard" element={<AdminFreshnessDashboard />} />
