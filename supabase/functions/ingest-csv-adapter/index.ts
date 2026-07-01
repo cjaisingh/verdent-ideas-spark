@@ -148,6 +148,9 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
 
   const idempotencyKey = `csv-adapter:${p.file_id}:${p.source_mapping_id}`;
 
+  const retrySet = new Set(p.retry_row_nos ?? []);
+  const isRetry = retrySet.size > 0;
+
   const { data: existingRaw } = await sb
     .from("raw_records")
     .select("id")
@@ -155,7 +158,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
 
-  if (existingRaw) {
+  if (existingRaw && !isRetry) {
     // Replay counts from staged_records / canonical_facts.
     const [{ data: staged }, { data: promoted }, { data: conflicts }] = await Promise.all([
       sb.from("staged_records").select("staging_batch_id, validation_status, promoted_canonical_id, row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors").eq("raw_record_id", existingRaw.id),
@@ -207,6 +210,25 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       dry_run: false,
     });
   }
+
+  if (isRetry && !existingRaw) {
+    return json({ error: "batch_not_found_for_retry" }, 404);
+  }
+
+  // Retry mode: clear prior staged_records + fact_conflicts for the targeted
+  // composite row_nos so the re-run writes fresh rows into the same batch.
+  if (isRetry && p.staging_batch_id) {
+    const rowNoList = [...retrySet];
+    await sb.from("staged_records")
+      .delete()
+      .eq("staging_batch_id", p.staging_batch_id)
+      .in("row_no", rowNoList);
+    await sb.from("fact_conflicts")
+      .delete()
+      .eq("staging_batch_id", p.staging_batch_id)
+      .in("row_no", rowNoList);
+  }
+
 
   // -------- download bytes from storage --------
 
@@ -281,33 +303,41 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     });
   }
 
-  // -------- insert raw_records --------
+  // -------- insert raw_records (or reuse existing in retry mode) --------
 
-  const stagingBatchId = crypto.randomUUID();
-  const { data: rawIns, error: rawErr } = await sb
-    .from("raw_records")
-    .insert({
-      tenant_id: mappingRow.tenant_id,
-      adapter_id: mappingRow.adapter_id,
-      source_kind: "file",
-      source_id: file.id,
-      received_at: new Date().toISOString(),
-      payload: {
-        file_id: file.id,
-        filename: file.filename,
-        sha256: file.sha256,
-        rows: dataRows.length,
-        mapping_version: mappingRow.version,
-      },
-      payload_hash: hexToBytea(file.sha256),
-      bytes: file.size_bytes,
-      idempotency_key: idempotencyKey,
-      pii_declared: p.pii_fields,
-    })
-    .select("id")
-    .single();
-  if (rawErr || !rawIns) return json({ error: "raw_insert_failed", detail: rawErr?.message }, 500);
-  const rawRecordId = rawIns.id;
+  const stagingBatchId = isRetry && p.staging_batch_id
+    ? p.staging_batch_id
+    : crypto.randomUUID();
+  let rawRecordId: string;
+  if (isRetry && existingRaw) {
+    rawRecordId = existingRaw.id;
+  } else {
+    const { data: rawIns, error: rawErr } = await sb
+      .from("raw_records")
+      .insert({
+        tenant_id: mappingRow.tenant_id,
+        adapter_id: mappingRow.adapter_id,
+        source_kind: "file",
+        source_id: file.id,
+        received_at: new Date().toISOString(),
+        payload: {
+          file_id: file.id,
+          filename: file.filename,
+          sha256: file.sha256,
+          rows: dataRows.length,
+          mapping_version: mappingRow.version,
+        },
+        payload_hash: hexToBytea(file.sha256),
+        bytes: file.size_bytes,
+        idempotency_key: idempotencyKey,
+        pii_declared: p.pii_fields,
+      })
+      .select("id")
+      .single();
+    if (rawErr || !rawIns) return json({ error: "raw_insert_failed", detail: rawErr?.message }, 500);
+    rawRecordId = rawIns.id;
+  }
+
 
   // -------- stage + promote / conflict / quarantine row-by-row --------
 
@@ -346,8 +376,11 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     }
 
     for (const f of mapping.facts) {
+      const compositeRowNo = rowNo * 1000 + mapping.facts.indexOf(f);
+      if (isRetry && !retrySet.has(compositeRowNo)) continue;
       const cellRaw = row[colIndex(f.column)];
       const parsedCell = parseCellValue(cellRaw, f.parser);
+
 
       const errors: Array<Record<string, unknown>> = [];
       if (!tenantNodeId) errors.push({ kind: "tenant_node_unresolved" });
@@ -535,7 +568,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
   return json<IngestCsvAdapterResponse>({
     staging_batch_id: stagingBatchId,
     raw_record_id: rawRecordId,
-    rows_seen: dataRows.length,
+    rows_seen: isRetry ? retrySet.size : dataRows.length,
     rows_staged: rowsStaged,
     rows_auto_promoted: rowsAutoPromoted,
     rows_quarantined: rowsQuarantined,
@@ -546,5 +579,6 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     conflicts_preview: conflictsPreview,
     deduped: false,
     dry_run: false,
+    ...(isRetry ? { retried_row_nos: [...retrySet] } : {}),
   });
 }));

@@ -118,6 +118,7 @@ export default function AdminIngestUpload() {
   const [dryRun, setDryRun] = useState<boolean>(true);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<false | "upload" | "mapping" | "run">(false);
+  const [retryingRow, setRetryingRow] = useState<number | null>(null);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [result, setResult] = useState<AdapterResponse | null>(null);
   const [facts, setFacts] = useState<CanonicalFactRow[]>([]);
@@ -305,6 +306,95 @@ export default function AdminIngestUpload() {
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const refreshBatchState = async (batchId: string) => {
+    const [{ data: stagedRows }, { data: conflictRows }, { data: fRows }] = await Promise.all([
+      supabase
+        .from("staged_records" as any)
+        .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_status, validation_errors, descriptors")
+        .eq("staging_batch_id", batchId)
+        .order("row_no", { ascending: true })
+        .limit(50000),
+      supabase
+        .from("fact_conflicts" as any)
+        .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id")
+        .eq("staging_batch_id", batchId)
+        .order("row_no", { ascending: true })
+        .limit(50000),
+      supabase
+        .from("canonical_facts" as any)
+        .select("id, tenant_node_id, fact_type, value, effective_at, auto_promoted, staged_row_no")
+        .eq("staging_batch_id", batchId)
+        .order("staged_row_no", { ascending: true })
+        .limit(500),
+    ]);
+    const staged = ((stagedRows ?? []) as unknown) as Array<Record<string, unknown>>;
+    const conflicts = ((conflictRows ?? []) as unknown) as Array<Record<string, unknown>>;
+    const quarantined = staged.filter((s) => s.validation_status === "quarantined");
+    const promoted = staged.filter((s) => s.validation_status === "passed");
+    setFacts(((fRows ?? []) as unknown) as CanonicalFactRow[]);
+    setResult((prev) => prev && ({
+      ...prev,
+      rows_staged: staged.length,
+      rows_auto_promoted: promoted.length,
+      rows_quarantined: quarantined.length,
+      conflicts_raised: conflicts.length,
+      quarantine_preview: quarantined.slice(0, 50).map((s) => ({
+        row_no: s.row_no as number,
+        fact_type: s.fact_type as string,
+        column: (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+        tenant_node_id: (s.tenant_node_id as string | null) ?? null,
+        effective_at: (s.effective_at as string | null) ?? null,
+        raw_value: s.value,
+        errors: (s.validation_errors as Array<Record<string, unknown>>) ?? [],
+      })),
+      conflicts_preview: conflicts.slice(0, 50).map((c) => ({
+        row_no: c.row_no as number,
+        fact_type: c.fact_type as string,
+        tenant_node_id: (c.tenant_node_id as string) ?? "",
+        effective_at: "",
+        incoming_value: c.incoming_value,
+        existing_canonical_id: (c.existing_canonical_id as string) ?? "",
+        existing_value_hash:
+          (c.existing_value as { hash?: string } | null)?.hash ?? "",
+      })),
+    }));
+  };
+
+  const retryRow = async (rowNo: number) => {
+    if (!result?.staging_batch_id || !uploadedFileId || !selectedMappingId) {
+      toast({ title: "Nothing to retry", variant: "destructive" });
+      return;
+    }
+    setRetryingRow(rowNo);
+    try {
+      const { data, error } = await supabase.functions.invoke("ingest-csv-adapter", {
+        body: {
+          file_id: uploadedFileId,
+          source_mapping_id: selectedMappingId,
+          staging_batch_id: result.staging_batch_id,
+          retry_row_nos: [rowNo],
+          pii_fields: [],
+          max_rows: 10000,
+        },
+      });
+      if (error) throw error;
+      const res = data as AdapterResponse;
+      await refreshBatchState(result.staging_batch_id);
+      toast({
+        title: `Row ${rowNo} retried`,
+        description: `${res.rows_auto_promoted} promoted · ${res.rows_quarantined} quarantined · ${res.conflicts_raised} conflicts`,
+      });
+    } catch (e) {
+      toast({
+        title: "Retry failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingRow(null);
     }
   };
 
@@ -554,6 +644,9 @@ export default function AdminIngestUpload() {
           rows={result.quarantine_preview}
           totalCount={result.rows_quarantined}
           onDownload={(fmt) => downloadQuarantineReport(result.staging_batch_id, fmt)}
+          onRetry={retryRow}
+          retryingRow={retryingRow}
+          canRetry={!!uploadedFileId && !!selectedMappingId}
         />
       )}
     </div>
@@ -875,10 +968,16 @@ function QuarantinePreviewTable({
   rows,
   totalCount,
   onDownload,
+  onRetry,
+  retryingRow,
+  canRetry,
 }: {
   rows: QuarantinePreview[];
   totalCount: number;
   onDownload: (format: ReportFormat) => void;
+  onRetry?: (rowNo: number) => void;
+  retryingRow?: number | null;
+  canRetry?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
@@ -981,6 +1080,7 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">raw_value</th>
               <th className="p-2">errors</th>
+              {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
           <tbody>
@@ -994,10 +1094,28 @@ function QuarantinePreviewTable({
                 <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
                   {quarantineErrorKinds(q).join(", ")}
                 </td>
+                {onRetry && (
+                  <td className="p-2 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={!canRetry || retryingRow !== null}
+                      onClick={() => onRetry(q.row_no)}
+                      title="Re-run this row against the current mapping"
+                    >
+                      {retryingRow === q.row_no ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        "Retry mapping"
+                      )}
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 7 : 6}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>

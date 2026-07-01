@@ -90,7 +90,17 @@ export const IngestCsvAdapterBody = z.object({
   // chunk larger files into multiple calls.
   max_rows: z.number().int().min(1).max(50_000).default(10_000),
   dry_run: z.boolean().default(false),
-});
+  // Retry mode: when non-empty, only the listed composite row_no values
+  // (rowNo*1000 + factIndex, as persisted on staged_records) are re-processed
+  // against the given staging_batch_id. Requires `staging_batch_id`. Prior
+  // staged_records + fact_conflicts for those row_nos are deleted first, then
+  // recreated using the current mapping. Idempotency dedup is bypassed.
+  retry_row_nos: z.array(z.number().int().min(1)).max(500).optional(),
+  staging_batch_id: z.string().uuid().optional(),
+}).refine(
+  (v) => !(v.retry_row_nos && v.retry_row_nos.length > 0) || !!v.staging_batch_id,
+  { message: "staging_batch_id is required when retry_row_nos is set", path: ["staging_batch_id"] },
+);
 export type IngestCsvAdapterBody = z.infer<typeof IngestCsvAdapterBody>;
 
 // ---------- response ----------
@@ -135,6 +145,7 @@ export type IngestCsvAdapterResponse = {
   conflicts_preview: IngestCsvAdapterConflictPreview[];
   deduped: boolean; // true when the (file, mapping) pair was already processed
   dry_run: boolean;
+  retried_row_nos?: number[]; // populated when the call ran in retry mode
 };
 
 // ---------- helpers ----------
