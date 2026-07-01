@@ -21,3 +21,16 @@ lexical. Rows with `rrf_score = 0` (matched neither leg) are filtered.
 "BM25" in product wording = `ts_rank_cd` here. True BM25 (pg_search / paradedb)
 is a W9.2 swap; the RRF contract and `hybrid_match_ingested_chunks` signature
 stay stable across that swap.
+
+## Structured leg — canonical_facts (added post-W9.1 adapter)
+
+Set `include_facts=true` on `ingest-search` to also get a parallel `fact_hits[]`
+from `public.search_canonical_facts(q, engagement, match_count)`. Backed by a
+generated `content_tsv` on `canonical_facts` (fact_type + value::text) with a
+GIN index. Facts are joined to their originating file via
+`raw_records.source_id::uuid = ingested_files.id` and scoped by `engagement_id`;
+only live facts (`superseded_by IS NULL`) are returned.
+
+Facts are NOT RRF-fused into `hits` — they are a different retrieval shape (rows
+vs prose) per `mem://preferences/retrieval-shapes`. Callers decide how to merge
+in the UI layer.
