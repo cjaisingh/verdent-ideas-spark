@@ -712,19 +712,24 @@ async function downloadQuarantineReport(batchId: string, format: ReportFormat = 
     toast({ title: "Report failed", description: error.message, variant: "destructive" });
     return;
   }
-  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((s) => [
-    String(s.row_no ?? ""),
-    String(s.fact_type ?? ""),
-    (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
-    String(s.tenant_node_id ?? ""),
-    String(s.effective_at ?? ""),
-    JSON.stringify(s.value ?? null),
-    JSON.stringify(s.validation_errors ?? []),
-  ]);
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((s) => {
+    const errs = (s.validation_errors as Array<Record<string, unknown>>) ?? [];
+    return [
+      String(s.row_no ?? ""),
+      String(s.fact_type ?? ""),
+      (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+      String(s.tenant_node_id ?? ""),
+      String(s.effective_at ?? ""),
+      formatRawCell(s.value),
+      humanizeErrors(errs),
+      JSON.stringify(s.value ?? null),
+      JSON.stringify(errs),
+    ];
+  });
   await writeReport(
     format,
     `quarantine-${batchId.slice(0, 8)}`,
-    ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "errors"],
+    ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "reason", "raw_value_json", "errors_json"],
     rows,
   );
 }
@@ -740,20 +745,26 @@ async function downloadConflictsReport(batchId: string, format: ReportFormat = "
     toast({ title: "Report failed", description: error.message, variant: "destructive" });
     return;
   }
-  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((c) => [
-    String(c.row_no ?? ""),
-    String(c.fact_type ?? ""),
-    String(c.tenant_node_id ?? ""),
-    JSON.stringify(c.incoming_value ?? null),
-    JSON.stringify(c.existing_value ?? null),
-    String(c.existing_canonical_id ?? ""),
-    String(c.status ?? ""),
-    String(c.created_at ?? ""),
-  ]);
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((c) => {
+    const existing = c.existing_value as { value?: unknown; hash?: string } | null;
+    return [
+      String(c.row_no ?? ""),
+      String(c.fact_type ?? ""),
+      String(c.tenant_node_id ?? ""),
+      formatRawCell(c.incoming_value),
+      formatRawCell(existing?.value),
+      existing?.hash ?? "",
+      String(c.existing_canonical_id ?? ""),
+      String(c.status ?? ""),
+      String(c.created_at ?? ""),
+      JSON.stringify(c.incoming_value ?? null),
+      JSON.stringify(existing?.value ?? null),
+    ];
+  });
   await writeReport(
     format,
     `conflicts-${batchId.slice(0, 8)}`,
-    ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_canonical_id", "status", "created_at"],
+    ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_value_hash", "existing_canonical_id", "status", "created_at", "incoming_value_json", "existing_value_json"],
     rows,
   );
 }
