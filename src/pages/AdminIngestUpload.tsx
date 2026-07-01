@@ -50,6 +50,7 @@ type ConflictPreview = {
   incoming_value: unknown;
   existing_canonical_id: string;
   existing_value_hash: string;
+  existing_value?: unknown;
 };
 
 type AdapterResponse = {
@@ -359,6 +360,8 @@ export default function AdminIngestUpload() {
         existing_canonical_id: (c.existing_canonical_id as string) ?? "",
         existing_value_hash:
           (c.existing_value as { hash?: string } | null)?.hash ?? "",
+        existing_value:
+          (c.existing_value as { value?: unknown } | null)?.value,
       })),
     }));
   };
@@ -709,19 +712,24 @@ async function downloadQuarantineReport(batchId: string, format: ReportFormat = 
     toast({ title: "Report failed", description: error.message, variant: "destructive" });
     return;
   }
-  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((s) => [
-    String(s.row_no ?? ""),
-    String(s.fact_type ?? ""),
-    (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
-    String(s.tenant_node_id ?? ""),
-    String(s.effective_at ?? ""),
-    JSON.stringify(s.value ?? null),
-    JSON.stringify(s.validation_errors ?? []),
-  ]);
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((s) => {
+    const errs = (s.validation_errors as Array<Record<string, unknown>>) ?? [];
+    return [
+      String(s.row_no ?? ""),
+      String(s.fact_type ?? ""),
+      (s.descriptors as { source_column?: string } | null)?.source_column ?? "",
+      String(s.tenant_node_id ?? ""),
+      String(s.effective_at ?? ""),
+      formatRawCell(s.value),
+      humanizeErrors(errs),
+      JSON.stringify(s.value ?? null),
+      JSON.stringify(errs),
+    ];
+  });
   await writeReport(
     format,
     `quarantine-${batchId.slice(0, 8)}`,
-    ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "errors"],
+    ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "reason", "raw_value_json", "errors_json"],
     rows,
   );
 }
@@ -737,20 +745,26 @@ async function downloadConflictsReport(batchId: string, format: ReportFormat = "
     toast({ title: "Report failed", description: error.message, variant: "destructive" });
     return;
   }
-  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((c) => [
-    String(c.row_no ?? ""),
-    String(c.fact_type ?? ""),
-    String(c.tenant_node_id ?? ""),
-    JSON.stringify(c.incoming_value ?? null),
-    JSON.stringify(c.existing_value ?? null),
-    String(c.existing_canonical_id ?? ""),
-    String(c.status ?? ""),
-    String(c.created_at ?? ""),
-  ]);
+  const rows = ((data ?? []) as unknown as Array<Record<string, unknown>>).map((c) => {
+    const existing = c.existing_value as { value?: unknown; hash?: string } | null;
+    return [
+      String(c.row_no ?? ""),
+      String(c.fact_type ?? ""),
+      String(c.tenant_node_id ?? ""),
+      formatRawCell(c.incoming_value),
+      formatRawCell(existing?.value),
+      existing?.hash ?? "",
+      String(c.existing_canonical_id ?? ""),
+      String(c.status ?? ""),
+      String(c.created_at ?? ""),
+      JSON.stringify(c.incoming_value ?? null),
+      JSON.stringify(existing?.value ?? null),
+    ];
+  });
   await writeReport(
     format,
     `conflicts-${batchId.slice(0, 8)}`,
-    ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_canonical_id", "status", "created_at"],
+    ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_value_hash", "existing_canonical_id", "status", "created_at", "incoming_value_json", "existing_value_json"],
     rows,
   );
 }
@@ -788,6 +802,45 @@ function cmp(a: unknown, b: unknown): number {
   if (typeof a === "number" && typeof b === "number") return a - b;
   return String(a).localeCompare(String(b));
 }
+
+/** Render an arbitrary JSON payload as a compact, readable cell string. */
+function formatRawCell(v: unknown): string {
+  if (v == null) return "—";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Unwrap the adapter's { value, unit? } envelope for readability.
+  if (typeof v === "object" && v !== null && "value" in (v as Record<string, unknown>)) {
+    const obj = v as { value?: unknown; unit?: unknown };
+    const inner = formatRawCell(obj.value);
+    return obj.unit ? `${inner} ${String(obj.unit)}` : inner;
+  }
+  return JSON.stringify(v);
+}
+
+/** Human-readable text for a single quarantine/validation error entry. */
+function humanizeError(err: Record<string, unknown>): string {
+  const kind = String(err.kind ?? "error");
+  const reason = err.reason ? String(err.reason) : "";
+  const column = err.column ? String(err.column) : "";
+  switch (kind) {
+    case "tenant_node_unresolved":
+      return "Tenant node could not be resolved from the row.";
+    case "effective_at_unresolved":
+      return "Effective date column was missing or unparseable.";
+    case "parse_failed":
+      return `Value in column “${column}” failed to parse${reason ? ` (${reason})` : ""}.`;
+    case "promote_failed":
+      return `Promotion to canonical_facts failed${reason ? `: ${reason}` : ""}.`;
+    default:
+      return reason ? `${kind}: ${reason}` : kind;
+  }
+}
+
+function humanizeErrors(errs: Array<Record<string, unknown>>): string {
+  if (!errs || errs.length === 0) return "—";
+  return errs.map(humanizeError).join(" · ");
+}
+
 
 function SortHeader<K extends string>({
   label,
@@ -934,22 +987,30 @@ function ConflictsPreviewTable({
               <SortHeader<ConflictSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">incoming</th>
+              <th className="p-2">existing_value</th>
               <th className="p-2">existing_canonical</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
-              <tr key={`${c.row_no}-${c.fact_type}`} className="border-t">
-                <td className="p-2 font-mono">{c.row_no}</td>
-                <td className="p-2 font-mono">{c.fact_type}</td>
-                <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
-                <td className="p-2 text-muted-foreground">{c.effective_at ? new Date(c.effective_at).toLocaleString() : "—"}</td>
-                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(c.incoming_value)}</td>
-                <td className="p-2 font-mono">{c.existing_canonical_id.slice(0, 8)}</td>
-              </tr>
-            ))}
+            {filtered.map((c) => {
+              const incoming = formatRawCell(c.incoming_value);
+              const existing = c.existing_value !== undefined
+                ? formatRawCell(c.existing_value)
+                : (c.existing_value_hash ? `hash:${c.existing_value_hash.slice(0, 12)}…` : "—");
+              return (
+                <tr key={`${c.row_no}-${c.fact_type}`} className="border-t align-top">
+                  <td className="p-2 font-mono">{c.row_no}</td>
+                  <td className="p-2 font-mono">{c.fact_type}</td>
+                  <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
+                  <td className="p-2 text-muted-foreground">{c.effective_at ? new Date(c.effective_at).toLocaleString() : "—"}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.incoming_value)}>{incoming}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.existing_value ?? { hash: c.existing_value_hash })}>{existing}</td>
+                  <td className="p-2 font-mono" title={c.existing_canonical_id}>{c.existing_canonical_id.slice(0, 8)}</td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={7}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -1079,43 +1140,50 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="column" col="column" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">raw_value</th>
-              <th className="p-2">errors</th>
+              <th className="p-2">reason</th>
+              <th className="p-2">error kinds</th>
               {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((q) => (
-              <tr key={`${q.row_no}-${q.fact_type}-${q.column}`} className="border-t">
-                <td className="p-2 font-mono">{q.row_no}</td>
-                <td className="p-2 font-mono">{q.fact_type}</td>
-                <td className="p-2 font-mono">{q.column}</td>
-                <td className="p-2 font-mono">{q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}</td>
-                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(q.raw_value)}</td>
-                <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
-                  {quarantineErrorKinds(q).join(", ")}
-                </td>
-                {onRetry && (
-                  <td className="p-2 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={!canRetry || retryingRow !== null}
-                      onClick={() => onRetry(q.row_no)}
-                      title="Re-run this row against the current mapping"
-                    >
-                      {retryingRow === q.row_no ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        "Retry mapping"
-                      )}
-                    </Button>
+            {filtered.map((q) => {
+              const rawText = formatRawCell(q.raw_value);
+              const reasonText = humanizeErrors(q.errors);
+              const kinds = quarantineErrorKinds(q).join(", ");
+              return (
+                <tr key={`${q.row_no}-${q.fact_type}-${q.column}`} className="border-t align-top">
+                  <td className="p-2 font-mono">{q.row_no}</td>
+                  <td className="p-2 font-mono">{q.fact_type}</td>
+                  <td className="p-2 font-mono">{q.column}</td>
+                  <td className="p-2 font-mono">{q.tenant_node_id ? q.tenant_node_id.slice(0, 8) : "—"}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(q.raw_value)}>{rawText}</td>
+                  <td className="p-2 max-w-sm text-amber-700 dark:text-amber-300" title={JSON.stringify(q.errors)}>
+                    {reasonText}
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className="p-2 font-mono text-xs text-muted-foreground">{kinds}</td>
+                  {onRetry && (
+                    <td className="p-2 text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={!canRetry || retryingRow !== null}
+                        onClick={() => onRetry(q.row_no)}
+                        title="Re-run this row against the current mapping"
+                      >
+                        {retryingRow === q.row_no ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Retry mapping"
+                        )}
+                      </Button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 7 : 6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 8 : 7}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>

@@ -123,6 +123,10 @@ export type IngestCsvAdapterConflictPreview = {
   incoming_value: unknown;
   existing_canonical_id: string;
   existing_value_hash: string;
+  // Full existing canonical value (JSON payload) when available — persisted on
+  // fact_conflicts.existing_value so operators can compare incoming vs live
+  // without a second round-trip.
+  existing_value?: unknown;
 };
 
 export type IngestCsvAdapterResponse = {

@@ -193,6 +193,8 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
         existing_canonical_id: c.existing_canonical_id as string,
         existing_value_hash:
           (c.existing_value as { hash?: string } | null)?.hash ?? "",
+        existing_value:
+          (c.existing_value as { value?: unknown } | null)?.value,
       }));
     return json<IngestCsvAdapterResponse>({
       staging_batch_id: batchId,
@@ -451,7 +453,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
       // Check for live canonical conflict.
       const { data: live } = await sb
         .from("canonical_facts")
-        .select("id, value_hash")
+        .select("id, value, value_hash")
         .eq("tenant_node_id", tenantNodeId!)
         .eq("fact_type", f.fact_type)
         .eq("effective_at", effectiveAt!)
@@ -474,7 +476,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
           tenant_node_id: tenantNodeId,
           fact_type: f.fact_type,
           incoming_value: valuePayload,
-          existing_value: { hash: liveHashHex },
+          existing_value: { hash: liveHashHex, value: live.value },
           value_pair_hash: hexToBytea(pairHashHex),
           source_mapping_id: mappingRow.id,
           staging_batch_id: stagingBatchId,
@@ -492,6 +494,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
               incoming_value: valuePayload,
               existing_canonical_id: live.id,
               existing_value_hash: liveHashHex,
+              existing_value: live.value,
             });
           }
           await sb.from("ingest_events").insert({
