@@ -315,7 +315,10 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
   let rowsAutoPromoted = 0;
   let rowsQuarantined = 0;
   let conflictsRaised = 0;
+  const quarantinePreview: IngestCsvAdapterQuarantinePreview[] = [];
+  const conflictsPreview: IngestCsvAdapterConflictPreview[] = [];
   const blockAutoPromote = precheckFailures.length > 0;
+
 
   for (let r = 0; r < dataRows.length; r++) {
     const rowNo = r + 1;
