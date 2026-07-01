@@ -1080,6 +1080,7 @@ function QuarantinePreviewTable({
               <SortHeader<QuarantineSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">raw_value</th>
               <th className="p-2">errors</th>
+              {onRetry && <th className="p-2 text-right">action</th>}
             </tr>
           </thead>
           <tbody>
@@ -1093,10 +1094,28 @@ function QuarantinePreviewTable({
                 <td className="p-2 font-mono max-w-xs truncate text-amber-600 dark:text-amber-400">
                   {quarantineErrorKinds(q).join(", ")}
                 </td>
+                {onRetry && (
+                  <td className="p-2 text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={!canRetry || retryingRow !== null}
+                      onClick={() => onRetry(q.row_no)}
+                      title="Re-run this row against the current mapping"
+                    >
+                      {retryingRow === q.row_no ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        "Retry mapping"
+                      )}
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={onRetry ? 7 : 6}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>
