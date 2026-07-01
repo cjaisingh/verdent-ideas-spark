@@ -376,8 +376,11 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     }
 
     for (const f of mapping.facts) {
+      const compositeRowNo = rowNo * 1000 + mapping.facts.indexOf(f);
+      if (isRetry && !retrySet.has(compositeRowNo)) continue;
       const cellRaw = row[colIndex(f.column)];
       const parsedCell = parseCellValue(cellRaw, f.parser);
+
 
       const errors: Array<Record<string, unknown>> = [];
       if (!tenantNodeId) errors.push({ kind: "tenant_node_unresolved" });
