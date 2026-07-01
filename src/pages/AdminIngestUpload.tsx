@@ -855,7 +855,7 @@ function QuarantinePreviewTable({
 }: {
   rows: QuarantinePreview[];
   totalCount: number;
-  onDownload: () => void;
+  onDownload: (format: ReportFormat) => void;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
