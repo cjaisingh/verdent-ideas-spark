@@ -987,22 +987,30 @@ function ConflictsPreviewTable({
               <SortHeader<ConflictSortKey> label="tenant_node" col="tenant_node_id" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortHeader<ConflictSortKey> label="effective_at" col="effective_at" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <th className="p-2">incoming</th>
+              <th className="p-2">existing_value</th>
               <th className="p-2">existing_canonical</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => (
-              <tr key={`${c.row_no}-${c.fact_type}`} className="border-t">
-                <td className="p-2 font-mono">{c.row_no}</td>
-                <td className="p-2 font-mono">{c.fact_type}</td>
-                <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
-                <td className="p-2 text-muted-foreground">{c.effective_at ? new Date(c.effective_at).toLocaleString() : "—"}</td>
-                <td className="p-2 font-mono max-w-xs truncate">{JSON.stringify(c.incoming_value)}</td>
-                <td className="p-2 font-mono">{c.existing_canonical_id.slice(0, 8)}</td>
-              </tr>
-            ))}
+            {filtered.map((c) => {
+              const incoming = formatRawCell(c.incoming_value);
+              const existing = c.existing_value !== undefined
+                ? formatRawCell(c.existing_value)
+                : (c.existing_value_hash ? `hash:${c.existing_value_hash.slice(0, 12)}…` : "—");
+              return (
+                <tr key={`${c.row_no}-${c.fact_type}`} className="border-t align-top">
+                  <td className="p-2 font-mono">{c.row_no}</td>
+                  <td className="p-2 font-mono">{c.fact_type}</td>
+                  <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
+                  <td className="p-2 text-muted-foreground">{c.effective_at ? new Date(c.effective_at).toLocaleString() : "—"}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.incoming_value)}>{incoming}</td>
+                  <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.existing_value ?? { hash: c.existing_value_hash })}>{existing}</td>
+                  <td className="p-2 font-mono" title={c.existing_canonical_id}>{c.existing_canonical_id.slice(0, 8)}</td>
+                </tr>
+              );
+            })}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={6}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={7}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>
