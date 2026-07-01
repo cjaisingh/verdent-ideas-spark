@@ -95,6 +95,26 @@ export type IngestCsvAdapterBody = z.infer<typeof IngestCsvAdapterBody>;
 
 // ---------- response ----------
 
+export type IngestCsvAdapterQuarantinePreview = {
+  row_no: number;
+  fact_type: string;
+  column: string;
+  tenant_node_id: string | null;
+  effective_at: string | null;
+  raw_value: unknown;
+  errors: Array<Record<string, unknown>>;
+};
+
+export type IngestCsvAdapterConflictPreview = {
+  row_no: number;
+  fact_type: string;
+  tenant_node_id: string;
+  effective_at: string;
+  incoming_value: unknown;
+  existing_canonical_id: string;
+  existing_value_hash: string;
+};
+
 export type IngestCsvAdapterResponse = {
   staging_batch_id: string;
   raw_record_id: string;
@@ -109,6 +129,10 @@ export type IngestCsvAdapterResponse = {
     column?: string;
     row_no?: number;
   }>;
+  // Per-row previews, capped at 50 each. Full lists live in staged_records /
+  // fact_conflicts and can be downloaded via the quarantine report endpoint.
+  quarantine_preview: IngestCsvAdapterQuarantinePreview[];
+  conflicts_preview: IngestCsvAdapterConflictPreview[];
   deduped: boolean; // true when the (file, mapping) pair was already processed
   dry_run: boolean;
 };
