@@ -31,6 +31,26 @@ type Mapping = {
   created_at: string;
 };
 
+type QuarantinePreview = {
+  row_no: number;
+  fact_type: string;
+  column: string;
+  tenant_node_id: string | null;
+  effective_at: string | null;
+  raw_value: unknown;
+  errors: Array<Record<string, unknown>>;
+};
+
+type ConflictPreview = {
+  row_no: number;
+  fact_type: string;
+  tenant_node_id: string;
+  effective_at: string;
+  incoming_value: unknown;
+  existing_canonical_id: string;
+  existing_value_hash: string;
+};
+
 type AdapterResponse = {
   staging_batch_id: string;
   raw_record_id: string;
@@ -41,6 +61,8 @@ type AdapterResponse = {
   conflicts_raised: number;
   auto_promote_eligible: boolean;
   precheck_failures: Array<{ reason: string; column?: string; row_no?: number }>;
+  quarantine_preview: QuarantinePreview[];
+  conflicts_preview: ConflictPreview[];
   deduped: boolean;
   dry_run: boolean;
 };
