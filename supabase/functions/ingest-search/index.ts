@@ -123,8 +123,37 @@ Deno.serve(withLogger("ingest-search", async (req) => {
     metadata: h.metadata,
   }));
 
+  // W9.1 — optional structured leg: lexical search over canonical_facts
+  // scoped to the same engagement. Kept as a parallel `fact_hits[]` (not
+  // fused into `hits`) because facts and prose chunks have different
+  // retrieval shapes — see mem://preferences/retrieval-shapes.
+  let factHits: IngestSearchFactHit[] | undefined;
+  if (p.include_facts) {
+    const { data: fRows, error: fErr } = await sb.rpc("search_canonical_facts", {
+      q: p.query,
+      engagement: p.engagement_id,
+      match_count: p.fact_match_count,
+    });
+    if (fErr) return json({ error: "fact_search_failed", detail: fErr.message }, 500);
+    factHits = (fRows ?? []).map((r: {
+      fact_id: string; tenant_node_id: string | null; fact_type: string;
+      value: unknown; effective_at: string; file_id: string; filename: string;
+      lexical_score: number;
+    }) => ({
+      fact_id: r.fact_id,
+      tenant_node_id: r.tenant_node_id,
+      fact_type: r.fact_type,
+      value: r.value,
+      effective_at: r.effective_at,
+      file_id: r.file_id,
+      filename: r.filename,
+      lexical_score: r.lexical_score ?? 0,
+    }));
+  }
+
   return json<IngestSearchResponse>({
     hits: mapped,
+    fact_hits: factHits,
     query_tokens: qTokens,
     embed_model: EMBED_MODEL,
     mode: p.mode,
