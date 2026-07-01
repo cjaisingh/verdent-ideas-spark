@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Upload, FileCheck2, AlertTriangle, Download } from "lucide-react";
+import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X } from "lucide-react";
 
 type Mapping = {
   id: string;
