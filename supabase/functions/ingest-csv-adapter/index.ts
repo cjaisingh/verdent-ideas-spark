@@ -450,6 +450,17 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
         });
         if (!cfErr) {
           conflictsRaised++;
+          if (conflictsPreview.length < 50) {
+            conflictsPreview.push({
+              row_no: rowNo * 1000 + mapping.facts.indexOf(f),
+              fact_type: f.fact_type,
+              tenant_node_id: tenantNodeId!,
+              effective_at: effectiveAt!,
+              incoming_value: valuePayload,
+              existing_canonical_id: live.id,
+              existing_value_hash: liveHashHex,
+            });
+          }
           await sb.from("ingest_events").insert({
             event_type: "conflict_raised",
             tenant_id: mappingRow.tenant_id,
