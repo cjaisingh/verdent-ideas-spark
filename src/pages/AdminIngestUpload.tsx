@@ -118,6 +118,7 @@ export default function AdminIngestUpload() {
   const [dryRun, setDryRun] = useState<boolean>(true);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<false | "upload" | "mapping" | "run">(false);
+  const [retryingRow, setRetryingRow] = useState<number | null>(null);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [result, setResult] = useState<AdapterResponse | null>(null);
   const [facts, setFacts] = useState<CanonicalFactRow[]>([]);
