@@ -568,7 +568,7 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
   return json<IngestCsvAdapterResponse>({
     staging_batch_id: stagingBatchId,
     raw_record_id: rawRecordId,
-    rows_seen: dataRows.length,
+    rows_seen: isRetry ? retrySet.size : dataRows.length,
     rows_staged: rowsStaged,
     rows_auto_promoted: rowsAutoPromoted,
     rows_quarantined: rowsQuarantined,
@@ -579,5 +579,6 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
     conflicts_preview: conflictsPreview,
     deduped: false,
     dry_run: false,
+    ...(isRetry ? { retried_row_nos: [...retrySet] } : {}),
   });
 }));
