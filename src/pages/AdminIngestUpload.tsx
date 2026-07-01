@@ -579,7 +579,31 @@ function downloadCsv(filename: string, header: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-async function downloadQuarantineReport(batchId: string) {
+type ReportFormat = "csv" | "xlsx";
+
+async function downloadXlsx(filename: string, header: string[], rows: string[][]) {
+  const XLSX = await import("xlsx");
+  const aoa = [header, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "report");
+  XLSX.writeFile(wb, filename);
+}
+
+async function writeReport(
+  format: ReportFormat,
+  baseName: string,
+  header: string[],
+  rows: string[][],
+) {
+  if (format === "xlsx") {
+    await downloadXlsx(`${baseName}.xlsx`, header, rows);
+  } else {
+    downloadCsv(`${baseName}.csv`, header, rows);
+  }
+}
+
+async function downloadQuarantineReport(batchId: string, format: ReportFormat = "csv") {
   const { data, error } = await supabase
     .from("staged_records" as any)
     .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors, source_mapping_id")
@@ -600,14 +624,15 @@ async function downloadQuarantineReport(batchId: string) {
     JSON.stringify(s.value ?? null),
     JSON.stringify(s.validation_errors ?? []),
   ]);
-  downloadCsv(
-    `quarantine-${batchId.slice(0, 8)}.csv`,
+  await writeReport(
+    format,
+    `quarantine-${batchId.slice(0, 8)}`,
     ["row_no", "fact_type", "column", "tenant_node_id", "effective_at", "raw_value", "errors"],
     rows,
   );
 }
 
-async function downloadConflictsReport(batchId: string) {
+async function downloadConflictsReport(batchId: string, format: ReportFormat = "csv") {
   const { data, error } = await supabase
     .from("fact_conflicts" as any)
     .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id, status, created_at")
@@ -628,8 +653,9 @@ async function downloadConflictsReport(batchId: string) {
     String(c.status ?? ""),
     String(c.created_at ?? ""),
   ]);
-  downloadCsv(
-    `conflicts-${batchId.slice(0, 8)}.csv`,
+  await writeReport(
+    format,
+    `conflicts-${batchId.slice(0, 8)}`,
     ["row_no", "fact_type", "tenant_node_id", "incoming_value", "existing_value", "existing_canonical_id", "status", "created_at"],
     rows,
   );
