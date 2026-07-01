@@ -145,6 +145,7 @@ export type IngestCsvAdapterResponse = {
   conflicts_preview: IngestCsvAdapterConflictPreview[];
   deduped: boolean; // true when the (file, mapping) pair was already processed
   dry_run: boolean;
+  retried_row_nos?: number[]; // populated when the call ran in retry mode
 };
 
 // ---------- helpers ----------
