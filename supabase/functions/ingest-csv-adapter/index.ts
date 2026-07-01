@@ -386,6 +386,17 @@ Deno.serve(withLogger("ingest-csv-adapter", async (req) => {
 
       if (status === "quarantined") {
         rowsQuarantined++;
+        if (quarantinePreview.length < 50) {
+          quarantinePreview.push({
+            row_no: rowNo * 1000 + mapping.facts.indexOf(f),
+            fact_type: f.fact_type,
+            column: f.column,
+            tenant_node_id: tenantNodeId,
+            effective_at: effectiveAt,
+            raw_value: cellRaw ?? null,
+            errors,
+          });
+        }
         await sb.from("ingest_events").insert({
           event_type: "row_quarantined",
           tenant_id: mappingRow.tenant_id,
