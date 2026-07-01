@@ -792,6 +792,45 @@ function cmp(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b));
 }
 
+/** Render an arbitrary JSON payload as a compact, readable cell string. */
+function formatRawCell(v: unknown): string {
+  if (v == null) return "—";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  // Unwrap the adapter's { value, unit? } envelope for readability.
+  if (typeof v === "object" && v !== null && "value" in (v as Record<string, unknown>)) {
+    const obj = v as { value?: unknown; unit?: unknown };
+    const inner = formatRawCell(obj.value);
+    return obj.unit ? `${inner} ${String(obj.unit)}` : inner;
+  }
+  return JSON.stringify(v);
+}
+
+/** Human-readable text for a single quarantine/validation error entry. */
+function humanizeError(err: Record<string, unknown>): string {
+  const kind = String(err.kind ?? "error");
+  const reason = err.reason ? String(err.reason) : "";
+  const column = err.column ? String(err.column) : "";
+  switch (kind) {
+    case "tenant_node_unresolved":
+      return "Tenant node could not be resolved from the row.";
+    case "effective_at_unresolved":
+      return "Effective date column was missing or unparseable.";
+    case "parse_failed":
+      return `Value in column “${column}” failed to parse${reason ? ` (${reason})` : ""}.`;
+    case "promote_failed":
+      return `Promotion to canonical_facts failed${reason ? `: ${reason}` : ""}.`;
+    default:
+      return reason ? `${kind}: ${reason}` : kind;
+  }
+}
+
+function humanizeErrors(errs: Array<Record<string, unknown>>): string {
+  if (!errs || errs.length === 0) return "—";
+  return errs.map(humanizeError).join(" · ");
+}
+
+
 function SortHeader<K extends string>({
   label,
   col,
