@@ -725,6 +725,29 @@ function SortHeader<K extends string>({
   );
 }
 
+function DownloadFormatMenu({
+  label,
+  onDownload,
+}: {
+  label: string;
+  onDownload: (format: ReportFormat) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Download className="h-3 w-3 mr-1" /> {label}
+          <ChevronDown className="h-3 w-3 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => onDownload("csv")}>Download CSV</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onDownload("xlsx")}>Download XLSX</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 type ConflictSortKey = "row_no" | "fact_type" | "tenant_node_id" | "effective_at";
 
 function ConflictsPreviewTable({
