@@ -1083,7 +1083,12 @@ function QuarantinePreviewTable({
     if (sortKey) {
       const k = sortKey;
       const dir = sortDir === "asc" ? 1 : -1;
-      out = [...out].sort((a, b) => cmp(a[k], b[k]) * dir);
+      out = [...out].sort((a, b) => {
+        if (k === "reason") {
+          return cmp(humanizeErrors(a.errors), humanizeErrors(b.errors)) * dir;
+        }
+        return cmp(a[k], b[k]) * dir;
+      });
     }
     return out;
   }, [rows, query, factType, errorKind, sortKey, sortDir]);
