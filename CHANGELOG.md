@@ -4,6 +4,9 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+- docs: merge strategic corpus batch 1/3 — platform review, H2 roadmap, platform PRD/spec, constellation status map, 2027 constellation roadmap
+
+
 ### Added (2026-06-27 — W9.1 structured CSV/XLSX adapter)
 - `supabase/functions/_shared/contracts/ingest-csv-adapter.ts` — Zod `CsvMappingSchema` + `IngestCsvAdapterBody`/`Response` types + `parseCellValue` helper; first concrete implementation of `SOURCE_ADAPTER_CONTRACT`.
 - `ingest-csv-adapter` edge fn: pulls a CSV/XLSX out of `ingested-files`, applies the approved `source_mappings.mapping`, writes one `raw_records` envelope, fans rows into `staged_records`, and either promotes to `canonical_facts`, raises a `fact_conflicts` row (on live-value mismatch), or quarantines. Emits `ingest_events` per outcome. Idempotent on `(file_id, source_mapping_id)`.
