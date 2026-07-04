@@ -4,6 +4,7 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+- docs: merge strategic corpus batch 3/3 — readiness companion, twin framework, agent architecture, dashboards/reporting/extraction framework, constellation element book (3 vols)
 - docs: merge strategic corpus batch 2/3 — platform PRD/spec, W10 corporate ingestion programme (PRD, spec, roadmap, plan)
 - docs: merge strategic corpus batch 1/3 — platform review, H2 roadmap, platform PRD/spec, constellation status map, 2027 constellation roadmap
 
