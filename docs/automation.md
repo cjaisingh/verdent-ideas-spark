@@ -12,7 +12,7 @@ How AWIP Core watches itself: scheduled AI code review, nightly tests, QA probes
 | Daily plan | Nightly 05:30 UTC (`pg_cron`) | `daily-plan` | `daily_plans` |
 | Failure alerts | On every job failure | `dispatchAlert` (inline helper) | `alert_log` |
 
-All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same token used by `awip-api`). RLS on every new table is operator-only; realtime is enabled so the UI updates without polling.
+All cron-invoked functions authenticate with `AWIP_SERVICE_TOKEN` (the same token used by `awip-api`). RLS on every new table is operator-only; realtime is enabled so the UI updates without polling. The token is compared in constant time via `_shared/timing-safe.ts` (`tokenMatches`) — `night-agent` and the shared `requireCronOrOperator` helper no longer use a short-circuiting `===`, which would otherwise leak the token byte-by-byte through response latency.
 
 ## Daily plan
 
