@@ -96,6 +96,8 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
   if (!parsed.success) return json({ error: parsed.error.flatten() }, 400);
   const p = parsed.data;
 
+  const docEmbedding: number[] | null = p.doc_embedding ?? null;
+
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
   // Confirm file exists.
@@ -107,20 +109,20 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
   if (fErr || !file) return json({ error: "file_not_found" }, 404);
 
   if (p.status === "failed") {
-    await sb.from("ingested_files").update({
-      status: "failed",
-      failure_reason: p.failure_reason ?? "unknown",
-      attempts: (await sb.from("ingested_files").select("attempts").eq("id", p.file_id).single()).data?.attempts + 1 || 1,
-    }).eq("id", p.file_id);
+    // Atomic attempt increment (no read-modify-write race across retries).
+    await sb.rpc("mark_ingest_failed", {
+      p_file_id: p.file_id,
+      p_failure_reason: p.failure_reason ?? "unknown",
+    });
     await sb.from("ingested_file_events").insert({
       file_id: p.file_id,
       event_type: "failed",
       actor: "sidecar",
       payload: { failure_reason: p.failure_reason },
     });
-    return json<IngestCallbackResponse>({
+    return json({
       file_id: p.file_id, chunks_written: 0, embeddings_queued: 0, status: "failed",
-    });
+    } satisfies IngestCallbackResponse);
   }
 
   // Mark parsing.
@@ -131,7 +133,8 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
     last_heartbeat_at: new Date().toISOString(),
   }).eq("id", p.file_id);
 
-  // Upsert chunks.
+  // Upsert chunks with W9.1 semantic index fields (from the validated contract).
+  // parent_chunk_index is resolved to parent_chunk_id after IDs are returned.
   const chunkRows = p.chunks.map((c) => ({
     file_id: p.file_id,
     chunk_index: c.chunk_index,
@@ -139,18 +142,73 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
     tokens: c.tokens ?? null,
     metadata: c.metadata,
     embed_model: EMBED_MODEL,
+    chunk_type: c.chunk_type,
+    section_id: c.section_id ?? null,
+    is_section_root: c.is_section_root,
+    entity_refs: c.entity_refs,
   }));
+  const idByIndex = new Map<number, string>();
   if (chunkRows.length > 0) {
-    const { error: chErr } = await sb
+    const { data: upserted, error: chErr } = await sb
       .from("ingested_file_chunks")
-      .upsert(chunkRows, { onConflict: "file_id,chunk_index" });
+      .upsert(chunkRows, { onConflict: "file_id,chunk_index" })
+      .select("id, chunk_index");
     if (chErr) {
       return json({ error: "chunk_upsert_failed", detail: chErr.message }, 500);
+    }
+    for (const row of (upserted ?? []) as Array<{ id: string; chunk_index: number }>) {
+      idByIndex.set(row.chunk_index, row.id);
     }
     await sb.from("ingested_file_events").insert({
       file_id: p.file_id, event_type: "chunked", actor: "sidecar",
       payload: { chunks: chunkRows.length },
     });
+  }
+
+  // Resolve parent_chunk_index → parent_chunk_id now that UUIDs exist.
+  for (const c of p.chunks) {
+    if (c.parent_chunk_index == null) continue;
+    const childId = idByIndex.get(c.chunk_index);
+    const parentId = idByIndex.get(c.parent_chunk_index);
+    if (!childId || !parentId || childId === parentId) continue;
+    await sb.from("ingested_file_chunks").update({ parent_chunk_id: parentId }).eq("id", childId);
+  }
+
+  // Upsert entity refs for chunks that carry them.
+  let totalEntities = 0;
+  if (idByIndex.size > 0) {
+    const entityRows: Array<{
+      chunk_id: string; entity_id: string; raw_mention: string;
+      confidence: number; extraction_method: string;
+    }> = [];
+    for (const c of p.chunks) {
+      if (c.entity_refs.length === 0) continue;
+      const chunkId = idByIndex.get(c.chunk_index);
+      if (!chunkId) continue;
+      for (const entity_id of c.entity_refs) {
+        entityRows.push({
+          chunk_id: chunkId, entity_id, raw_mention: "",
+          confidence: 1.0, extraction_method: "string_match",
+        });
+      }
+    }
+    if (entityRows.length > 0) {
+      const { error: entErr } = await sb
+        .from("ingested_chunk_entities")
+        .upsert(entityRows, { onConflict: "chunk_id,entity_id", ignoreDuplicates: true });
+      if (entErr) {
+        await sb.from("ingested_file_events").insert({
+          file_id: p.file_id, event_type: "failed", actor: "entity-linker",
+          payload: { stage: "entity_upsert", error: entErr.message.slice(0, 500) },
+        });
+      } else {
+        totalEntities = entityRows.length;
+        await sb.from("ingested_file_events").insert({
+          file_id: p.file_id, event_type: "entities_extracted", actor: "sidecar",
+          payload: { entities: totalEntities },
+        });
+      }
+    }
   }
 
   // Embed in batches of 32.
@@ -184,6 +242,25 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
     });
   }
 
+  // Persist doc-level embedding if provided; emit the event only on success.
+  if (docEmbedding) {
+    const { error: docErr } = await sb
+      .from("ingested_files")
+      .update({ doc_embedding: docEmbedding as unknown as string })
+      .eq("id", p.file_id);
+    if (docErr) {
+      await sb.from("ingested_file_events").insert({
+        file_id: p.file_id, event_type: "failed", actor: "embedder",
+        payload: { stage: "doc_embed", error: docErr.message.slice(0, 500) },
+      });
+    } else {
+      await sb.from("ingested_file_events").insert({
+        file_id: p.file_id, event_type: "doc_embedded", actor: "sidecar",
+        payload: { dims: docEmbedding.length },
+      });
+    }
+  }
+
   // Final status.
   const finalStatus = p.status;
   await sb.from("ingested_files").update({
@@ -198,10 +275,10 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
     payload: { parser: p.parser, parser_version: p.parser_version },
   });
 
-  return json<IngestCallbackResponse>({
+  return json({
     file_id: p.file_id,
     chunks_written: chunkRows.length,
     embeddings_queued: embeddedCount,
     status: finalStatus,
-  });
+  } satisfies IngestCallbackResponse);
 }));

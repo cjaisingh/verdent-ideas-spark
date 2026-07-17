@@ -97,6 +97,17 @@ export type IngestFileResponse = {
 
 // ---------- ingest-callback ----------
 
+// Semantic chunk classifications (W9.1). Shared by the callback + search bodies.
+export const CHUNK_TYPES = [
+  "maintenance_record",
+  "asset_spec",
+  "compliance_clause",
+  "inspection_note",
+  "procedure",
+  "general",
+] as const;
+export type ChunkType = (typeof CHUNK_TYPES)[number];
+
 export const IngestCallbackBody = z.object({
   file_id: z.string().uuid(),
   parser: z.string().min(1).max(64),               // "markitdown" | "metadata_only" | "adapter:<name>"
@@ -107,10 +118,18 @@ export const IngestCallbackBody = z.object({
       content: z.string().min(1).max(20000),
       tokens: z.number().int().min(0).optional(),
       metadata: z.record(z.unknown()).default({}),
+      // W9.1 semantic index fields (defaults applied server-side).
+      chunk_type: z.enum(CHUNK_TYPES).default("general"),
+      section_id: z.string().max(255).nullable().optional(),
+      parent_chunk_index: z.number().int().min(0).nullable().optional(),
+      is_section_root: z.boolean().default(false),
+      entity_refs: z.array(z.string().uuid()).max(50).default([]),
     }),
   ).max(2000),
   status: z.enum(["parsed", "metadata_only", "failed"]),
   failure_reason: z.string().max(2000).nullable().optional(),
+  // W9.1 — doc-level embedding (mean-pooled + normalised over chunk embeddings).
+  doc_embedding: z.array(z.number()).length(1536).nullable().optional(),
 });
 export type IngestCallbackBody = z.infer<typeof IngestCallbackBody>;
 
@@ -136,6 +155,11 @@ export const IngestSearchBody = z.object({
   // and chunks have different retrieval shapes.
   include_facts: z.boolean().default(false),
   fact_match_count: z.number().int().min(1).max(100).default(20),
+  // W9.1 semantic filters — pushed into hybrid_match_ingested_chunks so
+  // ranking happens over the filtered corpus. hierarchical caps chunks/file.
+  entity_ids: z.array(z.string().uuid()).max(32).nullable().optional(),
+  chunk_types: z.array(z.enum(CHUNK_TYPES)).max(6).nullable().optional(),
+  hierarchical: z.boolean().default(true),
 });
 export type IngestSearchBody = z.infer<typeof IngestSearchBody>;
 
@@ -151,6 +175,12 @@ export type IngestSearchHit = {
   rrf_score: number;           // fused score (sole sort key in hybrid mode)
   domain_id: string | null;
   metadata: Record<string, unknown>;
+
+  // --- semantic index fields (W9.1) ---
+  chunk_id: string;            // DB UUID of the chunk row
+  chunk_type: string;          // one of CHUNK_TYPES
+  section_id: string | null;   // section heading / identifier, if set
+  entity_refs: string[];       // entity UUIDs resolved for this chunk
 };
 
 export type IngestSearchFactHit = {
@@ -164,6 +194,24 @@ export type IngestSearchFactHit = {
   lexical_score: number;
 };
 
+// Entity resolved from entity_refs during search result enrichment (W9.1).
+export type EntityContext = {
+  entity_id: string;
+  name: string;
+  kind: string; // 'capability' | 'asset' | 'space' | 'system' | 'unknown'
+};
+
+// OKR / goal node linked to entities that appeared in the search results (W9.1).
+export type OkrContext = {
+  node_id: string;
+  title: string;
+  type: string;
+  status: string;
+  current_value: number | null;
+  target_value: number | null;
+  linked_capability_ids: string[];
+};
+
 export type IngestSearchResponse = {
   hits: IngestSearchHit[];
   fact_hits?: IngestSearchFactHit[];
@@ -171,6 +219,10 @@ export type IngestSearchResponse = {
   embed_model: string;
   mode: "hybrid" | "dense" | "lexical";
   rrf_k: number;
+
+  // --- semantic index enrichment (W9.1) ---
+  entity_context: EntityContext[];
+  okr_context: OkrContext[];
 };
 
 // ---------- contract metadata ----------
