@@ -4,6 +4,12 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-07-17 — W9.1 semantic index enrichment)
+- Migration `20260717120000` extends the hybrid retrieval layer with an entity-aware, hierarchical semantic index: `chunk_type`, `section_id`, `section_embedding`, `parent_chunk_id`, `entity_refs`, `is_section_root` on `ingested_file_chunks`; `doc_embedding` + `chunk_count` on `ingested_files` (backfilled, kept in sync by trigger); new `ingested_chunk_entities` audit table (RLS-scoped to operator/admin).
+- `hybrid_match_ingested_chunks` extended to return `chunk_id`/`chunk_type`/`section_id`/`entity_refs` and accept `p_entity_ids`/`p_chunk_types` filters applied inside the scope CTE (ranking over the filtered corpus). New `match_ingested_documents` for document-level coarse retrieval and `mark_ingest_failed` for atomic failure marking.
+- `ingest-callback`: persists validated semantic chunk fields + entity refs, resolves `parent_chunk_index` → `parent_chunk_id`, atomic attempt increment, doc-embedding persistence gated on write success.
+- `ingest-search`: pushes semantic filters into the hybrid RPC, hierarchical chunk-per-file cap, 20s bounded embedding timeout, and entity + OKR context enrichment on results (alongside the existing hybrid + canonical-facts legs).
+
 - docs: merge strategic corpus batch 3/3 — readiness companion, twin framework, agent architecture, dashboards/reporting/extraction framework, constellation element book (3 vols)
 - docs: merge strategic corpus batch 2/3 — platform PRD/spec, W10 corporate ingestion programme (PRD, spec, roadmap, plan)
 - docs: merge strategic corpus batch 1/3 — platform review, H2 roadmap, platform PRD/spec, constellation status map, 2027 constellation roadmap
