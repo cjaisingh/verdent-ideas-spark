@@ -6,10 +6,11 @@
 // proportional to the input length only (a length mismatch still returns early;
 // that leaks length, which is standard and not sensitive for fixed-length tokens).
 
+const encoder = new TextEncoder();
+
 export function timingSafeEqual(a: string, b: string): boolean {
-  const enc = new TextEncoder();
-  const ba = enc.encode(a);
-  const bb = enc.encode(b);
+  const ba = encoder.encode(a);
+  const bb = encoder.encode(b);
   if (ba.length !== bb.length) return false;
   let diff = 0;
   for (let i = 0; i < ba.length; i++) diff |= ba[i] ^ bb[i];

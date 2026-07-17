@@ -4,6 +4,11 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-07-17 — fact-conflict resolution, #32)
+- Migration `20260717140000` adds `resolve_fact_conflict(_conflict_id, _resolution, _dismiss)` — a SECURITY DEFINER RPC (operator-gated) that closes an open `fact_conflicts` row. `keep_existing` records the existing fact as the outcome; `accept_incoming` / `superseded_by_rule` supersede the live `canonical_facts` row with the staged incoming value; `_dismiss=true` marks the conflict dismissed. Every resolution emits a `conflict_resolved` ingest event (a supersede also emits `fact_superseded`). `manual_value` is deferred (needs a matching value-hash scheme).
+- The self-referential `canonical_facts` FKs (`superseded_by`, `supersedes_id`) are now `DEFERRABLE INITIALLY DEFERRED` so a supersede can retire the old row before inserting its replacement without tripping the `uq_canonical_facts_live` partial unique index.
+- `AdminIngestUpload` fact-conflicts table gains per-row **Accept incoming / Keep existing / Dismiss** actions and shows resolved/dismissed status; the view refreshes from the DB after each resolution. Docs: `docs/operator-ingestion.md`.
+
 ### Fixed (2026-07-17 — deploy safety + auth hardening)
 - Migration `20260717130000` creates the `ingested-files` storage bucket (#31). It was referenced by a column default and three storage RLS policies but only ever created by hand in the live env, so fresh environments (new project, CI, DR restore) failed every upload with "bucket not found". Idempotent (`ON CONFLICT DO NOTHING`) — the live bucket is untouched.
 - Constant-time service-token comparison (#33): new `_shared/timing-safe.ts` (`timingSafeEqual` / `tokenMatches`); `_shared/operator-auth.ts` and `night-agent` now compare the service token in constant time instead of a short-circuiting `===`, closing a timing side-channel that could enumerate the token byte-by-byte.

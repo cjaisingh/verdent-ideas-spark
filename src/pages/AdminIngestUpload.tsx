@@ -43,6 +43,8 @@ type QuarantinePreview = {
 };
 
 type ConflictPreview = {
+  id?: string;            // fact_conflicts.id — present after a real run / refresh
+  status?: string;        // open | resolved | dismissed
   row_no: number;
   fact_type: string;
   tenant_node_id: string;
@@ -120,6 +122,7 @@ export default function AdminIngestUpload() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<false | "upload" | "mapping" | "run">(false);
   const [retryingRow, setRetryingRow] = useState<number | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [result, setResult] = useState<AdapterResponse | null>(null);
   const [facts, setFacts] = useState<CanonicalFactRow[]>([]);
@@ -287,13 +290,9 @@ export default function AdminIngestUpload() {
       setResult(res);
 
       if (!res.dry_run && res.staging_batch_id) {
-        const { data: fRows } = await supabase
-          .from("canonical_facts" as any)
-          .select("id, tenant_node_id, fact_type, value, effective_at, auto_promoted, staged_row_no")
-          .eq("staging_batch_id", res.staging_batch_id)
-          .order("staged_row_no", { ascending: true })
-          .limit(500);
-        setFacts(((fRows ?? []) as unknown) as CanonicalFactRow[]);
+        // Re-read from the DB so conflict rows carry their id + status
+        // (the adapter response preview does not include them).
+        await refreshBatchState(res.staging_batch_id);
       }
       toast({
         title: res.dry_run ? "Dry run complete" : "Adapter run complete",
@@ -320,7 +319,7 @@ export default function AdminIngestUpload() {
         .limit(50000),
       supabase
         .from("fact_conflicts" as any)
-        .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id")
+        .select("id, status, row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id")
         .eq("staging_batch_id", batchId)
         .order("row_no", { ascending: true })
         .limit(50000),
@@ -352,6 +351,8 @@ export default function AdminIngestUpload() {
         errors: (s.validation_errors as Array<Record<string, unknown>>) ?? [],
       })),
       conflicts_preview: conflicts.slice(0, 50).map((c) => ({
+        id: c.id as string | undefined,
+        status: (c.status as string | undefined) ?? "open",
         row_no: c.row_no as number,
         fact_type: c.fact_type as string,
         tenant_node_id: (c.tenant_node_id as string) ?? "",
@@ -398,6 +399,38 @@ export default function AdminIngestUpload() {
       });
     } finally {
       setRetryingRow(null);
+    }
+  };
+
+  const resolveConflict = async (
+    conflictId: string,
+    resolution: "keep_existing" | "accept_incoming" | null,
+  ) => {
+    if (!result?.staging_batch_id) return;
+    setResolvingId(conflictId);
+    try {
+      const { data, error } = await supabase.rpc("resolve_fact_conflict" as any, {
+        _conflict_id: conflictId,
+        _resolution: resolution,
+        _dismiss: resolution === null,
+      });
+      if (error) throw error;
+      await refreshBatchState(result.staging_batch_id);
+      const outcome = (data as { status?: string } | null)?.status ?? "resolved";
+      toast({
+        title: `Conflict ${outcome}`,
+        description: resolution
+          ? `Applied ${resolution.replace("_", " ")}.`
+          : "Marked as dismissed.",
+      });
+    } catch (e) {
+      toast({
+        title: "Resolve failed",
+        description: e instanceof Error ? e.message : String(e),
+        variant: "destructive",
+      });
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -639,6 +672,8 @@ export default function AdminIngestUpload() {
           rows={result.conflicts_preview}
           totalCount={result.conflicts_raised}
           onDownload={(fmt) => downloadConflictsReport(result.staging_batch_id, fmt)}
+          onResolve={resolveConflict}
+          resolvingId={resolvingId}
         />
       )}
 
@@ -904,10 +939,14 @@ function ConflictsPreviewTable({
   rows,
   totalCount,
   onDownload,
+  onResolve,
+  resolvingId,
 }: {
   rows: ConflictPreview[];
   totalCount: number;
   onDownload: (format: ReportFormat) => void;
+  onResolve: (conflictId: string, resolution: "keep_existing" | "accept_incoming" | null) => void;
+  resolvingId: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [factType, setFactType] = useState<string>("__all__");
@@ -999,6 +1038,7 @@ function ConflictsPreviewTable({
                <th className="p-2">incoming</th>
                <th className="p-2">existing_value</th>
                <th className="p-2">existing_canonical</th>
+               <th className="p-2">resolve</th>
             </tr>
           </thead>
           <tbody>
@@ -1007,8 +1047,10 @@ function ConflictsPreviewTable({
               const existing = c.existing_value !== undefined
                 ? formatRawCell(c.existing_value)
                 : (c.existing_value_hash ? `hash:${c.existing_value_hash.slice(0, 12)}…` : "—");
+              const st = c.status ?? "open";
+              const busyRow = !!c.id && resolvingId === c.id;
               return (
-                <tr key={`${c.row_no}-${c.fact_type}`} className="border-t align-top">
+                <tr key={c.id ?? `${c.row_no}-${c.fact_type}`} className="border-t align-top">
                   <td className="p-2 font-mono">{c.row_no}</td>
                   <td className="p-2 font-mono">{c.fact_type}</td>
                   <td className="p-2 font-mono">{c.tenant_node_id ? c.tenant_node_id.slice(0, 8) : "—"}</td>
@@ -1016,11 +1058,39 @@ function ConflictsPreviewTable({
                   <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.incoming_value)}>{incoming}</td>
                   <td className="p-2 font-mono max-w-xs truncate" title={JSON.stringify(c.existing_value ?? { hash: c.existing_value_hash })}>{existing}</td>
                   <td className="p-2 font-mono" title={c.existing_canonical_id}>{c.existing_canonical_id.slice(0, 8)}</td>
+                  <td className="p-2">
+                    {!c.id ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : st !== "open" ? (
+                      <Badge variant={st === "resolved" ? "default" : "secondary"}>{st}</Badge>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm" variant="default" className="h-7 text-xs"
+                          disabled={busyRow}
+                          onClick={() => onResolve(c.id!, "accept_incoming")}
+                          title="Supersede the live fact with the incoming value"
+                        >Accept incoming</Button>
+                        <Button
+                          size="sm" variant="outline" className="h-7 text-xs"
+                          disabled={busyRow}
+                          onClick={() => onResolve(c.id!, "keep_existing")}
+                          title="Keep the existing live fact"
+                        >Keep existing</Button>
+                        <Button
+                          size="sm" variant="ghost" className="h-7 text-xs"
+                          disabled={busyRow}
+                          onClick={() => onResolve(c.id!, null)}
+                          title="Dismiss — not a real conflict"
+                        >Dismiss</Button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td className="p-4 text-center text-muted-foreground" colSpan={7}>No rows match the current filters.</td></tr>
+              <tr><td className="p-4 text-center text-muted-foreground" colSpan={8}>No rows match the current filters.</td></tr>
             )}
           </tbody>
         </table>
