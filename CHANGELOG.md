@@ -4,6 +4,17 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added (2026-07-17 — W10-S2 lifecycle + approval schema, #36 slice 2)
+- Migration `20260717160000` (M2 slice 1 — schema only, deliberately inert): `doc_lifecycle` + `approval_mode` enums; `ingested_files.lifecycle` (default `ingested`) + `approved_by`/`approved_at`/`approval_id`; `document_approval_policies` seeded per class (contract/certificate/register/model/drawing → operator; correspondence/media/other → auto with clean-parse + lawful-basis conditions; four_eyes dormant); `retrieval_contracts.min_approval_state` (default `approved`); six lifecycle event kinds added to `ingested_file_events`.
+- Deterministic evaluator `_shared/contracts/approval-policy.ts` (+ Deno tests) so ingest-callback can decide auto-approve vs pending-review without embedding policy logic.
+- Nothing enforces the boundary yet — the wiring (ingest-callback stamping, lifecycle transition endpoint, approval-aware `_v2` match RPCs, and the corpus backfill) is M2 slice 2 and must land with the backfill so existing content is `approved` before retrieval filters. The `_v2` swap is the programme's riskiest change (wrapper week per the plan).
+
+### Added (2026-07-17 — W10-S1 records layer, #36 slice 1)
+- Migration `20260717150000` (M1, "smallest reviewable slice" per the W10 plan): every ingested file gets a records identity. New `retention_policies` table (seeded standard/contract/media/working), `records_class` + `bytes_tier` enums, and `ingested_files` columns `records_class` (default `other`), `retention_policy_key` (→ retention_policies, default `standard`), `revision_of` (self-fk), `revision_label`, `legal_hold`, `bytes_tier`. Indexes on class, revision_of, and a partial index on held files.
+- `legal_hold_audit` table + `set_legal_hold(_file_id,_on,_reason)` — admin-gated SECURITY DEFINER that flips the hold and writes the audit atomically.
+- Deterministic records classifier `_shared/contracts/records-class.ts` (no LLM; extension → keyword → discipline → mime → `other`) with Deno unit tests. LLM assist for the `other` bucket is a deferred operator toggle.
+- Docs: `docs/features/ingestion.md` § Records & lifecycle; `mem/features/doc-lifecycle.md`. Follow-up slices: M2 lifecycle + approval trust boundary, retention sweeper, quota enforcement, revision detection in ingest-file, and the S1/S2 non-code gates (DR restore drill, DPA).
+
 ### Added (2026-07-17 — fact-conflict resolution, #32)
 - Migration `20260717140000` adds `resolve_fact_conflict(_conflict_id, _resolution, _dismiss)` — a SECURITY DEFINER RPC (operator-gated) that closes an open `fact_conflicts` row. `keep_existing` records the existing fact as the outcome; `accept_incoming` / `superseded_by_rule` supersede the live `canonical_facts` row with the staged incoming value; `_dismiss=true` marks the conflict dismissed. Every resolution emits a `conflict_resolved` ingest event (a supersede also emits `fact_superseded`). `manual_value` is deferred (needs a matching value-hash scheme).
 - The self-referential `canonical_facts` FKs (`superseded_by`, `supersedes_id`) are now `DEFERRABLE INITIALLY DEFERRED` so a supersede can retire the old row before inserting its replacement without tripping the `uq_canonical_facts_live` partial unique index.

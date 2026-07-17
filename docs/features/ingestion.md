@@ -73,6 +73,27 @@ Out-of-repo Python service running `markitdown`. Contract in `docs/runbooks/inge
 - `LOVABLE_API_KEY` — already present; used for embeddings.
 - `AWIP_SERVICE_TOKEN` — already present; used by GHA worker.
 
+## Records & lifecycle (W10-S1)
+
+Every ingested file carries a **records identity** (migration `20260717150000`):
+
+- `records_class` — one of contract / certificate / register / model / drawing /
+  correspondence / media / other. Assigned by the deterministic classifier in
+  `_shared/contracts/records-class.ts` (extension → filename keyword → declared
+  discipline → mime → `other`; no LLM in the default path).
+- `retention_policy_key` → `retention_policies` (seeded standard / contract /
+  media / working; each sets hot_days, chunks_days, min_approval_for_delete).
+- `revision_of` / `revision_label` — revision chain (detection in ingest-file is a
+  follow-up slice).
+- `legal_hold` (+ `legal_hold_audit`) — set only via the admin-gated
+  `set_legal_hold()` RPC. A legal hold always beats retention.
+- `bytes_tier` — hot / chunks_only / tombstone, driven later by the retention
+  sweeper.
+
+Still to land (later S1/S2 slices): the lifecycle + approval trust boundary,
+the retention sweeper (dry-run first), storage-quota enforcement, and the S1/S2
+readiness gates (DR restore drill, DPA). See `mem/features/doc-lifecycle.md`.
+
 ## Out of scope (v1)
 
 - Hosting the markitdown sidecar (separate infra decision)
