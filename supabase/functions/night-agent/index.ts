@@ -24,6 +24,7 @@ import { smokeTest } from "./smoke.ts";
 import { dispatchAlert } from "../_shared/alerts.ts";
 import { withLogger } from "../_shared/logger.ts";
 import { recordStep } from "../_shared/steps.ts";
+import { tokenMatches } from "../_shared/timing-safe.ts";
 
 const SETTINGS_COLS =
   "night_agent_enabled, night_timezone, night_window_start, night_window_end, night_blackout_dates, night_allowed_kinds";
@@ -40,7 +41,7 @@ Deno.serve(withLogger("night-agent", async (req, ctx) => {
 
   const provided = req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+  const triggeredByCron = tokenMatches(provided, SERVICE_TOKEN);
   const sb = createServiceClient();
 
   if (!triggeredByCron && !auth.startsWith("Bearer ")) {

@@ -1,6 +1,7 @@
 // Shared operator-role check for cron/edge functions that accept either a
 // service-token (cron) or an operator/admin Bearer JWT.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { tokenMatches } from "./timing-safe.ts";
 
 export type OperatorAuthResult =
   | { ok: true; triggeredByCron: boolean; userId: string | null }
@@ -11,7 +12,7 @@ export async function requireCronOrOperator(req: Request): Promise<OperatorAuthR
   const provided =
     req.headers.get("x-awip-service-token") ?? req.headers.get("x-service-token");
   const auth = req.headers.get("authorization") ?? "";
-  const triggeredByCron = !!SERVICE_TOKEN && provided === SERVICE_TOKEN;
+  const triggeredByCron = tokenMatches(provided, SERVICE_TOKEN);
   if (triggeredByCron) return { ok: true, triggeredByCron: true, userId: null };
 
   if (!auth.startsWith("Bearer ")) return { ok: false, status: 401, error: "unauthorized" };
