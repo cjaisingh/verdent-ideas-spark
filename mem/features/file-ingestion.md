@@ -36,6 +36,12 @@ W9.0 substrate for client file ingestion.
 ## GHA worker
 - `scripts/ingest-bulk-worker.py` — local markitdown, claims via PATCH on PostgREST, posts HMAC-signed callbacks. Requires `SUPABASE_SERVICE_ROLE_KEY` as a GHA secret.
 
+## Semantic index enrichment (W9.1, migration 20260717120000)
+- Chunks carry semantic metadata: `chunk_type` (maintenance_record / asset_spec / compliance_clause / inspection_note / procedure / general), `section_id` + `parent_chunk_id` (section hierarchy), `is_section_root`, and `entity_refs[]` (resolved AWIP entity UUIDs, audited in `ingested_chunk_entities`).
+- Files carry a `doc_embedding` (mean-pooled + normalised over chunk embeddings) and a trigger-synced `chunk_count`; `match_ingested_documents` does a document-level coarse pass.
+- `hybrid_match_ingested_chunks` now filters (`p_entity_ids`, `p_chunk_types`) inside its scope CTE and returns the semantic columns, so `ingest-search` layers entity + OKR context enrichment on top of hybrid (dense+lexical+RRF) results without a separate RPC.
+- Sidecar populates these via the 5-step pipeline in `docs/runbooks/ingest-sidecar.md` (semantic chunking → type classification → entity extraction → doc embedding → signed callback).
+
 ## Out of scope (v1)
 - Sidecar host + actual sidecar container (separate infra discussion).
 - CAD/IFC/BIM geometry adapters → W9.2.

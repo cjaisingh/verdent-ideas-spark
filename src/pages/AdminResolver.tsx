@@ -110,7 +110,7 @@ export default function AdminResolver() {
       toast({ title: "Save failed", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Thresholds updated", description: JSON.stringify((data as { current?: unknown } | null)?.current ?? data) });
+    toast({ title: "Thresholds updated", description: JSON.stringify((data as any)?.current ?? data) });
     setReason("");
     load();
   };
