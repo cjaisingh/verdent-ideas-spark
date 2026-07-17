@@ -20,9 +20,23 @@ Durable decisions for the corporate-knowledge records layer. See
 - **Trust boundary defaults to `approved`** — retrieval contracts serve approved
   content unless a contract widens `min_approval_state` (S2).
 
+## Landed — S2 M2 slice 1 (migration 20260717160000, schema only)
+- `doc_lifecycle` enum: ingested → pending_review | auto_approved → approved →
+  superseded → archived; quarantined from any; rejected terminal.
+- `ingested_files.lifecycle` (default `ingested`) + `approved_by`/`approved_at`/`approval_id`.
+- `document_approval_policies` seeded per class; deterministic evaluator in
+  `_shared/contracts/approval-policy.ts` (unit-tested). four_eyes is dormant.
+- `retrieval_contracts.min_approval_state` (default `approved`) — inert until the
+  `_v2` match RPCs read it.
+- This slice is intentionally inert: nothing stamps or enforces lifecycle yet.
+
 ## Not yet landed
-- M2: lifecycle enum + approval trust boundary + `document_approval_policies` +
-  approval-aware retrieval (`_v2` match RPCs with `min_lifecycle`).
+- M2 slice 2 (the wiring): ingest-callback policy stamping (auto_approved vs
+  pending_review + approval row), lifecycle transition endpoint
+  (approve/reject/quarantine/supersede), approval-aware `_v2` match RPCs with
+  `min_lifecycle` (old signatures as deprecating wrappers one release), the
+  canonical-gate 4th condition, and the corpus backfill — **must ship together**
+  so existing content is `approved` before retrieval starts filtering.
 - Retention sweeper (dry-run first, two weeks), storage-quota enforcement,
   revision detection in ingest-file.
 - Non-code gates: S1 needs a recorded DR restore drill (incl. held-file
