@@ -21,6 +21,14 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Upload, FileCheck2, AlertTriangle, Download, ArrowUp, ArrowDown, ArrowUpDown, X, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
+// The ingest-pipeline tables (staged_records, fact_conflicts, canonical_facts,
+// source_mappings) and the resolve_fact_conflict RPC are not in the generated
+// Supabase types yet, so `.from()/.rpc()` on them don't type-check. Centralise
+// the single unavoidable loose-typed access here rather than scattering casts;
+// callers still narrow results with explicit `as unknown as` casts.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 type Mapping = {
   id: string;
   adapter_id: string;
@@ -129,8 +137,7 @@ export default function AdminIngestUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMappings = async () => {
-    const { data } = await supabase
-      .from("source_mappings" as any)
+    const { data } = await db.from("source_mappings")
       .select("id, adapter_id, version, status, tenant_id, mapping, notes, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
@@ -176,14 +183,12 @@ export default function AdminIngestUpload() {
           patch.approved_by = user?.id ?? null;
           patch.approved_at = new Date().toISOString();
         }
-        const { error } = await supabase
-          .from("source_mappings" as any)
+        const { error } = await db.from("source_mappings")
           .update(patch)
           .eq("id", selectedMappingId);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from("source_mappings" as any)
+        const { data, error } = await db.from("source_mappings")
           .insert({
             adapter_id: adapterId,
             version: 1,
@@ -311,20 +316,17 @@ export default function AdminIngestUpload() {
 
   const refreshBatchState = async (batchId: string) => {
     const [{ data: stagedRows }, { data: conflictRows }, { data: fRows }] = await Promise.all([
-      supabase
-        .from("staged_records" as any)
+      db.from("staged_records")
         .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_status, validation_errors, descriptors")
         .eq("staging_batch_id", batchId)
         .order("row_no", { ascending: true })
         .limit(50000),
-      supabase
-        .from("fact_conflicts" as any)
+      db.from("fact_conflicts")
         .select("id, status, row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id")
         .eq("staging_batch_id", batchId)
         .order("row_no", { ascending: true })
         .limit(50000),
-      supabase
-        .from("canonical_facts" as any)
+      db.from("canonical_facts")
         .select("id, tenant_node_id, fact_type, value, effective_at, auto_promoted, staged_row_no")
         .eq("staging_batch_id", batchId)
         .order("staged_row_no", { ascending: true })
@@ -409,7 +411,7 @@ export default function AdminIngestUpload() {
     if (!result?.staging_batch_id) return;
     setResolvingId(conflictId);
     try {
-      const { data, error } = await supabase.rpc("resolve_fact_conflict" as any, {
+      const { data, error } = await db.rpc("resolve_fact_conflict", {
         _conflict_id: conflictId,
         _resolution: resolution,
         _dismiss: resolution === null,
@@ -736,8 +738,7 @@ async function writeReport(
 }
 
 async function downloadQuarantineReport(batchId: string, format: ReportFormat = "csv") {
-  const { data, error } = await supabase
-    .from("staged_records" as any)
+  const { data, error } = await db.from("staged_records")
     .select("row_no, fact_type, tenant_node_id, effective_at, value, validation_errors, descriptors, source_mapping_id")
     .eq("staging_batch_id", batchId)
     .eq("validation_status", "quarantined")
@@ -770,8 +771,7 @@ async function downloadQuarantineReport(batchId: string, format: ReportFormat = 
 }
 
 async function downloadConflictsReport(batchId: string, format: ReportFormat = "csv") {
-  const { data, error } = await supabase
-    .from("fact_conflicts" as any)
+  const { data, error } = await db.from("fact_conflicts")
     .select("row_no, fact_type, tenant_node_id, incoming_value, existing_value, existing_canonical_id, status, created_at")
     .eq("staging_batch_id", batchId)
     .order("row_no", { ascending: true })
