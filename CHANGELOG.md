@@ -4,6 +4,10 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Fixed (2026-07-17 — CI baseline)
+- Cleared the 10 `@typescript-eslint/no-explicit-any` errors that kept `main`'s `Lint & Typecheck` and `CI` workflows red on every push (9 in `AdminIngestUpload.tsx` — centralised into one documented `db` alias for the not-yet-typed ingest tables/RPCs; 1 typed cast in `AdminResolver.tsx`). No runtime change.
+- `rls-map-verify` now runs against a self-contained Supabase local stack (`supabase start` applies all migrations) instead of empty staging DB secrets, so it stops erroring on connection for every PR.
+
 ### Added (2026-07-17 — W10-S2 lifecycle + approval schema, #36 slice 2)
 - Migration `20260717160000` (M2 slice 1 — schema only, deliberately inert): `doc_lifecycle` + `approval_mode` enums; `ingested_files.lifecycle` (default `ingested`) + `approved_by`/`approved_at`/`approval_id`; `document_approval_policies` seeded per class (contract/certificate/register/model/drawing → operator; correspondence/media/other → auto with clean-parse + lawful-basis conditions; four_eyes dormant); `retrieval_contracts.min_approval_state` (default `approved`); six lifecycle event kinds added to `ingested_file_events`.
 - Deterministic evaluator `_shared/contracts/approval-policy.ts` (+ Deno tests) so ingest-callback can decide auto-approve vs pending-review without embedding policy logic.
