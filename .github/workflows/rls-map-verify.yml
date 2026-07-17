@@ -1,13 +1,8 @@
 name: RLS map verify
 
-# Regenerates e2e/rls-policy-map.generated.ts from a database with all
-# migrations applied and fails the PR if the committed file drifts. Mark
-# **"RLS map verify"** as a required status check so RLS migrations must
-# include the regenerated map.
-#
-# Uses a self-contained Supabase local stack (Postgres + the managed
-# auth/storage schemas + roles the migrations depend on) rather than a remote
-# staging DB, so the check runs on every PR without needing populated secrets.
+# Regenerates e2e/rls-policy-map.generated.ts from the live database and
+# fails the PR if the committed file drifts. Mark **"RLS map verify"** as a
+# required status check so RLS migrations must include the regenerated map.
 
 on:
   pull_request:
@@ -27,38 +22,27 @@ jobs:
   verify:
     name: Verify RLS map matches live schema
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    environment: staging
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
 
       - name: Install psql client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      # Brings up local Postgres and applies every migration in
-      # supabase/migrations. A migration error fails here — which is the point.
-      - name: Start local Supabase (applies all migrations)
-        run: supabase start
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Regenerate and diff RLS map
+      - name: Regenerate and diff
         run: bun run rls:verify
         env:
-          # Supabase local stack defaults (config.toml).
-          PGHOST: 127.0.0.1
-          PGPORT: "54322"
-          PGUSER: postgres
-          PGPASSWORD: postgres
-          PGDATABASE: postgres
-          PGSSLMODE: disable
-
-      - name: Stop local Supabase
-        if: always()
-        run: supabase stop || true
+          # Standard libpq env vars — set in the staging GitHub Environment.
+          PGHOST: ${{ secrets.PGHOST }}
+          PGPORT: ${{ secrets.PGPORT }}
+          PGUSER: ${{ secrets.PGUSER }}
+          PGPASSWORD: ${{ secrets.PGPASSWORD }}
+          PGDATABASE: ${{ secrets.PGDATABASE }}
+          PGSSLMODE: require
