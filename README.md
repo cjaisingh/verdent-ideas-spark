@@ -20,6 +20,11 @@ Full framing in [`docs/why-awip.md`](docs/why-awip.md) — share this with FM st
 - [Phases 5/6/6b research](docs/phases-5-6-6b-research.md) — locked invariants + open questions feeding those phases
 - [ADR benchmarks](docs/adr/benchmarks.md) — datasets + metrics + thresholds for closing ADR-0003..0006
 - [Architecture overview](docs/architecture.md) — data model, event streams, how consumers read them
+- [Knowledge Fabric architecture](docs/knowledge-fabric-architecture.md) — knowledge-centred architecture truth-up and concentric model
+- [Knowledge Contract](docs/knowledge-contract.md) — binding raw/candidate/trusted/superseded/retired lifecycle contract
+- [Knowledge Contract ADR](docs/adr/0013-knowledge-contract.md) — accepted decision adopting the contract
+- [Knowledge Contract current-state mapping](docs/knowledge-contract-current-state.md) — existing tables/features mapped to the contract
+- [Knowledge Refinery implementation plan](docs/knowledge-refinery-implementation-plan.md) — phased W10 + Companion path and freeze boundaries
 - [API reference](docs/api.md) — every `/awip-api` endpoint with examples
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
 - [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones

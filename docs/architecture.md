@@ -1,5 +1,14 @@
 # AWIP Core — Architecture Overview
 
+> **Truth-up note (2026-07-18):** this document remains the historical Core
+> substrate view: OKRs, capabilities, and event streams. The next architectural
+> layer is now governed by
+> [Verdent / AWIP Knowledge Fabric Architecture](./knowledge-fabric-architecture.md)
+> and the [Knowledge Contract](./knowledge-contract.md), accepted by
+> [ADR-0013](./adr/0013-knowledge-contract.md).
+> Core is still the system of record; knowledge refinery and model-runtime work
+> must preserve the five Core rules below.
+
 This doc explains how AWIP Core is put together: the data model, the two event streams that fall out of it, and how the operator UI and Control Plane consume those streams. The companion file [api.md](./api.md) is the endpoint reference.
 
 ## Mental model in one paragraph
@@ -187,4 +196,3 @@ There is no external delivery (no email/Telegram/webhook) — in-app only. The a
 
 - [api.md](./api.md) — endpoint reference with examples
 - [`../.lovable/plan.md`](../.lovable/plan.md) — v1 plan + status
-
