@@ -53,7 +53,7 @@ jobs:
 
       - name: Comment on PR
         if: steps.snip.outputs.skip != 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: changelog-suggestion
           message: ${{ steps.snip.outputs.body }}
