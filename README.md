@@ -20,6 +20,7 @@ Full framing in [`docs/why-awip.md`](docs/why-awip.md) — share this with FM st
 - [Phases 5/6/6b research](docs/phases-5-6-6b-research.md) — locked invariants + open questions feeding those phases
 - [ADR benchmarks](docs/adr/benchmarks.md) — datasets + metrics + thresholds for closing ADR-0003..0006
 - [Architecture overview](docs/architecture.md) — data model, event streams, how consumers read them
+- [Knowledge refinery diagrams](docs/knowledge-refinery-diagrams.md) — raw → candidate → trusted lifecycle, provenance chain, authority vs approval
 - [API reference](docs/api.md) — every `/awip-api` endpoint with examples
 - [Local development](docs/development.md) — clone, env vars, migrations, edge functions
 - [Modules](docs/modules.md) — placeholder projects in the constellation + scaffold for new ones
