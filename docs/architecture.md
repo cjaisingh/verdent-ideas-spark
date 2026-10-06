@@ -185,6 +185,8 @@ There is no external delivery (no email/Telegram/webhook) — in-app only. The a
 
 ## See also
 
+- [knowledge-refinery-diagrams.md](./knowledge-refinery-diagrams.md) — raw → candidate → trusted lifecycle, provenance, authority vs approval
+
 - [api.md](./api.md) — endpoint reference with examples
 - [`../.lovable/plan.md`](../.lovable/plan.md) — v1 plan + status
 
