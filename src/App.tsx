@@ -60,6 +60,7 @@ import Walkthrough from "./pages/Walkthrough";
 import Reviews from "./pages/Reviews";
 import Ontology from "./pages/Ontology";
 import Governance from "./pages/Governance";
+import Refinery from "./pages/Refinery";
 import Entities from "./pages/Entities";
 import EntitiesAliases from "./pages/EntitiesAliases";
 import Sovereignty from "./pages/Sovereignty";
@@ -161,6 +162,7 @@ const App = () => (
             <Route path="/reviews" element={<Reviews />} />
             <Route path="/ontology" element={<Ontology />} />
             <Route path="/governance" element={<Governance />} />
+            <Route path="/refinery" element={<Refinery />} />
             <Route path="/entities" element={<Entities />} />
             <Route path="/entities/aliases" element={<EntitiesAliases />} />
             <Route path="/sovereignty" element={<Sovereignty />} />
