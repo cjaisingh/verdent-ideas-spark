@@ -83,7 +83,7 @@ function ProvenanceTab() {
   const [chain, setChain] = useState<{ staged?: any; raw?: any; conflicts: any[]; events: any[] }>({ conflicts: [], events: [] });
 
   useEffect(() => {
-    db.from("canonical_facts").select("*").order("created_at", { ascending: false }).limit(50).then(({ data }: any) => setFacts(data ?? []));
+    db.from("canonical_facts").select("*").order("recorded_at", { ascending: false }).limit(50).then(({ data }: any) => setFacts(data ?? []));
   }, []);
 
   const shown = useMemo(
@@ -93,11 +93,10 @@ function ProvenanceTab() {
 
   async function open(f: any) {
     setSel(f);
-    const stagedId = f.staged_record_id ?? f.source_staged_id;
-    const staged = stagedId ? (await db.from("staged_records").select("*").eq("id", stagedId).maybeSingle()).data : null;
-    const rawId = staged?.raw_record_id;
+    const staged = f.raw_record_id ? (await db.from("staged_records").select("*").eq("raw_record_id", f.raw_record_id).limit(1).maybeSingle()).data : null;
+    const rawId = f.raw_record_id;
     const raw = rawId ? (await db.from("raw_records").select("*").eq("id", rawId).maybeSingle()).data : null;
-    const conflicts = (await db.from("fact_conflicts").select("*").or(`fact_a_id.eq.${f.id},fact_b_id.eq.${f.id}`).limit(20)).data ?? [];
+    const conflicts = (await db.from("fact_conflicts").select("*").or(`existing_canonical_id.eq.${f.id},resolved_canonical_id.eq.${f.id}`).limit(20)).data ?? [];
     const events = (await db.from("ingest_events").select("*").eq("subject_id", f.id).order("recorded_at").limit(50)).data ?? [];
     setChain({ staged, raw, conflicts, events });
   }
@@ -112,8 +111,8 @@ function ProvenanceTab() {
           <div className="max-h-[480px] overflow-auto divide-y">
             {shown.map((f) => (
               <button key={f.id} onClick={() => open(f)} className={`w-full text-left py-2 px-1 text-sm hover:bg-muted ${sel?.id === f.id ? "bg-muted" : ""}`}>
-                <div className="font-medium">{f.fact_type ?? f.entity ?? "fact"} · {f.field ?? f.fact_key ?? ""}</div>
-                <div className="text-xs text-muted-foreground truncate">{JSON.stringify(f.value ?? f.payload ?? {})}</div>
+                <div className="font-medium">{f.fact_type}{f.superseded_by ? " · superseded" : ""}</div>
+                <div className="text-xs text-muted-foreground truncate">{JSON.stringify(f.value ?? {})}</div>
               </button>
             ))}
           </div>
@@ -203,7 +202,7 @@ function GatesTab() {
             <TableHeader><TableRow><TableHead>Surface</TableHead><TableHead>Min approval</TableHead></TableRow></TableHeader>
             <TableBody>
               {ret.map((r) => (
-                <TableRow key={r.id}><TableCell>{r.surface ?? r.name ?? r.key ?? r.id}</TableCell><TableCell><Badge variant="outline">{r.min_approval_state}</Badge></TableCell></TableRow>
+                <TableRow key={r.id}><TableCell>{r.consumer} <span className="text-xs text-muted-foreground">({r.consumer_kind})</span></TableCell><TableCell><Badge variant="outline">{r.min_approval_state}</Badge></TableCell></TableRow>
               ))}
             </TableBody>
           </Table>
