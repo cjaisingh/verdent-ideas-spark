@@ -3766,6 +3766,7 @@ export type Database = {
       ingested_files: {
         Row: {
           attempts: number
+          bytes_tier: Database["public"]["Enums"]["bytes_tier"]
           cad_fm: boolean
           created_at: string
           declared_discipline: string | null
@@ -3775,11 +3776,16 @@ export type Database = {
           filename: string
           id: string
           last_heartbeat_at: string | null
+          legal_hold: boolean
           max_attempts: number
           mime: string
           parsed_at: string | null
           parser: string | null
           parser_version: string | null
+          records_class: Database["public"]["Enums"]["records_class"]
+          retention_policy_key: string
+          revision_label: string | null
+          revision_of: string | null
           sha256: string
           size_bytes: number
           source: string
@@ -3791,6 +3797,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          bytes_tier?: Database["public"]["Enums"]["bytes_tier"]
           cad_fm?: boolean
           created_at?: string
           declared_discipline?: string | null
@@ -3800,11 +3807,16 @@ export type Database = {
           filename: string
           id?: string
           last_heartbeat_at?: string | null
+          legal_hold?: boolean
           max_attempts?: number
           mime: string
           parsed_at?: string | null
           parser?: string | null
           parser_version?: string | null
+          records_class?: Database["public"]["Enums"]["records_class"]
+          retention_policy_key?: string
+          revision_label?: string | null
+          revision_of?: string | null
           sha256: string
           size_bytes: number
           source: string
@@ -3816,6 +3828,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          bytes_tier?: Database["public"]["Enums"]["bytes_tier"]
           cad_fm?: boolean
           created_at?: string
           declared_discipline?: string | null
@@ -3825,11 +3838,16 @@ export type Database = {
           filename?: string
           id?: string
           last_heartbeat_at?: string | null
+          legal_hold?: boolean
           max_attempts?: number
           mime?: string
           parsed_at?: string | null
           parser?: string | null
           parser_version?: string | null
+          records_class?: Database["public"]["Enums"]["records_class"]
+          retention_policy_key?: string
+          revision_label?: string | null
+          revision_of?: string | null
           sha256?: string
           size_bytes?: number
           source?: string
@@ -3839,7 +3857,22 @@ export type Database = {
           updated_at?: string
           uploaded_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ingested_files_retention_policy_key_fkey"
+            columns: ["retention_policy_key"]
+            isOneToOne: false
+            referencedRelation: "retention_policies"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "ingested_files_revision_of_fkey"
+            columns: ["revision_of"]
+            isOneToOne: false
+            referencedRelation: "ingested_files"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ingestion_runs: {
         Row: {
@@ -3930,6 +3963,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      legal_hold_audit: {
+        Row: {
+          actor: string | null
+          created_at: string
+          file_id: string
+          id: string
+          on_hold: boolean
+          reason: string | null
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          file_id: string
+          id?: string
+          on_hold: boolean
+          reason?: string | null
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          file_id?: string
+          id?: string
+          on_hold?: boolean
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "legal_hold_audit_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "ingested_files"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lesson_events: {
         Row: {
@@ -5690,6 +5758,33 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           reason?: string
+        }
+        Relationships: []
+      }
+      retention_policies: {
+        Row: {
+          chunks_days: number
+          created_at: string
+          description: string | null
+          hot_days: number
+          key: string
+          min_approval_for_delete: string
+        }
+        Insert: {
+          chunks_days: number
+          created_at?: string
+          description?: string | null
+          hot_days: number
+          key: string
+          min_approval_for_delete?: string
+        }
+        Update: {
+          chunks_days?: number
+          created_at?: string
+          description?: string | null
+          hot_days?: number
+          key?: string
+          min_approval_for_delete?: string
         }
         Relationships: []
       }
@@ -9526,6 +9621,10 @@ export type Database = {
         Returns: Json
       }
       set_awip_service_token: { Args: { new_value: string }; Returns: Json }
+      set_legal_hold: {
+        Args: { _file_id: string; _on: boolean; _reason?: string }
+        Returns: Json
+      }
       set_managed_cron_active: {
         Args: { _active: boolean; _jobname: string }
         Returns: undefined
@@ -9579,6 +9678,7 @@ export type Database = {
         | "sap_floc"
         | "other"
       app_role: "operator" | "admin"
+      bytes_tier: "hot" | "chunks_only" | "tombstone"
       capability_status: "available" | "planned" | "experimental" | "deprecated"
       entity_conflict_status: "open" | "resolved" | "dismissed"
       entity_resolution_event_kind:
@@ -9620,6 +9720,15 @@ export type Database = {
         | "voice"
         | "email"
         | "bms_batch"
+      records_class:
+        | "contract"
+        | "certificate"
+        | "register"
+        | "model"
+        | "drawing"
+        | "correspondence"
+        | "media"
+        | "other"
       roadmap_comment_kind: "comment" | "question" | "decision"
       roadmap_status: "planned" | "active" | "done" | "paused"
       roadmap_task_status:
@@ -9781,6 +9890,7 @@ export const Constants = {
         "other",
       ],
       app_role: ["operator", "admin"],
+      bytes_tier: ["hot", "chunks_only", "tombstone"],
       capability_status: ["available", "planned", "experimental", "deprecated"],
       entity_conflict_status: ["open", "resolved", "dismissed"],
       entity_resolution_event_kind: [
@@ -9825,6 +9935,16 @@ export const Constants = {
         "voice",
         "email",
         "bms_batch",
+      ],
+      records_class: [
+        "contract",
+        "certificate",
+        "register",
+        "model",
+        "drawing",
+        "correspondence",
+        "media",
+        "other",
       ],
       roadmap_comment_kind: ["comment", "question", "decision"],
       roadmap_status: ["planned", "active", "done", "paused"],
