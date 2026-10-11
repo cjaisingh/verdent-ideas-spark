@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- untyped W10 tables not yet in generated types */
@@ -206,10 +207,67 @@ function GatesTab() {
               ))}
             </TableBody>
           </Table>
-          <p className="text-xs text-muted-foreground mt-2">Enforcement (stamping at ingest, stage transitions, retrieval filtering) ships in the next W10 slice.</p>
+          <p className="text-xs text-muted-foreground mt-2">Enforced: parsed files are stamped by class policy; search filters by this minimum stage.</p>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+const NEXT: Record<string, string[]> = {
+  ingested: ["pending_review", "quarantined", "rejected"],
+  pending_review: ["approved", "rejected", "quarantined"],
+  auto_approved: ["approved", "pending_review", "quarantined", "superseded", "archived"],
+  approved: ["superseded", "archived", "quarantined"],
+  quarantined: ["pending_review", "rejected"],
+};
+const NEEDS_REASON = new Set(["rejected", "quarantined", "archived"]);
+
+function ReviewTab() {
+  const [files, setFiles] = useState<any[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = () =>
+    db.from("ingested_files").select("id,filename,records_class,lifecycle,status,revision_of,legal_hold,updated_at")
+      .not("lifecycle", "in", "(rejected,archived,superseded)").order("updated_at", { ascending: false }).limit(100)
+      .then(({ data }: any) => setFiles(data ?? []));
+  useEffect(() => { load(); }, []);
+  async function move(f: any, to: string) {
+    let reason: string | null = null;
+    if (NEEDS_REASON.has(to)) {
+      reason = window.prompt(`Reason for ${to}?`);
+      if (!reason) return;
+    }
+    setBusy(f.id);
+    const { error } = await db.rpc("transition_file_lifecycle", { _file_id: f.id, _to: to, _reason: reason });
+    setBusy(null);
+    if (error) toast.error(error.message); else { toast.success(`${f.filename} → ${to}`); load(); }
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-2"><CardTitle className="text-base">Review queue — move files between stages</CardTitle></CardHeader>
+      <CardContent>
+        {files.length === 0 && <p className="text-sm text-muted-foreground">No files awaiting a decision.</p>}
+        <Table>
+          <TableHeader><TableRow><TableHead>File</TableHead><TableHead>Class</TableHead><TableHead>Parse</TableHead><TableHead>Stage</TableHead><TableHead>Move to</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {files.map((f) => (
+              <TableRow key={f.id}>
+                <TableCell>{f.filename}{f.legal_hold && <Badge variant="destructive" className="ml-2">hold</Badge>}</TableCell>
+                <TableCell>{f.records_class}</TableCell>
+                <TableCell className="text-xs">{f.status}</TableCell>
+                <TableCell><Badge variant="outline">{f.lifecycle}</Badge></TableCell>
+                <TableCell className="space-x-1">
+                  {(NEXT[f.lifecycle] ?? []).map((to) => (
+                    <Button key={to} size="sm" variant={to === "approved" ? "default" : "outline"} disabled={busy === f.id} onClick={() => move(f, to)}>{to.replace("_", " ")}</Button>
+                  ))}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <p className="text-xs text-muted-foreground mt-2">Search serves only files meeting each surface's minimum stage (default: approved). Four-eyes classes block self-approval.</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -273,11 +331,13 @@ export default function Refinery() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="stages">Stages</TabsTrigger>
+          <TabsTrigger value="review">Review</TabsTrigger>
           <TabsTrigger value="provenance">Provenance</TabsTrigger>
           <TabsTrigger value="gates">Gates</TabsTrigger>
           <TabsTrigger value="diagrams">Diagrams</TabsTrigger>
         </TabsList>
         <TabsContent value="stages"><StagesTab /></TabsContent>
+        <TabsContent value="review"><ReviewTab /></TabsContent>
         <TabsContent value="provenance"><ProvenanceTab /></TabsContent>
         <TabsContent value="gates"><GatesTab /></TabsContent>
         <TabsContent value="diagrams"><DiagramsTab /></TabsContent>

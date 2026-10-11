@@ -132,6 +132,13 @@ Deno.serve(withLogger("ingest-search", async (req) => {
   // Hierarchical mode over-fetches so we can cap chunks-per-file afterwards.
   const fetchCount = p.hierarchical ? p.match_count * 2 : p.match_count;
 
+  let minApproval = p.min_approval_state;
+  if (!minApproval) {
+    const { data: rc } = await sb.from("retrieval_contracts")
+      .select("min_approval_state").eq("consumer", "ingest-search").maybeSingle();
+    minApproval = (rc?.min_approval_state as typeof minApproval) ?? "approved";
+  }
+
   const { data: rawHits, error: mErr } = await sb.rpc("hybrid_match_ingested_chunks", {
     query_embedding: callEmbedding as unknown as string | null,
     query_text: callQueryText,
@@ -142,6 +149,7 @@ Deno.serve(withLogger("ingest-search", async (req) => {
     candidate_pool: p.candidate_pool,
     p_entity_ids: p.entity_ids ?? null,
     p_chunk_types: p.chunk_types ?? null,
+    p_min_approval: minApproval,
   });
 
   if (mErr) return json({ error: "search_failed", detail: mErr.message }, 500);
@@ -277,6 +285,7 @@ Deno.serve(withLogger("ingest-search", async (req) => {
   }
 
   return json({
+    min_approval_state: minApproval,
     hits: mapped,
     fact_hits: factHits,
     query_tokens: qTokens,
