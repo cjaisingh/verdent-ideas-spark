@@ -126,3 +126,4 @@ flowchart LR
 2. `copilot_lessons` has only `active`; no candidate state or source-turn pointer.
 3. `lessons` has no superseded state.
 4. File retirement reason/actor lives only in events.
+- Refinery UI at `/refinery` (stages, provenance, gates, live diagrams).
