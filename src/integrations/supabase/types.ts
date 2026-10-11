@@ -3072,6 +3072,30 @@ export type Database = {
           },
         ]
       }
+      document_approval_policies: {
+        Row: {
+          auto_conditions: Json
+          created_at: string
+          mode: Database["public"]["Enums"]["approval_mode"]
+          records_class: Database["public"]["Enums"]["records_class"]
+          updated_at: string
+        }
+        Insert: {
+          auto_conditions?: Json
+          created_at?: string
+          mode: Database["public"]["Enums"]["approval_mode"]
+          records_class: Database["public"]["Enums"]["records_class"]
+          updated_at?: string
+        }
+        Update: {
+          auto_conditions?: Json
+          created_at?: string
+          mode?: Database["public"]["Enums"]["approval_mode"]
+          records_class?: Database["public"]["Enums"]["records_class"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       edge_request_logs: {
         Row: {
           classified_error: string | null
@@ -3765,6 +3789,9 @@ export type Database = {
       }
       ingested_files: {
         Row: {
+          approval_id: string | null
+          approved_at: string | null
+          approved_by: string | null
           attempts: number
           bytes_tier: Database["public"]["Enums"]["bytes_tier"]
           cad_fm: boolean
@@ -3777,6 +3804,7 @@ export type Database = {
           id: string
           last_heartbeat_at: string | null
           legal_hold: boolean
+          lifecycle: Database["public"]["Enums"]["doc_lifecycle"]
           max_attempts: number
           mime: string
           parsed_at: string | null
@@ -3796,6 +3824,9 @@ export type Database = {
           uploaded_by: string | null
         }
         Insert: {
+          approval_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           attempts?: number
           bytes_tier?: Database["public"]["Enums"]["bytes_tier"]
           cad_fm?: boolean
@@ -3808,6 +3839,7 @@ export type Database = {
           id?: string
           last_heartbeat_at?: string | null
           legal_hold?: boolean
+          lifecycle?: Database["public"]["Enums"]["doc_lifecycle"]
           max_attempts?: number
           mime: string
           parsed_at?: string | null
@@ -3827,6 +3859,9 @@ export type Database = {
           uploaded_by?: string | null
         }
         Update: {
+          approval_id?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           attempts?: number
           bytes_tier?: Database["public"]["Enums"]["bytes_tier"]
           cad_fm?: boolean
@@ -3839,6 +3874,7 @@ export type Database = {
           id?: string
           last_heartbeat_at?: string | null
           legal_hold?: boolean
+          lifecycle?: Database["public"]["Enums"]["doc_lifecycle"]
           max_attempts?: number
           mime?: string
           parsed_at?: string | null
@@ -5851,6 +5887,7 @@ export type Database = {
           fallback: string
           freshness_window: string
           id: string
+          min_approval_state: string
           notes: string | null
           primary_key: string
           shape: string
@@ -5867,6 +5904,7 @@ export type Database = {
           fallback: string
           freshness_window: string
           id?: string
+          min_approval_state?: string
           notes?: string | null
           primary_key: string
           shape: string
@@ -5883,6 +5921,7 @@ export type Database = {
           fallback?: string
           freshness_window?: string
           id?: string
+          min_approval_state?: string
           notes?: string | null
           primary_key?: string
           shape?: string
@@ -9678,8 +9717,18 @@ export type Database = {
         | "sap_floc"
         | "other"
       app_role: "operator" | "admin"
+      approval_mode: "auto" | "operator" | "four_eyes"
       bytes_tier: "hot" | "chunks_only" | "tombstone"
       capability_status: "available" | "planned" | "experimental" | "deprecated"
+      doc_lifecycle:
+        | "ingested"
+        | "pending_review"
+        | "auto_approved"
+        | "approved"
+        | "superseded"
+        | "archived"
+        | "quarantined"
+        | "rejected"
       entity_conflict_status: "open" | "resolved" | "dismissed"
       entity_resolution_event_kind:
         | "propose"
@@ -9890,8 +9939,19 @@ export const Constants = {
         "other",
       ],
       app_role: ["operator", "admin"],
+      approval_mode: ["auto", "operator", "four_eyes"],
       bytes_tier: ["hot", "chunks_only", "tombstone"],
       capability_status: ["available", "planned", "experimental", "deprecated"],
+      doc_lifecycle: [
+        "ingested",
+        "pending_review",
+        "auto_approved",
+        "approved",
+        "superseded",
+        "archived",
+        "quarantined",
+        "rejected",
+      ],
       entity_conflict_status: ["open", "resolved", "dismissed"],
       entity_resolution_event_kind: [
         "propose",

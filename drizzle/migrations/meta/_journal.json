@@ -8,6 +8,13 @@
       "when": 1791755517679,
       "tag": "0000_w10_s1_records_layer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791755547355,
+      "tag": "0001_w10_s2_lifecycle_approval",
+      "breakpoints": true
     }
   ]
 }
