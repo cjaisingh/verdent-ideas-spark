@@ -9457,24 +9457,32 @@ export type Database = {
         Args: {
           candidate_pool?: number
           match_count?: number
+          p_chunk_types?: string[]
           p_domain_ids?: string[]
           p_engagement_id: string
+          p_entity_ids?: string[]
+          p_min_approval?: string
           query_embedding: string
           query_text: string
           rrf_k?: number
         }
         Returns: {
+          chunk_id: string
           chunk_index: number
+          chunk_type: string
           content: string
           dense_rank: number
           dense_similarity: number
           domain_id: string
+          entity_refs: string[]
           file_id: string
           filename: string
           lexical_rank: number
           lexical_score: number
+          lifecycle: string
           metadata: Json
           rrf_score: number
+          section_id: string
         }[]
       }
       infer_ai_job_module: { Args: { _job: string }; Returns: string }
@@ -9488,6 +9496,13 @@ export type Database = {
         Returns: boolean
       }
       is_workstream_locked: { Args: { _workstream: string }; Returns: boolean }
+      lifecycle_meets: {
+        Args: {
+          _lc: Database["public"]["Enums"]["doc_lifecycle"]
+          _min: string
+        }
+        Returns: boolean
+      }
       list_all_nightly_jobs: {
         Args: never
         Returns: {
@@ -9547,6 +9562,23 @@ export type Database = {
           chunk_index: number
           content: string
           domain_id: string
+          file_id: string
+          filename: string
+          metadata: Json
+          similarity: number
+        }[]
+      }
+      match_ingested_chunks_approved: {
+        Args: {
+          match_count?: number
+          p_domain_ids?: string[]
+          p_engagement_id: string
+          p_min_approval?: string
+          query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content: string
           file_id: string
           filename: string
           metadata: Json
@@ -9684,6 +9716,10 @@ export type Database = {
         }
         Returns: Json
       }
+      stamp_file_lifecycle_on_parse: {
+        Args: { _file_id: string }
+        Returns: Database["public"]["Enums"]["doc_lifecycle"]
+      }
       table_surface_last_seen: {
         Args: { _surface_id: string }
         Returns: string
@@ -9695,6 +9731,14 @@ export type Database = {
       tenant_node_compute_ancestry: {
         Args: { _node_id: string; _parent_id: string }
         Returns: string[]
+      }
+      transition_file_lifecycle: {
+        Args: {
+          _file_id: string
+          _reason?: string
+          _to: Database["public"]["Enums"]["doc_lifecycle"]
+        }
+        Returns: Json
       }
       unlock_workstream: {
         Args: { _reason: string; _workstream: string }
