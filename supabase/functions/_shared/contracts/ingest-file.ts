@@ -150,6 +150,8 @@ export const IngestSearchBody = z.object({
   mode: z.enum(["hybrid", "dense", "lexical"]).default("hybrid"),
   rrf_k: z.number().int().min(1).max(1000).default(60),
   candidate_pool: z.number().int().min(1).max(200).default(50),
+  /** W10-S3 serving gate. Omitted → retrieval_contracts row for consumer "ingest-search", else "approved". */
+  min_approval_state: z.enum(["any", "auto_approved", "approved"]).optional(),
   // W9.1 — structured retrieval leg over canonical_facts. Returned as a
   // parallel `fact_hits[]` (not RRF-fused with prose chunks) because facts
   // and chunks have different retrieval shapes.

@@ -275,6 +275,12 @@ Deno.serve(withLogger("ingest-callback", async (req) => {
     payload: { parser: p.parser, parser_version: p.parser_version },
   });
 
+  // W10-S3: stamp lifecycle (auto_approved or pending_review) from the class approval policy.
+  if (finalStatus === "parsed" || finalStatus === "metadata_only") {
+    const { error: stampErr } = await sb.rpc("stamp_file_lifecycle_on_parse", { _file_id: p.file_id });
+    if (stampErr) console.error("lifecycle_stamp_failed", stampErr.message);
+  }
+
   return json({
     file_id: p.file_id,
     chunks_written: chunkRows.length,
