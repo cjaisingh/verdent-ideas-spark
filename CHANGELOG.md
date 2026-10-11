@@ -4,6 +4,8 @@ All notable changes to AWIP Core. Format loosely follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+- W10-S3: `transition_file_lifecycle()` (operator-gated stage moves, four-eyes, revision supersede, events), `stamp_file_lifecycle_on_parse()` called from ingest-callback, `lifecycle_meets()` ladder; `hybrid_match_ingested_chunks` + new `match_ingested_chunks_approved` filter by `p_min_approval` (default approved); ingest-search resolves gate from `retrieval_contracts`; Review tab on `/refinery`; anon execute revoked on `set_legal_hold`.
+
 ### Fixed (2026-07-17 — CI baseline)
 - Cleared the 10 `@typescript-eslint/no-explicit-any` errors that kept `main`'s `Lint & Typecheck` and `CI` workflows red on every push (9 in `AdminIngestUpload.tsx` — centralised into one documented `db` alias for the not-yet-typed ingest tables/RPCs; 1 typed cast in `AdminResolver.tsx`). No runtime change.
 

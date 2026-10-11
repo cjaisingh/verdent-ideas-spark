@@ -1,7 +1,7 @@
 # Knowledge Refinery — Architecture Diagrams
 
 Companion to the Knowledge Contract (ADR-0013). Grounded in the live schema as of 2026-10-06.
-Items marked *(W10, unapplied)* exist in migrations `20260717150000` / `20260717160000` but are not yet in the database.
+Items marked *(W10)* exist in migrations `20260717150000` / `20260717160000` but are not yet in the database.
 
 ## 1. Lifecycle: raw → candidate → trusted
 
@@ -9,21 +9,21 @@ Items marked *(W10, unapplied)* exist in migrations `20260717150000` / `20260717
 flowchart LR
   subgraph RAW["Raw information"]
     rr["raw_records"]
-    inf["ingested_files<br/>lifecycle=ingested (W10, unapplied)"]
+    inf["ingested_files<br/>lifecycle=ingested (W10)"]
     cm["companion_messages"]
   end
 
   subgraph CAND["Candidate knowledge"]
     sr["staged_records<br/>validation_status"]
     fc["fact_conflicts<br/>status=open"]
-    pr["ingested_files<br/>pending_review (W10, unapplied)"]
+    pr["ingested_files<br/>pending_review (W10)"]
     lp["lessons<br/>status=proposed"]
     cl["claims<br/>unresolved"]
   end
 
   subgraph TRUST["Trusted knowledge"]
     cf["canonical_facts (live)"]
-    ap["ingested_files<br/>approved / auto_approved (W10, unapplied)"]
+    ap["ingested_files<br/>approved / auto_approved (W10)"]
     la["lessons<br/>status=applied"]
     cw["claims<br/>resolve_truth() winner"]
   end
@@ -99,12 +99,12 @@ flowchart LR
 
   subgraph APPR["Approval (may it be used?)"]
     smap["source_mappings approved"]
-    dap["document_approval_policies<br/>auto / operator / four_eyes (W10, unapplied)"]
+    dap["document_approval_policies<br/>auto / operator / four_eyes (W10)"]
     op["Operator disposition"]
   end
 
   subgraph USE["Retrieval gate"]
-    rc["retrieval_contracts<br/>min_approval_state (W10, unapplied)"]
+    rc["retrieval_contracts<br/>min_approval_state (W10)"]
   end
 
   cand --> rt
