@@ -64,7 +64,7 @@ jobs:
           echo "All required production secrets are present."
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v2
         with:
           version: latest
 
